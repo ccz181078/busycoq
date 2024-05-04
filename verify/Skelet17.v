@@ -152,6 +152,7 @@ Proof.
   finish.
 Qed.
 
+
 Lemma goright_nonzero_steps : forall xs x y ys zs,
   Forall Nonzero xs ->
   lowerL (y :: ys) |> lowerR' (xs ++ (S x) :: zs) -->*
@@ -454,6 +455,593 @@ Proof.
     finish.
 Qed.
 
+Inductive Increment: (nat*(list nat))->(nat*(list nat))->Prop :=
+| Increment_even x xs y z zs:
+  Even x ->
+  Forall Nonzero xs ->
+  Forall Even xs ->
+  Odd y ->
+  Increment
+  (S x, xs ++ y :: z :: zs)
+  (x, xs ++ y :: S z :: zs)
+| Increment_odd x y xs:
+  Odd x ->
+  Increment
+  (S x, y :: xs)
+  (x, S y :: xs)
+.
+
+Inductive Halve: (nat*(list nat))->(nat*(list nat))->Prop :=
+| Halve_intro x xs:
+  Halve
+  (O, x :: xs)
+  (S x, xs)
+.
+
+Inductive Zero: (nat*(list nat))->(nat*(list nat))->Prop :=
+| Zero_intro x xs y:
+  Forall Nonzero xs ->
+  Forall Even xs ->
+  Even x ->
+  Even y ->
+  Zero
+  (S x, xs ++ [y])
+  (x, xs ++ [S y; O; O])
+.
+
+Inductive TryHalve: (nat*(list nat))->(nat*(list nat))->Prop :=
+| TryHalve_1 x xs:
+  TryHalve
+  (O, x :: xs)
+  (S x, xs)
+| TryHalve_0 x xs:
+  TryHalve
+  (S x, xs)
+  (S x, xs)
+.
+
+Inductive toConfig: (nat*(list nat))->(Q*tape)->Prop :=
+| toConfig_intro x xs:
+  toConfig (S x,xs) (lower (x::xs))
+.
+
+Lemma Increment_toConfig s1 s2 s3 c1 c3:
+  Increment s1 s2 ->
+  TryHalve s2 s3 ->
+  toConfig s1 c1 ->
+  toConfig s3 c3 ->
+  c1 -->* c3.
+Proof.
+  intros I12 I23 T1 T3.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  destruct s3 as [x3 xs3].
+  inverts I12.
+  - inverts I23.
+    + inverts T1.
+      inverts T3.
+      rewrite H1.
+      follow increment_O. finish.
+    + inverts T1.
+      inverts T3.
+      follow increment_S_even.
+      finish.
+  - inverts I23.
+    1: inverts H0; lia.
+    inverts T1.
+    inverts T3.
+    follow increment_S_odd.
+    finish.
+Qed.
+
+Lemma Zero_toConfig s1 s2 s3 c1 c3:
+  Zero s1 s2 ->
+  TryHalve s2 s3 ->
+  toConfig s1 c1 ->
+  toConfig s3 c3 ->
+  c1 -->* c3.
+Proof.
+  intros I12 I23 T1 T3.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  destruct s3 as [x3 xs3].
+  inverts I12.
+  inverts I23.
+  + inverts T1.
+    inverts T3.
+    rewrite H1.
+    follow zero_O. finish.
+  + inverts T1.
+    inverts T3.
+    follow zero_S. finish.
+Qed.
+
+
+Fixpoint grey_to_binary(xs:list bool):(list bool) :=
+match xs with
+| nil => nil
+| xh::xt => (xorb xh (hd false (grey_to_binary xt)))::(grey_to_binary xt)
+end.
+
+Definition list_to_binary(xs:list nat):(list bool) :=
+  grey_to_binary (map odd xs).
+
+Fixpoint binary_to_nat(xs:list bool):nat :=
+match xs with
+| nil => O
+| xh::xt =>
+  (if xh then (S O) else O)+(binary_to_nat xt)*2
+end.
+
+Definition to_n_binary(s:nat*(list nat)) :=
+  list_to_binary (snd s).
+
+Definition to_n(s:nat*(list nat)) :=
+  binary_to_nat (to_n_binary s).
+
+Definition to_s(s:nat*(list nat)) :=
+  let (x,xs):=s in
+  xorb (even x) (hd false (list_to_binary xs)).
+
+Lemma map_odd_Even xs:
+  Forall Even xs ->
+  map odd xs = repeat false (length xs).
+Proof.
+  induction xs.
+  1: reflexivity.
+  intros Hev.
+  inverts Hev as Ha Hxs.
+  specialize (IHxs Hxs).
+  cbn.
+  f_equal; auto 1.
+  unfold odd.
+  rewrite <-even_spec in Ha.
+  rewrite Ha.
+  reflexivity.
+Qed.
+
+Lemma grey_to_binary_0s_hd n xs:
+  hd false (grey_to_binary (repeat false n ++ xs)) = hd false (grey_to_binary xs).
+Proof.
+  induction n; auto 1.
+Qed.
+
+Lemma grey_to_binary_0s n xs:
+  grey_to_binary ((repeat false n) ++ xs) =
+  (repeat (hd false (grey_to_binary xs)) n) ++ grey_to_binary xs.
+Proof.
+  induction n.
+  1: reflexivity.
+  cbn.
+  rewrite <-IHn.
+  f_equal.
+  apply grey_to_binary_0s_hd.
+Qed.
+
+Lemma hd_repeat(x:bool) n xs:
+  hd false ((repeat x n)++x::xs) = x.
+Proof.
+  destruct n; reflexivity.
+Qed.
+
+Lemma repeat_app_S{A} (x:A) n xs:
+  repeat x n ++ x :: xs =
+  (repeat x (S n)) ++ xs.
+Proof.
+  induction n.
+  1: reflexivity.
+  cbn.
+  rewrite IHn.
+  reflexivity.
+Qed.
+
+Lemma binary_to_nat_S n xs:
+  S (binary_to_nat (repeat true n ++ false :: xs)) =
+  binary_to_nat (repeat false n ++ true :: xs).
+Proof.
+  induction n.
+  1: reflexivity.
+  cbn.
+  rewrite <-IHn.
+  lia.
+Qed.
+
+Lemma list_to_binary_app_O_hd xs:
+  (hd false (list_to_binary (xs ++ [O]))) =
+  (hd false (list_to_binary (xs))).
+Proof.
+  induction xs.
+  1: reflexivity.
+  cbn.
+  unfold list_to_binary in IHxs.
+  rewrite IHxs.
+  reflexivity.
+Qed.
+
+Ltac simpl_xor_neg :=
+  repeat (rewrite <-Bool.negb_xorb_l || rewrite <-Bool.negb_xorb_r || rewrite Bool.negb_involutive);
+  try reflexivity.
+
+Ltac simpl_oe_S :=
+  repeat (rewrite odd_succ || rewrite even_succ).
+
+Lemma list_to_binary_S_hd xs z zs:
+  (hd false (list_to_binary (xs ++ S z :: zs))) =
+  negb (hd false (list_to_binary (xs ++ z :: zs))).
+Proof.
+  induction xs.
+  - cbn.
+    simpl_oe_S.
+    unfold odd.
+    simpl_xor_neg.
+  - cbn.
+    unfold list_to_binary in IHxs.
+    rewrite IHxs.
+    simpl_xor_neg.
+Qed.
+
+Lemma list_to_binary_app_S_hd xs y:
+  (hd false (list_to_binary (xs ++ [S y]))) =
+  negb (hd false (list_to_binary (xs ++ [y]))).
+Proof.
+  induction xs.
+  - cbn.
+    simpl_oe_S.
+    unfold odd.
+    simpl_xor_neg.
+  - cbn.
+    unfold list_to_binary in IHxs.
+    rewrite IHxs.
+    simpl_xor_neg.
+Qed.
+
+Lemma binary_to_nat_app_O xs:
+  binary_to_nat (xs ++ [false]) =
+  binary_to_nat (xs).
+Proof.
+  induction xs.
+  1: reflexivity.
+  cbn.
+  rewrite IHxs.
+  reflexivity.
+Qed.
+
+Lemma binary_to_nat_1s n:
+  binary_to_nat (repeat true n) =
+  Nat.pred (pow 2 n).
+Proof.
+  induction n.
+  1: reflexivity.
+  cbn.
+  rewrite IHn.
+  assert (2^n <> O) by (apply pow_nonzero; auto 1).
+  lia.
+Qed.
+
+Lemma grey_to_binary_length xs:
+  length (grey_to_binary xs) = length xs.
+Proof.
+  induction xs.
+  1: reflexivity.
+  cbn.
+  f_equal.
+  apply IHxs.
+Qed.
+
+
+
+
+Lemma Increment_sgn s1 s2:
+  Increment s1 s2 ->
+  to_s s1 = to_s s2.
+Proof.
+  intro I.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts I.
+  - unfold to_s.
+    simpl_oe_S.
+    unfold odd.
+    symmetry.
+    rewrite app_cons_r.
+    rewrite list_to_binary_S_hd.
+    rewrite <-app_cons_r.
+    simpl_xor_neg.
+  - unfold to_s.
+    simpl_oe_S.
+    unfold odd.
+    change (S y :: xs) with (nil ++ ((S y :: xs))).
+    rewrite (list_to_binary_S_hd). cbn.
+    simpl_xor_neg.
+Qed.
+
+
+Lemma Halve_sgn s1 s2:
+  Halve s1 s2 ->
+  negb (to_s s1) = (to_s s2).
+Proof.
+  intro H.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts H.
+  unfold to_s.
+  simpl_oe_S.
+  cbn.
+  unfold list_to_binary.
+  destruct (xorb (odd x) (hd false (grey_to_binary (map odd xs2)))); reflexivity.
+Qed.
+
+Lemma Zero_sgn s1 s2:
+  Zero s1 s2 ->
+  (to_s s1) = (to_s s2).
+Proof.
+  intro Z.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts Z.
+  unfold to_s.
+  simpl_oe_S.
+  unfold odd.
+  simpl_xor_neg.
+  symmetry.
+  do 2 rewrite app_cons_r.
+  do 2 rewrite list_to_binary_app_O_hd.
+  rewrite list_to_binary_app_S_hd.
+  simpl_xor_neg.
+Qed.
+
+Lemma Increment_n s1 s2:
+  Increment s1 s2 ->
+  if to_s s1 then
+  S (to_n s1) = to_n s2
+  else
+  to_n s1 = S (to_n s2).
+Proof.
+destruct (to_s s1) eqn:E.
+{
+  intro I.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  cbn in E.
+  unfold list_to_binary in E.
+  inverts I.
+  - cbn.
+    generalize E; clear E.
+    repeat rewrite map_app.
+    rewrite map_odd_Even; auto 1.
+    rewrite <-even_spec in H3.
+    rewrite <-odd_spec in H6.
+    simpl_oe_S.
+    change (odd x2) with (negb (even x2)).
+    rewrite H3.
+    cbn.
+    rewrite H6.
+    repeat rewrite grey_to_binary_0s. cbn.
+    remember ((grey_to_binary (map odd zs))) as v1.
+    remember (hd false v1) as v2.
+    simpl_oe_S.
+    remember (odd z) as oz.
+    unfold odd in Heqoz.
+    subst oz.
+    simpl_xor_neg.
+    rewrite hd_repeat.
+    remember (xorb (even z) v2) as v4.
+    intro E.
+    destruct v4; cbn in E; try congruence.
+    cbn.
+    repeat rewrite repeat_app_S.
+    apply binary_to_nat_S.
+  - cbn.
+    generalize E; clear E.
+    simpl_oe_S.
+    rewrite <-odd_spec in H0.
+    rewrite H0.
+    cbn.
+    remember ((grey_to_binary (map odd xs))) as v1.
+    remember (odd y) as oy.
+    unfold odd in Heqoy.
+    subst oy.
+    simpl_xor_neg.
+    destruct ((xorb (even y) (hd false v1))); cbn; congruence.
+}
+{
+  intros I.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  cbn in E.
+  unfold list_to_binary in E.
+  inverts I.
+  - cbn.
+    generalize E; clear E.
+    repeat rewrite map_app.
+    rewrite map_odd_Even; auto 1.
+    rewrite <-even_spec in H3.
+    rewrite <-odd_spec in H6.
+    simpl_oe_S.
+    change (odd x2) with (negb (even x2)).
+    rewrite H3.
+    cbn.
+    rewrite H6.
+    repeat rewrite grey_to_binary_0s. cbn.
+    remember ((grey_to_binary (map odd zs))) as v1.
+    remember (hd false v1) as v2.
+    simpl_oe_S.
+    remember (odd z) as oz.
+    unfold odd in Heqoz.
+    subst oz.
+    simpl_xor_neg.
+    rewrite hd_repeat.
+    remember (xorb (even z) v2) as v4.
+    intro E.
+    destruct v4; cbn in E; try congruence.
+    cbn.
+    repeat rewrite repeat_app_S.
+    symmetry.
+    apply binary_to_nat_S.
+  - cbn.
+    generalize E; clear E.
+    simpl_oe_S.
+    rewrite <-odd_spec in H0.
+    rewrite H0.
+    cbn.
+    remember ((grey_to_binary (map odd xs))) as v1.
+    remember (odd y) as oy.
+    unfold odd in Heqoy.
+    subst oy.
+    simpl_xor_neg.
+    destruct ((xorb (even y) (hd false v1))); cbn; congruence.
+}
+Qed.
+
+Lemma Halve_n s1 s2:
+  Halve s1 s2 ->
+  div2 (to_n s1) = to_n s2.
+Proof.
+  intro H.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts H.
+  cbn.
+  remember (xorb (odd x) (hd false (grey_to_binary (map odd xs2)))) as v1.
+  destruct v1; lia.
+Qed.
+
+Lemma Zero_n s1 s2:
+  Zero s1 s2 ->
+  to_n s2 = pred (2 ^ (length (to_n_binary s1))).
+Proof.
+  intro Z.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts Z.
+  unfold to_n_binary,snd,list_to_binary.
+  rewrite grey_to_binary_length,map_length,app_length.
+  cbn.
+  rewrite map_app,map_odd_Even.
+  2: auto 1.
+  rewrite grey_to_binary_0s.
+  rewrite <-even_spec in H6.
+  cbn.
+  simpl_oe_S.
+  rewrite H6.
+  cbn.
+  rewrite repeat_app_S.
+  rewrite app_cons_r.
+  do 2 rewrite binary_to_nat_app_O.
+  rewrite binary_to_nat_1s.
+  rewrite Nat.add_comm.
+  reflexivity.
+Qed.
+
+
+Lemma Increment_len s1 s2:
+  Increment s1 s2 ->
+  length (to_n_binary s1) = length (to_n_binary s2).
+Proof.
+  intro I.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts I.
+  - cbn.
+    repeat rewrite grey_to_binary_length,map_length,app_length.
+    reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma Halve_len s1 s2:
+  Halve s1 s2 ->
+  length (to_n_binary s1) = S (length (to_n_binary s2)).
+Proof.
+  intro H.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts H.
+  cbn.
+  reflexivity.
+Qed.
+
+Lemma Zero_len s1 s2:
+  Zero s1 s2 ->
+  length (to_n_binary s2) = length (to_n_binary s1) + 2.
+Proof.
+  intro Z.
+  destruct s1 as [x1 xs1].
+  destruct s2 as [x2 xs2].
+  inverts Z.
+  cbn.
+  repeat rewrite grey_to_binary_length,map_length,app_length.
+  cbn.
+  lia.
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Lemma halt_case : forall x xs,
+  Forall Nonzero xs ->
+  Forall Even xs ->
+  Even x ->
+  exists c1,
+  lower (x :: xs ++ [O; O]) -->*
+  c1 /\ halted tm c1.
+Proof.
+  introv Hxsnz Hxsev Hx.
+  destruct (rev xs) eqn:E.
+  - destruct x as [|x].
+    + eexists. split.
+      * follow (goleft_even (O::xs)).
+        repeat evstep1.
+        unfold lowerL,lowerL'.
+        rewrite E.
+        cbn. unfold lowerR'. cbn.
+        repeat evstep1.
+        finish.
+      * constructor.
+    + eexists. split.
+      * follow (goleft_even (S x::xs)).
+        repeat evstep1.
+        unfold lowerL,lowerL'.
+        rewrite E.
+        cbn. unfold lowerR'. cbn.
+        repeat evstep1.
+        finish.
+      * constructor.
+  - destruct n as [|n].
+    + pose proof (Forall_rev Hxsnz) as H.
+      rewrite E in H.
+      inverts H as H1 H2. congruence.
+    + eexists. split.
+      * follow (goleft_even (x::xs)).
+        repeat evstep1.
+        unfold lowerL,lowerL'.
+        cbn.
+        rewrite <-app_assoc.
+        cbn.
+        rewrite E.
+        cbn.
+        repeat evstep1.
+        finish.
+      * constructor.
+Qed.
+
+
 Lemma base :
   c0 -->*
   lower ([0; 4; 2; 0]%nat).
@@ -600,6 +1188,19 @@ Proof.
   unfold s0.
   rewrite <-const_unfold.
   finish.
+Qed.
+
+Lemma halt_case_1 :
+  halts tm (lower ([4; 4; 0; 0]%nat)).
+Proof.
+  unfold halts.
+  eexists.
+  unfold halts_in.
+  eexists.
+  split.
+  - repeat evstep1.
+    constructor.
+  - constructor.
 Qed.
 
 
