@@ -2582,6 +2582,10 @@ Inductive weakly_embanked: (nat*(list nat))->(nat*(list nat))->nat->nat->nat->na
   Halve s3 s4 ->
   Increments n2 s4 s5 ->
   Halve s5 s6 ->
+  (to_n s3) + (fst s1) = 2^(to_l s1) ->
+  (to_n s4) + (fst s1)/2 + 1 = 2^(to_l s1 - 1) ->
+  (to_n s5) = (nth O (snd s1) O) + 2^(to_l s1 - 1) ->
+  (to_n s6) = (nth O (snd s1) O)/2 + 2^(to_l s1 - 2) ->
   weakly_embanked s1 s6 (to_n s3) (to_n s5) (to_n s4) (to_n s6).
 
 Inductive embanked: (nat*(list nat))->(nat*(list nat))->nat->nat->nat->nat->Prop :=
@@ -2718,6 +2722,27 @@ Proof.
     apply div2ceil_div2floor_Odd,H.
 Qed.
 
+Lemma div2_add_Odd n1 n2:
+  Odd n1 ->
+  Odd n2 ->
+  n1/2 + n2/2 + 1 = (n1+n2)/2.
+Proof.
+  intros.
+  inverts H.
+  inverts H0.
+  repeat rewrite (mul_comm 2).
+  rewrite div_add_l. 2: congruence.
+  rewrite div_add_l. 2: congruence.
+  replace (x*2+1+(x0*2+1)) with ((x+x0+1)*2) by lia.
+  rewrite div_mul. 2: congruence.
+  cbn; lia.
+Qed.
+
+
+(*
+  Proposition 3.4
+  and also prove some properties of s_1,s_2,h_1,h_2 for Lemma 3.5
+*)
 Lemma weakly_embanked_precond s1:
   WF1 s1 ->
   to_s s1 = false ->
@@ -2806,7 +2831,15 @@ Proof.
   remember (to_l s3) as l3.
   remember (to_l s4) as l4.
   assert (H_a11_a40:a11 + 2 ^ (l1 - 1) = a40 + n3 / 2) by lia.
-  Search (n4).
+  assert (Hn3_expr:n3 + a10 = 2^l1) by lia.
+  assert (Hn4_expr:n4 + a10/2 + 1 = 2^(l1-1)). {
+    rewrite <-Hs4n.
+    replace (l1) with (1+(l1-1)) in Hn3_expr by lia.
+    rewrite pow2_1a,mul_comm in Hn3_expr.
+    replace (2^(l1-1)) with (2^(l1-1)*2/2) by (apply div_mul; congruence).
+    rewrite div2_add_Odd; auto 1.
+    congruence.
+  }
   eassert (I45:_). {
     apply (Increments_inc_precond2 (fst s4) Hwf4 Hs4s).
     3: lia.
@@ -2832,6 +2865,11 @@ Proof.
   assert (Hs5a0_0:fst s5 = O) by lia.
   clear Hs5a0.
 
+  remember (to_n s5) as n5.
+  rewrite <-Heqn4 in Hs5n.
+
+  assert (Hn5_expr:n5 = a11 + 2^(l1-1)) by lia.
+
   edestruct (Halve_precond1 Hwf5 Hs5a0_0) as [s6 [H56 Hwf6]]. 1: lia.
   pose proof (Halve_sgn H56) as Hs6s.
   pose proof (Halve_n H56) as Hs6n.
@@ -2839,6 +2877,18 @@ Proof.
   pose proof (Halve_a0 H56) as Hs6a0.
   rewrite <-Hs5s,Hs4s in Hs6s.
   cbn in Hs6s. symmetry in Hs6s.
+
+  remember (to_n s6) as n6.
+  rewrite <-Heqn5 in Hs6n.
+  rewrite div2_div in Hs6n.
+  assert (Hn6_expr:n6 = a11/2 + 2^(l1-2)). {
+    Search a11.
+    replace (l1-1) with (1+(l1-2)) in Hn5_expr by lia.
+    rewrite pow2_1a in Hn5_expr.
+    rewrite <-Hs6n,Hn5_expr,mul_comm,add_comm.
+    rewrite div_add_l. 2: congruence.
+    apply add_comm.
+  }
   do 5 eexists.
   econstructor.
   - apply Z12.
@@ -2846,6 +2896,10 @@ Proof.
   - apply H34.
   - apply I45.
   - apply H56.
+  - congruence.
+  - congruence.
+  - congruence.
+  - congruence.
 Qed.
 
 
