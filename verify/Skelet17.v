@@ -855,7 +855,7 @@ Ltac simpl_list_to_binary_0s:=
 
 (* s after Inc/Halve/Zero/Overflow *)
 
-Lemma Increment_sgn s1 s2:
+Lemma Increment_sgn {s1 s2}:
   Increment s1 s2 ->
   to_s s1 = to_s s2.
 Proof.
@@ -880,7 +880,7 @@ Proof.
 Qed.
 
 
-Lemma Halve_sgn s1 s2:
+Lemma Halve_sgn {s1 s2}:
   Halve s1 s2 ->
   negb (to_s s1) = (to_s s2).
 Proof.
@@ -896,7 +896,7 @@ Proof.
 Qed.
 
 
-Lemma Zero_sgn s1 s2:
+Lemma Zero_sgn {s1 s2}:
   Zero s1 s2 ->
   (to_s s2) = false.
 Proof.
@@ -915,7 +915,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma Overflow_sgn s1 s2:
+Lemma Overflow_sgn {s1 s2}:
   Overflow s1 s2 ->
   (to_s s2) = false.
 Proof.
@@ -1062,7 +1062,7 @@ Qed.
 
 (* n after Inc/Halve/Zero/Overflow *)
 
-Lemma Increment_n s1 s2:
+Lemma Increment_n {s1 s2}:
   Increment s1 s2 ->
   if to_s s1 then
   S (to_n s1) = to_n s2
@@ -1104,7 +1104,7 @@ Proof.
   }
 Qed.
 
-Lemma Halve_n s1 s2:
+Lemma Halve_n {s1 s2}:
   Halve s1 s2 ->
   div2 (to_n s1) = to_n s2.
 Proof.
@@ -1117,7 +1117,7 @@ Proof.
   destruct v1; lia.
 Qed.
 
-Lemma Zero_n s1 s2:
+Lemma Zero_n {s1 s2}:
   Zero s1 s2 ->
   to_n s2 = (2 ^ (to_l s1)) - 1.
 Proof.
@@ -1145,7 +1145,7 @@ Proof.
   cbn; lia.
 Qed.
 
-Lemma Overflow_n s1 s2:
+Lemma Overflow_n {s1 s2}:
   Overflow s1 s2 ->
   to_n s2 = O.
 Proof.
@@ -1170,7 +1170,7 @@ Qed.
 
 (* l after Inc/Halve/Zero/Overflow *)
 
-Lemma Increment_len s1 s2:
+Lemma Increment_len {s1 s2}:
   Increment s1 s2 ->
   to_l s1 = to_l s2.
 Proof.
@@ -1184,7 +1184,7 @@ Proof.
   - reflexivity.
 Qed.
 
-Lemma Halve_len s1 s2:
+Lemma Halve_len {s1 s2}:
   Halve s1 s2 ->
   to_l s1 = S (to_l s2).
 Proof.
@@ -1196,7 +1196,7 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma Zero_len s1 s2:
+Lemma Zero_len {s1 s2}:
   Zero s1 s2 ->
   to_l s2 = to_l s1 + 2.
 Proof.
@@ -1210,7 +1210,7 @@ Proof.
   lia.
 Qed.
 
-Lemma Overflow_len s1 s2:
+Lemma Overflow_len {s1 s2}:
   Overflow s1 s2 ->
   to_l s2 = to_l s1 + 1.
 Proof.
@@ -1413,7 +1413,7 @@ Proof.
 Qed.
 
 (* one induction step of Proposition 2.2 *)
-Lemma Increment_d s1 s2:
+Lemma Increment_a {s1 s2}:
   Increment s1 s2 ->
   if to_s s1 then
   forall i,
@@ -1559,7 +1559,7 @@ Inductive Increments: nat->(nat*(list nat))->(nat*(list nat))->Prop :=
 .
 
 (* Proposition 2.2 (i>=1) *)
-Lemma Increments_d n s1 s2:
+Lemma Increments_a {n s1 s2}:
   Increments n s1 s2 ->
   if to_s s1 then
   forall i,
@@ -1573,9 +1573,9 @@ Proof.
   intro I.
   induction I.
   1: destruct (to_s s); reflexivity.
-  pose proof (Increment_d _ _ H) as Hd.
-  rewrite <-(Increment_sgn _ _ H) in IHI.
-  pose proof (Increment_n _ _ H) as Hn.
+  pose proof (Increment_a H) as Hd.
+  rewrite <-(Increment_sgn H) in IHI.
+  pose proof (Increment_n H) as Hn.
   destruct (to_s s2) eqn:E;
     intro i;
     specialize (IHI i);
@@ -1584,7 +1584,7 @@ Proof.
 Qed.
 
 (* Proposition 2.2 (i=0) *)
-Lemma Increments_d0 n s1 s2:
+Lemma Increments_a0 {n s1 s2}:
   Increments n s1 s2 ->
   if to_s s1 then
     (fst s1) + (to_n s1) =
@@ -1596,8 +1596,8 @@ Proof.
   intro I.
   induction I.
   1: destruct (to_s s); reflexivity.
-  rewrite <-(Increment_sgn _ _ H) in IHI.
-  pose proof (Increment_n _ _ H) as Hn.
+  rewrite <-(Increment_sgn H) in IHI.
+  pose proof (Increment_n H) as Hn.
   destruct (to_s s2) eqn:E;
     inverts H;
       destruct s4 as [x4 xs4];
@@ -1606,7 +1606,7 @@ Proof.
       lia.
 Qed.
 
-Lemma Increment_d0 s1 s2:
+Lemma Increment_a0 {s1 s2}:
   Increment s1 s2 ->
   if to_s s1 then
     (fst s1) + (to_n s1) =
@@ -1616,7 +1616,7 @@ Lemma Increment_d0 s1 s2:
     (fst s1) + (to_n s2).
 Proof.
   intros.
-  eapply (Increments_d0 1 s1 s2).
+  eapply (Increments_a0).
   econstructor; eauto 1; constructor.
 Qed.
 
@@ -1714,18 +1714,26 @@ Qed.
 
 
 
-
-(* weak pre-cond for Inc/Halve/Zero/Overflow *)
-Inductive WF: (nat*(list nat))->Prop :=
-| WF_1 x xs y:
+Inductive WF1: (nat*(list nat))->Prop :=
+| WF1_intro x xs y:
   Forall Nonzero xs ->
-  WF (x,xs ++ [y])
-| WF_2 x xs y zs:
+  WF1 (x,xs ++ [y]).
+
+Inductive WF2: (nat*(list nat))->Prop :=
+| WF2_intro x xs y zs:
   Forall Nonzero xs ->
   Forall Even xs ->
   Odd y ->
   Forall Nonzero zs ->
-  WF (x,xs ++ y :: zs ++ [O; O])
+  WF2 (x,xs ++ y :: zs ++ [O; O])
+.
+
+(* weak pre-cond for Inc/Halve/Zero/Overflow *)
+Inductive WF: (nat*(list nat))->Prop :=
+| WF_1 s:
+  WF1 s -> WF s
+| WF_2 s:
+  WF2 s -> WF s
 .
 
 Inductive Step: (nat*(list nat))->(nat*(list nat))->Prop :=
@@ -1735,21 +1743,17 @@ Inductive Step: (nat*(list nat))->(nat*(list nat))->Prop :=
 | OverflowStep s1 s2: Overflow s1 s2 -> Step s1 s2
 .
 
-Definition is_WF_1 (s1:nat*(list nat)):Prop :=
-  exists x xs y, Forall Nonzero xs /\ s1 = (x,xs++[y]).
-
-Lemma is_WF_1_00 x xs:
-  ~is_WF_1 (x, xs ++ [0; 0]%nat).
+Lemma WF1_00 x xs:
+  ~WF1 (x, xs ++ [0; 0]%nat).
 Proof.
   intro H.
-  destruct H as [x0 [xs0 [y0 [H H0]]]].
-  inverts H0.
-  rewrite app_cons_r in H3.
-  rewrite app_inj_tail_iff in H3.
-  destruct H3 as [H3 H4].
-  rewrite <-H3 in H.
-  rewrite Forall_app in H.
-  destruct H as [_ H].
+  inverts H.
+  rewrite (app_cons_r xs) in H2.
+  rewrite app_inj_tail_iff in H2.
+  destruct H2 as [H3 H4].
+  rewrite H3 in H1.
+  rewrite Forall_app in H1.
+  destruct H1 as [_ H].
   inverts H.
   lia.
 Qed.
@@ -1760,8 +1764,9 @@ Lemma WF_Step s1:
   exists s2, Step s1 s2.
 Proof.
   intro Hwf.
-  inverts Hwf.
-  - destruct x as [|x].
+  inverts Hwf as Hwf.
+  - inverts Hwf.
+    destruct x as [|x].
     { destruct xs;
         eexists; apply HalveStep; econstructor. }
     destruct (Even_or_Odd x) as [Ex|Ox].
@@ -1786,7 +1791,8 @@ Proof.
         eexists; apply IncrementStep;
         eapply Increment_odd; eauto 1.
     }
-  - destruct x as [|x].
+  - inverts Hwf.
+    destruct x as [|x].
     { destruct xs;
         eexists; apply HalveStep; econstructor. }
     destruct (Even_or_Odd x) as [Ex|Ox].
@@ -1805,18 +1811,104 @@ Lemma WF_nonempty {x xs}:
   xs<>nil.
 Proof.
   intro H.
-  inverts H;
+  inverts H as H; inverts H;
     eapply app_nonempty_r; eauto 1.
 Qed.
 
 
-(* more pre-cond to keep post-cond also WF *)
-Lemma Increment_inc_precond s1:
-  WF s1 ->
+
+(* some trivial lemmas *)
+Lemma pow2_1a n:
+  2^(1+n) = 2*(2^n).
+Proof.
+  reflexivity.
+Qed.
+
+Ltac Odd_Even_contra:=
+  match goal with
+  | H1:Odd ?x, H2:Even ?x |- _ => destruct (Even_Odd_False _ H2 H1)
+  end.
+
+Lemma to_n_pow2sub1 x xs y:
+  to_n (x,xs++[y;0;0]%nat) = 2^(to_l (x,xs++[y;0;0]%nat) - 2) - 1 ->
+  (hd false (grey_to_binary (map odd (xs++[y;0;0]%nat)))) = true /\
+  Forall Even xs /\
+  Odd y.
+Proof.
+  cbn.
+  induction xs.
+  - cbn.
+    destruct (odd y) eqn:Oy; cbn.
+    2: congruence.
+    rewrite <-odd_spec.
+    intro. repeat split; auto 1.
+  - cbn.
+    cbn in IHxs.
+    remember (hd false (grey_to_binary (map odd (xs++[y;0;0]%nat)))) as v1.
+    remember (binary_to_nat (grey_to_binary (map odd (xs++[y;0;0]%nat)))) as v2.
+    intro H.
+    rewrite grey_to_binary_length,map_length,app_length in H,IHxs.
+    cbn in H,IHxs.
+    replace (length xs + 3 - 1) with (1+(length xs + 3 - 2)) in H by lia.
+    rewrite pow2_1a in H.
+    pose proof (pow2_nez (length xs + 3 - 2)).
+    destruct (xorb (odd a) v1) eqn:E.
+    2: lia.
+    assert (Hv2:v2 = 2 ^ (length xs + 3 - 2) - 1) by lia.
+    specialize (IHxs Hv2).
+    destruct IHxs as [I1 [I2 I3]].
+    rewrite I1 in E.
+    destruct (odd a) eqn:Oa.
+    1: cbn in E; congruence.
+    unfold odd in Oa.
+    generalize Oa. clear Oa.
+    simpl_xor_neg.
+    intro Ea.
+    repeat split; auto 1.
+    constructor; auto 1.
+    rewrite <-even_spec.
+    apply Ea.
+Qed.
+
+Lemma WF2_n_lt {s1}:
+  WF2 s1 ->
+  to_n s1 < 2^(to_l s1 - 2).
+Proof.
+  intro H.
+  inverts H.
+  cbn.
+  rewrite grey_to_binary_length,map_length.
+  replace (xs ++ y :: zs ++ [0; 0]%nat) with
+  ((xs ++ y :: zs) ++ [0; 0]%nat).
+  2: rewrite <-app_assoc; reflexivity.
+  generalize (xs++y::zs).
+  clear x xs y zs H0 H1 H2 H3.
+  intro l.
+  induction l.
+  1: cbn; lia.
+  cbn.
+  remember (grey_to_binary (map odd (l ++ [0; 0]%nat))) as v1.
+  generalize IHl; clear IHl.
+  rewrite app_length.
+  cbn.
+  replace (length l + 2 - 1) with (1+(length l + 2 - 2)) by lia.
+  rewrite pow2_1a.
+  destruct (xorb (odd a) (hd false v1)); lia.
+Qed.
+
+
+
+
+
+
+(* more pre-cond to keep post-cond also WF;
+   also track the transition between WF1,WF2 *)
+Lemma Increment_inc_precond1 {s1}:
+  WF1 s1 ->
   to_s s1 = true ->
   to_n s1 < 2^(to_l s1) - 1 ->
   fst s1 > O ->
-  exists s2, Increment s1 s2 /\ WF s2.
+  exists s2, Increment s1 s2 /\ WF1 s2.
 Proof.
   intros.
   destruct s1 as [x1 xs1].
@@ -1824,7 +1916,7 @@ Proof.
   destruct x1 as [|x1]. 1: lia.
   destruct (Even_or_Odd x1) as [Ex1|Ox1].
   - inverts H.
-    + destruct (Forall_Even_dec xs) as [H0'|[xs0 [y0 [zs [H0' [H1' H2']]]]]].
+      destruct (Forall_Even_dec xs) as [H0'|[xs0 [y0 [zs [H0' [H1' H2']]]]]].
       {
         generalize H0; clear H0.
         unfold to_s.
@@ -1855,7 +1947,7 @@ Proof.
             rewrite Forall_app in H4.
             apply H4.
           + rewrite app_cons_r.
-            apply WF_1.
+            constructor.
             rewrite <-H2'. apply H4.
         - eexists.
           split.
@@ -1863,7 +1955,7 @@ Proof.
             rewrite H2' in H4.
             rewrite Forall_app in H4.
             apply H4.
-          + applys_eq WF_1.
+          + applys_eq WF1_intro.
             * f_equal.
               do 2 rewrite app_cons_r.
               rewrite app_assoc.
@@ -1877,28 +1969,11 @@ Proof.
               repeat split; auto 1. 
               repeat constructor. lia.
       }
-    + destruct zs.
-      * eexists.
-        split.
-        1: eapply Increment_even; eauto 1.
-        do 2 rewrite app_cons_r.
-        destruct y as [|y]. 1: inverts H7; lia.
-        apply WF_1.
-        repeat rewrite Forall_app.
-        repeat split; auto 1; repeat constructor; lia.
-      * eexists.
-        split.
-        1: cbn; eapply Increment_even; eauto 1.
-        applys_eq WF_2.
-        1: do 3 f_equal; rewrite app_comm_cons; f_equal.
-        all: auto 1.
-        inverts H8.
-        constructor; auto 1; lia.
   - destruct xs1 as [|x2 xs1].
-    1: pose proof (WF_nonempty H); congruence.
+    1: pose proof (WF_nonempty (WF_1 _ H)); congruence.
     assert (I12:Increment (S x1, x2 :: xs1) (x1, S x2 :: xs1)).
     { eapply Increment_odd; eauto 1. }
-    pose proof (Increment_n _ _ I12) as I12n.
+    pose proof (Increment_n I12) as I12n.
     rewrite H0 in I12n.
     eexists.
     split. 1: apply I12.
@@ -1910,14 +1985,71 @@ Proof.
       destruct xs.
       - cbn in H5.
         inverts H5.
-        apply (WF_1 (S x1) []),H4.
+        apply (WF1_intro (S x1) []),H4.
       - cbn in H5.
         inverts H5.
         rewrite app_comm_cons.
-        apply WF_1.
+        apply WF1_intro.
         inverts H4.
         constructor; auto 1; lia.
     }
+Qed.
+
+Lemma Increment_inc_precond22 {s1}:
+  WF2 s1 ->
+  to_s s1 = true ->
+  to_n s1 < 2^(to_l s1 - 2) - 1 ->
+  fst s1 > O ->
+  exists s2, Increment s1 s2 /\ WF2 s2.
+Proof.
+  intros.
+  destruct s1 as [x1 xs1].
+  cbn in H2.
+  destruct x1 as [|x1]. 1: lia.
+  destruct (Even_or_Odd x1) as [Ex1|Ox1].
+  - inverts H.
+      destruct zs.
+      * eassert (I:Increment (S x1, xs ++ y :: [] ++ [0; 0]%nat) _).
+        { eapply Increment_even; eauto 1. }
+        pose proof (Increment_n I) as Hn.
+        rewrite H0 in Hn.
+        remember (to_n (S x1, xs ++ y :: [] ++ [0; 0]%nat)) as v1.
+        generalize Hn.
+        cbn.
+        simpl_list_to_binary_0s.
+        OE_oe.
+        rewrite H7.
+        cbn.
+        rewrite repeat_app_S.
+        rewrite binary_to_nat_0s_app.
+        change (binary_to_nat [true; false]) with 1%nat.
+        unfold to_l in H1.
+        cbn in H1.
+        rewrite grey_to_binary_length,map_length,app_length in H1.
+        cbn in H1.
+        replace (length xs + 3 - 2) with (S (length xs)) in H1 by lia.
+        intro H1'.
+        lia.
+      * eexists.
+        split.
+        1: cbn; eapply Increment_even; eauto 1.
+        applys_eq WF2_intro.
+        1: do 3 f_equal; rewrite app_comm_cons; f_equal.
+        all: auto 1.
+        inverts H8.
+        constructor; auto 1; lia.
+  - destruct xs1 as [|x2 xs1].
+    1: pose proof (WF_nonempty (WF_2 _ H)); congruence.
+    assert (I12:Increment (S x1, x2 :: xs1) (x1, S x2 :: xs1)).
+    { eapply Increment_odd; eauto 1. }
+    pose proof (Increment_n I12) as I12n.
+    rewrite H0 in I12n.
+    eexists.
+    split. 1: apply I12.
+    destruct x1.
+    1: inverts Ox1; lia.
+    rewrite Odd_succ in Ox1.
+    inverts H.
     {
       destruct xs.
       - cbn in H4.
@@ -1940,13 +2072,13 @@ Proof.
           rewrite app_cons_r in H8.
           repeat rewrite Forall_app in H8.
           destruct H8 as [[H8a H8b] H8c].
-          applys_eq (WF_2 (S x1) (S x2::xs0) y zs0).
+          applys_eq (WF2_intro (S x1) (S x2::xs0) y zs0).
           1: f_equal; cbn; rewrite <-app_assoc; reflexivity.
           all: try constructor; auto 1; lia.
       - cbn in H4. inverts H4.
         inverts H6. inverts H5.
         rewrite <-Odd_succ in H4.
-        applys_eq (WF_2 (S x1) nil (S x2) (xs++y::zs)).
+        applys_eq (WF2_intro (S x1) nil (S x2) (xs++y::zs)).
         1: rewrite <-app_assoc; reflexivity.
         all: auto 1.
         rewrite Forall_app. split; auto 1.
@@ -1955,16 +2087,65 @@ Proof.
     }
 Qed.
 
-Lemma Increment_dec_precond s1:
-  WF s1 ->
+
+
+Lemma Increment_inc_precond21 {s1}:
+  WF2 s1 ->
+  to_s s1 = true ->
+  to_n s1 = 2^(to_l s1 - 2) - 1 ->
+  fst s1 > O ->
+  exists s2, Increment s1 s2 /\ WF1 s2.
+Proof.
+  intros.
+  destruct s1 as [x1 xs1].
+  cbn in H2.
+  destruct x1 as [|x1]. 1: lia.
+  inverts H.
+  destruct zs.
+  - cbn[app] in H1.
+    destruct (to_n_pow2sub1 _ _ _ H1) as [I1 [I2 I3]].
+    generalize H0; clear H0.  
+    unfold to_s.
+    simpl_oe_S. cbn.
+    unfold list_to_binary.
+    rewrite I1.
+    destruct (odd x1) eqn:Ox1; cbn; intro X.
+    1: congruence.
+    unfold odd in Ox1.
+    rewrite Bool.negb_false_iff in Ox1.
+    rewrite even_spec in Ox1.
+    eexists.
+    split.
+    + eapply Increment_even; eauto 1.
+    + do 2 rewrite app_cons_r.
+      apply WF1_intro.
+      repeat rewrite Forall_app.
+      destruct y. 1: inverts I3; lia.
+      repeat split; auto 1; repeat constructor; lia.
+  - assert (H:n::zs<>[]) by congruence.
+    destruct (exists_last H) as [zs0 [y0 H']].
+    rewrite H' in H1.
+    replace (xs ++ y :: (zs0 ++ [y0]) ++ [0; 0]%nat) with
+    ((xs++y::zs0)++[y0;0;0]%nat) in H1.
+    2: {
+      do 2 rewrite <-app_assoc.
+      reflexivity.
+    }
+    destruct (to_n_pow2sub1 _ _ _ H1) as [I1 [I2 I3]].
+    rewrite Forall_app in I2.
+    inverts I2. inverts H4.
+    Odd_Even_contra.
+Qed.
+
+
+Lemma Increment_dec_precond1 {s1}:
+  WF1 s1 ->
   to_s s1 = false ->
   to_n s1 > O ->
   fst s1 > O ->
-  (to_n s1 = S O -> is_WF_1 s1) ->
-  exists s2, Increment s1 s2 /\ WF s2.
+  exists s2, Increment s1 s2 /\ WF1 s2.
 Proof.
   intros.
-  rename H3 into H3'.
   destruct s1 as [x1 xs1].
   cbn in H2.
   destruct x1 as [|x1]. 1: lia.
@@ -2000,7 +2181,7 @@ Proof.
             rewrite Forall_app in H4.
             apply H4.
           + rewrite app_cons_r.
-            apply WF_1.
+            apply WF1_intro.
             rewrite <-H2'. apply H4.
         - eexists.
           split.
@@ -2008,7 +2189,7 @@ Proof.
             rewrite H2' in H4.
             rewrite Forall_app in H4.
             apply H4.
-          + applys_eq WF_1.
+          + applys_eq WF1_intro.
             * f_equal.
               do 2 rewrite app_cons_r.
               rewrite app_assoc.
@@ -2022,28 +2203,11 @@ Proof.
               repeat split; auto 1. 
               repeat constructor. lia.
       }
-    + destruct zs.
-      * eexists.
-        split.
-        1: eapply Increment_even; eauto 1.
-        do 2 rewrite app_cons_r.
-        destruct y as [|y]. 1: inverts H7; lia.
-        apply WF_1.
-        repeat rewrite Forall_app.
-        repeat split; auto 1; repeat constructor; lia.
-      * eexists.
-        split.
-        1: cbn; eapply Increment_even; eauto 1.
-        applys_eq WF_2.
-        1: do 3 f_equal; rewrite app_comm_cons; f_equal.
-        all: auto 1.
-        inverts H8.
-        constructor; auto 1; lia.
   - destruct xs1 as [|x2 xs1].
-    1: pose proof (WF_nonempty H); congruence.
+    1: pose proof (WF_nonempty (WF_1 _ H)); congruence.
     assert (I12:Increment (S x1, x2 :: xs1) (x1, S x2 :: xs1)).
     { eapply Increment_odd; eauto 1. }
-    pose proof (Increment_n _ _ I12) as I12n.
+    pose proof (Increment_n I12) as I12n.
     rewrite H0 in I12n.
     eexists.
     split. 1: apply I12.
@@ -2055,14 +2219,60 @@ Proof.
       destruct xs.
       - cbn in H5.
         inverts H5.
-        apply (WF_1 (S x1) []),H4.
+        apply (WF1_intro (S x1) []),H4.
       - cbn in H5.
         inverts H5.
         rewrite app_comm_cons.
-        apply WF_1.
+        apply WF1_intro.
         inverts H4.
         constructor; auto 1; lia.
     }
+Qed.
+
+Lemma Increment_dec_precond2 {s1}:
+  WF2 s1 ->
+  to_s s1 = false ->
+  to_n s1 > S O ->
+  fst s1 > O ->
+  exists s2, Increment s1 s2 /\ WF2 s2.
+Proof.
+  intros.
+  destruct s1 as [x1 xs1].
+  cbn in H2.
+  destruct x1 as [|x1]. 1: lia.
+  destruct (Even_or_Odd x1) as [Ex1|Ox1].
+  - inverts H.
+    + destruct zs.
+      * generalize H0.
+        unfold to_s.
+        OE_oe.
+        simpl_oe_S.
+        unfold odd.
+        rewrite Ex1.
+        cbn.
+        simpl_list_to_binary_0s.
+        rewrite H7.
+        cbn; intro; congruence.
+      * eexists.
+        split.
+        1: cbn; eapply Increment_even; eauto 1.
+        applys_eq WF2_intro.
+        1: do 3 f_equal; rewrite app_comm_cons; f_equal.
+        all: auto 1.
+        inverts H8.
+        constructor; auto 1; lia.
+  - destruct xs1 as [|x2 xs1].
+    1: pose proof (WF_nonempty (WF_2 _ H)); congruence.
+    assert (I12:Increment (S x1, x2 :: xs1) (x1, S x2 :: xs1)).
+    { eapply Increment_odd; eauto 1. }
+    pose proof (Increment_n I12) as I12n.
+    rewrite H0 in I12n.
+    eexists.
+    split. 1: apply I12.
+    destruct x1.
+    1: inverts Ox1; lia.
+    rewrite Odd_succ in Ox1.
+    inverts H.
     {
       destruct xs.
       - cbn in H4.
@@ -2079,21 +2289,19 @@ Proof.
             rewrite <-even_spec; reflexivity.
           }
           rewrite (to_n_Even (S x1) _ Ev) in I12n.
-          specialize (H3' I12n).
-          rewrite app_comm_cons in H3'.
-          destruct (is_WF_1_00 _ _ H3').
+          lia.
         + destruct E as [xs0 [y [zs0 [E0 [E1 E2]]]]].
           subst zs.
           rewrite app_cons_r in H8.
           repeat rewrite Forall_app in H8.
           destruct H8 as [[H8a H8b] H8c].
-          applys_eq (WF_2 (S x1) (S x2::xs0) y zs0).
+          applys_eq (WF2_intro (S x1) (S x2::xs0) y zs0).
           1: f_equal; cbn; rewrite <-app_assoc; reflexivity.
           all: try constructor; auto 1; lia.
       - cbn in H4. inverts H4.
         inverts H6. inverts H5.
         rewrite <-Odd_succ in H4.
-        applys_eq (WF_2 (S x1) nil (S x2) (xs++y::zs)).
+        applys_eq (WF2_intro (S x1) nil (S x2) (xs++y::zs)).
         1: rewrite <-app_assoc; reflexivity.
         all: auto 1.
         rewrite Forall_app. split; auto 1.
@@ -2102,34 +2310,46 @@ Proof.
     }
 Qed.
 
-Lemma Halve_precond s1:
-  WF s1 ->
+Lemma Halve_precond1 {s1}:
+  WF1 s1 ->
   fst s1 = O ->
   to_l s1 >= 2 ->
-  (to_n s1 = S O -> is_WF_1 s1) ->
-  exists s2, Halve s1 s2 /\ WF s2.
+  exists s2, Halve s1 s2 /\ WF1 s2.
 Proof.
   destruct s1 as [x xs].
   cbn.
   intros.
   rename H1 into H1'.
-  rename H2 into H2'.
   subst.
   inverts H.
-  - destruct xs0.
-    + cbn.
-      eexists.
-      split.
-      1: econstructor.
-      rewrite grey_to_binary_length,map_length in H1'.
-      cbn in H1'. lia.
-    + cbn.
-      eexists.
-      split.
-      1: econstructor.
-      inverts H1.
-      apply WF_1; auto 1.
-  - destruct xs0.
+  destruct xs0.
+  + cbn.
+    eexists.
+    split.
+    1: econstructor.
+    rewrite grey_to_binary_length,map_length in H1'.
+    cbn in H1'. lia.
+  + cbn.
+    eexists.
+    split.
+    1: econstructor.
+    inverts H1.
+    apply WF1_intro; auto 2.
+Qed.
+
+Lemma Halve_precond2 {s1}:
+  WF2 s1 ->
+  fst s1 = O ->
+  (to_n s1 <> S O) ->
+  exists s2, Halve s1 s2 /\ WF2 s2.
+Proof.
+  destruct s1 as [x xs].
+  cbn.
+  intros.
+  rename H1 into H2'.
+  subst.
+  inverts H.
+    destruct xs0.
     + cbn.
       eexists.
       split.
@@ -2142,17 +2362,13 @@ Proof.
         rewrite H4.
         cbn.
         rewrite binary_to_nat_0s_app.
-        cbn.
-        intro X.
-        specialize (X (eq_refl _)).
-        rewrite app_comm_cons in X.
-        destruct (is_WF_1_00 _ _ X).
+        cbn. lia.
       * destruct E as [xs0 [y0 [zs0 [E0 [E1 E2]]]]].
         subst zs.
         rewrite Forall_app in H5.
         destruct H5 as [H5a H5b].
         inverts H5b.
-        applys_eq WF_2.
+        applys_eq WF2_intro.
         1: rewrite <-app_assoc; cbn; reflexivity.
         all: auto 1.
     + cbn.
@@ -2160,30 +2376,19 @@ Proof.
       split.
       1: econstructor.
       inverts H2. inverts H3.
-      apply WF_2; auto 1.
+      apply WF2_intro; auto 1.
 Qed.
 
 
-Lemma Zero_precond s1:
-  WF s1 ->
+Lemma Zero_precond {s1}:
+  WF1 s1 ->
   to_s s1 = false ->
   to_n s1 = O ->
   Odd (fst s1) ->
-  exists s2, Zero s1 s2 /\ WF s2.
+  exists s2, Zero s1 s2 /\ WF2 s2.
 Proof.
   intros.
   inverts H.
-  2: {
-    pose proof (to_n_0_Even _ _ H1) as Ev.
-    rewrite Forall_app in Ev.
-    destruct Ev as [_ Ev].
-    inverts Ev.
-    OE_oe.
-    unfold odd in H5.
-    rewrite H8 in H5.
-    cbn in H5.
-    congruence.
-  }
   pose proof (to_n_0_Even _ _ H1) as Ev.
   rewrite Forall_app in Ev.
   destruct Ev as [Ev1 Ev2].
@@ -2194,17 +2399,17 @@ Proof.
   eexists.
   split.
   1: constructor; auto 1.
-  apply (WF_2 x xs (S y) nil); auto 1.
+  apply (WF2_intro x xs (S y) nil); auto 1.
   rewrite Odd_succ.
   apply H5.
 Qed.
 
-Lemma Increments_inc_precond s1 n:
-  WF s1 ->
+Lemma Increments_inc_precond1 {s1} n:
+  WF1 s1 ->
   to_s s1 = true ->
   to_n s1 + n < 2^(to_l s1) ->
   fst s1 >= n ->
-  exists s2, Increments n s1 s2 /\ WF s2.
+  exists s2, Increments n s1 s2 /\ WF1 s2.
 Proof.
   gen s1.
   induction n.
@@ -2213,12 +2418,12 @@ Proof.
     auto 1.
   - intros.
     eassert (I:_) by
-      (eapply Increment_inc_precond; eauto 1; lia).
+      (eapply Increment_inc_precond1; eauto 1; lia).
     destruct I as [s4 [I1 I2]].
-    pose proof (Increment_n _ _ I1) as Hn.
-    pose proof (Increment_sgn _ _ I1) as Hs.
-    pose proof (Increment_len _ _ I1) as Hl.
-    pose proof (Increment_d0 _ _ I1) as Hd.
+    pose proof (Increment_n I1) as Hn.
+    pose proof (Increment_sgn I1) as Hs.
+    pose proof (Increment_len I1) as Hl.
+    pose proof (Increment_a0 I1) as Hd.
     rewrite H0 in Hn,Hd.
     eassert (X:_). {
       apply IHn.
@@ -2236,13 +2441,76 @@ Proof.
     + auto 1.
 Qed.
 
-Lemma Increments_dec_precond s1 n:
-  WF s1 ->
+Lemma Increments_inc_precond2 {s1} n:
+  WF2 s1 ->
+  to_s s1 = true ->
+  to_n s1 + n >= 2^(to_l s1 - 2) ->
+  to_n s1 + n < 2^(to_l s1) ->
+  fst s1 >= n ->
+  exists s2, Increments n s1 s2 /\ WF1 s2.
+Proof.
+  gen s1.
+  induction n.
+  - intros.
+    pose proof (WF2_n_lt H); lia.
+  - intros.
+    pose proof (WF2_n_lt H) as Hlt.
+    assert (Hle:to_n s2 < 2^(to_l s2 - 2) - 1 \/ to_n s2 = 2^(to_l s2 - 2) - 1) by lia.
+    clear Hlt.
+    destruct Hle as [Hlt|Heq].
+    + eassert (I:_) by
+        (eapply Increment_inc_precond22; eauto 1; lia).
+      destruct I as [s4 [I1 I2]].
+      pose proof (Increment_n I1) as Hn.
+      pose proof (Increment_sgn I1) as Hs.
+      pose proof (Increment_len I1) as Hl.
+      pose proof (Increment_a0 I1) as Hd.
+      rewrite H0 in Hn,Hd. rewrite Hl in H2.
+      eassert (X:_). {
+        apply IHn.
+        - apply I2.
+        - rewrite <-Hs. apply H0.
+        - pose proof (pow2_nez (to_l s4)).
+          rewrite Hl in H1.
+          lia.
+        - lia.
+        - lia.
+      }
+      destruct X as [s3 [X1 X2]].
+      eexists s3.
+      split.
+      * econstructor; eauto 1.
+      * auto 1.
+    + eassert (I:_) by
+        (eapply Increment_inc_precond21; eauto 1; lia).
+      destruct I as [s4 [I1 I2]].
+      pose proof (Increment_n I1) as Hn.
+      pose proof (Increment_sgn I1) as Hs.
+      pose proof (Increment_len I1) as Hl.
+      pose proof (Increment_a0 I1) as Hd.
+      rewrite H0 in Hn,Hd. rewrite Hl in H2.
+      eassert (X:_). {
+        eapply Increments_inc_precond1 with (n:=n).
+        - apply I2.
+        - rewrite <-Hs. apply H0.
+        - pose proof (pow2_nez (to_l s4)).
+          rewrite Hl in H1.
+          lia.
+        - lia.
+      }
+      destruct X as [s3 [X1 X2]].
+      eexists s3.
+      split.
+      * econstructor; eauto 1.
+      * auto 1.
+Qed.
+
+Lemma Increments_dec_precond1 {s1} n:
+  WF1 s1 ->
   to_s s1 = false ->
   to_n s1 >= n ->
   fst s1 >= n ->
-  (to_n s1 = n -> is_WF_1 s1) ->
-  exists s2, Increments n s1 s2 /\ WF s2.
+  exists s2, Increments n s1 s2 /\ WF1 s2.
 Proof.
   gen s1.
   induction n.
@@ -2251,20 +2519,18 @@ Proof.
     auto 1.
   - intros.
     eassert (I:_) by
-      (eapply Increment_inc_precond; eauto 1; lia).
+      (eapply Increment_dec_precond1; eauto 1; lia).
     destruct I as [s4 [I1 I2]].
-    pose proof (Increment_n _ _ I1) as Hn.
-    pose proof (Increment_sgn _ _ I1) as Hs.
-    pose proof (Increment_len _ _ I1) as Hl.
-    pose proof (Increment_d0 _ _ I1) as Hd.
+    pose proof (Increment_n I1) as Hn.
+    pose proof (Increment_sgn I1) as Hs.
+    pose proof (Increment_len I1) as Hl.
+    pose proof (Increment_a0 I1) as Hd.
     rewrite H0 in Hn,Hd.
     eassert (X:_). {
       apply IHn.
       - apply I2.
       - rewrite <-Hs. apply H0.
-      - pose proof (pow2_nez (to_l s4)).
-        rewrite Hl in H1.
-        lia.
+      - inverts I1; lia.
       - lia.
     }
     destruct X as [s3 [X1 X2]].
@@ -2274,27 +2540,314 @@ Proof.
     + auto 1.
 Qed.
 
+Lemma Increments_dec_precond2 {s1} n:
+  WF2 s1 ->
+  to_s s1 = false ->
+  to_n s1 >= S n ->
+  fst s1 >= n ->
+  exists s2, Increments n s1 s2 /\ WF2 s2.
+Proof.
+  gen s1.
+  induction n.
+  - intros. eexists.
+    split. 1: constructor.
+    auto 1.
+  - intros.
+    eassert (I:_) by
+      (eapply Increment_dec_precond2; eauto 1; lia).
+    destruct I as [s4 [I1 I2]].
+    pose proof (Increment_n I1) as Hn.
+    pose proof (Increment_sgn I1) as Hs.
+    pose proof (Increment_len I1) as Hl.
+    pose proof (Increment_a0 I1) as Hd.
+    rewrite H0 in Hn,Hd.
+    eassert (X:_). {
+      apply IHn.
+      - apply I2.
+      - rewrite <-Hs. apply H0.
+      - inverts I1; lia.
+      - lia.
+    }
+    destruct X as [s3 [X1 X2]].
+    eexists s3.
+    split.
+    + econstructor; eauto 1.
+    + auto 1.
+Qed.
 
-
-Inductive embanked: (nat*(list nat))->Prop :=
-| embanked_intro n1 n2 n3 s1 s2 s3 s4 s5 s6 s7 s8:
-  Zero s1 s2 ->
-  Increments n1 s2 s3 ->
-  Halve s3 s4 ->
-  Increments n2 s4 s5 ->
-  Halve s5 s6 ->
-  Increments n3 s6 s7 ->
-  Zero s7 s8 ->
-  embanked s1.
-
-Inductive weakly_embanked: (nat*(list nat))->Prop :=
+Inductive weakly_embanked: (nat*(list nat))->(nat*(list nat))->nat->nat->nat->nat->Prop :=
 | weakly_embanked_intro n1 n2 s1 s2 s3 s4 s5 s6:
   Zero s1 s2 ->
   Increments n1 s2 s3 ->
   Halve s3 s4 ->
   Increments n2 s4 s5 ->
   Halve s5 s6 ->
-  weakly_embanked s1.
+  weakly_embanked s1 s6 (to_n s3) (to_n s5) (to_n s4) (to_n s6).
+
+Inductive embanked: (nat*(list nat))->(nat*(list nat))->nat->nat->nat->nat->Prop :=
+| embanked_intro n1 s1 s2 s3 s4 s_1 s_2 h_1 h_2:
+  weakly_embanked s1 s2 s_1 s_2 h_1 h_2 ->
+  Increments n1 s2 s3 ->
+  Zero s3 s4 ->
+  embanked s1 s3 s_1 s_2 h_1 h_2.
+
+
+
+Lemma Zero_a0 {s1 s2}:
+  Zero s1 s2 ->
+  fst s1 = S (fst s2).
+Proof.
+  intro Z.
+  inverts Z.
+  reflexivity.
+Qed.
+
+Lemma Zero_a1 {s1 s2}:
+  Zero s1 s2 ->
+  to_l s1 >= 2 ->
+  nth O (snd s1) O = nth O (snd s2) O.
+Proof.
+  intros Z Hl.
+  inverts Z.
+  cbn in Hl.
+  cbn.
+  destruct xs.
+  1: cbn in Hl; lia.
+  reflexivity.
+Qed.
+
+Lemma Halve_a0 {s1 s2}:
+  Halve s1 s2 ->
+  fst s2 = S (nth O (snd s1) O).
+Proof.
+  intro H.
+  inverts H.
+  reflexivity.
+Qed.
+
+Lemma Increments_sgn {n s1 s2}:
+  Increments n s1 s2 ->
+  to_s s1 = to_s s2.
+Proof.
+  intro H.
+  induction H.
+  1: reflexivity.
+  pose proof (Increment_sgn H).
+  congruence.
+Qed.
+
+Lemma Increments_n {n s1 s2}:
+  Increments n s1 s2 ->
+  if to_s s1 then
+    to_n s1 + n = to_n s2
+  else
+    to_n s1 = to_n s2 + n.
+Proof.
+  intro H.
+  induction H.
+  1: destruct (to_s s); lia.
+  pose proof (Increment_n H) as Hn.
+  pose proof (Increment_sgn H) as Hs.
+  rewrite <-Hs in IHIncrements.
+  destruct (to_s s2); lia.
+Qed.
+
+Lemma Increments_len {n s1 s2}:
+  Increments n s1 s2 ->
+  to_l s1 = to_l s2.
+Proof.
+  intro H.
+  induction H.
+  1: reflexivity.
+  pose proof (Increment_len H).
+  congruence.
+Qed.
+
+Lemma div2ceil_pow2sub1 n:
+  n<>O ->
+  (2^n - 1 + 1)/2 = 2^(n-1).
+Proof.
+  intro H.
+  destruct n. 1: congruence.
+  rewrite pow2_1a.
+  pose proof (pow2_nez n).
+  replace (S n - 1) with n by lia.
+  replace (2*2^n-1+1) with (2^n*2) by lia.
+  rewrite div_mul; lia.
+Qed.
+
+Lemma divpow2r_0 n:
+  divpow2r n O = (n+1)/2.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma div2ceil_div2floor_Odd n:
+  Odd n ->
+  (n+1)/2 = n/2 + 1.
+Proof.
+  intro H.
+  inverts H.
+  rewrite (mul_comm 2 x).
+  rewrite <-add_assoc.
+  cbn[add].
+  rewrite div_add_l. 2: lia.
+  rewrite div_add_l. 2: lia.
+  cbn; lia.
+Qed.
+
+Lemma div2ceil_div2floor_Even n:
+  Even n ->
+  (n+1)/2 = n/2.
+Proof.
+  intro H.
+  inverts H.
+  rewrite mul_comm,div_add_l. 2: lia.
+  rewrite div_mul. 2: lia.
+  cbn; lia.
+Qed.
+
+Lemma div2ceil_div2floor n:
+  (n+1)/2 = n/2 + 1 \/
+  (n+1)/2 = n/2.
+Proof.
+  destruct (Even_or_Odd n).
+  - right.
+    apply div2ceil_div2floor_Even,H.
+  - left.
+    apply div2ceil_div2floor_Odd,H.
+Qed.
+
+Lemma weakly_embanked_precond s1:
+  WF1 s1 ->
+  to_s s1 = false ->
+  to_n s1 = O ->
+  to_l s1 >= 2 ->
+  Odd (fst s1) ->
+  fst s1 < 2 ^ to_l s1 - 1 ->
+  nth O (snd s1) O < 3 * (2 ^ (to_l s1 - 1)) ->
+  exists s2 s_1 s_2 h_1 h_2,
+  weakly_embanked s1 s2 s_1 s_2 h_1 h_2.
+Proof.
+  intros Hwf1 Hs1s Hs1n Hs1l Hs1a0_odd Hs1a0_lt Hs1a1_lt.
+  destruct (Zero_precond Hwf1 Hs1s Hs1n Hs1a0_odd) as [s2 [Z12 Hwf2]].
+  pose proof (Zero_sgn Z12) as Hs2s.
+  pose proof (Zero_n Z12) as Hs2n.
+  pose proof (Zero_len Z12) as Hs2l.
+  pose proof (Zero_a0 Z12) as Hs2a0.
+  pose proof (Zero_a1 Z12 Hs1l) as Hs2a1.
+  assert (Hs2a0_even:Even (fst s2)). {
+    rewrite Hs2a0 in Hs1a0_odd.
+    rewrite Odd_succ in Hs1a0_odd.
+    apply Hs1a0_odd.
+  }
+  assert (Hs2n_odd:Odd (to_n s2)). {
+    rewrite Hs2n.
+    replace (to_l s1) with (1+(to_l s1 - 1)) by lia.
+    rewrite pow2_1a.
+    pose proof (pow2_nez (to_l s1 - 1)).
+    destruct (2 ^ (to_l s1 - 1)). 1: congruence.
+    replace (2*(S n)-1) with (S (2*n)) by lia.
+    rewrite Odd_succ.
+    econstructor; reflexivity.
+  }
+  eassert (I23:_). {
+    apply (Increments_dec_precond2 (fst s2) Hwf2 Hs2s).
+    2: lia.
+    rewrite <-Hs2a0.
+    rewrite Hs2n.
+    lia.
+  }
+  destruct I23 as [s3 [I23 Hwf3]].
+  pose proof (Increments_sgn I23) as Hs3s.
+  pose proof (Increments_n I23) as Hs3n.
+  pose proof (Increments_len I23) as Hs3l.
+  pose proof (Increments_a0 I23) as Hs3a0.
+  pose proof (Increments_a I23) as Hs3a.
+  rewrite Hs2s in Hs3n,Hs3a0,Hs3a.
+  pose proof (Hs3a O) as Hs3a1.
+  assert (Hs3a0_0:fst s3 = O) by lia.
+  clear Hs3a0.
+  assert (Hs3n_odd:Odd (to_n s3)). {
+    rewrite Hs3n in Hs2n_odd.
+    apply (Odd_add_Odd_inv_l _ _ Hs2n_odd Hs2a0_even).
+  }
+  pose proof (div2ceil_div2floor_Odd _ Hs3n_odd) as Hs3n_div2.
+  assert (Hs3ngt1:to_n s3 > 1%nat) by lia.
+
+  edestruct (Halve_precond2 Hwf3 Hs3a0_0) as [s4 [H34 Hwf4]]. 1: lia.
+  pose proof (Halve_sgn H34) as Hs4s.
+  pose proof (Halve_n H34) as Hs4n.
+  pose proof (Halve_len H34) as Hs4l.
+  pose proof (Halve_a0 H34) as Hs4a0.
+  rewrite <-Hs3s,Hs2s in Hs4s.
+  cbn in Hs4s; symmetry in Hs4s.
+
+  rewrite Hs2n in Hs3a1.
+  do 2 rewrite divpow2r_0 in Hs3a1.
+  rewrite div2ceil_pow2sub1 in Hs3a1. 2: lia.
+  rewrite div2_div in Hs4n.
+  rewrite Hs3n_div2 in Hs3a1.
+
+  remember (nth O (snd s1) O) as a11.
+  remember (nth O (snd s2) O) as a21.
+  remember (nth O (snd s3) O) as a31.
+  remember (nth O (snd s4) O) as a41.
+  remember (fst s1) as a10.
+  remember (fst s2) as a20.
+  remember (fst s3) as a30.
+  remember (fst s4) as a40.
+  remember (to_n s1) as n1.
+  remember (to_n s2) as n2.
+  remember (to_n s3) as n3.
+  remember (to_n s4) as n4.
+  remember (to_l s1) as l1.
+  remember (to_l s2) as l2.
+  remember (to_l s3) as l3.
+  remember (to_l s4) as l4.
+  assert (H_a11_a40:a11 + 2 ^ (l1 - 1) = a40 + n3 / 2) by lia.
+  Search (n4).
+  eassert (I45:_). {
+    apply (Increments_inc_precond2 (fst s4) Hwf4 Hs4s).
+    3: lia.
+    - rewrite <-Heqn4,<-Heqa40,<-Heql4.
+      rewrite <-Hs4n.
+      replace (l4-2) with (l1-1) by lia.
+      lia.
+    - rewrite <-Heqn4,<-Heqa40,<-Heql4.
+      rewrite <-Hs4n.
+      replace (l4) with (l1+1) by lia.
+      replace (l1+1) with (1+(1+(l1-1))) by lia.
+      do 2 rewrite pow2_1a.
+      lia.
+  }
+  rewrite <-Heqa40 in I45.
+  destruct I45 as [s5 [I45 Hwf5]].
+  pose proof (Increments_sgn I45) as Hs5s.
+  pose proof (Increments_n I45) as Hs5n.
+  pose proof (Increments_len I45) as Hs5l.
+  pose proof (Increments_a0 I45) as Hs5a0.
+  pose proof (Increments_a I45) as Hs5a.
+  rewrite Hs4s in Hs5n,Hs5a0,Hs5a.
+  assert (Hs5a0_0:fst s5 = O) by lia.
+  clear Hs5a0.
+
+  edestruct (Halve_precond1 Hwf5 Hs5a0_0) as [s6 [H56 Hwf6]]. 1: lia.
+  pose proof (Halve_sgn H56) as Hs6s.
+  pose proof (Halve_n H56) as Hs6n.
+  pose proof (Halve_len H56) as Hs6l.
+  pose proof (Halve_a0 H56) as Hs6a0.
+  rewrite <-Hs5s,Hs4s in Hs6s.
+  cbn in Hs6s. symmetry in Hs6s.
+  do 5 eexists.
+  econstructor.
+  - apply Z12.
+  - apply I23.
+  - apply H34.
+  - apply I45.
+  - apply H56.
+Qed.
+
 
 
 
