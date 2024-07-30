@@ -1,4 +1,4 @@
-(** * Instantiating the development to machines with 5 states and 2 symbols *)
+(** * Instantiating the development to machines with 6 states and 2 symbols *)
 
 From Coq Require Import Lists.List. Import ListNotations.
 From BusyCoq Require Export Flip.
