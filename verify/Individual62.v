@@ -139,6 +139,26 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma lpow_mul{A} (a:list A) b n:
+  a^^(b*n) = (a^^n)^^b.
+Proof.
+  induction b.
+  - reflexivity.
+  - cbn.
+    rewrite lpow_add.
+    congruence.
+Qed.
+
+Lemma lpow_shift21e(a:Sym)(b:Stream Sym) n:
+  a >> [a;a]^^n *> b = [a;a]^^n *> a >> b.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    rewrite IHn.
+    reflexivity.
+Qed.
+
 
 
 
