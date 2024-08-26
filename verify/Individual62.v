@@ -139,6 +139,28 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma lpow_rotate a0 a1 (b:Stream Sym) n:
+  (a1::a0)^^n *> a1 >> b = a1 >> (a0++[a1])^^n *> b.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    simpl_tape.
+    rewrite IHn.
+    reflexivity.
+Qed.
+
+Lemma lpow_rotate' a0 a1 (b:Stream Sym) n:
+  (a1++a0)^^n *> a1 *> b = a1 *> (a0++a1)^^n *> b.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    simpl_tape.
+    rewrite IHn.
+    reflexivity.
+Qed.
+
 Lemma lpow_mul{A} (a:list A) b n:
   a^^(b*n) = (a^^n)^^b.
 Proof.

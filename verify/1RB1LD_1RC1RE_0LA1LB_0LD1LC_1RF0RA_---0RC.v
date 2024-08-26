@@ -51,17 +51,6 @@ Proof.
   execute.
 Qed.
 
-Lemma lpow_rotate a0 a1 (b:Stream Sym) n:
-  (a1::a0)^^n *> a1 >> b = a1 >> (a0++[a1])^^n *> b.
-Proof.
-  induction n.
-  - reflexivity.
-  - cbn.
-    simpl_tape.
-    rewrite IHn.
-    reflexivity.
-Qed.
-
 Definition S0 a b c :=
   const 0 <* [0;1;1] <* [0;1;1;1;1;1]^^a <{{B}} [1;1] *> [0;1;1] *> [0;1]^^b *> [0;1;1]^^c *> const 0.
 
