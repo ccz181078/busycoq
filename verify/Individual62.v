@@ -181,6 +181,337 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma flat_map_lpow{A B} (f:A->list B) ls n:
+  List.flat_map f (ls^^n) = (List.flat_map f ls)^^n.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    rewrite <-IHn.
+    apply List.flat_map_app.
+Qed.
+
+Lemma Forall_lpow{A} (P:A->Prop) a n:
+  List.Forall P a ->
+  List.Forall P (a^^n).
+Proof.
+  intro H.
+  induction n.
+  - auto.
+  - cbn.
+    rewrite List.Forall_app; split; auto.
+Qed.
+
+Lemma lpow_length{A} (s:list A) n:
+  List.length (s^^n) = n*(List.length s).
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    rewrite List.app_length,IHn.
+    reflexivity.
+Qed.
+
+
+Lemma shift_rule_L d tm x x' X:
+  (forall l r,
+    l <* x <{{X}} d *> r -[ tm ]->*
+    l <{{X}} d *> x' *> r) ->
+  forall l r n,
+    l <* x^^n <{{X}} d *> r -[ tm ]->*
+    l <{{X}} d *> x'^^n *> r.
+Proof.
+  intros.
+  gen l r.
+  induction n; intros.
+  - finish.
+  - simpl_tape.
+    follow H.
+    follow IHn.
+    rewrite lpow_shift'.
+    finish.
+Qed.
+
+Lemma shift_rule_R d tm x x' X:
+  (forall l r,
+    l <* d {{X}}> x *> r -[ tm ]->*
+    l <* x' <* d {{X}}> r) ->
+  forall l r n,
+    l <* d {{X}}> x^^n *> r -[ tm ]->*
+    l <* x'^^n <* d {{X}}> r.
+Proof.
+  intros.
+  gen l r.
+  induction n; intros.
+  - finish.
+  - simpl_tape.
+    follow H.
+    follow IHn.
+    rewrite lpow_shift'.
+    finish.
+Qed.
+
+Lemma Str_cons_def{A} (a:A) b:
+  a >> b = [a] *> b.
+Proof.
+  reflexivity.
+Qed.
+
+Ltac step1 :=
+  match goal with
+  | |- (_ -[ _ ]->+ _) => eapply progress_intro
+  | |- (_ -[ _ ]->* _) => eapply evstep_step
+  | _ => fail "fail1"
+  end; [prove_step|simpl_tape].
+
+Ltac simpl_rotate :=
+  cbn;
+  repeat (rewrite lpow_rotate; cbn).
+
+Ltac step1s :=
+  repeat ((try (apply evstep_refl'; reflexivity; fail)); step1).
+
+Ltac execute_with_rotate :=
+  simpl_rotate; step1s.
+
+Ltac find_shift_rule :=
+  steps;
+  eapply evstep_refl';
+  repeat f_equal;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  cbn[List.app];
+  f_equal;
+  fail.
+
+Open Scope list.
+
+Ltac use_shift_rule :=
+  match goal with
+  | |- (_ -[ _ ]->+ _) => eapply evstep_progress_trans
+  | |- (_ -[ _ ]->* _) => eapply evstep_trans
+  | _ => idtac "fail1"; fail
+  end; [
+    let x :=
+    match goal with
+    | |- (_ <* _ ^^ _ <{{ _ }} _ -[ _ ]->* _) => shift_rule_L
+    | |- (_ {{ _ }}> _ ^^ _ *> _ -[ _ ]->* _) => shift_rule_R
+    | _ => idtac "fail2"; fail
+    end in
+      (eapply (x []); find_shift_rule) ||
+      (eapply (x [_]); find_shift_rule) ||
+      (eapply (x [_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_]); find_shift_rule) ||
+      (fail)
+  |].
+
+Ltac execute_with_shift_rule :=
+  intros;
+  repeat (execute_with_rotate; use_shift_rule).
+
+Ltac simpl_flat_map :=
+  repeat rewrite List.flat_map_app;
+  repeat rewrite flat_map_lpow;
+  cbn;
+  simpl_tape.
+
+Ltac casen_execute_with_shift_rule n :=
+  (execute_with_shift_rule; fail) ||
+  (destruct n; [ step1s | execute_with_shift_rule ]).
+
+
+
+Definition Q_eqb(a b:Q):bool:=
+match a,b with
+| A,A | B,B | C,C | D,D | E,E | F,F => true
+| _,_ => false
+end.
+
+Lemma Q_eqb_spec a b:
+  Q_eqb a b = true <-> a=b.
+Proof.
+  destruct a,b; cbn; split; congruence.
+Qed.
+
+Definition Sym_eqb(a b:Sym):bool:=
+match a,b with
+| 0,0 | 1,1 => true
+| _,_ => false
+end.
+
+Lemma Sym_eqb_spec a b:
+  Sym_eqb a b = true <-> a=b.
+Proof.
+  destruct a,b; cbn; split; congruence.
+Qed.
+
+Definition cconfig:Set := (list Sym)*(list Sym)*Sym*Q.
+
+Definition cconfig_to_config(x:cconfig):Q*tape:=
+match x with
+| (l,r,m,s) =>
+  (s,(const 0 <* l,m,r *>const 0))
+end.
+
+Definition cconfig_step(tm:TM)(x:cconfig):option cconfig:=
+match x with
+| (l,r,m,s) =>
+  match tm (s,m) with
+  | Some (o,d,s') =>
+    match d with
+    | L => Some (List.tl l,o::r,List.hd 0 l,s')
+    | R => Some (o::l,List.tl r,List.hd 0 r,s')
+    end
+  | None => None
+  end
+end.
+
+Notation "x &&& y" := (if x then y else false) (at level 80, right associativity).
+Notation "x ||| y" := (if x then true else y) (at level 85, right associativity).
+
+Lemma andb_shortcut_spec(a b:bool):
+  (a&&&b) = (a&&b)%bool.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma orb_shortcut_spec(a b:bool):
+  (a|||b) = (a||b)%bool.
+Proof.
+  reflexivity.
+Qed.
+
+Fixpoint cside_eqb_const0(x:list Sym):bool :=
+match x with
+| a::b => Sym_eqb a 0 &&& cside_eqb_const0 b
+| nil => true
+end.
+
+Fixpoint cside_eqb(x y:list Sym):bool :=
+match x,y with
+| a::b,c::d => Sym_eqb a c &&& cside_eqb b d
+| a::b,nil => cside_eqb_const0 x
+| nil,_ => cside_eqb_const0 y
+end.
+
+Definition cconfig_eqb(x y:cconfig):bool :=
+match x,y with
+| (l,r,m,s),(l',r',m',s') =>
+  Q_eqb s s' &&&
+  Sym_eqb m m' &&&
+  cside_eqb l l' &&&
+  cside_eqb r r'
+end.
+
+Lemma cside_eqb_const0_spec x:
+  cside_eqb_const0 x = true ->
+  x *> const 0 = const 0.
+Proof.
+  induction x; cbn; try congruence.
+  repeat rewrite andb_shortcut_spec.
+  rewrite Bool.andb_true_iff.
+  rewrite Sym_eqb_spec.
+  intro H.
+  destruct H as [H H0].
+  subst.
+  rewrite IHx; auto.
+  rewrite <-const_unfold; auto.
+Qed.
+
+Lemma cside_eqb_spec x y:
+  cside_eqb x y = true ->
+  x *> const 0 = y *> const 0.
+Proof.
+  gen y.
+  induction x; intros.
+  - cbn. rewrite cside_eqb_const0_spec; auto.
+  - cbn.
+    cbn in H.
+    destruct y; repeat rewrite andb_shortcut_spec,Bool.andb_true_iff in H.
+    + destruct H as [H H0].
+      rewrite Sym_eqb_spec in H. subst.
+      rewrite cside_eqb_const0_spec; auto.
+      rewrite <-const_unfold; auto.
+    + destruct H as [H H0].
+      rewrite Sym_eqb_spec in H. subst. cbn.
+      erewrite IHx; eauto.
+Qed.
+
+Lemma cconfig_eqb_spec x y:
+  cconfig_eqb x y = true ->
+  cconfig_to_config x = cconfig_to_config y.
+Proof.
+  destruct x as [[[l1 r1] m1] s1].
+  destruct y as [[[l2 r2] m2] s2].
+  cbn.
+  repeat rewrite andb_shortcut_spec.
+  repeat rewrite Bool.andb_true_iff.
+  rewrite Q_eqb_spec,Sym_eqb_spec.
+  intro H.
+  destruct H as [H [H0 [H1 H2]]].
+  subst.
+  rewrite (cside_eqb_spec _ _ H1).
+  rewrite (cside_eqb_spec _ _ H2).
+  reflexivity.
+Qed.
+
+Lemma cconfig_step_spec tm x:
+  match cconfig_step tm x with
+  | Some y => (cconfig_to_config x) -[ tm ]-> (cconfig_to_config y)
+  | None => True
+  end.
+Proof.
+  destruct x as [[[l1 r1] m1] s1].
+  cbn.
+  destruct (tm (s1,m1)) as [[[o d] s']|] eqn:E.
+  2: auto.
+  destruct d; cbn.
+  - epose proof (@step_left tm s1 _ m1 _ (l1 *> const 0) (r1 *> const 0) E) as H.
+    cbn in H.
+    destruct l1; apply H.
+  - epose proof (@step_right tm s1 _ m1 _ (l1 *> const 0) (r1 *> const 0) E) as H.
+    cbn in H.
+    destruct r1; apply H.
+Qed.
+
+Fixpoint cconfig_evstep_dec(tm:TM)(x y:cconfig)(n:nat) :=
+match n with
+| O => false
+| S n0 =>
+  cconfig_eqb x y |||
+  match cconfig_step tm x with
+  | None => false
+  | Some x0 => cconfig_evstep_dec tm x0 y n0
+  end
+end.
+
+Lemma cconfig_evstep_dec_spec tm x y n:
+  cconfig_evstep_dec tm x y n = true ->
+  (cconfig_to_config x) -[ tm ]->* (cconfig_to_config y).
+Proof.
+  gen x.
+  induction n; cbn; intros.
+  1: congruence.
+  pose proof (cconfig_eqb_spec x y) as HE.
+  destruct (cconfig_eqb x y) eqn:E.
+  - rewrite HE; auto.
+  - pose proof (cconfig_step_spec tm x) as HE0.
+    destruct (cconfig_step tm x) as [x0|].
+    + eapply evstep_step; eauto.
+    + congruence.
+Qed.
+
+Ltac solve_init :=
+    repeat rewrite Str_cons_def;
+    repeat rewrite <-Str_app_assoc;
+    cbn[List.app];
+    match goal with
+    | |- c0 -[ ?tm ]->* (?q,(?l *> const 0, ?m, ?r *> const 0)) =>
+      apply (cconfig_evstep_dec_spec tm (nil,nil,s0,q0) (l,r,m,q) 1000000)
+    end;
+    vm_compute; reflexivity.
 
 
 

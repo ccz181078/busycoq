@@ -377,16 +377,6 @@ Proof.
     finish.
 Qed.
 
-Lemma flat_map_lpow{A B} (f:A->list B) ls n:
-  flat_map f (ls^^n) = (flat_map f ls)^^n.
-Proof.
-  induction n.
-  - reflexivity.
-  - cbn.
-    rewrite <-IHn.
-    apply flat_map_app.
-Qed.
-
 
 Definition r1 := [0;1;1;1] *> const 0.
 Definition r2 := [1;1] *> const 0.
@@ -815,27 +805,6 @@ match x with
 | config_l4_r2_s s n0 n1 n2 => Forall Odd s /\ (length s >= 3)
 end.
 
-Lemma Forall_lpow{A} (P:A->Prop) a n:
-  Forall P a ->
-  Forall P (a^^n).
-Proof.
-  intro H.
-  induction n.
-  - auto.
-  - cbn.
-    rewrite Forall_app; split; auto.
-Qed.
-
-Lemma lpow_length{A} (s:list A) n:
-  Datatypes.length (s^^n) = n*(Datatypes.length s).
-Proof.
-  induction n.
-  - reflexivity.
-  - cbn.
-    rewrite app_length,IHn.
-    reflexivity.
-Qed.
-
 Ltac solve_Forall:=
   repeat (
   rewrite Forall_app ||
@@ -845,12 +814,7 @@ Ltac solve_Forall:=
 
 Theorem nonhalt: ~halts tm c0.
 apply multistep_nonhalt with (c':=to_config (config_l1_r2 [1;1;1;1] 5 0 0)%nat).
-1: {
-  do 79 ((do 100 (eapply evstep_step; [prove_step|])); simpl_tape).
-  do 56 (eapply evstep_step; [prove_step|]).
-  simpl_tape.
-  finish.
-}
+1: cbn; solve_init.
 apply (progress_nonhalt_cond tm _ _ _ P).
 2:{
   split.
