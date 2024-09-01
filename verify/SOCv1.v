@@ -169,63 +169,6 @@ Proof.
   apply BinaryCounter.LInc; assumption.
 Qed.
 
-Lemma LC_Overflow_0' n:
-  pow2' n <> xH ->
-  LC (pow2' n) <| RC 0 -->+
-  LC (pow2 n) |> RC 1.
-Proof.
-  intro H.
-  destruct n as [|n].
-  1: cbn in H; lia.
-  replace (S n) with (n+1) by lia.
-  unfold LC.
-  rewrite Counter_pow2,Counter_pow2'.
-  replace (RC 0) with (rd0 *> const 0). 2:{
-    cbn.
-    repeat rewrite <-const_unfold.
-    reflexivity.
-  }
-  follow10 LOverflow_0.
-  cbn.
-  repeat rewrite <-const_unfold.
-  finish.
-Qed.
-
-Lemma LC_Overflow_1' n:
-  pow2' n <> xH ->
-  (exists k0,
-  LC (pow2' n) <| RC 1 -->+
-  LC k0 |> RC 0 /\
-  ((pow2 n)*2 <= k0 < ((pow2 n)+1)*2)%positive
-  ).
-Proof.
-  intro H.
-  destruct n as [|n].
-  1: cbn in H; lia.
-  replace (S n) with (n+1) by lia.
-  destruct (LC_shl (pow2 (n+1)) [v0]) as [k0 [H0 H1]].
-  cbn in H0,H1.
-  rewrite app_nil_r in H0.
-  exists k0.
-  split.
-  - rewrite <-H0.
-    unfold LC.
-    rewrite Counter_pow2,Counter_pow2'.
-    replace (RC 1) with (rd1 *> const 0). 2:{
-      cbn.
-      repeat rewrite <-const_unfold.
-      reflexivity.
-    }
-    follow10 LOverflow_1.
-    replace (RC 0) with ([0;0;0]*>const 0). 2:{
-      cbn.
-      repeat rewrite <-const_unfold.
-      reflexivity.
-    }
-    finish.
-  - lia.
-Qed.
-
 Lemma LC_Overflow_0 n m:
   pow2' n <> xH ->
   LC (pow2' n) <| RC (Npos (m~0)) -->+
