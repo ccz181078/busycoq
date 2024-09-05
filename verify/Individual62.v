@@ -44,6 +44,8 @@ Ltac follow11 H :=
 Ltac steps := cbn; intros;
   repeat ((try apply evstep_refl); step).
 
+Ltac solve_const0_eq:=
+  cbv; (repeat rewrite <-const_unfold); reflexivity.
 
 Ltac solve_shift_rule H l r n :=
   gen l r;
@@ -210,6 +212,18 @@ Proof.
   - cbn.
     rewrite List.app_length,IHn.
     reflexivity.
+Qed.
+
+Lemma lpow_all0 a n:
+  a *> const 0 = const 0 ->
+  a^^n *> const 0 = const 0.
+Proof.
+  intro H.
+  induction n.
+  - reflexivity.
+  - simpl_tape.
+    rewrite IHn.
+    apply H.
 Qed.
 
 
@@ -503,15 +517,59 @@ Proof.
     + congruence.
 Qed.
 
+Lemma simpl_directed_head_l (l:list Sym)(r:side) (q:Q):
+  const 0 <* l <{{ q }} r =
+  (q,(const 0 <* (List.tl l), (List.hd 0 l), r)).
+Proof.
+  destruct l; reflexivity.
+Qed.
+
+Lemma simpl_directed_head_r (l:side)(r:list Sym) (q:Q):
+  l {{ q }}> r *> const 0 =
+  (q,(l, (List.hd 0 r), (List.tl r) *> const 0)).
+Proof.
+  destruct r; reflexivity.
+Qed.
+
+Lemma config_to_cconfig l r q m:
+  (q,(const 0 <* l,m,r *> const 0)) =
+  cconfig_to_config (l,r,m,q).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma l_const0_app_nil (r:side)(m:Sym)(q:Q):
+  (q,(const 0,m,r)) =
+  (q,([] *> const 0,m,r)).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma r_const0_app_nil (l:side)(m:Sym)(q:Q):
+  (q,(l,m,const 0)) =
+  (q,(l,m,[] *> const 0)).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma c0_to_cconfig:
+  c0 = cconfig_to_config (nil,nil,0,q0).
+Proof.
+  reflexivity.
+Qed.
+
 Ltac solve_init :=
-    repeat rewrite Str_cons_def;
-    repeat rewrite <-Str_app_assoc;
-    cbn[List.app];
-    match goal with
-    | |- c0 -[ ?tm ]->* (?q,(?l *> const 0, ?m, ?r *> const 0)) =>
-      apply (cconfig_evstep_dec_spec tm (nil,nil,s0,q0) (l,r,m,q) 1000000)
-    end;
-    vm_compute; reflexivity.
+  rewrite c0_to_cconfig;
+  repeat rewrite simpl_directed_head_l;
+  repeat rewrite simpl_directed_head_r;
+  repeat rewrite l_const0_app_nil;
+  repeat rewrite r_const0_app_nil;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  repeat rewrite config_to_cconfig;
+  apply cconfig_evstep_dec_spec with (n:=1000000);
+  vm_compute;
+  reflexivity.
 
 
 

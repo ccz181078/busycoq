@@ -72,7 +72,7 @@ Definition LC n :=
   BinaryCounter d0 d1 (d1a *> const 0) n.
 
 Definition RC n :=
-  BinaryCounter_0 rd0 rd1 (rd1 *> const 0) n.
+  BinaryCounter_0 rd1 n.
 
 Definition RC0 n m :=
   BinaryCounter rd0 rd1 ([0;0;1] *> RC m) n.
@@ -116,8 +116,6 @@ Qed.
 
 
 
-Ltac solve_const0_eq:=
-  cbv; (repeat rewrite <-const_unfold); reflexivity.
 
 
 Lemma LC_Inc n (Hnf:not_full n) r:
@@ -161,7 +159,6 @@ Lemma RC_Inc n l:
   l <| RC (N.succ n).
 Proof.
   apply BinaryCounter.RInc_0; auto.
-  solve_const0_eq.
 Qed.
 
 Lemma RC0_Inc n m (Hnf:not_full n) l:

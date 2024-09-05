@@ -15,12 +15,6 @@ match n with
 | xO n0 => d0 *> (BinaryCounter n0)
 end.
 
-Definition BinaryCounter_0 (n:N) :=
-match n with
-| N0 => const 0
-| Npos n0 => BinaryCounter n0
-end.
-
 Lemma not_full_Inc {n} (Hnf:not_full n):
   exists s i,
   BinaryCounter n = d1^^i *> d0 *> s /\
@@ -68,39 +62,24 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma Counter_mulpow2 m n:
+  BinaryCounter (m*(pow2 n)) =
+  d0^^n *> BinaryCounter m.
+Proof.
+  induction n; cbn.
+  - f_equal; lia.
+  - simpl_tape.
+    rewrite <-IHn.
+    rewrite POrderedType.Positive_as_OT.mul_xO_r.
+    reflexivity.
+Qed.
+
 Lemma Counter_pow2' n:
   BinaryCounter (pow2' n) =
   d1^^n *> d1a.
 Proof.
   induction n; cbn; auto.
   rewrite IHn,Str_app_assoc.
-  reflexivity.
-Qed.
-
-Lemma Counter_shr_S_ctz n:
-  d1a = d1 *> const 0 ->
-  BinaryCounter_0 (Npos n) =
-  d0^^(ctz n) *> d1 *> BinaryCounter_0 (shr n (S (ctz n))).
-Proof.
-  intro H.
-  induction n; cbn; auto.
-  cbn in IHn.
-  rewrite IHn.
-  simpl_tape.
-  reflexivity.
-Qed.
-
-Lemma BinaryCounter_0_d0 n:
-  BinaryCounter_0 (Npos (n~0)) =
-  d0 *> BinaryCounter_0 (Npos n).
-Proof.
-  reflexivity.
-Qed.
-
-Lemma BinaryCounter_0_d1 n:
-  BinaryCounter_0 (Npos (n~1)) =
-  d1 *> BinaryCounter_0 (Npos n).
-Proof.
   reflexivity.
 Qed.
 
@@ -145,12 +124,162 @@ Proof.
   apply H.
 Qed.
 
+End BinaryCounter.
+
+Section BinaryCounter_0.
+
+Hypothesis d1:list Sym.
+Definition d0:list Sym := List.repeat 0 (length d1).
+Definition d1a := d1 *> const 0.
+
+Definition BinaryCounter_0 (n:N) :=
+match n with
+| N0 => const 0
+| Npos n0 => BinaryCounter d0 d1 d1a n0
+end.
+
+Lemma BinaryCounter_0_d0 n:
+  BinaryCounter_0 (Npos (n~0)) =
+  d0 *> BinaryCounter_0 (Npos n).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma BinaryCounter_0_d1 n:
+  BinaryCounter_0 (Npos (n~1)) =
+  d1 *> BinaryCounter_0 (Npos n).
+Proof.
+  reflexivity.
+Qed.
+
+Lemma d0_all0:
+  d0 *> const 0 = const 0.
+Proof.
+  unfold d0.
+  induction (length d1); cbn.
+  - reflexivity.
+  - rewrite IHn.
+    solve_const0_eq.
+Qed.
+
+Lemma BinaryCounter_0_d0' n:
+  BinaryCounter_0 (n*2+0) =
+  d0 *> BinaryCounter_0 n.
+Proof.
+  destruct n as [|n].
+  - cbn.
+    rewrite d0_all0.
+    reflexivity.
+  - replace ((N.pos n)*2+0)%N with (N.pos n~0) by lia.
+    apply BinaryCounter_0_d0.
+Qed.
+
+Lemma BinaryCounter_0_d1' n:
+  BinaryCounter_0 (n*2+1) =
+  d1 *> BinaryCounter_0 n.
+Proof.
+  destruct n as [|n].
+  - reflexivity.
+  - replace ((N.pos n)*2+1)%N with (N.pos n~1) by lia.
+    apply BinaryCounter_0_d1.
+Qed.
+
+
+
+Lemma Counter_shr_S_ctz n:
+  BinaryCounter_0 (Npos n) =
+  d0^^(ctz n) *> d1 *> BinaryCounter_0 (shr n (S (ctz n))).
+Proof.
+  induction n; cbn; auto.
+  cbn in IHn.
+  rewrite IHn.
+  simpl_tape.
+  reflexivity.
+Qed.
+
+Lemma Counter_shr_S_ctzS n:
+  BinaryCounter_0 n =
+  d1^^(ctz (N.succ_pos n)) *> d0 *> BinaryCounter_0 (shr (N.succ_pos n) (S (ctz (N.succ_pos n)))).
+Proof.
+  remember (N.succ_pos n) as n'.
+  gen n.
+  induction n'; intros.
+  - cbn[ctz]. cbn[shr].
+    destruct n as [|[n|n|]]; try lia.
+    rewrite BinaryCounter_0_d0.
+    assert (n=n') by lia.
+    subst.
+    reflexivity.
+  - cbn[shr]. cbn[ctz].
+    destruct n as [|[n|n|]]; try lia.
+    + rewrite BinaryCounter_0_d1.
+      cbn[lpow]. rewrite Str_app_assoc.
+      rewrite <-(IHn' (N.pos n)).
+      * reflexivity.
+      * lia.
+    + assert (n'=1%positive) by lia.
+      subst.
+      cbn. simpl_tape. cbn.
+      rewrite d0_all0.
+      reflexivity.
+  - assert (n=N0) by lia.
+    subst.
+    cbn.
+    rewrite d0_all0.
+    reflexivity.
+Qed.
+
+Hypothesis tm:TM.
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+
+Local Notation "l <| r" :=
+  (l <{{QL}} qL *> r) (at level 30).
+
+Local Notation "l |> r" :=
+  (l <* qR {{QR}}> r) (at level 30).
+Lemma LInc_0:
+  (forall l r n,
+    d1^^n *> d0 *> l <| r -[ tm ]->+
+    d0^^n *> d1 *> l |> r) ->
+  forall n r,
+    BinaryCounter_0 n <| r -[ tm ]->+
+    BinaryCounter_0 (N.succ n) |> r.
+Proof.
+  intros.
+  destruct n as [|n].
+  - cbn[BinaryCounter_0].
+    rewrite <-d0_all0.
+    change (d0 *> const 0) with (d1^^0 *> d0 *> const 0).
+    follow10 H.
+    cbn.
+    unfold d1a.
+    finish.
+  - destruct (is_full n) eqn:E.
+    + rewrite <-is_full_spec in E.
+      cbn.
+      destruct (full_Overflow d0 d1 d1a E) as [i [H2 [H3 H4]]].
+      rewrite H2,H3.
+      unfold d1a.
+      rewrite lpow_shift'.
+      specialize (H (const 0) r (S i)).
+      cbn in H. cbn.
+      gen H.
+      simpl_tape.
+      rewrite d0_all0.
+      tauto.
+    + rewrite <-is_full_spec' in E.
+      destruct (not_full_Inc d0 d1 d1a E) as [s [i [H2 H3]]].
+      cbn.
+      rewrite H2,H3.
+      apply H.
+Qed.
+
 Lemma RInc_0:
   (forall l r n,
     l |> d1^^n *> d0 *> r -[ tm ]->+
     l <| d0^^n *> d1 *> r) ->
-  d1a = d1 *> const 0 ->
-  d0 *> const 0 = const 0 ->
   forall n l,
     l |> BinaryCounter_0 n -[ tm ]->+
     l <| BinaryCounter_0 (N.succ n).
@@ -158,31 +287,31 @@ Proof.
   intros.
   destruct n as [|n].
   - cbn[BinaryCounter_0].
-    rewrite <-H1.
+    rewrite <-d0_all0.
     change (d0 *> const 0) with (d1^^0 *> d0 *> const 0).
     follow10 H.
     cbn.
-    rewrite H0.
+    unfold d1a.
     finish.
   - destruct (is_full n) eqn:E.
     + rewrite <-is_full_spec in E.
       cbn.
-      destruct (full_Overflow E) as [i [H2 [H3 H4]]].
+      destruct (full_Overflow d0 d1 d1a E) as [i [H2 [H3 H4]]].
       rewrite H2,H3.
-      rewrite H0.
+      unfold d1a.
       rewrite lpow_shift'.
       specialize (H l (const 0) (S i)).
       cbn in H. cbn.
       gen H.
       simpl_tape.
-      rewrite H1.
+      rewrite d0_all0.
       tauto.
     + rewrite <-is_full_spec' in E.
-      destruct (not_full_Inc E) as [s [i [H2 H3]]].
+      destruct (not_full_Inc d0 d1 d1a E) as [s [i [H2 H3]]].
       cbn.
       rewrite H2,H3.
       apply H.
 Qed.
 
 
-End BinaryCounter.
+End BinaryCounter_0.

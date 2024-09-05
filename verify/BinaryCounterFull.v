@@ -51,6 +51,29 @@ match k with
   end
 end.
 
+Lemma shr_S_le n m:
+  (shr n (S m) <= shr n m)%N.
+Proof.
+  generalize dependent n.
+  induction m; intros.
+  - destruct n; cbn; lia.
+  - destruct n.
+    + apply (IHm n).
+    + apply (IHm n).
+    + cbn. lia.
+Qed.
+
+Lemma shr_S_lt n m:
+  (shr n (S m) < Npos n)%N.
+Proof.
+  induction m.
+  - destruct n; cbn; lia.
+  - eapply N.le_lt_trans.
+    2: apply IHm.
+    apply shr_S_le.
+Qed.
+
+
 
 
 Open Scope positive.
@@ -246,6 +269,18 @@ Lemma log2_pow2 x:
 Proof.
   induction x; cbn; auto.
 Qed.
+
+Lemma log2_mulpow2 n m: (log2 (n*(pow2 m)) = m + log2 n)%nat.
+Proof.
+  induction m.
+  - cbn.
+    f_equal. lia.
+  - cbn.
+    rewrite POrderedType.Positive_as_OT.mul_xO_r.
+    rewrite <-IHm.
+    reflexivity.
+Qed.
+
 
 Lemma rest_pow2 x:
   (rest (pow2 x) + 1 = Npos (pow2 x))%N.

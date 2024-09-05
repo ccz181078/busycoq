@@ -103,7 +103,7 @@ Definition LC n :=
   BinaryCounter d0 d1 (d1a *> const 0) n.
 
 Definition RC n :=
-  BinaryCounter_0 rd0 rd1 (rd1 *> const 0) n.
+  BinaryCounter_0 rd1 n.
 
 Definition RC0 n m :=
   BinaryCounter rd0 rd1 ([0] *> rd1 *> RC m) n.
@@ -187,7 +187,7 @@ Proof.
   cbn[BinaryCounter].
   rewrite Counter_pow2.
   rewrite rotate_0.
-  rewrite <-Counter_shr_S_ctz; auto.
+  rewrite Counter_shr_S_ctz; auto.
 Qed.
 
 Lemma LC_Overflow_1 n m:
@@ -216,7 +216,7 @@ Proof.
     cbn[BinaryCounter].
     rewrite Counter_pow2.
     rewrite rotate_000.
-    rewrite <-Counter_shr_S_ctz; auto.
+    rewrite Counter_shr_S_ctz; auto.
   - apply H1.
 Qed.
 
@@ -225,8 +225,7 @@ Lemma RC_Inc n l:
   l <| RC (N.succ n).
 Proof.
   apply BinaryCounter.RInc_0; auto.
-  - intros. apply RInc.
-  - cbv; (repeat rewrite <-const_unfold); reflexivity.
+  intros. apply RInc.
 Qed.
 
 Lemma RC0_Inc n m (Hnf:not_full n) l:
@@ -293,7 +292,7 @@ Proof.
     follow10 ROverflow_11.
     rewrite rotate_000.
     unfold RC.
-    rewrite <-Counter_shr_S_ctz; auto.
+    rewrite Counter_shr_S_ctz; auto.
     rewrite H0.
     finish.
   - replace (n * 2 + 1) with (length (ls3 ++ ls4 ^^ n ++ ls5)).
@@ -367,7 +366,7 @@ Proof.
     follow10 ROverflow_1001.
     rewrite rotate_000.
     unfold RC.
-    rewrite <-Counter_shr_S_ctz; auto.
+    rewrite Counter_shr_S_ctz; auto.
     rewrite H0.
     finish.
   - replace (n * 2 + 2) with (length (ls0 ++ ls1 ^^ n ++ ls2)).
