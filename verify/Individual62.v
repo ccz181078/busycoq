@@ -560,12 +560,12 @@ Qed.
 
 Ltac solve_init :=
   rewrite c0_to_cconfig;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
   repeat rewrite simpl_directed_head_l;
   repeat rewrite simpl_directed_head_r;
   repeat rewrite l_const0_app_nil;
   repeat rewrite r_const0_app_nil;
-  repeat rewrite Str_cons_def;
-  repeat rewrite <-Str_app_assoc;
   repeat rewrite config_to_cconfig;
   apply cconfig_evstep_dec_spec with (n:=1000000);
   vm_compute;
