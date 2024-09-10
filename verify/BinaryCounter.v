@@ -124,6 +124,48 @@ Proof.
   apply H.
 Qed.
 
+Lemma LInc':
+  (forall l r n,
+    l <* d0 <* d1^^n <| r -[ tm ]->+
+    l <* d1 <* d0^^n |> r) ->
+  (forall r n,
+    d1a <* d1^^n <| r -[ tm ]->+
+    d1a <* d0^^(1+n) |> r) ->
+  forall n r,
+    BinaryCounter n <| r -[ tm ]->+
+    BinaryCounter (Pos.succ n) |> r.
+Proof.
+  intros H H0 n r.
+  destruct (is_full n) eqn:E.
+  - rewrite <-is_full_spec in E.
+    destruct (full_Overflow E) as [i [H1 [H2 H3]]].
+    rewrite H1,H2.
+    apply H0.
+  - rewrite <-is_full_spec' in E.
+    apply LInc; auto.
+Qed.
+
+Lemma RInc':
+  (forall l r n,
+    l |> d1^^n *> d0 *> r -[ tm ]->+
+    l <| d0^^n *> d1 *> r) ->
+  (forall l n,
+    l |> d1^^n *> d1a -[ tm ]->+
+    l <| d0^^(1+n) *> d1a) ->
+  forall n l,
+    l |> BinaryCounter n -[ tm ]->+
+    l <| BinaryCounter (Pos.succ n).
+Proof.
+  intros H H0 n r.
+  destruct (is_full n) eqn:E.
+  - rewrite <-is_full_spec in E.
+    destruct (full_Overflow E) as [i [H1 [H2 H3]]].
+    rewrite H1,H2.
+    apply H0.
+  - rewrite <-is_full_spec' in E.
+    apply RInc; auto.
+Qed.
+
 End BinaryCounter.
 
 Section BinaryCounter_0.

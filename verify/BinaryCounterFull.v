@@ -3,6 +3,17 @@ Require Import ZArith.
 Set Default Goal Selector "!".
 
 
+Lemma Pos_mul2 n:
+  ((Pos.of_nat (N.to_nat ((Npos n)*2+0))) = n~0)%positive.
+Proof.
+  lia.
+Qed.
+
+Lemma Pos_mul2add1 n:
+  ((Pos.of_nat (N.to_nat ((Npos n)*2+1))) = n~1)%positive.
+Proof.
+  lia.
+Qed.
 
 
 Inductive not_full: positive -> Prop :=

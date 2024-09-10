@@ -180,5 +180,4 @@ Qed.
 
 
 
-
 End Eat2Digit.

@@ -30,6 +30,15 @@ Notation "l '<{{E}}' r" := (l <{{E}} r) (at level 30).
 Notation "l '<{{F}}' r" := (l <{{F}} r) (at level 30).
 
 
+Ltac mid m :=
+  eapply evstep_trans with (c':=m).
+
+Ltac mid10 m :=
+  eapply progress_evstep_trans with (c':=m).
+
+Ltac mid01 m :=
+  eapply evstep_progress_trans with (c':=m).
+
 Ltac follow10 H :=
   eapply progress_evstep_trans; [ apply H; fail | idtac ].
 
@@ -150,6 +159,16 @@ Proof.
     simpl_tape.
     rewrite IHn.
     reflexivity.
+Qed.
+
+
+Lemma lpow_rotate_const0 a0 n:
+  (0::a0)^^n *> const 0 = 0 >> (a0++[0])^^n *> const 0.
+Proof.
+  rewrite const_unfold.
+  rewrite lpow_rotate.
+  rewrite <-const_unfold.
+  reflexivity.
 Qed.
 
 Lemma lpow_rotate' a0 a1 (b:Stream Sym) n:
@@ -280,7 +299,7 @@ Ltac step1 :=
 
 Ltac simpl_rotate :=
   cbn;
-  repeat (rewrite lpow_rotate; cbn).
+  repeat ((rewrite lpow_rotate || rewrite lpow_rotate_const0); cbn).
 
 Ltac step1s :=
   repeat ((try (apply evstep_refl'; reflexivity; fail)); step1).
