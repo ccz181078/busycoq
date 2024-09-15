@@ -178,6 +178,13 @@ Proof.
   solve_cert (cert1 E A [0] [0] [1] [1] [0] [1] 0 0 0).
 Qed.
 
+Definition tm10 := Eval compute in (TM_from_str "1LB1RA_1LC0LD_1LD---_1LE1LD_1RF0LE_0RF0RA").
+Lemma nonhalt10: ~halts tm10 c0.
+Proof.
+  solve_cert (cert1 E A [1] [0] [1] [1] [0] [1] 0 0 0).
+Qed.
+
+
 
 
 End Eat2Digit.
