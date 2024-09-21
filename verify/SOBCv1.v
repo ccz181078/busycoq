@@ -918,5 +918,128 @@ Proof.
   solve_cert (cert1 D B [1;0;1;0] [1;1;0;1] 0 0).
 Qed.
 
+Definition tm115 := Eval compute in (TM_from_str "1RB0RE_0RC1RE_1LD0RD_1LA1RF_0LA0LC_---0LB").
+Lemma nonhalt115: ~halts tm115 c0.
+Proof.
+  solve_cert (cert1 D E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm116 := Eval compute in (TM_from_str "1RB1RA_0RC0LC_1LD0RD_1LE0RF_1RF0RB_---0LA").
+Lemma nonhalt116: ~halts tm116 c0.
+Proof.
+  solve_cert (cert1 D B [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm117 := Eval compute in (TM_from_str "1RB1LB_0RC0LC_1LD0RD_0LE0RF_1RA0RE_---0LA").
+Lemma nonhalt117: ~halts tm117 c0.
+Proof.
+  solve_cert (cert1 D B [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm118 := Eval compute in (TM_from_str "1RB0RC_0LB1RC_0RD0LD_1LE0RE_1LA0RF_---0LA").
+Lemma nonhalt118: ~halts tm118 c0.
+Proof.
+  solve_cert (cert1 E C [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm119 := Eval compute in (TM_from_str "1RB0RC_0RC1RC_1LD0LE_1LA1RF_0LB0RD_---0RE").
+Lemma nonhalt119: ~halts tm119 c0.
+Proof.
+  solve_cert (cert1 B C [0;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm120 := Eval compute in (TM_from_str "1RB0RE_0RC1RE_1LD0RD_1LA1RF_0LA0LC_---0LA").
+Lemma nonhalt120: ~halts tm120 c0.
+Proof.
+  solve_cert (cert1 D E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm121 := Eval compute in (TM_from_str "1RB1LB_0RC0LC_1LD0RD_0LE1RF_1RA0RE_---0RC").
+Lemma nonhalt121: ~halts tm121 c0.
+Proof.
+  solve_cert (cert1 D B [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm122 := Eval compute in (TM_from_str "1RB1LB_1LC0LE_0LF1RD_---0RE_1LC0RC_1RA0RF").
+Lemma nonhalt122: ~halts tm122 c0.
+Proof.
+  solve_cert (cert1 C B [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm123 := Eval compute in (TM_from_str "1RB1RB_0RC0LC_1LD0RD_1LE0RF_1RA0RB_---0LA").
+Lemma nonhalt123: ~halts tm123 c0.
+Proof.
+  solve_cert (cert1 D B [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm124 := Eval compute in (TM_from_str "1RB1RB_0RC0LC_1LD0RD_1LE1RF_1RA0RB_---0LA").
+Lemma nonhalt124: ~halts tm124 c0.
+Proof.
+  solve_cert (cert1 D B [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm125 := Eval compute in (TM_from_str "1RB0RC_0LB1RC_0RD0LD_1LE0RE_1LA1RF_---0LB").
+Lemma nonhalt125: ~halts tm125 c0.
+Proof.
+  solve_cert (cert1 E C [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm126 := Eval compute in (TM_from_str "1RB0RC_1LC1RC_0RD0LD_1LE0RE_1LA1RF_---0LB").
+Lemma nonhalt126: ~halts tm126 c0.
+Proof.
+  solve_cert (cert1 E C [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm127 := Eval compute in (TM_from_str "1RB0RD_1LC1RE_1LA1RD_---0LB_0RF0LF_1LC0RC").
+Lemma nonhalt127: ~halts tm127 c0.
+Proof.
+  solve_cert (cert1 C E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm128 := Eval compute in (TM_from_str "1RB0RD_1RC1RD_1LA1RF_0RE0LE_1LC0RC_---0LB").
+Lemma nonhalt128: ~halts tm128 c0.
+Proof.
+  solve_cert (cert1 C D [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm129 := Eval compute in (TM_from_str "1RB0RE_0RC1RE_1LD0RD_1LA0RF_0LA0LC_---0LA").
+Lemma nonhalt129: ~halts tm129 c0.
+Proof.
+  solve_cert (cert1 D E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm130 := Eval compute in (TM_from_str "1RB0RE_0RC1RE_1LD0RD_1LA0RF_0RC0LC_---0LA").
+Lemma nonhalt130: ~halts tm130 c0.
+Proof.
+  solve_cert (cert1 D E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm131 := Eval compute in (TM_from_str "1RB0RE_0RC1RE_1LD0RD_1LA0RF_1LD0LC_---0LA").
+Lemma nonhalt131: ~halts tm131 c0.
+Proof.
+  solve_cert (cert1 D E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm132 := Eval compute in (TM_from_str "1RB0RE_0RC1RE_1LD0RD_1LA1RF_0RC0LC_---0LB").
+Lemma nonhalt132: ~halts tm132 c0.
+Proof.
+  solve_cert (cert1 D E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm133 := Eval compute in (TM_from_str "1RB0RE_1LC1RE_1LA1RD_---0LB_0RF0LF_1LC0RC").
+Lemma nonhalt133: ~halts tm133 c0.
+Proof.
+  solve_cert (cert1 C E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+Definition tm134 := Eval compute in (TM_from_str "1RB1RE_1LC0RC_1LF1RD_---0LA_0RB0LB_1RA0RE").
+Lemma nonhalt134: ~halts tm134 c0.
+Proof.
+  solve_cert (cert1 C E [1;0;1;0] [1;1;0;1] 0 0).
+Qed.
+
+
+
+
 
 

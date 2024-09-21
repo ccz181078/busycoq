@@ -3,6 +3,8 @@ From BusyCoq Require Import Individual62.
 Require Import Lia.
 Require Import ZArith.
 Require Import String.
+From BusyCoq Require Import UintArith.
+Import UintArith.N'.
 
 Ltac er := execute_with_rotate.
 Ltac sr := use_shift_rule; simpl_rotate.
@@ -26,6 +28,7 @@ Ltac solve_rule:=
   | |- forall _, _ => intros; solve_rule
   | |- (c0 -[ _ ]->* ?S0 _ _ _) => unfold S0; solve_init
   | |- (?S0 _ _ _ -[ _ ]->* ?S0 _ _ _) => unfold S0; simpl_tape'; execute_with_shift_rule
+  | |- (?S0 _ _ _ -[ _ ]->+ ?S0 _ _ _) => unfold S0; simpl_tape'; execute_with_shift_rule
   | |- (halts _ (?S0 _ _ _)) => unfold S0; simpl_tape'; solve_halt
   | |- (c0 -[ _ ]->* _) => solve_init
   | |- (_ -[ _ ]->* _) => simpl_tape'; execute_with_shift_rule
@@ -91,13 +94,19 @@ Definition config(x:nat*nat*nat):=
 Hypothesis x_init: nat*nat*nat.
 
 Hypothesis bouncer_rule: nat*nat*nat->nat*nat*nat.
+Hypothesis bouncer_rule': N'*N'*N'->(N'*N'*N').
 
 Hypothesis calc_step: nat*nat*nat->option (nat*nat*nat).
+Hypothesis calc_step': N'*N'*N'->option (N'*N'*N').
 
 Hypothesis init: c0 -->* config x_init.
 
 Hypothesis bouncer_rule_spec:
   forall x, config x -->* config (bouncer_rule x).
+
+Hypothesis bouncer_rule'_spec:
+  forall x,
+    bouncer_rule (N'to_nat3 x) = N'to_nat3 (bouncer_rule' x).
 
 Hypothesis calc_step_spec:
   forall x,
@@ -106,45 +115,93 @@ Hypothesis calc_step_spec:
   | None => halts tm (config x)
   end.
 
-Fixpoint check_halt(x:nat*nat*nat)(T:nat):bool :=
-match T with
-| O => false
-| S T0 =>
-  match (calc_step (bouncer_rule x)) with
-  | None => true
-  | Some x' => check_halt x' T0
-  end
+Hypothesis calc_step'_spec:
+  forall x,
+    calc_step (N'to_nat3 x) = N'to_onat3 (calc_step' x).
+
+Definition calc_step1 x :=
+match x with
+| None => None
+| Some x0 => (calc_step (bouncer_rule x0))
 end.
 
+Definition calc_steps(T:N)(x:nat*nat*nat) :=
+  N.iter T calc_step1 (Some x).
 
-Lemma check_halt_spec x T:
-  check_halt x T = true ->
-  halts tm (config x).
+Lemma calc_steps_spec T x:
+match calc_steps T x with
+| None => halts tm (config x)
+| Some x0 => config x -->* config x0
+end.
 Proof.
-  gen x.
-  induction T; intros.
-  - cbn in H.
-    congruence.
-  - cbn in H.
-    pose proof (calc_step_spec (bouncer_rule x)) as H0.
-    destruct (calc_step (bouncer_rule x)) eqn:E.
-    + specialize (IHT p H).
-      apply (halts_evstep _ _ _ IHT).
-      follow (bouncer_rule_spec x).
-      apply H0.
-    + apply (halts_evstep _ _ _ H0).
-      apply bouncer_rule_spec.
+  induction T using N.peano_ind.
+  - cbn.
+    finish.
+  - unfold calc_steps.
+    unfold calc_steps in IHT.
+    rewrite N.iter_succ.
+    destruct (N.iter T calc_step1 (Some x)) as [x0|].
+    + unfold calc_step1.
+      pose proof (calc_step_spec (bouncer_rule x0)) as H.
+      destruct (calc_step (bouncer_rule x0)) as [x1|].
+      * follow IHT.
+        follow (bouncer_rule_spec x0).
+        apply H.
+      * apply (halts_evstep _ _ _ H).
+        follow IHT.
+        apply bouncer_rule_spec.
+    + cbn. apply IHT.
 Qed.
 
-Lemma halt:
-  forall T,
-  check_halt x_init T = true ->
-  halts tm c0.
+Definition calc_step1' x :=
+match x with
+| None => None
+| Some x0 => (calc_step' (bouncer_rule' x0))
+end.
+
+Definition calc_steps'(T:N)(x:N'*N'*N') :=
+  N.iter T calc_step1' (Some x).
+
+Lemma calc_steps'_spec0 x T:
+  calc_steps T (N'to_nat3 x) = N'to_onat3 (calc_steps' T x).
 Proof.
-  intros T H.
-  pose proof (check_halt_spec _ _ H) as H0.
-  apply (halts_evstep _ _ _ H0).
-  apply init.
+  induction T using N.peano_ind.
+  - reflexivity.
+  - unfold calc_steps,calc_steps'.
+    unfold calc_steps,calc_steps' in IHT.
+    repeat rewrite N.iter_succ.
+    rewrite IHT.
+    remember (N.iter T calc_step1' (Some x)) as v1.
+    unfold calc_step1,calc_step1'.
+    destruct v1 as [v1|]; cbn.
+    + rewrite bouncer_rule'_spec,calc_step'_spec.
+      reflexivity.
+    + reflexivity.
+Qed.
+
+
+Lemma calc_steps'_spec1 T x:
+match calc_steps' T x with
+| None => halts tm (config (N'to_nat3 x))
+| Some x0 => config (N'to_nat3 x) -->* config (N'to_nat3 x0)
+end.
+Proof.
+  pose proof (calc_steps_spec T (N'to_nat3 x)) as H.
+  rewrite calc_steps'_spec0 in H.
+  destruct (calc_steps' T x); apply H.
+Qed.
+
+Lemma calc_steps'_spec T:
+match calc_steps' T (N'of_nat3 x_init) with
+| None => halts tm c0
+| Some x0 => c0 -->* config (N'to_nat3 x0)
+end.
+Proof.
+  pose proof (calc_steps'_spec1 T (N'of_nat3 x_init)) as H.
+  rewrite N'to_of_nat3 in H.
+  destruct (calc_steps' T (N'of_nat3 x_init)).
+  - follow init. apply H.
+  - apply (halts_evstep _ _ _ H),init.
 Qed.
 
 End CubicCap.
@@ -180,26 +237,73 @@ Inductive Cert :=
   (S0: nat->nat->nat->Q*tape)
   (x_init: nat*nat*nat)
   (bouncer_rule: nat*nat*nat->nat*nat*nat)
-  (calc_step: nat*nat*nat->option (nat*nat*nat)).
+  (bouncer_rule': N'*N'*N'->N'*N'*N')
+  (calc_step: nat*nat*nat->option (nat*nat*nat))
+  (calc_step': N'*N'*N'->option (N'*N'*N')).
+
 
 Definition Cert_WF(tm:string)(cert:Cert):Prop :=
 match cert with
-| cert1 S0_ x_init bouncer_rule calc_step =>
+| cert1 S0_ x_init bouncer_rule bouncer_rule' calc_step calc_step' =>
   forall T,
-  (check_halt bouncer_rule calc_step x_init T = true ->
-  halts (TM_from_str tm) c0)
+  match calc_steps' bouncer_rule' calc_step' T (N'of_nat3 x_init) with
+  | None => halts (TM_from_str tm) c0
+  | Some x0 => c0 -[TM_from_str tm]->* config S0_ (N'to_nat3 x0)
+  end
 end.
 
+Lemma Cert_WF_halt {tm S0 x_init bouncer_rule bouncer_rule' calc_step calc_step'}:
+  Cert_WF tm (cert1 S0 x_init bouncer_rule bouncer_rule' calc_step calc_step') ->
+  forall T:N,
+  calc_steps' bouncer_rule' calc_step' T (N'of_nat3 x_init) = None ->
+  halts (TM_from_str tm) c0.
+Proof.
+  intros H T H0.
+  specialize (H T).
+  rewrite H0 in H.
+  apply H.
+Qed.
+
+Lemma Cert_WF_init {tm S0 x_init bouncer_rule bouncer_rule' calc_step calc_step'}:
+  Cert_WF tm (cert1 S0 x_init bouncer_rule bouncer_rule' calc_step calc_step') ->
+  forall (T:N) x',
+  calc_steps' bouncer_rule' calc_step' T (N'of_nat3 x_init) = Some x' ->
+  c0 -[TM_from_str tm]->* config S0 (N'to_nat3 x').
+Proof.
+  intros H T x' H0.
+  specialize (H T).
+  rewrite H0 in H.
+  apply H.
+Qed.
+
+Ltac solve_nat_N'_eq :=
+  intros x;
+  destruct x as [[a b] c];
+  unfold N'to_onat3,N'to_nat3;
+  simpl_nat_add_mul;
+  solve_optimize;
+  repeat (
+  rewrite N'min_inj ||
+  rewrite N'add_inj ||
+  rewrite N'sub_inj ||
+  rewrite N'div_inj ||
+  rewrite N'mod_inj);
+  try reflexivity;
+  simpl_nat_add_mul;
+  try reflexivity.
+
 Ltac solve_Cert_WF :=
+time
 match goal with
-| |- Cert_WF ?s (cert1 ?S0' ?x_init ?bouncer_rule ?calc_step) =>
+| |- Cert_WF ?s (cert1 ?S0' ?x_init ?bouncer_rule0 ?bouncer_rule' ?calc_step0 ?calc_step') =>
   unfold Cert_WF;
+  idtac s;
 (*
   remember (TM_from_str s) as tm eqn:Heqtm;
   compute in Heqtm;
   subst tm;
 *)
-  eapply halt with (S0:=S0');
+  eapply calc_steps'_spec with (S0:=S0') (bouncer_rule:=bouncer_rule0) (calc_step:=calc_step0);
   [ unfold config;
     solve_rule
   | intros x;
@@ -207,10 +311,12 @@ match goal with
     eapply CapIncs;
     unfold config;
     solve_rule
+  | try (solve_nat_N'_eq; fail)
   | intros x;
     destruct x as [[a b] c];
     unfold config;
     solve_calc_step_spec
+  | try (solve_nat_N'_eq; fail)
   ]
 end.
 
@@ -226,6 +332,10 @@ Lemma WF1:
     let '(a,b,c) := x in
     let i:=min (a/1) (c/1) in
     (a-i*1,b+i*1,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min a c in
+    (a-i,b+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -246,6 +356,32 @@ Lemma WF1:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,0,4)
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,0,4)
+      | Some c => Some (1+b+b,1,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -261,6 +397,10 @@ Lemma WF2:
     let '(a,b,c) := x in
     let i:=min (a/1) (c/1) in
     (a-i*1,b+i*1,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min a c in
+    (a-i,b+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -280,6 +420,28 @@ Lemma WF2:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -294,6 +456,10 @@ Lemma WF3:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*3,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -357,12 +523,94 @@ Lemma WF3:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2+b+b,2,0)
+      | Some c => Some (4+b+b,1,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (4+b+b,2,0)
+      | Some c =>
+      match N'OS c with
+      | None => Some (5+b+b,2,0)
+      | Some c => Some (7+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match (b/2) with
+          | b => Some (1,2,b)
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (1,2,b)
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => Some (5,2,b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (2+a,2,b)
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => Some (a,2,1+b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
 Qed.
-
-
 
 Lemma WF4:
   Cert_WF "1RB1LE_1LC1LE_1RD1LB_---1RC_0LB1RF_0RA0LE"
@@ -373,6 +621,10 @@ Lemma WF4:
     let '(a,b,c) := x in
     let i:=min (a/1) (c/1) in
     (a-i*1,b+i*1,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -392,6 +644,28 @@ Lemma WF4:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -409,6 +683,10 @@ Lemma WF5:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -426,6 +704,28 @@ Lemma WF5:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -441,6 +741,10 @@ Lemma WF6:
     let '(a,b,c) := x in
     let i:=min (a/1) (c/1) in
     (a-i*1,b+i*1,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -494,6 +798,74 @@ Lemma WF6:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (4+b+b+b+b,0,0)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (3+b+b+b+b,0,1)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (4+b+b+b+b,0,4)
+          end
+        | _ => Some x
+        end
+        end
+      | Some c =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (3+b+b+b+b,0,2+c)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (5+b+b+b+b,1,c)
+          end
+        | _ => Some x
+        end
+        end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,1,2+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -510,6 +882,10 @@ Lemma WF7:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -527,6 +903,28 @@ Lemma WF7:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -543,6 +941,10 @@ Lemma WF8:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -560,6 +962,28 @@ Lemma WF8:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -577,6 +1001,10 @@ Lemma WF9:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -594,6 +1022,28 @@ Lemma WF9:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -611,6 +1061,10 @@ Lemma WF10:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -628,6 +1082,28 @@ Lemma WF10:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -645,6 +1121,10 @@ Lemma WF11:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -662,6 +1142,28 @@ Lemma WF11:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -680,6 +1182,10 @@ Lemma WF12:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -697,6 +1203,28 @@ Lemma WF12:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -713,6 +1241,10 @@ Lemma WF13:
     (a-i*2,b+i*3,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -755,6 +1287,62 @@ Lemma WF13:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2+b+b,1,0)
+      | Some c => Some (3+b+b,2,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match N'OS (b/2) with
+          | None => Some (1,1,0)
+          | Some b => None
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => Some (3,2,b)
+          end
+        | _ => Some x
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c => Some (4+b+b,4,c)
+      end
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match N'OS (b/2) with
+          | None => Some (2+a,1,0)
+          | Some b => Some (a,2,1+b)
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => Some (a,1,1+b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -771,6 +1359,10 @@ Lemma WF14:
     (a-i*2,b+i*3,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -813,6 +1405,62 @@ Lemma WF14:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2+b+b,1,0)
+      | Some c => Some (3+b+b,2,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match N'OS (b/2) with
+          | None => Some (1,1,0)
+          | Some b => None
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => Some (3,2,b)
+          end
+        | _ => Some x
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c => Some (4+b+b,4,c)
+      end
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match N'OS (b/2) with
+          | None => Some (2+a,1,0)
+          | Some b => Some (a,2,1+b)
+          end
+        | Some bmod2 =>
+        match N'OS bmod2 with
+        | None =>
+          match b/2 with
+          | b => Some (a,1,1+b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -828,6 +1476,10 @@ Lemma WF15:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -858,6 +1510,48 @@ Lemma WF15:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,0)
+      | Some c => Some (2+b+b,1,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,0)
+      | Some c => Some (4+b+b,1,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2,1,b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -872,6 +1566,10 @@ Lemma WF16:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -912,6 +1610,64 @@ Lemma WF16:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (0,1,1)
+        | Some b => Some (1+b+b,2,1)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c => Some (2+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,2,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,2,1)
+      | Some c => Some (4+b+b,2,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (0,2,1)
+        | Some b => Some (2,2,b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -927,6 +1683,10 @@ Lemma WF17:
     let '(a,b,c) := x in
     let i:=min (a/3) (c/1) in
     (a-i*3,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -966,6 +1726,60 @@ Lemma WF17:
       | S c => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS b with
+      | None =>
+        match N'OS c with
+        | None => Some x
+        | Some c =>
+        match N'OS c with
+        | None => Some (3,0,4)
+        | Some c => None
+        end
+        end
+      | Some b =>
+      match N'OS b with
+      | None =>
+        match N'OS c with
+        | None => Some (3,0,4)
+        | Some c => None
+        end
+      | Some b =>
+        match N'OS c with
+        | None => Some (3+b+b,1,1)
+        | Some c => Some (5+b+b,0,c)
+        end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (3,0,4+b+b)
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,1)
+      | Some c => Some (5+b+b,0,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,3+b+b)
+      | Some c => Some (0,3+b,c)
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,1,3+b+b)
+      | Some c => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -983,6 +1797,10 @@ Lemma WF18:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1000,6 +1818,28 @@ Lemma WF18:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1016,6 +1856,10 @@ Lemma WF19:
     (a-i*1,b+i*1,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1033,6 +1877,28 @@ Lemma WF19:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1049,6 +1915,10 @@ Lemma WF20:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1079,6 +1949,48 @@ Lemma WF20:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,0,1)
+      | Some c => Some (2+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,0,1)
+      | Some c => Some (4+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2,0,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1093,6 +2005,10 @@ Lemma WF21:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1129,6 +2045,60 @@ Lemma WF21:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,1)
+      | Some c => Some (4+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c => Some (6+b+b,0,1+c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (2,1,1)
+        | Some b => Some (4,0,1+b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1146,6 +2116,10 @@ Lemma WF22:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1180,6 +2154,60 @@ Lemma WF22:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,1)
+      | Some c => Some (4+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c => Some (6+b+b,0,1+c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (2,1,1)
+        | Some b => Some (4,0,1+b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1194,6 +2222,10 @@ Lemma WF23:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1224,6 +2256,48 @@ Lemma WF23:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,2,1)
+      | Some c => Some (2+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => None
+        | Some b => Some (1+b+b,2,1)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c => Some (1+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1241,6 +2315,10 @@ Lemma WF24:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1269,6 +2347,48 @@ Lemma WF24:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,2,1)
+      | Some c => Some (2+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => None
+        | Some b => Some (1+b+b,2,1)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c => Some (1+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1286,6 +2406,10 @@ Lemma WF25:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1314,6 +2438,48 @@ Lemma WF25:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,2,1)
+      | Some c => Some (2+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => None
+        | Some b => Some (1+b+b,2,1)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c => Some (1+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1331,6 +2497,10 @@ Lemma WF26:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1359,6 +2529,48 @@ Lemma WF26:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,2,1)
+      | Some c => Some (2+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => None
+        | Some b => Some (1+b+b,2,1)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c => Some (1+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1374,6 +2586,10 @@ Lemma WF27:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*3,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1433,6 +2649,83 @@ Lemma WF27:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,2,0)
+      | Some c => Some (4+b+b,1,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match N'OS (b/2) with
+          | None => Some (8,1,0)
+          | Some b => Some (5,3,b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (8+b+b,1,0)
+      | Some c => Some (5+b+b,3,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (3,1,b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (3,3,b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (4+a,1,b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (a,2,1+b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1448,6 +2741,10 @@ Lemma WF28:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1484,6 +2781,60 @@ Lemma WF28:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,2,0)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,2,0)
+      | Some c => Some (3+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => None
+        | Some b => Some (1,2,1+b)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,2,0)
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,2,0)
+      | Some c => Some (5+b+b,2,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,2,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,2,b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1499,6 +2850,10 @@ Lemma WF29:
     let '(a,b,c) := x in
     let i:=min (a/1) (c/1) in
     (a-i*1,b+i*1,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1530,6 +2885,46 @@ Lemma WF29:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS (b mod 2) with
+      | None =>
+        match b/2 with
+        | b => Some (1+b+b+b+b,1,c)
+        end
+      | Some bmod2 =>
+      match N'OS (bmod2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (1+b+b+b+b,1,4)
+          | Some c =>
+          match N'OS c with
+          | None => None
+          | Some c => Some (3+b+b+b+b,2,c)
+          end
+          end
+        end
+      | _ => Some x
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,1,4+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,1,4+b+b)
+      | _ => Some x
+      end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1545,6 +2940,10 @@ Lemma WF30:
     let '(a,b,c) := x in
     let i:=min (a/1) (c/1) in
     (a-i*1,b+i*1,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a) (c) in
+    (a-i,b+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1571,6 +2970,38 @@ Lemma WF30:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1+b,0)
+      | Some c =>
+      match N'OS c with
+      | None => None
+      | Some c => Some (3+b+b,0,c)
+      end
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (a mod 2) with
+        | None =>
+          match a/2 with
+          | a => Some (0,a,3+b+b)
+          end
+        | Some amod2 =>
+        match N'OS (amod2) with
+        | None =>
+          match a/2 with
+          | a => Some (4+a+a,0,1+b+b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1588,6 +3019,10 @@ Lemma WF31:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1617,6 +3052,52 @@ Lemma WF31:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,0)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,0)
+      | Some c => Some (2+b+b,1,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,0)
+      | Some c => Some (4+b+b,1,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2,1,b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (4,1,b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1634,6 +3115,10 @@ Lemma WF32:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1663,6 +3148,52 @@ Lemma WF32:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,0)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,0)
+      | Some c => Some (2+b+b,1,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,0)
+      | Some c => Some (4+b+b,1,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2,1,b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (4,1,b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1678,6 +3209,10 @@ Lemma WF33:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1722,6 +3257,68 @@ Lemma WF33:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (2,2,1)
+        | Some b => Some (1+b+b,2,1)
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,2,1)
+      | Some c => Some (2+b+b,2,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,2,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,2,1)
+      | Some c => Some (4+b+b,2,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (0,2,1)
+        | Some b => Some (2,2,b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (2,2,1)
+        | Some b => Some (4,2,b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1739,6 +3336,10 @@ Lemma WF34:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1777,6 +3378,64 @@ Lemma WF34:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,1)
+      | Some c => Some (4+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c => Some (6+b+b,0,1+c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (2,1,1)
+        | Some b => Some (4,0,1+b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (4,1,1)
+        | Some b => Some (6,0,1+b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1794,6 +3453,10 @@ Lemma WF35:
     (a-i*2,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -1832,6 +3495,64 @@ Lemma WF35:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,1)
+      | Some c => Some (4+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c => Some (6+b+b,0,1+c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (2,1,1)
+        | Some b => Some (4,0,1+b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS b with
+        | None => Some (4,1,1)
+        | Some b => Some (6,0,1+b)
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1846,6 +3567,10 @@ Lemma WF36:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1876,6 +3601,48 @@ Lemma WF36:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1+b+b,0,1)
+      | Some c => Some (2+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,0,1)
+      | Some c => Some (4+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2,0,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (4,0,1+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,2,1+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1890,6 +3657,10 @@ Lemma WF37:
     let '(a,b,c) := x in
     let i:=min (a/3) (c/1) in
     (a-i*3,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -1920,6 +3691,48 @@ Lemma WF37:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS b with
+      | None =>
+        match N'OS c with
+        | None => Some (2,0,3)
+        | Some c => None
+        end
+      | Some b => Some (1,1+b,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,5+b+b)
+      | Some c =>
+      match N'OS c with
+      | None => Some (5+b+b,0,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (5+b+b,0,3)
+      | Some c => Some (4+b+b,1,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,0,5+b+b)
+      | Some c => Some (0,3+b,c)
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,0,5+b+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1938,6 +3751,10 @@ Lemma WF38:
     (a-i*3,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match b with
@@ -1966,6 +3783,48 @@ Lemma WF38:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS b with
+      | None =>
+        match N'OS c with
+        | None => Some (2,0,3)
+        | Some c => None
+        end
+      | Some b => Some (1,1+b,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,5+b+b)
+      | Some c =>
+      match N'OS c with
+      | None => Some (5+b+b,0,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (5+b+b,0,3)
+      | Some c => Some (4+b+b,1,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,0,5+b+b)
+      | Some c => Some (0,3+b,c)
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,0,5+b+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -1983,6 +3842,10 @@ Lemma WF39:
     (a-i*3,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -2045,6 +3908,112 @@ Lemma WF39:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (3,0,3+b+b)
+      | Some c => Some (2,1+b,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS (b mod 2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,2+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => Some (4+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (4+b+b+b+b,0,3)
+          | Some c => Some (3+b+b+b+b,1,c)
+          end
+          end
+          end
+        end
+      | Some bmod2 =>
+      match N'OS (bmod2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,4+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => None
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,3)
+          | Some c => Some (6+b+b+b+b,1,c)
+          end
+          end
+          end
+          end
+        end
+      | _ => Some x
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS (b mod 2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,4+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => None
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,3)
+          | Some c => Some (6+b+b+b+b,1,c)
+          end
+          end
+          end
+          end
+        end
+      | Some bmod2 =>
+      match N'OS (bmod2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,6+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => Some (8+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (8+b+b+b+b,0,3)
+          | Some c => Some (7+b+b+b+b,1,c)
+          end
+          end
+          end
+        end
+      | _ => Some x
+      end
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,0,5+b+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2062,6 +4031,10 @@ Lemma WF40:
     (a-i*3,b+i*2,c-i*1))
     (fun x =>
     let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
+    (fun x =>
+    let '(a,b,c) := x in
     match a with
     | 0 =>
       match c with
@@ -2124,6 +4097,112 @@ Lemma WF40:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (3,0,3+b+b)
+      | Some c => Some (2,1+b,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS (b mod 2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,2+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => Some (4+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (4+b+b+b+b,0,3)
+          | Some c => Some (3+b+b+b+b,1,c)
+          end
+          end
+          end
+        end
+      | Some bmod2 =>
+      match N'OS (bmod2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,4+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => None
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,3)
+          | Some c => Some (6+b+b+b+b,1,c)
+          end
+          end
+          end
+          end
+        end
+      | _ => Some x
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS (b mod 2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,4+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => None
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (7+b+b+b+b,0,3)
+          | Some c => Some (6+b+b+b+b,1,c)
+          end
+          end
+          end
+          end
+        end
+      | Some bmod2 =>
+      match N'OS (bmod2) with
+      | None =>
+        match b/2 with
+        | b =>
+          match N'OS c with
+          | None => Some (2,1,6+b+b+b+b)
+          | Some c =>
+          match N'OS c with
+          | None => Some (8+b+b+b+b,0,1)
+          | Some c =>
+          match N'OS c with
+          | None => Some (8+b+b+b+b,0,3)
+          | Some c => Some (7+b+b+b+b,1,c)
+          end
+          end
+          end
+        end
+      | _ => Some x
+      end
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,0,5+b+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2139,6 +4218,10 @@ Lemma WF41:
     let '(a,b,c) := x in
     let i:=min (a/3) (c/1) in
     (a-i*3,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -2257,6 +4340,181 @@ Lemma WF41:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS b with
+      | None => Some (1,1,1+c)
+      | Some b =>
+        match N'OS c with
+        | None => Some (6+b+b,1,1)
+        | Some c =>
+        match N'OS c with
+        | None => Some (5+b+b,1,4)
+        | Some c => Some (7+b+b,1,c)
+        end
+        end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 3) with
+        | None =>
+          match b/3 with
+          | b => Some (1,1,3+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (1,1,6+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (2+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (1+b+b,1,4)
+      | Some c => Some (3+b+b,1,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 3) with
+        | None =>
+          match b/3 with
+          | b => Some (1,1,6+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => None
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (1,1,9+b+b+b+b+b+b)
+          end
+        | _ => Some x
+        end
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (3+b+b,1,4)
+      | Some c => Some (5+b+b,1,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 3) with
+        | None =>
+          match b/3 with
+          | b => Some (1,0,5+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (3,1,5+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+        end
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 3) with
+        | None =>
+          match b/3 with
+          | b => Some (2,0,5+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (0,1,7+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (3,1,8+b+b+b+b+b+b)
+          end
+        | _ => Some x
+        end
+        end
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 3) with
+        | None =>
+          match b/3 with
+          | b => Some (3+a,0,5+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (1+a,1,7+b+b+b+b+b+b)
+          end
+        | Some bmod3 =>
+        match N'OS (bmod3) with
+        | None =>
+          match b/3 with
+          | b => Some (a,1,10+b+b+b+b+b+b)
+          end
+        | _ => Some x
+        end
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2273,6 +4531,10 @@ Lemma WF42:
     let '(a,b,c) := x in
     let i:=min (a/3) (c/1) in
     (a-i*3,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/3) (c) in
+    (a-(i+i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -2309,6 +4571,60 @@ Lemma WF42:
       | S c => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,1,1)
+      | Some c =>
+      match N'OS c with
+      | None => Some (b+b,1,3)
+      | Some c => Some (2+b+b,1,c)
+      end
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,1+b+b)
+      | Some c => Some (0,2+b,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,3+b+b)
+      | Some c => Some (0,3+b,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,1,5+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (0,2,5+b+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,1,5+b+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2324,6 +4640,10 @@ Lemma WF43:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -2349,6 +4669,40 @@ Lemma WF43:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2+b+b,0,1)
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,0,1)
+      | Some c => Some (5+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (a,0,3+b)
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2363,6 +4717,10 @@ Lemma WF44:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -2393,6 +4751,48 @@ Lemma WF44:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (2+b+b,0,1)
+      | Some c => Some (3+b+b,0,1+c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | Some c =>
+      match N'OS c with
+      | None => Some (4+b+b,0,1)
+      | Some c => Some (5+b+b,0,1+c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => None
+      | _ => Some x
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (1,0,4+b)
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None => Some (1+a,0,3+b)
+      | _ => Some x
+      end
+    end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2408,6 +4808,10 @@ Lemma WF45:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*2,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -2461,6 +4865,74 @@ Lemma WF45:
       | S c => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None => Some (1+c+c+b+b,0,2)
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => None
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (5+b+b+b+b,0,2)
+          end
+        | _ => Some x
+        end
+        end
+      | Some c => Some (3+c+c+b+b,0,2)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (5+b+b+b+b,0,2)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+      | Some c => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (a,0,3+b+b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (6+b+b+b+b+a,0,2)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
@@ -2477,6 +4949,10 @@ Lemma WF46:
     let '(a,b,c) := x in
     let i:=min (a/2) (c/1) in
     (a-i*2,b+i*3,c-i*1))
+    (fun x =>
+    let '(a,b,c) := x in
+    let i:=N'min (a/2) (c) in
+    (a-(i+i),b+i+i+i,c-i))%N'
     (fun x =>
     let '(a,b,c) := x in
     match a with
@@ -2536,6 +5012,83 @@ Lemma WF46:
       | _ => Some x
       end
     end)
+    (fun x =>
+    let '(a,b,c) := x in
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None => Some (b+b,2,0)
+      | Some c => Some (4+b+b,1,c)
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match N'OS (b/2) with
+          | None => Some (8,1,0)
+          | Some b => Some (5,3,b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => None
+          end
+        | _ => Some x
+        end
+        end
+      | Some c =>
+      match N'OS c with
+      | None => Some (8+b+b,1,0)
+      | Some c => Some (5+b+b,3,c)
+      end
+      end
+    | Some a =>
+    match N'OS a with
+    | None =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (3,1,b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (3,3,b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    | Some a =>
+      match N'OS c with
+      | None =>
+        match N'OS (b mod 2) with
+        | None =>
+          match b/2 with
+          | b => Some (4+a,1,b)
+          end
+        | Some bmod2 =>
+        match N'OS (bmod2) with
+        | None =>
+          match b/2 with
+          | b => Some (a,2,1+b)
+          end
+        | _ => Some x
+        end
+        end
+      | _ => Some x
+      end
+    end
+    end
+    end)%N'
   ).
 Proof.
   solve_Cert_WF.
