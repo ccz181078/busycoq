@@ -453,6 +453,7 @@ end.
 
 
 
+
 Definition tm0 := Eval compute in (TM_from_str "1RB0RD_0RC0RE_1LD1RF_1LE0RE_1RB0LE_---1RA").
 Lemma nonhalt0: ~halts tm0 c0.
 Proof.
@@ -858,9 +859,41 @@ Proof.
   2).
 Qed.
 
+Definition tm45 := Eval compute in (TM_from_str "1LB0RD_1LC0LF_1RA1RF_1RC0RE_0LB1RA_---0LD").
+Lemma nonhalt45: ~halts tm45 c0.
+Proof.
+  solve_cert (cert1 C E [1;0] [0;0]
+  [0;0;1;1] [1;1;0;1] [0;0;0;1;1] [0;1;1;1;1] [1;1;0;1;1] [0;1;1]
+  [1;1;0;1;0;0] [1;1;0;1] [1;1;0;1;0;1;1;0;1]
+  2).
+Qed.
 
+Definition tm46 := Eval compute in (TM_from_str "1LB0LA_1RC0RA_1LF0RD_1RE0RC_1RB---_0RA1LA").
+Lemma nonhalt46: ~halts tm46 c0.
+Proof.
+  solve_cert (cert1 B C [1;0] [0;0]
+  [0;0;0;1;1] [1;1;1;0;1] [0;0;0;0;1;1] [0;0;1;1;1;1] [1;1;1;0;1;1] [0;0;1;1]
+  [1;1;1;0;1;0;0] [1;1;1;0;1] [1;1;1;0;1;0;1;1;1;0;1]
+  0).
+Qed.
 
+Definition tm47 := Eval compute in (TM_from_str "1RB0RE_1RC---_1RD1RC_0LE1RE_0RA1LF_0LE0LF").
+Lemma nonhalt47: ~halts tm47 c0.
+Proof.
+  solve_cert (cert1 E E [] []
+  [0;0;0;0;1] [1;1;1;1;0] [0;0;0;0;0;1] [0;0;0;1;0;1] [1;1;1;1;1;0] [0;0;0;1]
+  [1;1;1;1;0;0;0] [1;1;1;1;0] [1;1;1;1;0;0;1;1;1;1;0]
+  0).
+Qed.
 
+Definition tm48 := Eval compute in (TM_from_str "1RB---_1RC1RB_0LD1RD_0RF1LE_0LC0LE_0RA0RD").
+Lemma nonhalt48: ~halts tm48 c0.
+Proof.
+  solve_cert (cert1 D D [] []
+  [0;0;0;0;1] [1;1;1;0;0] [0;0;0;0;0;1] [0;0;0;1;0;1] [1;1;1;1;0;0] [0;0;0;1]
+  [1;1;1;0;0;0;0] [1;1;1;0;0] [1;1;1;0;0;0;1;1;1;0;0]
+  0).
+Qed.
 
 
 

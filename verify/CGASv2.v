@@ -406,8 +406,21 @@ Proof.
   [0;1;0;0] [0;1;0;1] [1;0;1]).
 Qed.
 
+Definition tm3 := Eval compute in (TM_from_str "1LB0RF_0LC0LB_1RD1RA_0RC1RE_1LA---_1LD0RA").
+Lemma nonhalt3: ~halts tm3 c0.
+Proof.
+  solve_cert (cert1 B A B [0] [1] [0;1;0]
+  [1;0;1;0] [0;1;0;1] [0;1;0] [1;1;0] [0;1;1] [1;0]
+  [0;1;0;0] [0;1;0;1] [1;0;1]).
+Qed.
 
-
+Definition tm4 := Eval compute in (TM_from_str "1LB0RF_0LC0LB_1RD1RA_0RC0RE_0RA---_1LD0RA").
+Lemma nonhalt4: ~halts tm4 c0.
+Proof.
+  solve_cert (cert1 B A B [0] [1] [0;1;0]
+  [1;0;1;0] [0;1;0;1] [0;1;0] [1;1;0] [0;1;1] [1;0]
+  [0;1;0;0] [0;1;0;1] [1;0;1]).
+Qed.
 
 
 
