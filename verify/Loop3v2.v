@@ -2,8 +2,6 @@ From BusyCoq Require Import Individual62.
 Require Import Lia.
 Require Import ZArith.
 Require Import String.
-From BusyCoq Require Import BinaryCounter.
-From BusyCoq Require Import BinaryCounterFull.
 
 Open Scope list.
 

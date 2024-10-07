@@ -35,6 +35,11 @@ Module Type Ctx.
   Parameter eqb_q : forall (a b : Q), {a = b} + {a <> b}.
   Parameter eqb_sym : forall (a b : Sym), {a = b} + {a <> b}.
 
+  Parameter q_eqb : Q->Q->bool.
+  Parameter sym_eqb : Sym->Sym->bool.
+  Parameter q_eqb_spec : forall a b:Q, Bool.reflect (a=b) (q_eqb a b).
+  Parameter sym_eqb_spec : forall a b:Sym, Bool.reflect (a=b) (sym_eqb a b).
+
   (** It is also useful, in some situations, to be able to enumerate
       all the symbols and states. *)
   Parameter all_qs : list Q.

@@ -120,4 +120,7 @@ Tactic Notation "follow" constr(H) := follow_hyp H.
 (** For trivial [-->*] goals, provable by stepping and applying assumptions. *)
 Ltac triv := intros; repeat (try solve [finish]; (step || follow)).
 
+
+
+
 End Individual.

@@ -356,29 +356,6 @@ Ltac casen_execute_with_shift_rule n :=
 
 
 
-Definition Q_eqb(a b:Q):bool:=
-match a,b with
-| A,A | B,B | C,C | D,D | E,E | F,F => true
-| _,_ => false
-end.
-
-Lemma Q_eqb_spec a b:
-  Q_eqb a b = true <-> a=b.
-Proof.
-  destruct a,b; cbn; split; congruence.
-Qed.
-
-Definition Sym_eqb(a b:Sym):bool:=
-match a,b with
-| 0,0 | 1,1 => true
-| _,_ => false
-end.
-
-Lemma Sym_eqb_spec a b:
-  Sym_eqb a b = true <-> a=b.
-Proof.
-  destruct a,b; cbn; split; congruence.
-Qed.
 
 Definition cconfig:Set := (list Sym)*(list Sym)*Sym*Q.
 
@@ -418,13 +395,13 @@ Qed.
 
 Fixpoint cside_eqb_const0(x:list Sym):bool :=
 match x with
-| a::b => Sym_eqb a 0 &&& cside_eqb_const0 b
+| a::b => sym_eqb a 0 &&& cside_eqb_const0 b
 | nil => true
 end.
 
 Fixpoint cside_eqb(x y:list Sym):bool :=
 match x,y with
-| a::b,c::d => Sym_eqb a c &&& cside_eqb b d
+| a::b,c::d => sym_eqb a c &&& cside_eqb b d
 | a::b,nil => cside_eqb_const0 x
 | nil,_ => cside_eqb_const0 y
 end.
@@ -432,8 +409,8 @@ end.
 Definition cconfig_eqb(x y:cconfig):bool :=
 match x,y with
 | (l,r,m,s),(l',r',m',s') =>
-  Q_eqb s s' &&&
-  Sym_eqb m m' &&&
+  q_eqb s s' &&&
+  sym_eqb m m' &&&
   cside_eqb l l' &&&
   cside_eqb r r'
 end.
@@ -445,12 +422,10 @@ Proof.
   induction x; cbn; try congruence.
   repeat rewrite andb_shortcut_spec.
   rewrite Bool.andb_true_iff.
-  rewrite Sym_eqb_spec.
-  intro H.
-  destruct H as [H H0].
-  subst.
+  intros [H H0].
+  destruct (sym_eqb_spec a 0); subst; try congruence.
   rewrite IHx; auto.
-  rewrite <-const_unfold; auto.
+  solve_const0_eq.
 Qed.
 
 Lemma cside_eqb_spec x y:
@@ -464,11 +439,12 @@ Proof.
     cbn in H.
     destruct y; repeat rewrite andb_shortcut_spec,Bool.andb_true_iff in H.
     + destruct H as [H H0].
-      rewrite Sym_eqb_spec in H. subst.
+      destruct (sym_eqb_spec a 0); subst; try congruence.
       rewrite cside_eqb_const0_spec; auto.
       rewrite <-const_unfold; auto.
     + destruct H as [H H0].
-      rewrite Sym_eqb_spec in H. subst. cbn.
+      destruct (sym_eqb_spec a s); subst; try congruence.
+      cbn.
       erewrite IHx; eauto.
 Qed.
 
@@ -481,10 +457,9 @@ Proof.
   cbn.
   repeat rewrite andb_shortcut_spec.
   repeat rewrite Bool.andb_true_iff.
-  rewrite Q_eqb_spec,Sym_eqb_spec.
-  intro H.
-  destruct H as [H [H0 [H1 H2]]].
-  subst.
+  intros [H [H0 [H1 H2]]].
+  destruct (q_eqb_spec s1 s2); subst; try congruence.
+  destruct (sym_eqb_spec m1 m2); subst; try congruence.
   rewrite (cside_eqb_spec _ _ H1).
   rewrite (cside_eqb_spec _ _ H2).
   reflexivity.

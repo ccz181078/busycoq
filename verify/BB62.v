@@ -29,6 +29,30 @@ Module BB62 <: Ctx.
     decide equality.
   Defined.
 
+  Definition q_eqb(a b:Q):bool:=
+  match a,b with
+  | A,A | B,B | C,C | D,D | E,E | F,F => true
+  | _,_ => false
+  end.
+
+  Lemma q_eqb_spec a b:
+    Bool.reflect (a=b) (q_eqb a b).
+  Proof.
+    destruct a,b; cbn; constructor; congruence.
+  Qed.
+
+  Definition sym_eqb(a b:Sym):bool:=
+  match a,b with
+  | S0,S0 | S1,S1 => true
+  | _,_ => false
+  end.
+
+  Lemma sym_eqb_spec a b:
+    Bool.reflect (a=b) (sym_eqb a b).
+  Proof.
+    destruct a,b; cbn; constructor; congruence.
+  Qed.
+
   Definition all_qs := [A; B; C; D; E; F].
 
   Lemma all_qs_spec : forall a, In a all_qs.
