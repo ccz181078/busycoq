@@ -89,6 +89,41 @@ Module TM := TM Ctx. Export TM.
 Definition multistep' tm (p:bool) s0 s1 :=
 if p then s0-[tm]->+s1 else s0-[tm]->*s1.
 
+Definition multistep_lb tm (n:nat) s0 s1 :=
+exists n0, n<=n0 /\ s0 -[tm]->> n0 / s1.
+
+Lemma multistep_lb_multistep tm n s0 s1:
+  multistep_lb tm n s0 s1 ->
+  exists s2, multistep tm n s0 s2.
+Proof.
+  gen s0 s1.
+  induction n; intros s0 s1 H.
+  - exists s0.
+    constructor.
+  - destruct H as [n0 [H0 H1]].
+    destruct n0 as [|n0]. 1: lia.
+    inverts H1.
+    epose proof (IHn c' s1 _) as H4.
+    destruct H4 as [s2 H4].
+    eexists.
+    econstructor; eauto.
+Unshelve.
+  eexists.
+  split. 2: eauto. lia.
+Qed.
+
+Lemma multistep_lb_nonhalt tm:
+  (forall n, exists s, multistep_lb tm n c0 s) ->
+  ~halts tm c0.
+Proof.
+  intro H.
+  intros [n H0].
+  destruct (H (S n)) as [s H1].
+  destruct (multistep_lb_multistep _ _ _ _ H1) as [s' H2].
+  eapply exceeds_halt; eauto.
+Qed.
+
+
 
 Definition id_t := positive.
 
@@ -150,6 +185,7 @@ Inductive prop0_expr :=
 | config_eq(a b:config_expr)
 | false_prop0
 | multistep_expr(a b:config_expr)(n:nat_expr)
+| multistep_lb_expr(a b:config_expr)(n:nat_expr)
 | multistep'_expr(a b:config_expr)(n:bool)
 .
 
@@ -267,6 +303,8 @@ match a,b with
 | false_prop0,false_prop0 => true
 | multistep_expr a0 a1 an,multistep_expr b0 b1 bn =>
   config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && nat_expr_eqb an bn
+| multistep_lb_expr a0 a1 an,multistep_lb_expr b0 b1 bn =>
+  config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && nat_expr_eqb an bn
 | multistep'_expr a0 a1 an,multistep'_expr b0 b1 bn =>
   config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && Bool.eqb an bn
 | _,_ => false
@@ -283,6 +321,9 @@ Proof.
     destruct (side_expr_eqb_spec b0 b); solve_Bool_reflect.
   - destruct (config_expr_eqb_spec a a0); solve_Bool_reflect.
     destruct (config_expr_eqb_spec b0 b); solve_Bool_reflect.
+  - destruct (config_expr_eqb_spec a a0); solve_Bool_reflect.
+    destruct (config_expr_eqb_spec b0 b); solve_Bool_reflect.
+    destruct (nat_expr_eqb_spec n n0); solve_Bool_reflect.
   - destruct (config_expr_eqb_spec a a0); solve_Bool_reflect.
     destruct (config_expr_eqb_spec b0 b); solve_Bool_reflect.
     destruct (nat_expr_eqb_spec n n0); solve_Bool_reflect.
@@ -559,6 +600,8 @@ match a,b with
 | false_prop0,false_prop0 => true
 | multistep_expr a0 a1 an,multistep_expr b0 b1 bn =>
   config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && nat_expr_eqb an bn
+| multistep_lb_expr a0 a1 an,multistep_lb_expr b0 b1 bn =>
+  config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && nat_expr_eqb an bn
 | multistep'_expr a0 a1 an,multistep'_expr b0 b1 bn =>
   config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && Bool.eqb an bn
 | _,_ => false
@@ -639,6 +682,7 @@ match x with
 | config_eq a b => config_allFV b (config_allFV a s)
 | false_prop0 => s
 | multistep_expr a b n => config_allFV a (config_allFV b (nat_allFV n s))
+| multistep_lb_expr a b n => config_allFV a (config_allFV b (nat_allFV n s))
 | multistep'_expr a b n => config_allFV a (config_allFV b s)
 end.
 
@@ -686,6 +730,7 @@ match x with
 | config_eq a b => config_eq (simpl_config a) (simpl_config b)
 | false_prop0 => false_prop0
 | multistep_expr x0 x1 n => multistep_expr (simpl_config x0) (simpl_config x1) (simpl_nat n)
+| multistep_lb_expr x0 x1 n => multistep_lb_expr (simpl_config x0) (simpl_config x1) (simpl_nat n)
 | multistep'_expr x0 x1 n => multistep'_expr (simpl_config x0) (simpl_config x1) n
 end.
 
@@ -747,6 +792,7 @@ match x with
 | config_eq a b => config_eq (subst_config a) (subst_config b)
 | false_prop0 => false_prop0
 | multistep_expr x0 x1 n => multistep_expr (subst_config x0) (subst_config x1) (subst_nat n)
+| multistep_lb_expr x0 x1 n => multistep_lb_expr (subst_config x0) (subst_config x1) (subst_nat n)
 | multistep'_expr x0 x1 n => multistep'_expr (subst_config x0) (subst_config x1) n
 end.
 
@@ -959,17 +1005,10 @@ let (H2,G2):=SubstExpr.subst_prop (rename_var_by_add di) nat_ivar x2 in
 Definition prop_multistep'_trans(x:prop_expr): option prop_expr :=
 match x with
 | (H,[multistep'_expr s1 s2 n1;multistep'_expr s3 s4 n2]) => Some ((config_eq s2 s3)::H,[multistep'_expr s1 s4 (n1||n2)])
+| (H,[multistep_lb_expr s1 s2 n1;multistep_lb_expr s3 s4 n2]) => Some ((config_eq s2 s3)::H,[multistep_lb_expr s1 s4 (nat_add n1 n2)])
 | _ => None
 end.
 
-Definition prop_multistep'_apply(x1 x2:prop_expr): option prop_expr :=
-match x1,x2 with
-| ([],[multistep'_expr s1 s2 n1]),([],[multistep'_expr s3 s4 n2]) =>
-  if n1 || negb n2 then
-    Some ([config_eq s1 s3; config_eq s2 s4],[multistep'_expr s3 s4 n2])
-  else None
-| _,_ => None
-end.
 
 Definition follow_rule(w1 w2:prop_expr'):option prop_expr' :=
 let (x1,i1):=w1 in
@@ -1078,7 +1117,7 @@ match a,b,ca,cb with
     | nat_add _ (from_nat x) => x
     | _ => N0
     end in
-    if ((cbn-bn')/d =? n)%N then
+    if (1+(cbn-bn')/d =? n)%N then
       (seg_repeat b0 (from_nat (((cbn-bn') mod d)+bn')%N),p) (* dec *)
     else visit_seg' cb p
 | _,_,_,_ => visit_seg' cb p
@@ -1145,6 +1184,12 @@ let '(l30,r30,s30,sgn30):=c0 in
 let '(l3,r3,s3,sgn3):=c in
 oNmin (visit_side l1 l2 l30 l3) (visit_side r1 r2 r30 r3).
 
+Definition visit_prop(x:prop_expr)(c0 c:config_expr):option N :=
+match x with
+| (_,[multistep_lb_expr a b _]) => visit_config a b c0 c
+| _ => None
+end.
+
 End Visit3.
 
 
@@ -1156,17 +1201,17 @@ match x,x0',x0 with
   | Some (a,b,H) =>
     match solve_assumptions solve_assumptions_iter_limit TrySubst.config_normal (H++Hx,[multistep'_expr a b false]) i with
     | Some (Hx',[multistep'_expr a b false],mp) =>
-      let n := Visit3.visit_config a b c' c in
+      let w0 := (simpl_rule (Hx',[multistep_lb_expr a b nat_ivar])) in
+      let n := Visit3.visit_prop (fst w0) c' c in
       let (b',p) :=
       match n with
       | None => Visit2.visit_config' c 1%positive
-      | Some n => Visit2.visit_config n a b c' c 1%positive
+      | Some n => Visit2.visit_config' c 1%positive (*Visit2.visit_config n a b c' c 1%positive*)
       end in
-      let w0 := (simpl_rule (Hx',[multistep'_expr a b false])) in
       let w1 := ([],[multistep'_expr b' b' false],p) in
       match n with
       | None =>
-        match follow_rule ([],[multistep'_expr c' c' false],1%positive) w0 with
+        match follow_rule ([],[multistep_lb_expr c' c' (from_nat 0)],1%positive) w0 with
         | Some w0' => Some (simpl_rule (fst w0'),w1,mp,n)
         | None => None
         end
@@ -1237,6 +1282,7 @@ match x with
 | config_eq a b => to_config a = to_config b
 | false_prop0 => False
 | multistep_expr x0 x1 n => (to_config x0) -[tm]->> (N.to_nat (to_nat n)) / (to_config x1)
+| multistep_lb_expr x0 x1 n => multistep_lb tm (N.to_nat (to_nat n)) (to_config x0) (to_config x1)
 | multistep'_expr x0 x1 n => multistep' tm n (to_config x0) (to_config x1)
 end.
 
@@ -1552,6 +1598,8 @@ Proof.
     rewrite Forall_cons_iff; cbn; tauto.
   - unfold to_prop0_list.
     rewrite Forall_cons_iff; cbn; tauto.
+  - unfold to_prop0_list.
+    rewrite Forall_cons_iff; cbn; tauto.
 Qed.
 
 
@@ -1668,6 +1716,10 @@ Proof.
   - intros [H1 H2].
     rewrite (ExprEq_config_spec a a0); auto.
     rewrite (ExprEq_config_spec b0 b); auto.
+  - intros [[H1 H2] H3].
+    rewrite (ExprEq_config_spec a a0); auto.
+    rewrite (ExprEq_config_spec b0 b); auto.
+    rewrite (ExprEq_nat_spec n n0); auto.
   - intros [[H1 H2] H3].
     rewrite (ExprEq_config_spec a a0); auto.
     rewrite (ExprEq_config_spec b0 b); auto.
@@ -1858,6 +1910,9 @@ Proof.
     repeat rewrite nat_subst_spec.
     reflexivity.
   - repeat rewrite config_subst_spec.
+    repeat rewrite nat_subst_spec.
+    reflexivity.
+  - repeat rewrite config_subst_spec.
     reflexivity.
 Qed.
 
@@ -1900,7 +1955,17 @@ Proof.
   - apply evstep_trans.
 Qed.
 
-
+Lemma multistep_lb_trans n1 n2 s1 s2 s3:
+  multistep_lb tm n1 s1 s2 ->
+  multistep_lb tm n2 s2 s3 ->
+  multistep_lb tm (n1+n2) s1 s3.
+Proof.
+  unfold multistep_lb.
+  intros [n1' [H1a H1b]] [n2' [H2a H2b]].
+  exists (n1'+n2').
+  split. 1: lia.
+  eapply multistep_trans; eauto.
+Qed.
 
 
 
@@ -1911,6 +1976,8 @@ Qed.
 
 Definition match_prop(x1 x2:prop_expr):option prop_expr :=
 match x1,x2 with
+| ([],[multistep_lb_expr s1 s2 n1]),([],[multistep_lb_expr s1' s2' n1']) =>
+  Some ([config_eq s1 s1';config_eq s2 s2';nat_eq n1 n1'],[])
 | ([],[multistep'_expr s1 s2 n1]),([],[multistep'_expr s1' s2' n1']) =>
   Some ([config_eq s1 s1';config_eq s2 s2'],[])
 | _,_ => None
@@ -1989,6 +2056,26 @@ match x with
 | _ => x
 end.
 
+Definition step01_to_lb(x:prop_expr'):prop_expr' :=
+match x with
+| (H,(multistep'_expr a b n)::G,i) =>
+  (H,(multistep_lb_expr a b (from_nat (if n then 1 else 0)))::G,i)
+| _ => x
+end.
+
+Definition lb_to_step0(x:prop_expr'):prop_expr' :=
+match x with
+| (H,(multistep_lb_expr a b n)::G,i) =>
+  (H,(multistep'_expr a b false)::G,i)
+| _ => x
+end.
+
+Definition is_const(x:prop_expr'):bool :=
+match x with
+| ([],G,1%positive) => true
+| _ => true(*false*)
+end.
+
 Definition remove_ivar(x:prop_expr'):prop_expr' :=
 let (x,i):=x in
 let x:=SubstExpr.subst_prop subst_identity (nat_var i) x in
@@ -2008,11 +2095,14 @@ end.
 
 
 Definition subst_ind_S(w:prop_expr') (mp:list (PositiveMap.tree expr_expr)):prop_expr' :=
-  let w1 := step1_to_step0 w in
+  let w1 := w in
   (SubstExpr.subst_prop (subst_list_map mp) nat_ivar (fst w1),snd w1).
 
 (*
   find accelerate rule w1^n, that can be used after w0
+  input (w1, w0, w0 w1)
+  output ((forall n, w1^n), w0 w1^n)
+  if proved nonhalt, w0 w1^n is multistep_lb, else w0 w1^n is multistep'
 *)
 Definition try_ind(w1 w0' w0:prop_expr'):option (prop_expr'*prop_expr') :=
 let (x1,i1):=w1 in
@@ -2022,23 +2112,26 @@ match FindIH.find_IH x1 i1 (fst w0') (fst w0) with
   | None => None
   | Some w10 =>
     let w1' := subst_ind_S w1 mp in
-    if solve_ind w10 w1' w2 then
+    if solve_ind (step01_to_lb w10) (step01_to_lb w1') w2 then
       match n with
       | Some n =>
         if solve_apply w10 x3 then
+          let w2 := (lb_to_step0 w2) in
           match follow_rule w2 x3 with
           | None => None
           | Some w2 =>
             match follow_rule w0' (specialize_ivar w2 n) with
             | None => None
-            | Some w0 => Some (remove_ivar w2,w0)
+            | Some w0 => if is_const w0 then Some (remove_ivar w2,w0) else None
             end
           end
         else None
       | None =>
-        match follow_rule w0' (remove_ivar w2) with
+        match follow_rule (step01_to_lb (step1_to_step0 w0')) (remove_ivar w2) with
         | None => None
-        | Some w0 => Some (remove_ivar w2,w0)
+        | Some w0 =>
+          let w2 := (lb_to_step0 w2) in
+          Some (remove_ivar w2,w0)
         end
       end
     else None
@@ -2099,6 +2192,7 @@ Proof.
   destruct x as [H' G].
   destruct G as [|G0 G]; cbn; trivial.
   destruct G0; cbn; trivial.
+{
   destruct G as [|G0 G]; cbn; trivial.
   destruct G0; cbn; trivial.
   destruct G as [|G0 G]; cbn; trivial.
@@ -2115,7 +2209,30 @@ Proof.
   rewrite H0 in H.
   split; trivial.
   destruct (H H1) as [Ha [Hb _]].
+
+  rewrite Nnat.N2Nat.inj_add.
+  eapply multistep_lb_trans; eauto.
+}
+{
+  destruct G as [|G0 G]; cbn; trivial.
+  destruct G0; cbn; trivial.
+  destruct G as [|G0 G]; cbn; trivial.
+  unfold to_prop''.
+  cbn.
+  unfold to_prop0_list.
+  intros H mp.
+  specialize (H mp).
+  gen H.
+  repeat rewrite Forall_cons_iff.
+  repeat rewrite Forall_nil_iff.
+  cbn.
+  intros H [H0 H1].
+  rewrite H0 in H.
+  split; trivial.
+  destruct (H H1) as [Ha [Hb _]].
+
   eapply multistep'_trans; eauto.
+}
 Qed.
 
 Lemma prop_solve_eq_spec x:
@@ -2487,6 +2604,95 @@ Proof.
   apply progress_evstep.
 Qed.
 
+Lemma multistep_evstep a b n:
+  a -[ tm ]->> n / b ->
+  a -[ tm ]->* b.
+Proof.
+  gen a b.
+  induction n; intros.
+  - inverts H.
+    trivial.
+  - inverts H.
+    eapply evstep_step; eauto.
+Qed.
+
+Lemma evstep_multistep_lb a b:
+  a -[ tm ]->* b ->
+  multistep_lb tm 0 a b.
+Proof.
+  intro H.
+  induction H.
+  - exists 0; split. 1: lia.
+    constructor.
+  - destruct IHevstep as [n [H1 H2]].
+    exists (1+n).
+    split. 1: lia.
+    cbn.
+    econstructor; eauto.
+Qed.
+
+Lemma progress_multistep_lb a b:
+  a -[ tm ]->+ b ->
+  multistep_lb tm 1 a b.
+Proof.
+  intro H.
+  induction H.
+  - exists 1; split. 1: lia.
+    econstructor; eauto.
+  - destruct IHprogress as [n [H1 H2]].
+    exists (1+n).
+    split. 1: lia.
+    cbn.
+    econstructor; eauto.
+Qed.
+
+Lemma lb_to_step0_spec w:
+  to_prop' (fst w) ->
+  to_prop' (fst (lb_to_step0 w)).
+Proof.
+  destruct w as [[H G] i].
+  destruct G as [|[] G]; try tauto.
+  cbn.
+  unfold to_prop'.
+  intros H0 mpi mp.
+  specialize (H0 mpi mp).
+  gen H0.
+  unfold to_prop,to_prop0_list.
+  repeat rewrite Forall_cons_iff.
+  intros H1 H2.
+  specialize (H1 H2).
+  destruct H1 as [H1 H3].
+  split; try tauto.
+  gen H1.
+  cbn.
+  intros [n0 [H0 H1]].
+  eapply multistep_evstep; eauto.
+Qed.
+
+Lemma step01_to_lb_spec w:
+  to_prop' (fst w) ->
+  to_prop' (fst (step01_to_lb w)).
+Proof.
+  destruct w as [[H G] i].
+  destruct G as [|[] G]; try tauto.
+  cbn.
+  unfold to_prop'.
+  intros H0 mpi mp.
+  specialize (H0 mpi mp).
+  gen H0.
+  unfold to_prop,to_prop0_list.
+  repeat rewrite Forall_cons_iff.
+  intros H1 H2.
+  specialize (H1 H2).
+  destruct H1 as [H1 H3].
+  split; try tauto.
+  gen H1; cbn.
+
+  destruct n; intro H1.
+  - apply progress_multistep_lb,H1.
+  - apply evstep_multistep_lb,H1.
+Qed.
+
 Lemma subst_ind_S_spec w mp:
   to_prop' (fst w) ->
   to_prop' (fst (subst_ind_S w mp)).
@@ -2494,8 +2700,7 @@ Proof.
   intro H.
   cbn.
   intros mpi.
-  apply subst_spec.
-  apply step1_to_step0_spec,H.
+  apply subst_spec,H.
 Qed.
 
 Lemma solve_apply_spec' w1 w2:
@@ -2526,21 +2731,25 @@ Proof.
   assert (to_prop' (fst x2)) as H1. {
     unfold to_prop'.
     apply H0; trivial.
-    apply subst_ind_S_spec. tauto.
+    - apply step01_to_lb_spec,H.
+    - apply step01_to_lb_spec,subst_ind_S_spec,H'.
   }
   destruct n as [n|].
   - destruct_spec solve_apply_spec'; trivial.
     destruct_spec follow_rule_spec'; trivial.
     destruct_spec follow_rule_spec'; trivial.
+    pose proof (lb_to_step0_spec x2).
+    destruct_spec is_const; trivial.
     split.
     + apply remove_ivar_spec. tauto.
     + apply H4; try tauto.
       apply specialize_ivar_spec. tauto.
   - destruct_spec follow_rule_spec'; trivial.
     split.
-    + apply remove_ivar_spec,H1.
+    + apply remove_ivar_spec,lb_to_step0_spec,H1.
     + apply H2; try tauto.
-      apply remove_ivar_spec,H1.
+      2: apply remove_ivar_spec,H1.
+      apply step01_to_lb_spec,step1_to_step0_spec,H0'.
 Qed.
 
 
@@ -3305,6 +3514,110 @@ Proof.
   apply prop0_to_prop_spec,H0.
 Qed.
 
+Definition rep_rw_limit:nat := 16.
+
+Fixpoint rep_rw(n:nat)(f:prop_expr'->option prop_expr')(x:prop_expr'*prop_expr'):prop_expr'*prop_expr' :=
+match n with
+| O => x
+| Datatypes.S n0 =>
+  let '(w1,w0):=x in
+  match f w0 with
+  | None => x
+  | Some dw =>
+    match follow_rule w0 dw with
+    | None => x
+    | Some w0 =>
+      match follow_rule w1 dw with
+      | None => x
+      | Some w1 =>
+        rep_rw n0 f (w1,w0)
+      end
+    end
+  end
+end.
+
+Lemma rep_rw_spec n f (w:prop_expr'*prop_expr'):
+(forall x,
+to_prop' (fst x) ->
+match f x with
+| None => True
+| Some x =>
+  to_prop' (fst x)
+end) ->
+(let (w1,w0):=w in
+to_prop' (fst w1) /\
+to_prop' (fst w0)) ->
+let (w1',w0'):=rep_rw n f w in
+to_prop' (fst w1') /\
+to_prop' (fst w0').
+Proof.
+  intros Hf.
+  destruct w as [w1 w0].
+  cbn.
+  gen w1 w0.
+  induction n; intros w1 w0 [H1 H0]; cbn.
+  1: tauto.
+  specialize (Hf w0).
+  destruct (f w0) as [dw|]; cbn.
+  2: tauto.
+  destruct_spec follow_rule_spec'. 2: tauto.
+  destruct_spec follow_rule_spec'. 2: tauto.
+  apply IHn; tauto.
+Qed.
+
+
+Definition unfold_step1_fold w0 :=
+let w := (step0_refl' w0,w0) in
+let w := rep_rw rep_rw_limit find_repeat_unfold w in
+let w := rep_rw rep_rw_limit find_step1 w in
+let w := rep_rw rep_rw_limit find_repeat_fold w in
+w.
+
+Lemma unfold_step1_fold_spec w0:
+to_prop' (fst w0) ->
+let (w1,w0):=unfold_step1_fold w0 in
+to_prop' (fst w1) /\
+to_prop' (fst w0).
+Proof.
+  intros H.
+  unfold unfold_step1_fold.
+  repeat apply rep_rw_spec.
+  - apply find_repeat_fold_spec.
+  - apply find_step1_spec.
+  - apply find_repeat_unfold_spec.
+  - split.
+    + apply step0_refl'_spec,H.
+    + apply H.
+Qed.
+
+Definition step1_to_repeater_edge w0 :=
+match find_repeat_unfold w0 with
+| None => Some (fst (unfold_step1_fold w0))
+| _ => None
+end.
+
+Definition steps_to_repeater_edge w0 :=
+let w := unfold_step1_fold w0 in
+let w := rep_rw rep_rw_limit step1_to_repeater_edge w in
+w.
+
+Lemma steps_to_repeater_edge_spec w0:
+to_prop' (fst w0) ->
+let (w1,w0):=steps_to_repeater_edge w0 in
+to_prop' (fst w1) /\
+to_prop' (fst w0).
+Proof.
+  intros H.
+  unfold steps_to_repeater_edge.
+  apply rep_rw_spec.
+  - intros x Hx.
+    unfold step1_to_repeater_edge.
+    destruct (find_repeat_unfold x); trivial.
+    pose proof (unfold_step1_fold_spec x).
+    destruct (unfold_step1_fold x); cbn; tauto.
+  - apply unfold_step1_fold_spec,H.
+Qed.
+
 
 Definition hlin_layers_upd' (ls:list hlin_layer)(f:prop_expr'->option prop_expr') :=
 match ls with
@@ -3368,24 +3681,65 @@ match T with
 | Npos T0 => Pos_iter_until f x T0
 end.
 
+Lemma N_iter_until_spec{S S'}{f:S->S+S'}{x:S+S'}{T:N}(P:S->Prop)(P':S'->Prop):
+(forall x0:S, P x0 ->
+match f x0 with
+| inl x1 => P x1
+| inr x1 => P' x1
+end) ->
+(match x with
+| inl x1 => P x1
+| inr x1 => P' x1
+end) ->
+match N_iter_until f x T with
+| inl x1 => P x1
+| inr x1 => P' x1
+end.
+Proof.
+  intros H.
+  destruct T as [|T].
+  1: cbn; tauto.
+  cbn.
+  gen x.
+  induction T; intros x Hx; cbn.
+  - destruct x.
+    + apply IHT,IHT,H,Hx.
+    + apply Hx.
+  - destruct x.
+    + apply IHT,IHT,Hx.
+    + apply Hx.
+  - destruct x.
+    + apply H,Hx.
+    + apply Hx.
+Qed.
+
+Definition steps_to_repeater_edge' w :=
+if (snd w =? 1)%positive then
+  Some (fst (steps_to_repeater_edge w))
+else None.
+
+Lemma steps_to_repeater_edge'_spec x:
+to_prop' (fst x) ->
+match steps_to_repeater_edge' x with
+| Some x0 => to_prop' (fst x0)
+| None => True
+end.
+Proof.
+  intro H.
+  unfold steps_to_repeater_edge'.
+  destruct (snd x =? 1)%positive; trivial.
+  pose proof (steps_to_repeater_edge_spec x).
+  destruct (steps_to_repeater_edge); cbn; tauto.
+Qed.
 
 Definition hlin_layers_step(s:(list hlin_layer)*bool):(list hlin_layer)*bool+(list hlin_layer) :=
 let (ls,o):=s in
-if o then
-  match hlin_layers_upd' ls find_step1 with
-  | None =>
-    match hlin_layers_upd' ls find_repeat_unfold with
-    | None => inr ls
-    | Some ls => inl (ls,true)
-    end
+  match hlin_layers_upd' ls steps_to_repeater_edge' with
+  | None => inr ls
   | Some ls =>
     inl (ls,false)
-  end
-else
-  match hlin_layers_upd' ls find_repeat_fold with
-  | None => inl (ls,true)
-  | Some ls => inl (ls,false)
   end.
+
 
 Definition step0_refl_c0:prop_expr' :=
   ([],[multistep'_expr (side_0inf,side_0inf,q0,R) (side_0inf,side_0inf,q0,R) false],1%positive).
@@ -3404,6 +3758,94 @@ Qed.
 
 Definition hlin_layers_steps T :=
 N_iter_until hlin_layers_step (inl (reset_hlin_layers step0_refl_c0,true)) T.
+
+Lemma hlin_layers_steps_spec T:
+match hlin_layers_steps T with
+| inl x => hlin_layers_WF (fst x)
+| inr x =>hlin_layers_WF x
+end.
+Proof.
+  apply N_iter_until_spec.
+  - intros x Hx.
+    unfold hlin_layers_step.
+    destruct x as [ls o].
+    cbn in Hx.
+    destruct_spec hlin_layers_upd'_spec; cbn; auto.
+    apply H; auto.
+    apply steps_to_repeater_edge'_spec.
+  - cbn.
+    apply reset_hlin_layers_spec.
+    apply step0_refl_c0_spec.
+Qed.
+
+Definition check_nonhalt(x:prop_expr):bool :=
+match x with
+| ([],[multistep_lb_expr s1 s2 (nat_var v1)]) => config_expr_eqb s1 (side_0inf,side_0inf,q0,R)
+| _ => false
+end.
+
+
+Definition subst_for_nonhalt(n:N)(i:id_t)(t:type_t):to_type t :=
+match t with
+| nat_t => n
+| seg_t => []
+| side_t => const s0
+end.
+
+Lemma check_nonhalt_spec x:
+  to_prop' x ->
+  if check_nonhalt x then ~halts tm c0 else True.
+Proof.
+  intro H'.
+  destruct x as [H G]; cbn.
+  destruct H; trivial.
+  destruct G as [|G G0]; trivial.
+  destruct G; trivial.
+  destruct n; trivial.
+  destruct G0; trivial.
+  destruct (config_expr_eqb_spec a (side_0inf, side_0inf, q0, R)); trivial.
+  subst a.
+  apply multistep_lb_nonhalt.
+  intro n.
+  specialize (H' N0 (subst_for_nonhalt (N.of_nat n))).
+  unfold to_prop'' in H'.
+  cbn in H'.
+  unfold to_prop0_list in H'.
+  repeat rewrite Forall_cons_iff in H'.
+  repeat rewrite Forall_nil_iff in H'.
+  cbn in H'.
+  destruct (H' I) as [H0 _].
+  eexists.
+  applys_eq H0.
+  lia.
+Qed.
+
+Definition decide_hlin_nonhalt T :=
+match hlin_layers_steps T with
+| inr ((_,(w1,w0),_)::_) => check_nonhalt (fst w0)
+| _ => false
+end.
+
+Lemma decide_hlin_nonhalt_spec' T:
+  if decide_hlin_nonhalt T then ~halts tm c0 else True.
+Proof.
+  unfold decide_hlin_nonhalt.
+  destruct_spec hlin_layers_steps_spec; trivial.
+  destruct l as [|[[[w3 w2] [w1 w0]] p] ls]; trivial.
+  unfold hlin_layers_WF in H.
+  rewrite Forall_cons_iff in H.
+  cbn in H.
+  destruct_spec check_nonhalt_spec; trivial.
+  tauto.
+Qed.
+Lemma decide_hlin_nonhalt_spec T:
+  decide_hlin_nonhalt T = true -> ~halts tm c0.
+Proof.
+  pose proof (decide_hlin_nonhalt_spec' T) as H.
+  intro H0.
+  rewrite H0 in H.
+  apply H.
+Qed.
 
 End tm_ctx.
 
