@@ -972,7 +972,7 @@ End TrySubst.
 
 
 
-Definition solve_assumptions_iter_limit:nat := 16.
+Definition solve_assumptions_iter_limit:nat := 1024.
 
 Fixpoint solve_assumptions(n:nat)(cfg:TrySubst.Config)(x:prop_expr)(i:id_t):option (prop_expr*_) :=
 match n with
@@ -1192,7 +1192,7 @@ end.
 
 End Visit3.
 
-
+Definition min_ind_n:N := 0.
 Definition find_IH(x:prop_expr)(i:id_t)(x0' x0:prop_expr):option (prop_expr'*(prop_expr')*_*option N) :=
 match x,x0',x0 with
 | (Hx,[a]),([],[multistep'_expr _ c' _]),([],[multistep'_expr _ c _]) =>
@@ -1215,7 +1215,7 @@ match x,x0',x0 with
         | Some w0' => Some (simpl_rule (fst w0'),w1,mp,n)
         | None => None
         end
-      | Some _ => Some (w0,w1,mp,n)
+      | Some n0 => if (n0 <? min_ind_n)%N then None else Some (w0,w1,mp,n)
       end
     | _ => None
     end
@@ -1227,9 +1227,22 @@ End FindIH.
 
 
 
+Record Config := {
+  max_repeater_len:nat;
+  max_repeater_size:option N;
+}.
+Definition default_config := {|
+  max_repeater_len := 8;
+  max_repeater_size := None;
+|}.
+Definition config_limited_repeater_size := {|
+  max_repeater_len := 8;
+  max_repeater_size := Some 16%N;
+|}.
 
 Section tm_ctx.
 Hypothesis tm:TM.
+Hypothesis cfg:Config.
 
 Section subst_var.
 Hypothesis mp:id_t->forall t:type_t, to_type t.
@@ -2020,7 +2033,7 @@ end.
 (*
   prove w by induction,
   prove base case by wO,
-  prove induction step by "follow wS; follow IH; finish"
+  prove induction step by "follow IH; follow wS; finish"
 *)
 Definition solve_ind(wO wS w:prop_expr'):bool :=
 match follow_rule w wS with
@@ -2039,7 +2052,16 @@ Definition step0_refl s sgn:prop_expr' :=
 Definition get_config_r(x:prop_expr') :=
 let '((H,G),i):=x in
 match G with
+| (multistep_lb_expr a b n)::_ => Some b
 | (multistep'_expr a b n)::_ => Some b
+| _ => None
+end.
+
+Definition get_config_l(x:prop_expr') :=
+let '((H,G),i):=x in
+match G with
+| (multistep_lb_expr a b n)::_ => Some a
+| (multistep'_expr a b n)::_ => Some a
 | _ => None
 end.
 
@@ -2073,7 +2095,7 @@ end.
 Definition is_const(x:prop_expr'):bool :=
 match x with
 | ([],G,1%positive) => true
-| _ => true(*false*)
+| _ => false
 end.
 
 Definition remove_ivar(x:prop_expr'):prop_expr' :=
@@ -2093,6 +2115,47 @@ match mp with
   SubstExpr.subst_expr (subst_list_map mp) nat_ivar t (subst_vars mp0 i t)
 end.
 
+Fixpoint to_nat_const(x:nat_expr):option N :=
+match x with
+| from_nat n => Some n
+| nat_add a b =>
+  match to_nat_const a,to_nat_const b with
+  | Some a0,Some b0 => Some (a0+b0)%N
+  | _,_ => None
+  end
+| nat_mul a b =>
+  match to_nat_const a,to_nat_const b with
+  | Some a0,Some b0 => Some (a0*b0)%N
+  | _,_ => None
+  end
+| _ => None
+end.
+
+
+Definition mnc:N := 0.
+Definition subst_small_vars(mp:list (PositiveMap.tree expr_expr))(i:id_t)(t:type_t):to_expr_type t :=
+match t as t0 return (to_expr_type t0) with
+| nat_t =>
+    match to_nat_const (subst_list_map mp i nat_t) with
+    | Some n => if (n<?mnc)%N then from_nat n else mk_var i _
+    | None => mk_var i _
+    end
+| _ => mk_var i _
+end.
+(* when a var < mnc, specialize it
+  this increases readability of some rules, but may not solve more TMs
+ *)
+Definition subst_small_vars_for_follow(w0 w1 w1':prop_expr'):option prop_expr' :=
+if (mnc =? N0)%N then Some w1' else
+match get_config_r w0,get_config_l w1 with
+| Some c0,Some c1 =>
+  match solve_assumptions solve_assumptions_iter_limit TrySubst.config_normal (config_eq c0 c1 :: fst (fst w1),[]) (snd w1)%positive with
+  | None => None
+  | Some (x,mp) =>
+    Some (simpl_rule (SubstExpr.subst_prop (subst_small_vars mp) nat_ivar (fst w1')))
+  end
+| _,_ => None
+end.
 
 Definition subst_ind_S(w:prop_expr') (mp:list (PositiveMap.tree expr_expr)):prop_expr' :=
   let w1 := w in
@@ -2120,9 +2183,14 @@ match FindIH.find_IH x1 i1 (fst w0') (fst w0) with
           match follow_rule w2 x3 with
           | None => None
           | Some w2 =>
-            match follow_rule w0' (specialize_ivar w2 n) with
+            let w2n := (specialize_ivar w2 n) in
+            match subst_small_vars_for_follow w0' w2n w2 with
             | None => None
-            | Some w0 => if is_const w0 then Some (remove_ivar w2,w0) else None
+            | Some w2 =>
+              match follow_rule w0' w2n with
+              | None => None
+              | Some w0 => if is_const w0 then Some (remove_ivar w2,w0) else None
+              end
             end
           end
         else None
@@ -2250,20 +2318,20 @@ Proof.
 Qed.
 
 
-Lemma try_subst_spec cfg x i:
-  let '((x',i'),_):=(TrySubst.try_subst cfg x i) in
+Lemma try_subst_spec cfg0 x i:
+  let '((x',i'),_):=(TrySubst.try_subst cfg0 x i) in
   (to_prop'' x) -> (to_prop'' x').
 Proof.
   destruct x as [H G].
   cbn.
-  destruct (TrySubst.list_find_subst cfg H (PositiveMap.empty expr_expr, PositiveMap.empty unit, i)) as [[sl _] _].
+  destruct (TrySubst.list_find_subst cfg0 H (PositiveMap.empty expr_expr, PositiveMap.empty unit, i)) as [[sl _] _].
   intros H0.
   apply (subst_spec (H,G)),H0.
 Qed.
 
-Lemma solve_assumptions_spec n cfg x i:
+Lemma solve_assumptions_spec n cfg0 x i:
 to_prop'' x ->
-match solve_assumptions n cfg x i with
+match solve_assumptions n cfg0 x i with
 | None => True
 | Some (x',_) => to_prop'' x'
 end.
@@ -2275,15 +2343,15 @@ Proof.
   destruct (prop_has_false (prop_solve_eq x)).
   1: trivial.
   pose proof (prop_solve_eq_spec x H) as H0.
-  pose proof (try_subst_spec cfg (prop_solve_eq x) i) as H1.
-  destruct (TrySubst.try_subst cfg (prop_solve_eq x) i) as [[x0 i0] mp0].
+  pose proof (try_subst_spec cfg0 (prop_solve_eq x) i) as H1.
+  destruct (TrySubst.try_subst cfg0 (prop_solve_eq x) i) as [[x0 i0] mp0].
   specialize (H1 H0).
   destruct (list_prop0_eqb (fst x0) []).
   1: tauto.
   destruct (prop_eqb x0 x).
   1: trivial.
   specialize (IHn x0 i0 H1).
-  destruct (solve_assumptions n cfg x0 i0) as [[]|]; trivial.
+  destruct (solve_assumptions n cfg0 x0 i0) as [[]|]; trivial.
 Qed.
 
 Lemma rename_var_by_sort_spec x:
@@ -2714,6 +2782,28 @@ Proof.
   apply H; trivial.
 Qed.
 
+Lemma subst_small_vars_for_follow_spec w0 w1 w2:
+  to_prop' (fst w0) ->
+  to_prop' (fst w1) ->
+  to_prop' (fst w2) ->
+  match subst_small_vars_for_follow w0 w1 w2 with
+  | None => True
+  | Some w => to_prop' (fst w)
+  end.
+Proof.
+  intros H0 H1 H2.
+  unfold subst_small_vars_for_follow.
+  destruct_spec N.eqb. 1: tauto.
+  destruct_spec get_config_r; trivial.
+  destruct_spec get_config_l; trivial.
+  destruct_spec solve_assumptions; trivial.
+  destruct p as [_ mp].
+  intro mpi.
+  apply (simpl_rule_spec mpi).
+  apply subst_spec.
+  apply H2.
+Qed.
+
 Lemma try_ind_spec w1 w0' w0:
   to_prop' (fst w1) ->
   to_prop' (fst w0') ->
@@ -2737,13 +2827,14 @@ Proof.
   destruct n as [n|].
   - destruct_spec solve_apply_spec'; trivial.
     destruct_spec follow_rule_spec'; trivial.
+    destruct_spec subst_small_vars_for_follow_spec; trivial.
     destruct_spec follow_rule_spec'; trivial.
     pose proof (lb_to_step0_spec x2).
+    pose proof (specialize_ivar_spec p0 n).
     destruct_spec is_const; trivial.
     split.
     + apply remove_ivar_spec. tauto.
-    + apply H4; try tauto.
-      apply specialize_ivar_spec. tauto.
+    + tauto.
   - destruct_spec follow_rule_spec'; trivial.
     split.
     + apply remove_ivar_spec,lb_to_step0_spec,H1.
@@ -2953,9 +3044,24 @@ match ls with
 | _ => None
 end.
 
+
+Fixpoint get_seg_size_lb(x:seg_expr):N :=
+match x with
+| seg_sym _ => 1%N
+| seg_concat a b => (get_seg_size_lb a + get_seg_size_lb b)%N
+| seg_repeat a (from_nat n) => ((get_seg_size_lb a)*n)%N
+| _ => 0%N
+end.
+
+Definition check_seg_size(x:seg_expr):bool :=
+match cfg.(max_repeater_size) with
+| None => true
+| Some n => (get_seg_size_lb x <=? n)%N
+end.
+
 Definition side_find_repeat_fold_1 ls1 ls2 n :=
 match side_find_repeat_2_fold ls1 ls2 n with
-| Some h => Some (repeat_2_def h)
+| Some h => if check_seg_size h then Some (repeat_2_def h) else None
 | None =>
   match side_find_repeat_S_fold ls1 ls2 n with
   | Some h => Some (repeat_S_def h)
@@ -3003,8 +3109,6 @@ Proof.
   destruct x; cbn; cbn in H; congruence.
 Qed.
 
-Definition max_repeater_len:nat := 8.
-
 Fixpoint side_find_repeat_fold ls1 :=
 match side_find_repeat_O_fold ls1 with
 | Some h => Some (repeat_0_def' h)
@@ -3014,7 +3118,7 @@ match side_find_repeat_O_fold ls1 with
     match side_find_repeat_fold t1 with
     | Some v => Some (side_concat_rw_2 v)
     | None =>
-      match side_find_repeat_fold_2 ls1 ls1 O max_repeater_len with
+      match side_find_repeat_fold_2 ls1 ls1 O cfg.(max_repeater_len) with
       | Some v => Some v
       | None => None
       end
@@ -3022,8 +3126,6 @@ match side_find_repeat_O_fold ls1 with
   | _ => None
   end
 end.
-
-Opaque max_repeater_len.
 
 Lemma side_find_repeat_fold_1_spec ls1 ls2 n:
   match side_find_repeat_fold_1 ls1 ls2 n with
@@ -3033,6 +3135,7 @@ Lemma side_find_repeat_fold_1_spec ls1 ls2 n:
 Proof.
   unfold side_find_repeat_fold_1.
   destruct (side_find_repeat_2_fold ls1 ls2 n).
+  1: destruct_spec check_seg_size; trivial.
   1: apply repeat_2_def_spec.
   destruct (side_find_repeat_S_fold ls1 ls2 n).
   1: apply repeat_S_def_spec.
@@ -3070,11 +3173,8 @@ Proof.
   1: apply repeat_0_def_spec'.
   destruct (side_find_repeat_fold ls).
   - apply side_concat_rw_2_spec,IHls.
-  - pose proof (side_find_repeat_fold_2_spec (side_concat a ls) (side_concat a ls) 0 max_repeater_len).
-    destruct (side_find_repeat_fold_2 (side_concat a ls) (side_concat a ls) 0 max_repeater_len); tauto.
+  - destruct_spec side_find_repeat_fold_2_spec; tauto.
 Qed.
-
-Transparent max_repeater_len.
 
 Definition config_rw_l(x:prop0_expr*id_t) s sgn:prop0_expr*id_t :=
 match x with
@@ -3358,7 +3458,7 @@ match ls with
     match try_ind w1' w0_ u0 with
     | Some (u1',u0') =>
       match follow_rule w1_ u1' with
-      | None => reset_hlin_layers u1'
+      | None => reset_hlin_layers u0'
       | Some w1'' =>
         let ls':=hlin_layers_upd w1'' u0' ls in
         let u0'':= get_w0 ls' u0' in
