@@ -150,9 +150,11 @@ Inductive nat_expr :=
 .
 
 Inductive seg_expr :=
+| seg_nil
 | seg_sym(a:Sym)
 | seg_concat(a:seg_expr)(b:seg_expr)
 | seg_repeat(a:seg_expr)(n:nat_expr)
+| seg_arithseq(a:list ((list Sym)*Z*nat_expr))(n:nat_expr)
 | seg_var(i:id_t)
 .
 
@@ -193,6 +195,43 @@ Definition prop_expr:Type :=
   (list prop0_expr)*(list prop0_expr).
 
 
+Ltac solve_Bool_reflect :=
+  try (constructor; congruence).
+
+Fixpoint list_eqb{T}(T_eqb:T->T->bool)(a b:list T):bool :=
+match a,b with
+| a0::a1,b0::b1 => (T_eqb a0 b0) && (list_eqb T_eqb a1 b1)
+| nil,nil => true
+| _,_ => false
+end.
+
+Lemma list_eqb_spec {T} T_eqb (a b:list T):
+  (forall a0 b0, Bool.reflect (a0=b0) (T_eqb a0 b0)) ->
+  Bool.reflect (a=b) (list_eqb T_eqb a b).
+Proof.
+  intro H.
+  gen b.
+  induction a as [|a0 a1]; intros b; destruct b as [|b0 b1]; cbn.
+  all: solve_Bool_reflect.
+  destruct (H a0 b0),(IHa1 b1); solve_Bool_reflect.
+Qed.
+
+Definition prod_eqb{A B}(A_eqb:A->A->bool)(B_eqb:B->B->bool)(a b:A*B):bool :=
+match a,b with
+| (a0,a1),(b0,b1) =>
+  A_eqb a0 b0 && B_eqb a1 b1
+end.
+
+Lemma prod_eqb_spec{A B} A_eqb B_eqb (a b:A*B):
+  (forall a0 b0, Bool.reflect (a0=b0) (A_eqb a0 b0)) ->
+  (forall a0 b0, Bool.reflect (a0=b0) (B_eqb a0 b0)) ->
+  Bool.reflect (a=b) (prod_eqb A_eqb B_eqb a b).
+Proof.
+  intros Ha Hb.
+  destruct a as [a0 a1].
+  destruct b as [b0 b1]; cbn.
+  destruct (Ha a0 b0),(Hb a1 b1); solve_Bool_reflect.
+Qed.
 
 Fixpoint nat_expr_eqb(a b:nat_expr):bool :=
 match a,b with
@@ -203,9 +242,6 @@ match a,b with
 | nat_ivar,nat_ivar => true
 | _,_ => false
 end.
-
-Ltac solve_Bool_reflect :=
-  try (constructor; congruence).
 
 Lemma nat_expr_eqb_spec(a b:nat_expr): Bool.reflect (a=b) (nat_expr_eqb a b).
 Proof.
@@ -224,9 +260,13 @@ Qed.
 
 Fixpoint seg_expr_eqb(a b:seg_expr):bool :=
 match a,b with
+| seg_nil,seg_nil => true
 | seg_sym a0,seg_sym b0 => sym_eqb a0 b0
 | seg_concat a0 a1,seg_concat b0 b1 => seg_expr_eqb a0 b0 && seg_expr_eqb a1 b1
 | seg_repeat a0 an,seg_repeat b0 bn => seg_expr_eqb a0 b0 && nat_expr_eqb an bn
+| seg_arithseq a0 an,seg_arithseq b0 bn =>
+  nat_expr_eqb an bn &&
+  list_eqb (prod_eqb (prod_eqb (list_eqb sym_eqb) Z.eqb) nat_expr_eqb) a0 b0
 | seg_var a0,seg_var b0 => (a0 =? b0)%positive
 | _,_ => false
 end.
@@ -242,6 +282,15 @@ Proof.
     solve_Bool_reflect.
   - destruct (IHa b),(nat_expr_eqb_spec n n0); subst; cbn;
     solve_Bool_reflect.
+  - destruct (nat_expr_eqb_spec n n0); solve_Bool_reflect.
+    destruct (list_eqb_spec (prod_eqb (prod_eqb (list_eqb sym_eqb) Z.eqb) nat_expr_eqb) a a0);
+    solve_Bool_reflect.
+    intros.
+    apply prod_eqb_spec; intros.
+    1: apply prod_eqb_spec; intros.
+    1: apply list_eqb_spec,sym_eqb_spec.
+    1: apply Z.eqb_spec.
+    1: apply nat_expr_eqb_spec.
   - destruct (Pos.eqb_spec i i0);
     solve_Bool_reflect.
 Qed.
@@ -507,11 +556,23 @@ let f := add_to_affine_map a 1 nil in
 let f0 := add_to_affine_map b (-1) f in
 from_affine_map_simpl_div f0.
 
+Fixpoint solve_arithseq_eq(a b:list ((list Sym) * Z * nat_expr)):list prop0_expr :=
+match a,b with
+| nil,nil => []
+| (a0,a1,a2)::a3,(b0,b1,b2)::b3 =>
+  if list_eqb sym_eqb a0 b0 && Z.eqb a1 b1 then
+    (solve_nat_eq a2 b2) ++ (solve_arithseq_eq a3 b3)
+  else [false_prop0]
+| _,_ => [false_prop0]
+end.
+
 Fixpoint solve_seg_eq(a b:seg_expr):list prop0_expr :=
 match a,b with
+| seg_nil,seg_nil => []
 | seg_sym a0,seg_sym b0 => if sym_eqb a0 b0 then [] else [false_prop0]
 | seg_concat a0 a1,seg_concat b0 b1 => (solve_seg_eq a0 b0) ++ (solve_seg_eq a1 b1)
 | seg_repeat a0 a1,seg_repeat b0 b1 => (solve_seg_eq a0 b0) ++ (solve_nat_eq a1 b1)
+| seg_arithseq a0 a1,seg_arithseq b0 b1 => (solve_arithseq_eq a0 b0) ++ (solve_nat_eq a1 b1)
 | seg_var a0,seg_var b0 => if (a0=?b0)%positive then [] else [seg_eq a b]
 | _,_ => [seg_eq a b]
 end.
@@ -570,9 +631,13 @@ end.
 
 Fixpoint seg_expr_eqb(a b:seg_expr):bool :=
 match a,b with
+| seg_nil,seg_nil => true
 | seg_sym a0,seg_sym b0 => sym_eqb a0 b0
 | seg_concat a0 a1,seg_concat b0 b1 => seg_expr_eqb a0 b0 && seg_expr_eqb a1 b1
 | seg_repeat a0 an,seg_repeat b0 bn => seg_expr_eqb a0 b0 && nat_expr_eqb an bn
+| seg_arithseq a0 an,seg_arithseq b0 bn =>
+  nat_expr_eqb an bn &&
+  list_eqb (prod_eqb (prod_eqb (list_eqb sym_eqb) Z.eqb) nat_expr_eqb) a0 b0
 | seg_var a0,seg_var b0 => (a0 =? b0)%positive
 | _,_ => false
 end.
@@ -646,11 +711,16 @@ match x with
 | nat_ivar => s
 end.
 
+Definition seg_arithseq_allFV(x:list ((list Sym)*Z*nat_expr)):S->S :=
+List.fold_left (fun s x => let '(_,_,x2):=x in (nat_allFV x2 s)) x.
+
 Fixpoint seg_allFV(x:seg_expr)(s:S):S :=
 match x with
+| seg_nil => s
 | seg_sym a => s
 | seg_concat a b => seg_allFV a (seg_allFV b s)
 | seg_repeat a n => seg_allFV a (nat_allFV n s)
+| seg_arithseq a n => seg_arithseq_allFV a (nat_allFV n s)
 | seg_var i0 => add_var s i0
 end.
 
@@ -705,9 +775,11 @@ Definition simpl_nat x :=
 
 Fixpoint simpl_seg(x:seg_expr) :=
 match x with
+| seg_nil => x
 | seg_sym a => x
 | seg_concat a b => seg_concat (simpl_seg a) (simpl_seg b)
 | seg_repeat a n => seg_repeat (simpl_seg a) (simpl_nat n)
+| seg_arithseq a n => seg_arithseq (map (fun '(x0,x1,x2) => (x0,x1, simpl_nat x2)) a) (simpl_nat n)
 | seg_var i => x
 end.
 
@@ -760,9 +832,11 @@ end.
 
 Fixpoint subst_seg(x:seg_expr) :=
 match x with
+| seg_nil => x
 | seg_sym a => x
 | seg_concat a b => seg_concat (subst_seg a) (subst_seg b)
 | seg_repeat a n => seg_repeat (subst_seg a) (subst_nat n)
+| seg_arithseq a n => seg_arithseq (map (fun '(x0,x1,x2) => (x0,x1,subst_nat x2)) a) (subst_nat n)
 | seg_var i => (mp i seg_t)
 end.
 
@@ -1036,20 +1110,52 @@ Module Visit1.
 (* guess induction hypothesis *)
 Section visit.
 
+Definition visit_nat(an bn ca cb:nat_expr): option (nat_expr*nat_expr*(list prop0_expr)) :=
+match ca,cb with
+| from_nat can,from_nat cbn =>
+  if (can <=? cbn)%N then (* inc *)
+    let d := (cbn-can)%N in
+    let an' := (nat_add an (nat_mul (nat_ivar) (from_nat d))) in
+    Some (an,an',[nat_eq (nat_add an (from_nat d)) bn]) (* inc *)
+  else (* dec *)
+    let d := (can-cbn)%N in
+    let bn' := (nat_add bn (nat_mul (nat_ivar) (from_nat d))) in
+    Some (bn',bn,[nat_eq (nat_add bn (from_nat d)) an]) (* dec *)
+| _,_ => None
+end.
+
+Fixpoint visit_seg_arithseq(a b ca cb:list ((list Sym)*Z*nat_expr)):=
+match a,b,ca,cb with
+| (a0,a1,a2)::a,(b0,b1,b2)::b,(ca0,ca1,ca2)::ca,(cb0,cb1,cb2)::cb =>
+  if list_eqb sym_eqb a0 b0 && list_eqb sym_eqb a0 ca0 && list_eqb sym_eqb a0 cb0 &&
+    Z.eqb a1 b1 && Z.eqb a1 ca1 && Z.eqb a1 cb1
+  then
+    match visit_nat a2 b2 ca2 cb2,visit_seg_arithseq a b ca cb with
+    | Some (n2,n2',ls2),Some (ls,ls',ls3) =>
+      Some ((a0,a1,n2)::ls,(a0,a1,n2')::ls',ls2++ls3)
+    | _,_ => None
+    end
+  else None
+| [],[],[],[] => Some ([],[],[])
+| _,_,_,_ => None
+end.
+
 Definition visit_seg(a b ca cb:seg_expr):option (seg_expr*seg_expr*(list prop0_expr)) :=
 if seg_expr_eqb a b then Some (a,a,[]) else
 match a,b,ca,cb with
-| seg_repeat a0 an,seg_repeat b0 bn,seg_repeat ca0 (from_nat can),seg_repeat cb0 (from_nat cbn) =>
+| seg_repeat a0 an,seg_repeat b0 bn,seg_repeat ca0 can,seg_repeat cb0 cbn =>
   if seg_expr_eqb a0 b0 && seg_expr_eqb a0 ca0 && seg_expr_eqb a0 cb0 then
-    if (can <=? cbn)%N then (* inc *)
-      let d := (cbn-can)%N in
-      let an' := (nat_add an (nat_mul (nat_ivar) (from_nat d))) in
-      Some (seg_repeat a0 an,seg_repeat a0 an',[nat_eq (nat_add an (from_nat d)) bn]) (* inc *)
-    else (* dec *)
-      let d := (can-cbn)%N in
-      let bn' := (nat_add bn (nat_mul (nat_ivar) (from_nat d))) in
-      Some (seg_repeat b0 bn',seg_repeat b0 bn,[nat_eq (nat_add bn (from_nat d)) an]) (* dec *)
+    match visit_nat an bn can cbn with
+    | Some (n1,n2,ls) => Some (seg_repeat a0 n1,seg_repeat a0 n2,ls)
+    | None => None
+    end
   else None
+| seg_arithseq a0 an,seg_arithseq b0 bn,seg_arithseq ca0 can,seg_arithseq cb0 cbn =>
+  match visit_nat an bn can cbn,visit_seg_arithseq a0 b0 ca0 cb0 with
+  | Some (n1,n2,ls),Some (ls1,ls2,ls3) =>
+    Some (seg_arithseq ls1 n1,seg_arithseq ls2 n2,ls++ls3)
+  | _,_ => None
+  end
 | _,_,_,_ => None
 end.
 
@@ -1096,50 +1202,6 @@ End Visit1.
 
 Module Visit2. (* guess the value that decrease to near-zero *)
 Section visit.
-Hypothesis n:N.
-
-Definition visit_seg'(c:seg_expr)(p:id_t) :=
-match c with
-| seg_repeat c0 cn => (seg_repeat c0 (nat_var p),Pos.succ p)
-| _ => (c,p)
-end.
-
-Definition visit_seg(a b ca cb:seg_expr)(p:id_t) :=
-match a,b,ca,cb with
-| seg_repeat a0 an,seg_repeat b0 bn,seg_repeat ca0 (from_nat can),seg_repeat cb0 (from_nat cbn) =>
-  if (can <=? cbn)%N then (* inc *)
-    visit_seg' cb p
-  else (* dec *)
-    let d := (can-cbn)%N in
-    let bn' :=
-    match bn with
-    | from_nat x => x
-    | nat_add _ (from_nat x) => x
-    | _ => N0
-    end in
-    if (1+(cbn-bn')/d =? n)%N then
-      (seg_repeat b0 (from_nat (((cbn-bn') mod d)+bn')%N),p) (* dec *)
-    else visit_seg' cb p
-| _,_,_,_ => visit_seg' cb p
-end.
-
-Fixpoint visit_side(a b c' c:side_expr)(p:id_t) :=
-match a,b,c',c with
-| side_concat a0 a1,side_concat b0 b1,side_concat c0' c1',side_concat c0 c1 =>
-  let (x0,p):=(visit_seg a0 b0 c0' c0 p) in
-  let (x1,p):=(visit_side a1 b1 c1' c1 p) in
-  (side_concat x0 x1,p)
-| _,_,_,_ => (side_var p,Pos.succ p)
-end.
-
-Definition visit_config(a b c' c:config_expr)(p:id_t) :=
-let '(l1,r1,s1,sgn1):=a in
-let '(l2,r2,s2,sgn2):=b in
-let '(l3',r3',s3',sgn3'):=c' in
-let '(l3,r3,s3,sgn3):=c in
-let (lx,p):=visit_side l1 l2 l3' l3 p in
-let (rx,p):=visit_side r1 r2 r3' r3 p in
-((lx,rx,s2,sgn2),p).
 
 Definition visit_config'(c:config_expr)(p:id_t) :=
 let '(l3,r3,s3,sgn3):=c in
@@ -1153,9 +1215,9 @@ End Visit2.
 Module Visit3.
 (* guess n *)
 
-Definition visit_seg(a b ca cb:seg_expr):option N :=
-match a,b,ca,cb with
-| seg_repeat a0 an,seg_repeat b0 bn,seg_repeat ca0 (from_nat can),seg_repeat cb0 (from_nat cbn) =>
+Definition visit_nat(an bn ca cb:nat_expr):option N :=
+match ca,cb with
+| from_nat can,from_nat cbn =>
   if (can <=? cbn)%N then (* inc *)
     None
   else (* dec *)
@@ -1167,6 +1229,26 @@ match a,b,ca,cb with
     | _ => N0
     end in
     Some (1+(cbn-bn')/d)%N (* dec *)
+| _,_ => None
+end.
+
+Fixpoint visit_seg_arithseq(a b ca cb:list ((list Sym)*Z*nat_expr)):option N:=
+match a,b,ca,cb with
+| (a0,a1,a2)::a,(b0,b1,b2)::b,(ca0,ca1,ca2)::ca,(cb0,cb1,cb2)::cb =>
+  oNmin
+  (visit_nat a2 b2 ca2 cb2)
+  (visit_seg_arithseq a b ca cb)
+| _,_,_,_ => None
+end.
+
+Definition visit_seg(a b ca cb:seg_expr):option N :=
+match a,b,ca,cb with
+| seg_repeat a0 an,seg_repeat b0 bn,seg_repeat ca0 can,seg_repeat cb0 cbn =>
+  visit_nat an bn can cbn
+| seg_arithseq a0 an,seg_arithseq b0 bn,seg_arithseq ca0 can,seg_arithseq cb0 cbn =>
+  oNmin
+  (visit_seg_arithseq a0 b0 ca0 cb0)
+  (visit_nat an bn can cbn)
 | _,_,_,_ => None
 end.
 
@@ -1230,14 +1312,42 @@ End FindIH.
 Record Config := {
   max_repeater_len:nat;
   max_repeater_size:option N;
+  fixed_block_size:option nat;
+  enable_arithseq:bool;
+  initial_steps:N;
+  mnc:N;
 }.
 Definition default_config := {|
   max_repeater_len := 8;
   max_repeater_size := None;
+  fixed_block_size := None;
+  enable_arithseq := false;
+  initial_steps := 0;
+  mnc := 0;
 |}.
 Definition config_limited_repeater_size := {|
   max_repeater_len := 8;
   max_repeater_size := Some 16%N;
+  fixed_block_size := None;
+  enable_arithseq := false;
+  initial_steps := 0;
+  mnc := 0;
+|}.
+Definition config_arithseq n := {|
+  max_repeater_len := 8;
+  max_repeater_size := Some 16%N;
+  fixed_block_size := None;
+  enable_arithseq := true;
+  initial_steps := n;
+  mnc := 0;
+|}.
+Definition config_arithseq_fixed_block_size T0 n := {|
+  max_repeater_len := 16;
+  max_repeater_size := Some (N.of_nat n);
+  fixed_block_size := Some n;
+  enable_arithseq := true;
+  initial_steps := T0;
+  mnc := 2;
 |}.
 
 Section tm_ctx.
@@ -1257,11 +1367,30 @@ Fixpoint to_nat(x:nat_expr) :=
 | nat_ivar => mpi
 end)%N.
 
+Definition seg_arithseq_entry_to_seg(n1 n2:nat)(x:(list Sym)*Z*nat_expr):list Sym :=
+let '(x0,x1,x2):=x in
+let x2 := N.to_nat (to_nat x2) in
+match x1 with
+| Zpos x1 => x0 ^^ ((Pos.to_nat x1)*n1+x2)
+| Zneg x1 => x0 ^^ ((Pos.to_nat x1)*n2+x2)
+| Z0 => x0
+end.
+
+Fixpoint seg_arithseq_to_seg a n n2:list Sym :=
+match n with
+| O => nil
+| Datatypes.S n0 =>
+  (flat_map (seg_arithseq_entry_to_seg n0 n2) a) ++
+  seg_arithseq_to_seg a n0 (Datatypes.S n2)
+end.
+
 Fixpoint to_seg(x:seg_expr):list Sym :=
 match x with
+| seg_nil => []
 | seg_sym a => [a]
 | seg_concat a b => (to_seg a) ++ (to_seg b)
 | seg_repeat a n => (to_seg a) ^^ (N.to_nat (to_nat n))
+| seg_arithseq a n => seg_arithseq_to_seg a (N.to_nat (to_nat n)) O
 | seg_var i => (mp i seg_t)
 end.
 
@@ -1548,6 +1677,40 @@ Proof.
     rewrite (IHa b). 2: tauto.
     rewrite (solve_nat_eq_spec n n0). 2: tauto.
     reflexivity.
+  - rewrite Forall_app in E.
+    rewrite (solve_nat_eq_spec n n0). 2: tauto.
+    generalize 0.
+    induction (N.to_nat (to_nat n0)); intros n2.
+    1: reflexivity.
+    cbn.
+    f_equal.
+    2: apply IHn1. clear IHn1.
+    destruct E as [E _].
+    gen a0.
+    induction a as [|a1 a]; intros a0; destruct a0 as [|a2 a0].
+    + cbn.
+      tauto.
+    + cbn.
+      rewrite Forall_cons_iff; cbn; tauto.
+    + cbn.
+      destruct a1 as [[a11 a12] a13].
+      rewrite Forall_cons_iff; cbn; tauto.
+    + cbn.
+      destruct a1 as [[a11 a12] a13].
+      destruct a2 as [[a21 a22] a23].
+      destruct (list_eqb_spec sym_eqb a11 a21).
+      1: apply sym_eqb_spec.
+      2: rewrite Forall_cons_iff; cbn; tauto.
+      destruct (Z.eqb_spec a12 a22).
+      2: rewrite Forall_cons_iff; cbn; tauto.
+      subst.
+      rewrite Forall_app.
+      intros [H1 H2].
+      rewrite (IHa a0 H2).
+      pose proof (solve_nat_eq_spec _ _ H1) as H1'.
+      cbn in H1'.
+      cbn.
+      rewrite H1'. reflexivity.
   - destruct (Pos.eqb_spec i i0).
     + congruence.
     + rewrite Forall_cons_iff in E.
@@ -1678,6 +1841,32 @@ Proof.
   - intros [H1 H2].
     erewrite IHa; eauto.
     erewrite ExprEq_nat_spec; eauto.
+  - intros [H1 H2].
+    erewrite ExprEq_nat_spec; eauto.
+    generalize 0.
+    induction (N.to_nat (to_nat n0)); intros n2.
+    1: reflexivity.
+    cbn.
+    rewrite IHn1. clear IHn1.
+    f_equal.
+    gen a0.
+    induction a as [|a0 a]; intros [|a2 a1]; cbn; try congruence.
+    intro H.
+    rewrite and_true_iff in H.
+    destruct H as [H H0].
+    specialize (IHa _ H0).
+    rewrite IHa.
+    f_equal.
+    destruct a0 as [[a01 a02] a03].
+    destruct a2 as [[a21 a22] a23].
+    cbn. cbn in H.
+    repeat rewrite and_true_iff in H.
+    destruct H as [[H H2] H3].
+    destruct (list_eqb_spec sym_eqb a01 a21 sym_eqb_spec); try congruence.
+    destruct (Z.eqb_spec a02 a22); try congruence.
+    subst.
+    rewrite (ExprEq_nat_spec _ _ H3).
+    reflexivity.
   - destruct (Pos.eqb_spec i i0); congruence.
 Qed.
 
@@ -1790,8 +1979,23 @@ Lemma seg_simpl_spec x:
 Proof.
   induction x; cbn.
   all: try congruence.
-  rewrite (nat_simpl_spec n).
-  congruence.
+  - rewrite (nat_simpl_spec n).
+    congruence.
+  - rewrite (nat_simpl_spec n).
+    generalize 0.
+    induction (N.to_nat (to_nat n)); intros n2.
+    1: reflexivity.
+    cbn.
+    rewrite IHn0. clear IHn0.
+    f_equal.
+    induction a.
+    1: reflexivity.
+    cbn.
+    rewrite IHa.
+    f_equal.
+    destruct a as [[x0 x1] x2]; cbn.
+    rewrite nat_simpl_spec.
+    reflexivity.
 Qed.
 
 Lemma side_simpl_spec x:
@@ -1876,11 +2080,29 @@ Lemma seg_subst_spec x:
 Proof.
   induction x.
   - reflexivity.
+  - reflexivity.
   - cbn.
     rewrite IHx1,IHx2.
     reflexivity.
   - cbn.
     rewrite IHx,nat_subst_spec.
+    reflexivity.
+  - cbn.
+    rewrite nat_subst_spec.
+    unfold mpi. cbn.
+    generalize 0.
+    induction (N.to_nat (to_nat mp (to_nat mp' mpi' mpi0) n)); intros n2.
+    1: reflexivity.
+    cbn.
+    rewrite IHn0. clear IHn0.
+    f_equal.
+    induction a as [|a0 a].
+    1: reflexivity.
+    cbn.
+    rewrite IHa.
+    f_equal.
+    destruct a0 as [[a0 a1] a2]; cbn.
+    rewrite nat_subst_spec.
     reflexivity.
   - reflexivity.
 Qed.
@@ -2131,8 +2353,8 @@ match x with
 | _ => None
 end.
 
-
-Definition mnc:N := 0.
+Section TryInd.
+Hypothesis mnc:N.
 Definition subst_small_vars(mp:list (PositiveMap.tree expr_expr))(i:id_t)(t:type_t):to_expr_type t :=
 match t as t0 return (to_expr_type t0) with
 | nat_t =>
@@ -2206,6 +2428,7 @@ match FindIH.find_IH x1 i1 (fst w0') (fst w0) with
   end
 | _ => None
 end.
+End TryInd.
 
 Definition multistep'_for_ind(w1:prop_expr'):prop_expr' :=
 match w1 with
@@ -2443,7 +2666,18 @@ Lemma to_seg_fext x:
   to_seg mp mpi x = to_seg mp' mpi x.
 Proof.
   induction x; cbn.
-  all: repeat rewrite to_nat_fext; congruence.
+  all: repeat rewrite to_nat_fext; try congruence.
+  generalize 0.
+  induction (N.to_nat (to_nat mp' mpi n)); intro n2; cbn.
+  1: reflexivity.
+  rewrite IHn0. clear IHn0.
+  f_equal.
+  induction a as [|[[a0 a1] a2] a].
+  1: reflexivity.
+  cbn.
+  rewrite IHa.
+  rewrite to_nat_fext.
+  reflexivity.
 Qed.
 
 Lemma to_side_fext x:
@@ -2782,11 +3016,11 @@ Proof.
   apply H; trivial.
 Qed.
 
-Lemma subst_small_vars_for_follow_spec w0 w1 w2:
+Lemma subst_small_vars_for_follow_spec mnc w0 w1 w2:
   to_prop' (fst w0) ->
   to_prop' (fst w1) ->
   to_prop' (fst w2) ->
-  match subst_small_vars_for_follow w0 w1 w2 with
+  match subst_small_vars_for_follow mnc w0 w1 w2 with
   | None => True
   | Some w => to_prop' (fst w)
   end.
@@ -2804,10 +3038,10 @@ Proof.
   apply H2.
 Qed.
 
-Lemma try_ind_spec w1 w0' w0:
+Lemma try_ind_spec mnc w1 w0' w0:
   to_prop' (fst w1) ->
   to_prop' (fst w0') ->
-  match try_ind w1 w0' w0 with
+  match try_ind mnc w1 w0' w0 with
   | None => True
   | Some (x,x0) => to_prop' (fst x) /\ to_prop' (fst x0)
   end.
@@ -2887,6 +3121,23 @@ Proof.
   reflexivity.
 Qed.
 
+Definition seg_concat_def(r0:seg_expr):=
+  let r:=side_var 1%positive in
+  (side_eq
+  (side_concat r0 r)
+  (side_concat_unfold r0 r),
+  2%positive).
+
+Lemma seg_concat_def_spec r0:
+  to_prop0' (fst (seg_concat_def r0)).
+Proof.
+  unfold to_prop0'.
+  intros.
+  cbn.
+  rewrite side_concat_unfold_spec.
+  reflexivity.
+Qed.
+
 Definition repeat_S_def(r0:seg_expr):=
   let n:=nat_var 1%positive in
   let r:=side_var 2%positive in
@@ -2961,6 +3212,344 @@ Proof.
   reflexivity.
 Qed.
 
+
+Fixpoint to_seg_const(x:seg_expr):option (list Sym) :=
+match x with
+| seg_nil => Some []
+| seg_sym a => Some [a]
+| seg_concat a b =>
+  match to_seg_const a,to_seg_const b with
+  | Some a',Some b' => Some (a'++b')
+  | _,_ => None
+  end
+| seg_repeat a (from_nat n) =>
+  match to_seg_const a with
+  | Some a' => Some (a' ^^ (N.to_nat n))
+  | None => None
+  end
+| _ => None
+end.
+
+Lemma to_seg_const_spec x mp mpi:
+match to_seg_const x with
+| Some x0 => to_seg mp mpi x = x0
+| None => True
+end.
+Proof.
+  induction x; cbn; trivial.
+  - destruct_spec to_seg_const; trivial.
+    destruct_spec to_seg_const; trivial.
+    congruence.
+  - destruct n; trivial.
+    destruct_spec to_seg_const; trivial.
+    cbn.
+    congruence.
+Qed.
+
+Fixpoint from_seg(x:list Sym):seg_expr :=
+match x with
+| nil => seg_nil
+| h::t => 
+  match t with
+  | nil => seg_sym h
+  | _ => seg_concat (seg_sym h) (from_seg t)
+  end
+end.
+
+Lemma from_seg_spec x0 mp mpi:
+  to_seg mp mpi (from_seg x0) = x0.
+Proof.
+  induction x0.
+  1: reflexivity.
+  destruct x0.
+  1: reflexivity.
+  cbn.
+  cbn in IHx0.
+  congruence.
+Qed.
+
+Fixpoint side_concat_list_seg(r0:list seg_expr)(r:side_expr):side_expr :=
+match r0 with
+| r1::r2 => side_concat r1 (side_concat_list_seg r2 r)
+| nil => r
+end.
+
+Lemma side_concat_list_seg_spec mp mpi r0 r:
+  to_side mp mpi (side_concat_list_seg r0 r) =
+  flat_map (to_seg mp mpi) r0 *> to_side mp mpi r.
+Proof.
+  induction r0.
+  1: reflexivity.
+  cbn.
+  rewrite Str_app_assoc.
+  congruence.
+Qed.
+
+Definition seg_arithseq_entry_S(n:nat_expr)(x:seg_expr*Z*N)(p:id_t):
+  option (((list Sym)*Z*nat_expr)*((list Sym)*Z*nat_expr)*seg_expr*id_t) :=
+let '(x0',x1,x2):=x in
+match to_seg_const x0' with
+| None => None
+| Some x0 =>
+  Some (
+  let (v,p) := (nat_var p,Pos.succ p) in
+  match x1 with
+  | Zpos x1' =>
+    let v:=(from_nat x2) in
+    ((x0,x1,v),(x0,x1,v),seg_repeat x0' (nat_add v (nat_mul n (from_nat (Npos x1')))),p)
+  | Zneg x1' => ((x0,x1,v),(x0,x1,nat_add v (from_nat (Npos x1'))),seg_repeat x0' v,p)
+  | Z0 => ((x0,x1,v),(x0,x1,v),x0',p)
+  end)
+end.
+
+Fixpoint seg_arithseq_S(n:nat_expr)(x:list (seg_expr*Z*N))(p:id_t):
+  option ((list ((list Sym)*Z*nat_expr))*(list ((list Sym)*Z*nat_expr))*(list seg_expr)*id_t) :=
+match x with
+| nil => Some (nil,nil,nil,p)
+| h::t =>
+  match seg_arithseq_S n t p with
+  | Some (b0,b1,b2,p) =>
+    match seg_arithseq_entry_S n h p with
+    | Some (a0,a1,a2,p) => Some (a0::b0,a1::b1,a2::b2,p)
+    | None => None
+    end
+  | None => None
+  end
+end.
+
+Definition arithseq_S_def(r0:list (seg_expr*Z*N)):=
+  let n:=nat_var 1%positive in
+  let r:=side_var 2%positive in
+  match seg_arithseq_S n r0 (3%positive) with
+  | None => None
+  | Some (r1,r2,r3,p) =>
+    Some
+    (side_eq
+    (side_concat (seg_arithseq r1 (nat_add n (from_nat 1))) r)
+    (side_concat_list_seg r3 (side_concat (seg_arithseq r2 n) r)),
+    p)
+  end.
+
+Lemma arithseq_S_def_spec r0:
+  match arithseq_S_def r0 with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  unfold to_prop0'.
+  destruct (arithseq_S_def r0) as [[x' p']|] eqn:E'; trivial.
+  intros mp mpi.
+  cbn.
+  unfold arithseq_S_def in E'.
+  destruct (seg_arithseq_S (nat_var 1%positive) r0 3%positive) as [[[[r1 r2] r3] p]|] eqn:E.
+  2: congruence.
+  inverts E'.
+  cbn.
+  rewrite Nnat.N2Nat.inj_add.
+  rewrite Nat.add_comm.
+  change (N.to_nat 1) with 1. cbn.
+  rewrite side_concat_list_seg_spec.
+  rewrite Str_app_assoc.
+  cbn.
+  f_equal.
+{
+  gen r1 r2 r3 p'.
+  induction r0; intros.
+  - cbn in E. inverts E. reflexivity.
+  - cbn in E.
+    destruct (seg_arithseq_S (nat_var 1%positive) r0 3%positive) as [[[[b0 b1] b2] p1]|] eqn:E1.
+    2: congruence.
+    destruct (seg_arithseq_entry_S (nat_var 1%positive) a p1) as [[[[a0 a1] a2] p2]|] eqn:E2.
+    2: congruence.
+    inverts E.
+    cbn.
+    erewrite IHr0. 2: reflexivity.
+    f_equal.
+    destruct a as [[x0 x1] x2].
+    cbn in E2.
+    pose proof (to_seg_const_spec x0) as H3.
+    destruct (to_seg_const x0) as [x0'|] eqn:E3.
+    2: congruence.
+    destruct x1 as [|x1|x1];
+    inverts E2; cbn;
+    rewrite H3.
+    2,3: f_equal; lia.
+    reflexivity.
+}
+{
+  gen r0 r1 r2 r3 p'.
+  generalize 0.
+  induction (N.to_nat (mp 1%positive nat_t)); intros.
+  1: reflexivity.
+  cbn.
+  repeat rewrite Str_app_assoc.
+  erewrite (IHn (Datatypes.S n0)). 2: apply E.
+  f_equal.
+  gen r1 r2 r3 p'.
+  induction r0; intros.
+  - cbn in E. inverts E.
+    reflexivity.
+  - cbn in E.
+    destruct (seg_arithseq_S (nat_var 1%positive) r0 3%positive) as [[[[b0 b1] b2] p1]|] eqn:E1.
+    2: congruence.
+    destruct (seg_arithseq_entry_S (nat_var 1%positive) a p1) as [[[[a0 a1] a2] p2]|] eqn:E2.
+    2: congruence.
+    inverts E.
+    cbn.
+    erewrite IHr0. 2: reflexivity.
+    f_equal.
+    destruct a as [[x0 x1] x2].
+    cbn in E2.
+    pose proof (to_seg_const_spec x0) as H3.
+    destruct (to_seg_const x0) as [x0'|] eqn:E3.
+    2: congruence.
+    destruct x1 as [|x1|x1]; inverts E2; cbn.
+    2,3: f_equal; lia.
+    reflexivity.
+}
+Qed.
+
+Definition seg_arithseq_entry_3(x:seg_expr*Z*N)(p:id_t):
+  option (seg_expr*seg_expr*seg_expr*((list Sym)*Z*nat_expr)*id_t) :=
+let '(x0',x1,x2):=x in
+match to_seg_const x0' with
+| None => None
+| Some x0 =>
+  Some (
+  let (v,p) := (nat_var p,Pos.succ p) in
+  match x1 with
+  | Zpos x1' =>
+    (seg_repeat x0' (from_nat (x2+Npos x1'+Npos x1')),
+     seg_repeat x0' (from_nat (x2+Npos x1')),
+     seg_repeat x0' (from_nat x2),
+    (x0,x1,(from_nat x2)),p)
+  | Zneg x1' =>
+    (seg_repeat x0' v,
+     seg_repeat x0' (nat_add v (from_nat (Npos x1'))),
+     seg_repeat x0' (nat_add v (from_nat (Npos x1'+Npos x1'))),
+    (x0,x1,v),p)
+  | Z0 => (x0',x0',x0',(x0,x1,(from_nat 0)),p)
+  end)
+end.
+
+Fixpoint seg_arithseq_3(x:list (seg_expr*Z*N))(p:id_t):
+  option ((list seg_expr)*(list seg_expr)*(list seg_expr)*(list ((list Sym)*Z*nat_expr))*id_t) :=
+match x with
+| nil => Some (nil,nil,nil,nil,p)
+| h::t =>
+  match seg_arithseq_3 t p with
+  | Some (b0,b1,b2,b3,p) =>
+    match seg_arithseq_entry_3 h p with
+    | Some (a0,a1,a2,a3,p) => Some (a0::b0,a1::b1,a2::b2,a3::b3,p)
+    | None => None
+    end
+  | None => None
+  end
+end.
+
+Definition arithseq_3_def(r0:list (seg_expr*Z*N)):=
+  let n:=nat_var 1%positive in
+  let r:=side_var 2%positive in
+  match seg_arithseq_3 r0 (3%positive) with
+  | None => None
+  | Some (r1,r2,r3,r4,p) =>
+    Some
+    (side_eq
+    (side_concat (seg_arithseq r4 (from_nat 3)) r)
+    (side_concat_list_seg (r1++r2++r3) r),
+    p)
+  end.
+
+Lemma arithseq_3_def_spec r0:
+  match arithseq_3_def r0 with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  unfold to_prop0'.
+  destruct (arithseq_3_def r0) as [[x' p']|] eqn:E'; trivial.
+  intros mp mpi.
+  cbn.
+  unfold arithseq_3_def in E'.
+  destruct (seg_arithseq_3 r0 3%positive) as [[[[[r1 r2] r3] r4] p]|] eqn:E.
+  2: congruence.
+  inverts E'.
+  cbn.
+  rewrite side_concat_list_seg_spec.
+  repeat rewrite flat_map_app.
+  change (Pos.to_nat 3) with 3.
+  cbn.
+  repeat rewrite Str_app_assoc.
+  cbn.
+  f_equal; [|f_equal; [|f_equal]];
+  gen r1 r2 r3 r4 p';
+  (induction r0; intros;
+  [ cbn in E; inverts E; reflexivity |]);
+  cbn in E;
+  destruct (seg_arithseq_3 r0 3%positive) as [[[[[b0 b1] b2] b3] p1]|] eqn:E1;
+  try congruence;
+  destruct (seg_arithseq_entry_3 a p1) as [[[[[a0 a1] a2] a3] p2]|] eqn:E2;
+  try congruence;
+  inverts E;
+  cbn;
+  erewrite IHr0; try reflexivity;
+  f_equal;
+  destruct a as [[x0 x1] x2];
+  cbn in E2;
+  pose proof (to_seg_const_spec x0) as H3;
+  destruct (to_seg_const x0) as [x0'|];
+  try congruence;
+  destruct x1 as [|x1|x1];
+  inverts E2; cbn;
+  rewrite H3; try reflexivity;
+  f_equal; lia.
+Qed.
+
+
+Fixpoint generalize_arithseq (ls:list ((list Sym) * Z * nat_expr))(p:id_t) :=
+match ls with
+| nil => (nil,p)
+| (x0,x1,x2)::t =>
+  let (t,p):=generalize_arithseq t p in
+  ((x0,x1,nat_var p)::t,Pos.succ p)
+end.
+
+Definition arithseq_0_def r0 :=
+  let (r0,p):=generalize_arithseq r0 (1%positive) in
+  let (r,p):=(side_var p,Pos.succ p) in
+  (side_eq
+  (side_concat (seg_arithseq r0 (from_nat 0)) r)
+  r,
+  p).
+
+Lemma arithseq_0_def_spec r0:
+  to_prop0' (fst (arithseq_0_def r0)).
+Proof.
+  unfold to_prop0'.
+  unfold arithseq_0_def.
+  destruct (generalize_arithseq r0 1%positive).
+  reflexivity.
+Qed.
+
+Definition arithseq_0_def' r0 :=
+  let (r0,p):=generalize_arithseq r0 (1%positive) in
+  let (r,p):=(side_var p,Pos.succ p) in
+  (side_eq
+  r
+  (side_concat (seg_arithseq r0 (from_nat 0)) r),
+  p).
+
+Lemma arithseq_0_def_spec' r0:
+  to_prop0' (fst (arithseq_0_def' r0)).
+Proof.
+  unfold to_prop0'.
+  unfold arithseq_0_def'.
+  destruct (generalize_arithseq r0 1%positive).
+  reflexivity.
+Qed.
+
+
+
 Definition step1 m s sgn :=
   let l:=side_var 1%positive in
   let r:=side_var 2%positive in
@@ -3016,6 +3605,52 @@ match n with
   end
 end.
 
+Definition seg_find_arithseq_3_fold(h1 h2 h3:seg_expr):=
+if seg_expr_eqb h1 h2 && seg_expr_eqb h1 h3 then
+  Some (h1,Z0,N0)
+else
+match h1,h2,h3 with
+| seg_repeat a1 (from_nat n1),seg_repeat a2 (from_nat n2),seg_repeat a3 (from_nat n3) =>
+  if seg_expr_eqb a1 a2 && seg_expr_eqb a1 a3 && (n1+n3 =? n2*2)%N then
+    if (n1 <? n2)%N then
+      Some (a1,Z.opp (Z.of_N (n2-n1)%N),n1)
+    else
+      Some (a1,Z.of_N (n1-n2)%N,n3)
+  else None
+| _,_,_ => None
+end.
+
+Fixpoint side_find_arithseq_3_fold(ls1 ls2 ls3:side_expr)(n:nat):=
+match n with
+| O => Some []
+| Datatypes.S n0 =>
+  match ls1,ls2,ls3 with
+  | side_concat h1 t1,side_concat h2 t2,side_concat h3 t3 =>
+    match seg_find_arithseq_3_fold h1 h2 h3 with
+    | Some v1 =>
+      match side_find_arithseq_3_fold t1 t2 t3 n0 with
+      | Some v => Some (v1::v)
+      | None => None
+      end
+    | None => None
+    end
+  | _,_,_ => None
+  end
+end.
+
+Fixpoint arithseq_has_var (ls:list ((seg_expr)*Z*N)):bool :=
+match ls with
+| nil => false
+| (x0,x1,x2)::t => negb (x1 =? Z0)%Z || arithseq_has_var t
+end.
+
+Definition side_find_arithseq_3_fold' ls1 ls2 ls3 n :=
+match side_find_arithseq_3_fold ls1 ls2 ls3 n with
+| None => None
+| Some ls =>
+  if arithseq_has_var ls then Some ls else None
+end.
+
 Fixpoint side_check_repeat_S_fold(ls1:side_expr)(ls2:seg_expr)(n:nat):=
 match n with
 | O =>
@@ -3031,6 +3666,54 @@ match n with
   end
 end.
 
+Definition seg_check_arithseq_S_fold(h1:seg_expr)(h2:((list Sym)*Z*nat_expr))(n:N) :=
+match h1,h2 with
+| seg_repeat x0' (from_nat x2'),(x0,Zpos x1,from_nat x2) =>
+  match to_seg_const x0' with
+  | Some x0'' =>
+    if list_eqb sym_eqb x0'' x0 && (x2' =? x2+(Npos x1)*n)%N then
+      Some (x0',Zpos x1,x2)
+    else None
+  | _ => None
+  end
+| seg_repeat x0' (from_nat x2'),(x0,Zneg x1,from_nat x2) =>
+  match to_seg_const x0' with
+  | Some x0'' =>
+    if list_eqb sym_eqb x0'' x0 && (x2'+(Npos x1) =? x2)%N then
+      Some (x0',Zneg x1,x2')
+    else None
+  | _ => None
+  end
+| x0',(x0,Z0,_) =>
+  match to_seg_const x0' with
+  | Some x0'' =>
+    if list_eqb sym_eqb x0'' x0 then
+      Some (x0',Z0,N0)
+    else None
+  | _ => None
+  end
+| _,_ => None
+end.
+
+Fixpoint side_check_arithseq_S_fold(ls1:side_expr)(ls2:list ((list Sym)*Z*nat_expr))(n:nat)(n':N):=
+match n,ls2 with
+| O,[] => Some []
+| Datatypes.S n0,h2::t2 =>
+  match ls1 with
+  | side_concat h1 t1 =>
+    match seg_check_arithseq_S_fold h1 h2 n' with
+    | None => None
+    | Some v1 =>
+      match side_check_arithseq_S_fold t1 t2 n0 n' with
+      | None => None
+      | Some v => Some (v1::v)
+      end
+    end
+  | _ => None
+  end
+| _,_ => None
+end.
+
 Definition side_find_repeat_S_fold ls1 ls2 n :=
 match ls2 with
 | side_concat (seg_repeat h2 _) _ =>
@@ -3038,9 +3721,17 @@ match ls2 with
 | _ => None
 end.
 
+Definition side_find_arithseq_S_fold ls1 ls2 n :=
+match ls2 with
+| side_concat (seg_arithseq h2 (from_nat n')) _ =>
+  side_check_arithseq_S_fold ls1 h2 n n'
+| _ => None
+end.
+
 Definition side_find_repeat_O_fold ls :=
 match ls with
-| side_concat (seg_repeat h (from_nat 0)) _ => Some h
+| side_concat (seg_repeat h (from_nat 0)) _ => Some (repeat_0_def' h)
+| side_concat (seg_arithseq h (from_nat 0)) _ => Some (arithseq_0_def' h)
 | _ => None
 end.
 
@@ -3069,6 +3760,20 @@ match side_find_repeat_2_fold ls1 ls2 n with
   end
 end.
 
+Definition side_find_arithseq_fold_1 ls1 ls2 ls3 n :=
+match n with
+| O => None
+| _ =>
+  match side_find_arithseq_3_fold' ls1 ls2 ls3 n with
+  | Some h => arithseq_3_def h
+  | None =>
+    match side_find_arithseq_S_fold ls1 ls2 n with
+    | Some h => arithseq_S_def h
+    | None => None
+    end
+  end
+end.
+
 Fixpoint side_find_repeat_fold_2 ls1 ls2 n n0 {struct n0} :=
 match n0 with
 | O => None
@@ -3084,6 +3789,27 @@ match n0 with
     match ls2 with
     | side_concat h2 t2 =>
       side_find_repeat_fold_2 ls1 t2 (Datatypes.S n) n1
+    | _ => None
+    end
+  end
+end.
+
+Definition side_tl(x:side_expr):=
+match x with
+| side_concat _ t => t
+| _ => x
+end.
+
+Fixpoint side_find_arithseq_fold_2 ls1 ls2 ls3 n n0 {struct n0} :=
+match n0 with
+| O => None
+| Datatypes.S n1 =>
+  match side_find_arithseq_fold_1 ls1 ls2 ls3 n with
+  | Some h => Some h
+  | None =>
+    match ls2 with
+    | side_concat _ t2 =>
+      side_find_arithseq_fold_2 ls1 t2 (side_tl (side_tl ls3)) (Datatypes.S n) n1
     | _ => None
     end
   end
@@ -3109,22 +3835,93 @@ Proof.
   destruct x; cbn; cbn in H; congruence.
 Qed.
 
-Fixpoint side_find_repeat_fold ls1 :=
+Definition side_concat_rw_2'(x:prop0_expr*id_t)(v:seg_expr):prop0_expr*id_t :=
+side_concat_rw_2 x.
+
+Lemma side_concat_rw_2_spec' x v:
+  to_prop0' (fst x) ->
+  to_prop0' (fst (side_concat_rw_2' x v)).
+Proof.
+  apply side_concat_rw_2_spec.
+Qed.
+(*
+Definition side_concat_rw_2'(x:prop0_expr*id_t)(v:seg_expr):prop0_expr*id_t :=
+match x with
+| (side_eq a b,p) =>
+  (side_eq (side_concat v a) (side_concat v b),p)
+| _ => x
+end.
+
+Lemma side_concat_rw_2_spec' x v:
+  to_prop0' (fst x) ->
+  to_prop0' (fst (side_concat_rw_2' x v)).
+Proof.
+  unfold to_prop0'.
+  destruct x as [x i].
+  cbn.
+  intros H mp mpi.
+  specialize (H mp mpi).
+  destruct x; cbn; cbn in H; congruence.
+Qed.
+*)
+Definition is_seg_repeat(x:seg_expr) :=
+match x with
+| seg_repeat _ _ => true
+| _ => false
+end.
+
+Fixpoint side_find_repeat_fold_dynlen ls1 :=
 match side_find_repeat_O_fold ls1 with
-| Some h => Some (repeat_0_def' h)
+| Some h => Some h
 | None =>
   match ls1 with
   | side_concat h1 t1 =>
-    match side_find_repeat_fold t1 with
-    | Some v => Some (side_concat_rw_2 v)
+    match side_find_repeat_fold_dynlen t1 with
+    | Some v => Some (side_concat_rw_2' v h1)
     | None =>
       match side_find_repeat_fold_2 ls1 ls1 O cfg.(max_repeater_len) with
       | Some v => Some v
-      | None => None
+      | None =>
+        if cfg.(enable_arithseq) then
+          match side_find_arithseq_fold_2 ls1 ls1 ls1 O cfg.(max_repeater_len) with
+          | Some v => Some v
+          | None => None
+          end
+        else None
       end
     end
   | _ => None
   end
+end.
+
+Fixpoint side_find_repeat_fold_fixedlen ls1 ls2 n :=
+match side_find_repeat_O_fold ls1 with
+| Some h => Some h
+| None =>
+  match ls1 with
+  | side_concat h1 t1 =>
+    match side_find_repeat_fold_fixedlen t1 (side_tl ls2) n with
+    | Some v => Some (side_concat_rw_2' v h1)
+    | None =>
+      match side_find_repeat_fold_1 ls1 ls2 n with
+      | Some v => Some v
+      | None =>
+        if cfg.(enable_arithseq) && is_seg_repeat h1 then
+          match side_find_arithseq_fold_2 ls1 ls1 ls1 O cfg.(max_repeater_len) with
+          | Some v => Some v
+          | None => None
+          end
+        else None
+      end
+    end
+  | _ => None
+  end
+end.
+
+Definition side_find_repeat_fold ls :=
+match cfg.(fixed_block_size) with
+| None => side_find_repeat_fold_dynlen ls
+| Some n => side_find_repeat_fold_fixedlen ls (Nat.iter n side_tl ls) (Nat.pred n)
 end.
 
 Lemma side_find_repeat_fold_1_spec ls1 ls2 n:
@@ -3142,6 +3939,19 @@ Proof.
   trivial.
 Qed.
 
+Lemma side_find_arithseq_fold_1_spec ls1 ls2 ls3 n:
+  match side_find_arithseq_fold_1 ls1 ls2 ls3 n with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  unfold side_find_arithseq_fold_1.
+  destruct n; trivial.
+  destruct_spec (side_find_arithseq_3_fold').
+  1: apply arithseq_3_def_spec.
+  destruct_spec (side_find_arithseq_S_fold); trivial.
+  apply arithseq_S_def_spec.
+Qed.
 
 Lemma side_find_repeat_fold_2_spec ls1 ls2 n n0:
   match side_find_repeat_fold_2 ls1 ls2 n n0 with
@@ -3160,20 +3970,90 @@ Proof.
     apply IHn0.
 Qed.
 
-Lemma side_find_repeat_fold_spec ls:
-  match side_find_repeat_fold ls with
+Lemma side_find_arithseq_fold_2_spec ls1 ls2 ls3 n n0:
+  match side_find_arithseq_fold_2 ls1 ls2 ls3 n n0 with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  gen ls2 ls3 n.
+  induction n0; intros; cbn; trivial.
+  destruct n as [|n].
+  - cbn.
+    destruct ls2; cbn; trivial.
+    apply IHn0.
+  - destruct_spec side_find_arithseq_fold_1_spec.
+    1: tauto.
+    destruct ls2; cbn; trivial.
+    apply IHn0.
+Qed.
+
+Lemma side_find_repeat_O_fold_spec s:
+  match side_find_repeat_O_fold s with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  destruct s; cbn; trivial.
+  destruct a; cbn; trivial.
+  - destruct n; trivial.
+    destruct n; trivial.
+    apply repeat_0_def_spec'.
+  - destruct n; trivial.
+    destruct n; trivial.
+    apply arithseq_0_def_spec'.
+Qed.
+
+Lemma side_find_repeat_fold_dynlen_spec ls:
+  match side_find_repeat_fold_dynlen ls with
   | None => True
   | Some x => to_prop0' (fst x)
   end.
 Proof.
   induction ls.
   1,2: cbn; trivial.
-  cbn[side_find_repeat_fold].
-  destruct (side_find_repeat_O_fold (side_concat a ls)).
-  1: apply repeat_0_def_spec'.
-  destruct (side_find_repeat_fold ls).
-  - apply side_concat_rw_2_spec,IHls.
-  - destruct_spec side_find_repeat_fold_2_spec; tauto.
+  cbn[side_find_repeat_fold_dynlen].
+  destruct_spec side_find_repeat_O_fold_spec.
+  1: tauto.
+  destruct (side_find_repeat_fold_dynlen ls).
+  - apply side_concat_rw_2_spec',IHls.
+  - destruct_spec side_find_repeat_fold_2_spec.
+    1: tauto.
+    destruct_spec enable_arithseq; trivial.
+    destruct_spec side_find_arithseq_fold_2_spec; tauto.
+Qed.
+
+Lemma side_find_repeat_fold_fixedlen_spec ls1 ls2 n:
+  match side_find_repeat_fold_fixedlen ls1 ls2 n with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  gen ls2 n.
+  induction ls1; intros.
+  1,2: cbn; trivial.
+  cbn[side_find_repeat_fold_fixedlen].
+  destruct_spec side_find_repeat_O_fold_spec.
+  1: tauto.
+  destruct_spec (IHls1).
+  - apply side_concat_rw_2_spec'. tauto.
+  - destruct_spec side_find_repeat_fold_1_spec.
+    1: tauto.
+    destruct_spec enable_arithseq; trivial.
+    destruct_spec is_seg_repeat; trivial.
+    destruct_spec side_find_arithseq_fold_2_spec; tauto.
+Qed.
+
+Lemma side_find_repeat_fold_spec ls:
+  match side_find_repeat_fold ls with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  unfold side_find_repeat_fold.
+  destruct_spec (fixed_block_size).
+  - apply side_find_repeat_fold_fixedlen_spec.
+  - apply side_find_repeat_fold_dynlen_spec.
 Qed.
 
 Definition config_rw_l(x:prop0_expr*id_t) s sgn:prop0_expr*id_t :=
@@ -3242,12 +4122,16 @@ Proof.
 Qed.
 
 
-
 Definition side_find_repeat_unfold ls :=
 match ls with
 | side_0inf => Some side_0inf_def
+| side_concat ((seg_concat r0 r1) as a) r => Some (seg_concat_def a)
 | side_concat (seg_repeat a (from_nat 0)) r => Some (repeat_0_def a)
 | side_concat (seg_repeat a _) r => Some (repeat_S_def a)
+| side_concat (seg_arithseq a (from_nat 0)) r => Some (arithseq_0_def a)
+| side_concat (seg_arithseq a _) r =>
+  let a' := map (fun '(x0,x1,x2) => (from_seg x0,x1,match x2 with from_nat c => c | _ => N0 end)) a in
+  arithseq_S_def a'
 | _ => None
 end.
 
@@ -3260,10 +4144,15 @@ Proof.
   destruct ls; cbn; trivial.
   - apply side_0inf_def_spec.
   - destruct a; trivial.
-    destruct n.
-    1: destruct n.
-    all: try (apply repeat_S_def_spec).
-    apply repeat_0_def_spec.
+    + apply seg_concat_def_spec.
+    + destruct n.
+      1: destruct n.
+      all: try (apply repeat_S_def_spec).
+      apply repeat_0_def_spec.
+    + destruct n.
+      1: destruct n.
+      all: try (apply arithseq_S_def_spec).
+      apply arithseq_0_def_spec.
 Qed.
 
 Definition config_find_repeat_unfold(c:config_expr) :=
@@ -3455,7 +4344,7 @@ match ls with
   match follow_rule w1 u1 with
   | None => u
   | Some w1' =>
-    match try_ind w1' w0_ u0 with
+    match try_ind cfg.(mnc) w1' w0_ u0 with
     | Some (u1',u0') =>
       match follow_rule w1_ u1' with
       | None => reset_hlin_layers u0'
@@ -3497,8 +4386,8 @@ Proof.
   pose proof (follow_rule_spec' w1 u1).
   destruct (follow_rule w1 u1) as [w1'|].
   2: apply reset_hlin_layers_spec; tauto.
-  pose proof (try_ind_spec w1' w0_ u0).
-  destruct (try_ind w1' w0_ u0) as [[u1' u0']|].
+  pose proof (try_ind_spec cfg.(mnc) w1' w0_ u0).
+  destruct (try_ind cfg.(mnc) w1' w0_ u0) as [[u1' u0']|].
   - pose proof (follow_rule_spec' w1_ u1').
     destruct (follow_rule w1_ u1').
     2: apply reset_hlin_layers_spec; try tauto.
@@ -3718,6 +4607,121 @@ Proof.
   - apply unfold_step1_fold_spec,H.
 Qed.
 
+Definition DH_config:Type := (list Sym)*(list Sym)*Q*dir.
+Definition DH_step(x:DH_config):DH_config :=
+let '(l,r,s,sgn):=x in
+match tm (s,hd s0 r) with
+| None => x
+| Some (o,sgn',s') =>
+  match sgn,sgn' with
+  | L,L | R,R => (o::l,tl r,s',sgn')
+  | _,_ => (o::(tl r),l,s',sgn')
+  end
+end.
+Definition DH_steps(x:DH_config)(n:N):DH_config :=
+N.iter n DH_step x.
+
+Definition DH_config_to_config(x:DH_config):Q*tape :=
+let '(l,r,s,sgn):=x in
+let l' := l *> const s0 in
+let m := hd s0 r in
+let r' := (tl r) *> const s0 in
+match sgn with
+| L => (s,(r',m,l'))
+| R => (s,(l',m,r'))
+end.
+
+Lemma DH_step_spec x:
+  DH_config_to_config x
+  -[tm]->*
+  DH_config_to_config (DH_step x).
+Proof.
+  destruct x as [[[l r] s] sgn].
+  cbn.
+  destruct (tm (s,hd s0 r)) as [[[o sgn'] s']|] eqn:E.
+  2: constructor.
+  destruct sgn,sgn'; cbn;
+  apply progress_evstep,progress_base.
+  - destruct r as [|m [|m0 r]]; cbn; cbn in E;
+    constructor; apply E.
+  - destruct l,r; cbn; cbn in E;
+    constructor; apply E.
+  - destruct l,r; cbn; cbn in E;
+    constructor; apply E.
+  - destruct r as [|m [|m0 r]]; cbn; cbn in E;
+    constructor; apply E.
+Qed.
+
+Lemma DH_steps_spec x n:
+  DH_config_to_config x
+  -[tm]->*
+  DH_config_to_config (DH_steps x n).
+Proof.
+  induction n using N.peano_ind.
+  - constructor.
+  - eapply evstep_trans.
+    1: apply IHn.
+    eapply evstep_trans.
+    1: apply DH_step_spec.
+    applys_eq evstep_refl.
+    f_equal.
+    apply N.iter_succ.
+Qed.
+
+Definition DH_steps_from_init n :=
+  DH_steps ([],[],q0,R) n.
+
+Lemma DH_steps_from_init_spec n:
+  c0
+  -[tm]->*
+  DH_config_to_config (DH_steps_from_init n).
+Proof.
+  applys_eq DH_steps_spec.
+  reflexivity.
+Qed.
+
+
+Definition DH_side_to_expr(x:list Sym):side_expr :=
+side_concat_list_seg (map seg_sym x) side_0inf.
+
+Definition DH_config_to_expr(x:DH_config):config_expr :=
+let '(l,r,s,sgn):=x in
+(DH_side_to_expr l,DH_side_to_expr r,s,sgn).
+
+Lemma DH_side_to_expr_spec l mp mpi:
+  to_side mp mpi (DH_side_to_expr l) = l *> const s0.
+Proof.
+  induction l.
+  1: reflexivity.
+  cbn.
+  rewrite <-IHl.
+  reflexivity.
+Qed.
+
+Lemma DH_config_to_expr_spec x mp mpi:
+  to_config mp mpi (DH_config_to_expr x) =
+  DH_config_to_config x.
+Proof.
+  destruct x as [[[l r] s] sgn].
+  cbn.
+  destruct sgn.
+  - f_equal.
+    1: f_equal.
+    1: f_equal.
+    + rewrite DH_side_to_expr_spec.
+      destruct r; reflexivity.
+    + destruct r; reflexivity.
+    + apply DH_side_to_expr_spec.
+  - f_equal.
+    1: f_equal.
+    1: f_equal.
+    + apply DH_side_to_expr_spec.
+    + destruct r; reflexivity.
+    + rewrite DH_side_to_expr_spec.
+      destruct r; reflexivity.
+Qed.
+
+
 
 Definition hlin_layers_upd' (ls:list hlin_layer)(f:prop_expr'->option prop_expr') :=
 match ls with
@@ -3840,7 +4844,7 @@ let (ls,o):=s in
     inl (ls,false)
   end.
 
-
+(*
 Definition step0_refl_c0:prop_expr' :=
   ([],[multistep'_expr (side_0inf,side_0inf,q0,R) (side_0inf,side_0inf,q0,R) false],1%positive).
 
@@ -3855,9 +4859,27 @@ Proof.
   cbn.
   intro; split; trivial.
 Qed.
+*)
+Definition initial_steps_prop:prop_expr' :=
+  let s := DH_config_to_expr (DH_steps_from_init cfg.(initial_steps)) in
+  ([],[multistep'_expr (side_0inf,side_0inf,q0,R) s false],1%positive).
+
+Lemma initial_steps_prop_spec:
+  to_prop' (fst initial_steps_prop).
+Proof.
+  intros mpi mp.
+  cbn.
+  unfold to_prop0_list; cbn.
+  repeat rewrite Forall_cons_iff.
+  repeat rewrite Forall_nil_iff.
+  cbn.
+  intro; split; trivial.
+  applys_eq (DH_steps_from_init_spec).
+  apply DH_config_to_expr_spec.
+Qed.
 
 Definition hlin_layers_steps T :=
-N_iter_until hlin_layers_step (inl (reset_hlin_layers step0_refl_c0,true)) T.
+N_iter_until hlin_layers_step (inl (reset_hlin_layers initial_steps_prop,true)) T.
 
 Lemma hlin_layers_steps_spec T:
 match hlin_layers_steps T with
@@ -3875,7 +4897,7 @@ Proof.
     apply steps_to_repeater_edge'_spec.
   - cbn.
     apply reset_hlin_layers_spec.
-    apply step0_refl_c0_spec.
+    apply initial_steps_prop_spec.
 Qed.
 
 Definition check_nonhalt(x:prop_expr):bool :=
