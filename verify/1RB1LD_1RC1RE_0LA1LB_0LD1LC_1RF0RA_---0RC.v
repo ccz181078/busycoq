@@ -11,46 +11,6 @@ Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
 Open Scope list.
 
-Lemma BL l r n:
-  l <* [0;1;1;1;1;1]^^n <{{B}} [1;1] *> r -->*
-  l <{{B}} [1;1] *> [0;1;0;1;0;1]^^n *> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
-Lemma CR l r n:
-  l <* [0;1] {{C}}> [0;1;0;1;0;1]^^n *> r -->*
-  l <* [1;1;0;1;1;1]^^n <* [0;1] {{C}}> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
-Lemma AR l r n:
-  l {{A}}> [0;1;0;1;0;1]^^n *> r -->*
-  l <* [0;1;1;1;1;1]^^n {{A}}> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
-Lemma AR' l r n:
-  l {{A}}> [0;1;1]^^n *> r -->*
-  l <* [0;1;1]^^n {{A}}> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
-Lemma CL' l r n:
-  l <* [0;1;1]^^n <{{C}} r -->*
-  l <{{C}} [1;1;0]^^n *> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
 Definition S0 a b c :=
   const 0 <* [0;1;1] <* [0;1;1;1;1;1]^^a <{{B}} [1;1] *> [0;1;1] *> [0;1]^^b *> [0;1;1]^^c *> const 0.
 
@@ -59,12 +19,7 @@ Lemma LInc n m k:
   S0 n (m+4) k.
 Proof.
   unfold S0.
-  rewrite (Nat.add_comm m 4).
-  follow BL.
-  execute.
-  follow CR.
-  do 8 (rewrite lpow_rotate; cbn).
-  execute.
+  execute_with_shift_rule.
 Qed.
 
 Lemma LIncs n m k:
@@ -87,7 +42,7 @@ Proof.
   execute.
   rewrite lpow_mul.
   cbn.
-  follow AR.
+  use_shift_rule.
   finish.
 Qed.
 
@@ -108,15 +63,7 @@ Lemma RInc1 m n:
 Proof.
   unfold S0.
   follow LRst.
-  execute.
-  follow AR'.
-  execute.
-  follow CL'.
-  execute.
-  do 6 (rewrite lpow_rotate; cbn).
-  execute.
-  repeat (rewrite lpow_rotate; cbn).
-  finish.
+  execute_with_shift_rule.
 Qed.
 
 Lemma RInc0 m n:
@@ -125,14 +72,7 @@ Lemma RInc0 m n:
 Proof.
   unfold S0.
   follow LRst.
-  execute.
-  follow AR'.
-  execute.
-  follow CL'.
-  do 6 (rewrite lpow_rotate; cbn).
-  execute.
-  repeat (rewrite lpow_rotate; cbn).
-  finish.
+  execute_with_shift_rule.
 Qed.
 
 Lemma RInc2' m:

@@ -5,42 +5,6 @@ Require Import String.
 
 Open Scope list.
 
-Ltac er := execute_with_rotate.
-Ltac sr := use_shift_rule; simpl_rotate.
-
-Ltac unfold_config_expr x :=
-match x with
-| ?a ?b => unfold_config_expr a
-| ?a => try (unfold a)
-end.
-
-Ltac unfold_config :=
-match goal with
-| |- ?a -[_]->* ?b =>
-  unfold_config_expr a;
-  unfold_config_expr b
-| |- ?a -[_]->+ ?b =>
-  unfold_config_expr a;
-  unfold_config_expr b
-end.
-
-Ltac es :=
-  intros;
-  unfold_config;
-  repeat
-  (rewrite lpow_add ||
-  rewrite Str_app_assoc ||
-  rewrite lpow_mul);
-  simpl_tape;
-  execute_with_shift_rule.
-
-Ltac ind n H :=
-  induction n as [|n IHn]; intros;
-  [ finish |
-    cbn[Nat.add];
-    follow H;
-    follow IHn;
-    finish ].
 
 Ltac flia :=
   lia || (f_equal; flia).

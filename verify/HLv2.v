@@ -132,3 +132,7 @@ Proof. solve_hlin_nonhalt 2. Time Qed.
 Lemma nonhalt72: ~halts (TM_from_str "1RB1LA_1RC1RB_1LD1RF_---0LE_0RF0LB_1RA0RC") c0.
 Proof. solve_hlin_nonhalt 2. Time Qed.
 
+Lemma nonhalt73: ~halts (TM_from_str "1RB0RE_1LC1RD_1LA1LB_---1RA_1RC1LF_0LF1LC") c0.
+Proof. solve_hlin_nonhalt 3. Time Qed.
+
+

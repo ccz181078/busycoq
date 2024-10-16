@@ -12,34 +12,11 @@ Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 Open Scope list.
 
 
-Lemma CR l r n:
-  l {{C}}> [0;1]^^n *> r -->*
-  l <* [1;1]^^n {{C}}> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
-
-Lemma BL l r n:
-  l <* [1;1]^^n <{{B}} r -->*
-  l <{{B}} [0;1]^^n *> r.
-Proof.
-  shift_rule.
-  execute.
-Qed.
-
-
 Lemma LInc n r:
   const 0 {{C}}> [0;1]^^n *> [1;0;1;0;1] *> r -->*
   const 0 {{C}}> [0;1]^^(n+3) *> [1] *> r.
 Proof.
-  follow CR.
-  execute.
-  follow BL.
-  do 1 step.
-  repeat rewrite lpow_shift2.
-  finish.
+  es.
 Qed.
 
 Lemma LIncs n k r:
@@ -47,14 +24,7 @@ Lemma LIncs n k r:
   const 0 {{C}}> [0;1]^^(n+k*3) *> [1] *> r.
 Proof.
   gen n r.
-  induction k; intros.
-  - finish.
-  - replace (S k * 2) with (2+k*2) by lia.
-    rewrite lpow_add,Str_app_assoc.
-    cbn.
-    follow LInc.
-    follow IHk.
-    finish.
+  ind k LInc.
 Qed.
 
 Definition S0 n m :=
@@ -64,49 +34,21 @@ Lemma LOverflow n m:
   const 0 {{C}}> [0;1]^^(n+1) *> [1;0;1;1] *> [0;1]^^m *> const 0 -->*
   S0 (n+2) (m+2).
 Proof.
-  unfold S0.
-  follow CR.
-  execute.
-  follow CR.
-  execute.
-  follow BL.
-  rewrite <-lpow_shift21.
-  execute.
-  follow BL.
-  repeat rewrite lpow_shift2.
-  rewrite const_unfold.
-  rewrite const_unfold.
-  do 6 step.
-  finish.
+  es.
 Qed.
 
 Lemma LOverflow' n m:
   const 0 {{C}}> [0;1]^^(n+1) *> [1;1] *> [0;1]^^(m+1) *> const 0 -->*
   S0 (n+2) (m).
 Proof.
-  unfold S0.
-  follow CR.
-  replace (m+1) with (1+m) by lia.
-  simpl_tape.
-  cbn.
-  rewrite <-lpow_shift21.
-  execute.
-  follow BL.
-  execute.
+  es.
 Qed.
 
 Lemma LOverflow'' n:
   const 0 {{C}}> [0;1]^^(n+1) *> [1;1] *> const 0 -->*
   const 0 {{C}}> [0;1]^^2 *> [1] *> [0;1]^^(n+2) *> const 0.
 Proof.
-  follow CR.
-  replace (n+1) with (1+n) by lia.
-  rewrite lpow_add,Str_app_assoc.
-  cbn.
-  rewrite <-lpow_shift21.
-  execute.
-  follow BL.
-  execute.
+  es.
 Qed.
 
 Lemma LHalt n:
@@ -118,7 +60,7 @@ Proof.
     follow LOverflow''.
     replace (n*2+2) with ((n+1)*2) by lia.
     follow LIncs.
-    follow CR.
+    sr.
     repeat step.
     constructor.
   }
@@ -137,14 +79,7 @@ Proof.
   replace (n*2+1+2) with ((n+1)*2+1) by lia.
   rewrite lpow_add,Str_app_assoc.
   follow LIncs.
-  follow CR.
-  rewrite lpow_add,Str_app_assoc.
-  cbn.
-  rewrite <-lpow_shift21.
-  execute.
-  follow BL.
-  repeat rewrite lpow_shift2.
-  execute.
+  es.
 Qed.
 
 Lemma R1 n m:
@@ -201,8 +136,7 @@ Lemma init:
   c0 -->* S0 3 1.
 Proof.
   unfold S0.
-  cbn.
-  execute.
+  solve_init.
 Qed.
 
 
