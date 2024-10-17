@@ -8,8 +8,9 @@ Module Inductive62 := Inductive BB62.
 Import Inductive62.
 
 Ltac solve_hlin_nonhalt_T T :=
-  apply (decide_hlin_nonhalt_spec _ default_config T);
-  vm_cast_no_check (eq_refl true).
+  apply (decide_hlin_nonhalt_spec default_config T);
+  [ apply Config_WF_simple; reflexivity
+  | vm_cast_no_check (eq_refl true)].
 
 Ltac solve_hlin_nonhalt :=
   match goal with
