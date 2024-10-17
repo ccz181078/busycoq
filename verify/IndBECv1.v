@@ -235,6 +235,18 @@ Proof. solve_hlin_nonhalt (config_BEC_Pos 10000%N 5 B B [1;1] [1;0] [1;1;0] [1;0
 Lemma nonhalt28: ~halts (TM_from_str "1RB1LC_1LA1RD_0LB1LE_1LC0RD_0LF1RB_0LA---") c0.
 Proof. solve_hlin_nonhalt (config_BEC_Pos 10000%N 5 A D [0;0] [0;0] [0;0;1;1;0;0] [1;1;1;1;0;0] [1;1;1;1]). Time Qed.
 
+Lemma nonhalt29: ~halts (TM_from_str "1LB0LF_1LC0RD_1RB0LA_0LC0RE_1RF---_1RC1RD") c0.
+Proof. solve_hlin_nonhalt (config_BEC_Pos 1000%N 5 A E [] [] [0;1;1] [0;0;1] [0;0;1]). Time Qed.
+
+Lemma nonhalt30: ~halts (TM_from_str "1RB1LF_1RC0RB_0LD0LE_1LA1LC_0LD0RA_0LB---") c0.
+Proof. solve_hlin_nonhalt (config_BEC_Pos 10000%N 2 F B [1] [1] [0;1;0;0;1] [0;0;0;0;1] []). Time Qed.
+
+Lemma nonhalt31: ~halts (TM_from_str "1RB---_0LC0RB_1RA1LD_1LE1LF_1LB0LC_0LE0LA") c0.
+Proof. solve_hlin_nonhalt (config_BEC_Pos 1000%N 3 D B [1] [0] [0;0;1;1] [0;0;0;1] []). Time Qed.
+
+Lemma nonhalt32: ~halts (TM_from_str "1LB1LF_1LC0LD_0LD0RC_1RE1LA_1RC---_0LB0LE") c0.
+Proof. solve_hlin_nonhalt (config_BEC_Pos 1000%N 3 A C [1] [0] [0;0;1;1] [0;0;0;1] []). Time Qed.
+
 End Others.
 
 
@@ -270,6 +282,9 @@ Proof. solve_hlin_nonhalt (config_BEC 1000%N 3 C E [] [] [0;1]). Time Qed.
 
 Lemma nonhalt10: ~halts (TM_from_str "1RB1LD_1RC---_0LA0RC_1LF1LE_0LF0LB_1LC0LA") c0.
 Proof. solve_hlin_nonhalt (config_BEC_Pos 10000%N 3 D C [] [] [0;0;1;1] [0;0;0;1] []). Time Qed.
+
+Lemma nonhalt11: ~halts (TM_from_str "1RB1LF_0LC0RB_0RA1LD_0LE---_1LA0LF_1LE1LB") c0.
+Proof. solve_hlin_nonhalt (config_BEC 1000000%N 2 F B [] [] [0;0;1]). Time Qed.
 
 End PeriodicBadDigit.
 
