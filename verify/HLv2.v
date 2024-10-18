@@ -8,7 +8,7 @@ Module Inductive62 := Inductive BB62.
 Import Inductive62.
 
 Ltac solve_hlin_nonhalt_T T T0 bsz :=
-  apply (decide_hlin_nonhalt_spec (config_arithseq_fixed_block_size T0 bsz) T);
+  apply (decide_hlin_nonhalt_spec (config_arithseq_fixed_block_size T0 bsz 0) T);
   [ apply Config_WF_simple; reflexivity
   | vm_cast_no_check (eq_refl true)].
 

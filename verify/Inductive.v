@@ -1379,6 +1379,7 @@ Record Config := {
   enable_arithseq:bool;
   initial_steps:N;
   mnc:N;
+  max_period:N;
   ex_rules: list ExtraRules;
 }.
 
@@ -1392,6 +1393,7 @@ Definition default_config := {|
   enable_arithseq := false;
   initial_steps := 0;
   mnc := 0;
+  max_period := 0;
   ex_rules := [];
 |}.
 Definition config_limited_repeater_size := {|
@@ -1401,6 +1403,7 @@ Definition config_limited_repeater_size := {|
   enable_arithseq := false;
   initial_steps := 0;
   mnc := 0;
+  max_period := 0;
   ex_rules := [];
 |}.
 Definition config_arithseq n := {|
@@ -1410,15 +1413,17 @@ Definition config_arithseq n := {|
   enable_arithseq := true;
   initial_steps := n;
   mnc := 0;
+  max_period := 0;
   ex_rules := [];
 |}.
-Definition config_arithseq_fixed_block_size T0 n := {|
+Definition config_arithseq_fixed_block_size T0 n maxP := {|
   max_repeater_len := 16;
   max_repeater_size := Some (N.of_nat n);
   fixed_block_size := Some n;
   enable_arithseq := true;
   initial_steps := T0;
   mnc := 2;
+  max_period := maxP;
   ex_rules := [];
 |}.
 Definition config_BEC T0 n QL QR qL qR d1 := {|
@@ -1428,6 +1433,7 @@ Definition config_BEC T0 n QL QR qL qR d1 := {|
   enable_arithseq := false;
   initial_steps := T0;
   mnc := 2;
+  max_period := 0;
   ex_rules := [side_binary_inc_rule d1 qL qR QL QR];
 |}.
 Definition config_BEC_Pos T0 n QL QR qL qR d0 d1 d1a := {|
@@ -1437,6 +1443,7 @@ Definition config_BEC_Pos T0 n QL QR qL qR d0 d1 d1a := {|
   enable_arithseq := false;
   initial_steps := T0;
   mnc := 2;
+  max_period := 0;
   ex_rules := [side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR];
 |}.
 
@@ -3445,7 +3452,9 @@ match to_seg_const x0' with
     let v:=(from_nat x2) in
     ((x0,x1,v),(x0,x1,v),seg_repeat x0' (nat_add v (nat_mul n (from_nat (Npos x1')))),p)
   | Zneg x1' => ((x0,x1,v),(x0,x1,nat_add v (from_nat (Npos x1'))),seg_repeat x0' v,p)
-  | Z0 => ((x0,x1,v),(x0,x1,v),x0',p)
+  | Z0 =>
+    let v:=(from_nat 0) in
+    ((x0,x1,v),(x0,x1,v),x0',p)
   end)
 end.
 
@@ -3658,7 +3667,8 @@ match ls with
 | nil => (nil,p)
 | (x0,x1,x2)::t =>
   let (t,p):=generalize_arithseq t p in
-  ((x0,x1,nat_var p)::t,Pos.succ p)
+  let v := if (x1=?0)%Z then from_nat 0 else nat_var p in
+  ((x0,x1,v)::t,Pos.succ p)
 end.
 
 Definition arithseq_0_def r0 :=
@@ -5099,6 +5109,12 @@ Proof.
   tauto.
 Qed.
 
+Definition nxt_r r :=
+(match cfg.(max_period) with
+| N0 => r*2
+| Npos p => N.min (r*2) (r+Npos p)
+end)%N.
+
 (*
   u1: Q2 --> Q3
   u0: c0 --> P := w0 u1
@@ -5134,7 +5150,7 @@ match ls with
         match follow_rule w1_ w1' with
         | None => u
         | Some w1_ =>
-          ((w1_,u0),(step0_refl' u0,u0),(l,r*2)%N)::ls
+          ((w1_,u0),(step0_refl' u0,u0),(l,nxt_r r)%N)::ls
         end
     end
   end
@@ -5761,6 +5777,73 @@ Proof.
   lia.
 Qed.
 
+
+Definition get_rule T :=
+match hlin_layers_steps T with
+| inl (h::t,_) =>
+  let '((w1_,w0_),(w1,w0),_) := last t h in
+  match w1 with
+  | (H,multistep'_expr s1 s2 true::G,p) => Some (w0_,w1,H,s1)
+  | _ => None
+  end
+| _ => None
+end.
+
+Lemma last_In {A} (t:list A)(h:A):
+  In (last t h) (h::t).
+Proof.
+  gen h.
+  induction t; intros h.
+  - cbn. tauto.
+  - cbn.
+    destruct t.
+    + tauto.
+    + specialize (IHt h).
+      destruct IHt; tauto.
+Qed.
+
+Lemma Forall_In{A}{ls:list A}{x:A}{P:A->Prop}:
+  In x ls ->
+  Forall P ls ->
+  P x.
+Proof.
+  gen x.
+  induction ls; intros x H.
+  - cbn in H. tauto.
+  - cbn in H.
+    destruct H as [H|H].
+    + subst.
+      rewrite Forall_cons_iff. tauto.
+    + rewrite Forall_cons_iff.
+      intros [H0 H1].
+      eapply IHls; eauto.
+Qed.
+
+Lemma get_rule_spec_0 T:
+match get_rule T with
+| None => True
+| Some (w0,w1,_,_) =>
+  to_prop' (fst w0) /\ to_prop' (fst w1)
+end.
+Proof.
+  unfold get_rule.
+  destruct_spec hlin_layers_steps_spec; trivial.
+  destruct p as [l p].
+  destruct l; trivial.
+  cbn in H.
+  unfold hlin_layers_WF in H.
+  pose proof (last_In l h) as H0.
+  pose proof (Forall_In H0 H) as H1.
+  destruct (last l h) as [[[w1_ w0_] [w1 w0]] [l0 r0]].
+  cbn in H1.
+  destruct w1; trivial.
+  destruct p0; trivial.
+  destruct l2; trivial.
+  destruct p0; trivial.
+  destruct n; trivial.
+  tauto.
+Qed.
+
 Definition decide_hlin_nonhalt T :=
 match hlin_layers_steps T with
 | inr ((_,(w1,w0),_)::_) => check_nonhalt (fst w0)
@@ -5808,6 +5891,19 @@ Lemma decide_hlin_nonhalt_spec cfg T:
 Proof.
   intros tm H.
   apply decide_hlin_nonhalt_spec_1,H.
+Qed.
+
+Lemma get_rule_spec cfg T:
+  forall tm,
+  Config_WF tm cfg ->
+  match get_rule tm cfg T with
+  | None => True
+  | Some (w0,w1,_,_) =>
+    to_prop' tm (fst w0) /\ to_prop' tm (fst w1)
+  end.
+Proof.
+  intros tm H.
+  apply get_rule_spec_0,H.
 Qed.
 
 Declare Scope ind_scope.
