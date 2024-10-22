@@ -1700,7 +1700,8 @@ Inductive ExtraRules :=
 | side_binary_inc_rule(d1 qL qR:list Sym)(QL QR:Q)
 | side_binary_Pos_inc_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
 | side_binary_dec_inc_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
-| side_binary_dec_ov_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
+| side_binary_dec_ov0_rule(d0 d1 d1a d1b qL qR:list Sym)(QL QR:Q)
+| side_binary_dec_ov1_rule(d0 d1 d1a d1b qL qR:list Sym)(QL QR:Q)
 .
 
 Definition ExtraRules_WF(tm:TM)(x:ExtraRules):Prop :=
@@ -1720,10 +1721,14 @@ match x with
   (forall l r n,
     l <* d0 <* d1^^n <{{QL}} qL *> r -[ tm ]->+
     l <* d1 <* d0^^n <* qR {{QR}}> r)
-| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+| side_binary_dec_ov0_rule d0 d1 d1a d1b qL qR QL QR =>
   (forall r n,
     const s0 <* d1a <* d1^^n <{{QL}} qL *> r -[ tm ]->+
-    const s0 <* d1a <* d0 <* d0^^n <* qR {{QR}}> r)
+    const s0 <* d1b <* d0^^n <* qR {{QR}}> r)
+| side_binary_dec_ov1_rule d0 d1 d1a d1b qL qR QL QR =>
+  (forall r n,
+    const s0 <* d1a <* d1^^n <{{QL}} qL *> r -[ tm ]->+
+    const s0 <* d1b <* d0^^(1+n) <* qR {{QR}}> r)
 end.
 
 Record Config := {
@@ -1817,7 +1822,18 @@ Definition config_SBC T0 n QL QR QL' QR' qL qR qL' qR' d0 d1 d1a := {|
   max_period := 0;
   ex_rules :=
     [side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR;
-     side_binary_dec_ov_rule d0 d1 d1a qL' qR' QL' QR'];
+     side_binary_dec_ov1_rule d0 d1 d1a d1a qL' qR' QL' QR'];
+  enable_exp_toplevel_loop := true;
+|}.
+Definition config_SBC' T0 n ex := {|
+  max_repeater_len := 16;
+  max_repeater_size := match n with | O => None | _ => Some (N.of_nat n) end;
+  fixed_block_size := match n with | O => None | _ => Some n end;
+  enable_arithseq := false;
+  initial_steps := T0;
+  mnc := 4;
+  max_period := 0;
+  ex_rules := ex;
   enable_exp_toplevel_loop := true;
 |}.
 
@@ -4719,13 +4735,23 @@ Definition side_binary_dec_inc d0 d1 d1a qL qR QL QR :=
   true,
   5%positive).
 
-Definition side_binary_dec_ov d0 d1 d1a qL qR QL QR :=
+Definition side_binary_dec_ov0 d0 d1 d1a d1b qL qR QL QR :=
   let r:=side_var 1%positive in
   let len:=nat_var 2%positive in
   let n1:=nat_var 3%positive in
   (multistep'_expr
   (side_concat_unfold (from_seg qL) r,side_binary_dec d0 d1 d1a len n1 (from_nat 0),QL,L)
-  (side_concat_unfold (from_seg qR) (side_binary_dec d0 d1 d1a (nat_add len (from_nat 1)) (from_nat 0) (nat_add (nat_mul n1 (from_nat 2)) (from_nat 1))),r,QR,R)
+  (side_concat_unfold (from_seg qR) (side_binary_dec d0 d1 d1b len (from_nat 0) n1),r,QR,R)
+  true,
+  4%positive).
+
+Definition side_binary_dec_ov1 d0 d1 d1a d1b qL qR QL QR :=
+  let r:=side_var 1%positive in
+  let len:=nat_var 2%positive in
+  let n1:=nat_var 3%positive in
+  (multistep'_expr
+  (side_concat_unfold (from_seg qL) r,side_binary_dec d0 d1 d1a len n1 (from_nat 0),QL,L)
+  (side_concat_unfold (from_seg qR) (side_binary_dec d0 d1 d1b (nat_add len (from_nat 1)) (from_nat 0) (nat_add (nat_mul n1 (from_nat 2)) (from_nat 1))),r,QR,R)
   true,
   4%positive).
 
@@ -4737,8 +4763,10 @@ match x with
   to_prop0' (fst (side_binary_Pos_inc d0 d1 d1a qL qR QL QR))
 | side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR =>
   to_prop0' (fst (side_binary_dec_inc d0 d1 d1a qL qR QL QR))
-| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
-  to_prop0' (fst (side_binary_dec_ov d0 d1 d1a qL qR QL QR))
+| side_binary_dec_ov0_rule d0 d1 d1a d1b qL qR QL QR =>
+  to_prop0' (fst (side_binary_dec_ov0 d0 d1 d1a d1b qL qR QL QR))
+| side_binary_dec_ov1_rule d0 d1 d1a d1b qL qR QL QR =>
+  to_prop0' (fst (side_binary_dec_ov1 d0 d1 d1a d1b qL qR QL QR))
 end.
 
 Lemma binary_to_side_spec d1 n:
@@ -4854,12 +4882,36 @@ Proof.
     + lia.
 Qed.
 
-Lemma binary_dec_to_side_ov_spec d0 d1 d1a len n:
+Lemma binary_dec_to_side_ov0_spec d0 d1 d1a d1b len n:
   (n+1 = 2^len ->
   binary_dec_to_side d0 d1 d1a (N.to_nat len) n =
   d1^^(N.to_nat len) *> d1a *> const s0 /\
-  binary_dec_to_side d0 d1 d1a (N.to_nat (N.succ len)) 0 =
-  d0^^(N.to_nat (N.succ len)) *> d1a *> const s0)%N.
+  binary_dec_to_side d0 d1 d1b (N.to_nat len) 0 =
+  d0^^(N.to_nat len) *> d1b *> const s0)%N.
+Proof.
+  gen n.
+  induction len using N.peano_ind; intros n H.
+  - cbn.
+    change (Pos.to_nat 1) with 1. cbn.
+    tauto.
+  - rewrite Nnat.N2Nat.inj_succ. cbn.
+    repeat rewrite Str_app_assoc.
+    rewrite N.pow_succ_r' in H.
+    replace (n mod 2)%N with 1%N by lia.
+    cbn.
+    eassert (IH:_) by (apply (IHlen (n/2)%N); lia).
+    clear IHlen.
+    destruct IH as [H1 H2].
+    rewrite H1,H2.
+    tauto.
+Qed.
+
+Lemma binary_dec_to_side_ov1_spec d0 d1 d1a d1b len n:
+  (n+1 = 2^len ->
+  binary_dec_to_side d0 d1 d1a (N.to_nat len) n =
+  d1^^(N.to_nat len) *> d1a *> const s0 /\
+  binary_dec_to_side d0 d1 d1b (N.to_nat (N.succ len)) 0 =
+  d0^^(N.to_nat (N.succ len)) *> d1b *> const s0)%N.
 Proof.
   gen n.
   induction len using N.peano_ind; intros n H.
@@ -4940,16 +4992,32 @@ Proof.
     generalize (mp 3%positive nat_t). cbn; intros n1.
     intro Hpre.
     split.
+    1: repeat split; try lia; tauto.
+    destruct (binary_dec_to_side_ov0_spec d0 d1 d1a d1b len n1) as [H1 H2].
+    1: lia.
+    rewrite H1,H2.
+    cbn.
+    apply H.
+  - intros mp mpi.
+    cbn.
+    rw_side_concat_unfold.
+    repeat rewrite from_seg_spec.
+    repeat rewrite from_seg_WF.
+    cbn.
+    generalize (mp 1%positive side_t). cbn; intros r.
+    generalize (mp 2%positive nat_t). cbn; intros len.
+    generalize (mp 3%positive nat_t). cbn; intros n1.
+    intro Hpre.
+    split.
     1: rewrite N.pow_add_r;
       repeat split; try lia; tauto.
-    destruct (binary_dec_to_side_ov_spec d0 d1 d1a len n1) as [H1 H2].
+    destruct (binary_dec_to_side_ov1_spec d0 d1 d1a d1b len n1) as [H1 H2].
     1: lia.
     replace (len+1)%N with (N.succ len) by lia.
     rewrite H1,H2.
     cbn.
-    replace (N.to_nat (N.succ len)) with ((N.to_nat len)+1) by lia.
-    rewrite lpow_add,Str_app_assoc. cbn.
-    rewrite app_nil_r.
+    replace (N.to_nat (N.succ len)) with (1+(N.to_nat len)) by lia.
+    cbn.
     apply H.
 Qed.
 
@@ -5987,14 +6055,31 @@ match x with
     | _ => None
     end
   else None
-| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+| side_binary_dec_ov0_rule d0 d1 d1a d1b qL qR QL QR =>
   let '(l,r,s,sgn):=c in
   if dir_eqb sgn L && q_eqb s QL then
     match r with
     | side_binary_dec d0' d1' d1a' _ _ (from_nat N0) =>
       if list_eqb sym_eqb d0 d0' && list_eqb sym_eqb d1 d1' && list_eqb sym_eqb d1a d1a' then
         if side_startswith l qL then
-          Some (side_binary_dec_ov d0 d1 d1a qL qR QL QR)
+          Some (side_binary_dec_ov0 d0 d1 d1a d1b qL qR QL QR)
+        else
+          match side_find_repeat_unfold_limited_depth l (length qL) with
+          | None => None
+          | Some v => Some (config_rw_l v s sgn)
+          end
+      else None
+    | _ => None
+    end
+  else None
+| side_binary_dec_ov1_rule d0 d1 d1a d1b qL qR QL QR =>
+  let '(l,r,s,sgn):=c in
+  if dir_eqb sgn L && q_eqb s QL then
+    match r with
+    | side_binary_dec d0' d1' d1a' _ _ (from_nat N0) =>
+      if list_eqb sym_eqb d0 d0' && list_eqb sym_eqb d1 d1' && list_eqb sym_eqb d1a d1a' then
+        if side_startswith l qL then
+          Some (side_binary_dec_ov1 d0 d1 d1a d1b qL qR QL QR)
         else
           match side_find_repeat_unfold_limited_depth l (length qL) with
           | None => None
@@ -6080,6 +6165,20 @@ Proof.
     destruct_spec side_startswith; trivial.
     destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
     apply config_rw_l_spec,H1.
+  - cbn[config_find_unfold_ex_0].
+    destruct c as [[[l r] s] sgn].
+    destruct (dir_eqb_spec sgn L); trivial.
+    destruct (q_eqb_spec s QL); trivial.
+    destruct r; trivial.
+    destruct n2; trivial.
+    destruct n; trivial.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); trivial.
+    subst.
+    destruct_spec side_startswith; trivial.
+    destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
+    apply config_rw_l_spec,H1.
 Qed.
 
 Lemma config_find_unfold_ex_spec ls c:
@@ -6109,7 +6208,9 @@ match x with
   config_find_binary_Pos_fold c d0 d1 d1a
 | side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR =>
   config_find_binary_dec_fold c d0 d1 d1a
-| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+| side_binary_dec_ov0_rule d0 d1 d1a d1b qL qR QL QR =>
+  None
+| side_binary_dec_ov1_rule d0 d1 d1a d1b qL qR QL QR =>
   None
 end.
 

@@ -48,6 +48,8 @@ Ltac solve_hlin_nonhalt cfg :=
   end.
 
 
+
+
 Lemma nonhalt1: ~halts (TM_from_str "1LB1LF_1LC0LA_0RD1RA_1LE1RD_1LD0RC_---1RE") c0.
 Proof. solve_hlin_nonhalt (config_SBC 7450%N 5 A A A A [0] [1] [0;1;0] [1] [0;0;0;1] [0;1;0;1] [0;1;0]). Time Qed.
 
@@ -254,4 +256,238 @@ Proof. solve_hlin_nonhalt (config_SBC 2710%N 4 E D E E [0;1] [0;1] [0;1;0] [] [1
 
 Lemma nonhalt69: ~halts (TM_from_str "1RB0RC_1RC0LC_0RD0LE_1LE1RF_0LB---_0RA0LA") c0.
 Proof. solve_hlin_nonhalt (config_SBC 2093%N 5 C F C D [0] [1] [0;0] [] [0;0;0;1] [0;1;0;1] [0;1]). Time Qed.
+
+Lemma nonhalt70: ~halts (TM_from_str "1RB0RE_1LB0LC_0LD1LC_1RD1RA_1RA0RF_---1RA") c0.
+Proof. solve_hlin_nonhalt (config_SBC 1189%N 2 C A C A [1] [1] [1;1] [1] [0;0;1] [1;1;1] [1;1]). Time Qed.
+
+Lemma nonhalt71: ~halts (TM_from_str "1RB0RE_1LB0LC_0LD1LC_1RD1RA_1RA1RF_---0LA") c0.
+Proof. solve_hlin_nonhalt (config_SBC 1241%N 2 C A C A [1] [1] [1;1] [1] [0;0;1] [1;1;1] [1;1]). Time Qed.
+
+Lemma nonhalt72: ~halts (TM_from_str "1RB0RE_1RC0RA_1LC0LD_0LE1LD_1RF1RB_1RE---") c0.
+Proof. solve_hlin_nonhalt (config_SBC 1173%N 2 D E D E [] [] [1] [] [0;0;1] [1;1;1] [1;1]). Time Qed.
+
+Lemma nonhalt73: ~halts (TM_from_str "1RB0RF_1RC0RA_1LC0LD_0LE1LD_1RE1RB_---1RB") c0.
+Proof. solve_hlin_nonhalt (config_SBC 1173%N 2 D B D B [1] [1] [1;1] [1] [0;0;1] [1;1;1] [1;1]). Time Qed.
+
+Lemma nonhalt74: ~halts (TM_from_str "1RB1RF_1RC0RA_1LC0LD_0LE1LD_1RE1RB_---0LB") c0.
+Proof. solve_hlin_nonhalt (config_SBC 1225%N 2 D B D B [1] [1] [1;1] [1] [0;0;1] [1;1;1] [1;1]). Time Qed.
+
+Lemma nonhalt75: ~halts (TM_from_str "1LB1RE_1LC1LD_1RB0LF_0RC0RA_1RE0RD_1LA---") c0.
+Proof. solve_hlin_nonhalt (config_SBC 3754%N 2 F D F D [0;1] [0;1] [0;1;1;1;0] [0;1] [0;1;1;0;0;1] [0;1;0;0;0;1] [0;1;0]). Time Qed.
+
+Lemma nonhalt76: ~halts (TM_from_str "1LB0RE_0RC1LA_1RE0LD_1LE---_0LB1RF_0RA0RD") c0.
+Proof. solve_hlin_nonhalt (config_SBC 6493%N 3 B E B E [1] [1] [1;1;0] [1] [0;0;1;1] [0;0;1;0] [0]). Time Qed.
+
+Lemma nonhalt77: ~halts (TM_from_str "1RB1RC_1LC1RC_0RF0RD_1LB0LE_1LF---_0LD0RA") c0.
+Proof. solve_hlin_nonhalt (config_SBC 1770%N 3 C F C F [1] [0] [1;1;0] [0] [1;1;0;0] [1;0;0;0] [1;0;0]). Time Qed.
+
+Lemma nonhalt78: ~halts (TM_from_str "1LB---_0LC1RE_0RD1LF_1RB0RB_0RF0RA_0LA1LC") c0.
+Proof. solve_hlin_nonhalt (config_SBC 451%N 3 B B B B [1] [0] [1;0;1] [0] [0;1;1;0] [0;1;0;0] []). Time Qed.
+
+Lemma nonhalt79: ~halts (TM_from_str "1LB0RD_0LC0LD_1RD---_1RE1LF_1RA0RE_0RF0LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 3572%N 3 [
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;1] [] [] F E;
+    side_binary_dec_ov0_rule [1;0;1;0] [1;0;1;1] [1;1] [1;0] [] [] F E;
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;0] [] [] F E;
+    side_binary_dec_ov1_rule [1;0;1;0] [1;0;1;1] [1;0] [1;1] [1;0] [] F E
+  ]).
+Time Qed.
+
+Lemma nonhalt80: ~halts (TM_from_str "1RB1LE_1RC0RB_1LD0RA_0LF0LA_0RE0LC_1RA---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 3611%N 3 [
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;1] [] [] E B;
+    side_binary_dec_ov0_rule [1;0;1;0] [1;0;1;1] [1;1] [1;0] [] [] E B;
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;0] [] [] E B;
+    side_binary_dec_ov1_rule [1;0;1;0] [1;0;1;1] [1;0] [1;1] [1;0] [] E B
+  ]).
+Time Qed.
+
+Lemma nonhalt81: ~halts (TM_from_str "1RB0RA_1LC0RD_0LF0LD_1RA1LE_0RE0LB_1RD---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 3718%N 3 [
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;1] [] [] E A;
+    side_binary_dec_ov0_rule [1;0;1;0] [1;0;1;1] [1;1] [1;0] [] [] E A;
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;0] [] [] E A;
+    side_binary_dec_ov1_rule [1;0;1;0] [1;0;1;1] [1;0] [1;1] [1;0] [] E A
+  ]).
+Time Qed.
+
+Lemma nonhalt82: ~halts (TM_from_str "1RB0LD_1RC1RB_1LA1RE_1LC1LA_0RB1RF_0LA---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 500%N 3 [
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1] [] [] A B;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1] [1;1] [1;0] [] A B;
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1;1] [] [] A B;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1;1] [1] [1;0] [] A B
+  ]).
+Time Qed.
+
+Lemma nonhalt83: ~halts (TM_from_str "1RB1RA_1LC1RE_1RA0LD_1LB1LC_0RA1RF_0LC---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 300%N 3 [
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1] [] [] C A;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1] [1;1] [1;0] [] C A;
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1;1] [] [] C A;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1;1] [1] [1;0] [] C A
+  ]).
+Time Qed.
+
+Lemma nonhalt84: ~halts (TM_from_str "1RB---_1RC1LF_1RD0RC_1LE0RB_0LA0LB_0RF0LD") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 400%N 3 [
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;1] [] [] F C;
+    side_binary_dec_ov0_rule [1;0;1;0] [1;0;1;1] [1;1] [1;0] [] [] F C;
+    side_binary_dec_inc_rule [1;0;1;0] [1;0;1;1] [1;0] [] [] F C;
+    side_binary_dec_ov1_rule [1;0;1;0] [1;0;1;1] [1;0] [1;1] [1;0] [] F C
+  ]).
+Time Qed.
+
+Lemma nonhalt85: ~halts (TM_from_str "1LB1RE_1RC0LD_1RA1RC_1LA1LB_0RC1RF_0LB---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 500%N 3 [
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1] [] [] B C;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1] [1;1] [1;0] [] B C;
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1;1] [] [] B C;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1;1] [1] [1;0] [] B C
+  ]).
+Time Qed.
+
+Lemma nonhalt86: ~halts (TM_from_str "1LB1LC_1LC1RE_1RD0LA_1RB1RD_0RD1RF_0LC---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 300%N 3 [
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1] [] [] C D;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1] [1;1] [1;0] [] C D;
+    side_binary_dec_inc_rule [0;1;1;1] [1;1;1;1] [1;1] [] [] C D;
+    side_binary_dec_ov1_rule [0;1;1;1] [1;1;1;1] [1;1] [1] [1;0] [] C D
+  ]).
+Time Qed.
+
+Lemma nonhalt87: ~halts (TM_from_str "1LB0RD_1RC0LF_1RA1RD_0RE---_0LA1RB_0LD1LE") c0.
+Proof. solve_hlin_nonhalt (config_SBC 487%N 5 F B F E [] [] [0] [0;1;1] [1;0;1;1] [1;0;0;1] []). Time Qed.
+
+Lemma nonhalt88: ~halts (TM_from_str "1RB0LD_1RC1RF_1LA0RF_0LC1LE_0LC1RA_0RE---") c0.
+Proof. solve_hlin_nonhalt (config_SBC 480%N 5 D A D E [] [] [0] [0;1;1] [1;0;1;1] [1;0;0;1] []). Time Qed.
+
+Lemma nonhalt89: ~halts (TM_from_str "1RB1RF_1LC0LB_0RC1LD_1RE0LB_1RA0RE_---0RD") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 2010%N 4 [
+    side_binary_dec_inc_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [0;1;1;0;1] [] [] B D;
+    side_binary_dec_ov1_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [0;1;1;0;1] [] [] [] B D;
+    side_binary_dec_inc_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [] [] [] B D;
+    side_binary_dec_ov0_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [] [0;1;1;0;1] [0;1;1] [] B D
+  ]).
+Time Qed.
+
+Lemma nonhalt90: ~halts (TM_from_str "1RB1RF_1LC0LB_1RE1LD_1RE0LB_1RA0RE_---0RD") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 617%N 4 [
+    side_binary_dec_inc_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [0;1;1;0;1] [] [] B D;
+    side_binary_dec_ov1_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [0;1;1;0;1] [] [] [] B D;
+    side_binary_dec_inc_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [] [] [] B D;
+    side_binary_dec_ov0_rule [0;1;1;0;0;1] [0;1;1;0;1;1] [] [0;1;1;0;1] [0;1;1] [] B D
+  ]).
+Time Qed.
+
+Lemma nonhalt91: ~halts (TM_from_str "1LB0RE_1RC0LD_1RA0RB_0RF0LE_1RB1LD_---0LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 376%N 4 [
+    side_binary_dec_inc_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [] [] [] E B;
+    side_binary_dec_ov0_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [] [1] [] [] E B;
+    side_binary_dec_inc_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [1] [] [] E B;
+    side_binary_dec_ov1_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [1] [] [0;1;0] [] E B
+  ]).
+Time Qed.
+
+Lemma nonhalt92: ~halts (TM_from_str "1LB0RF_0LC---_0RD0LF_1RE0LA_0RA0RB_1RD1LC") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 2400%N 4 [
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [] F D;
+    side_binary_dec_ov1_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [0;1;0;0] [1] F E;
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [] [] F D;
+    side_binary_dec_ov0_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [1] [] [] F D
+  ]).
+Time Qed.
+
+Lemma nonhalt93: ~halts (TM_from_str "1LB0RF_0LC---_0RD0LF_1RE0LA_0RA0RD_1RD1LC") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 2300%N 4 [
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [] F D;
+    side_binary_dec_ov1_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [0;1;0;0] [1] F E;
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [] [] F D;
+    side_binary_dec_ov0_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [1] [] [] F D
+  ]).
+Time Qed.
+
+Lemma nonhalt94: ~halts (TM_from_str "1RB1LE_1RC0LE_1RD0RB_1LB0RA_0RF0LA_---0LD") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 2120%N 4 [
+    side_binary_dec_inc_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [] [] [] A B;
+    side_binary_dec_ov0_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [] [1] [] [] A B;
+    side_binary_dec_inc_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [1] [] [] A B;
+    side_binary_dec_ov1_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [1] [] [0;1;0] [] A B
+  ]).
+Time Qed.
+
+Lemma nonhalt95: ~halts (TM_from_str "1RB1LF_1RC0LD_0RD0RB_1LE0RA_0LF---_0RB0LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 4600%N 4 [
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [] A B;
+    side_binary_dec_ov1_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [0;1;0] [] A B;
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [] [] A B;
+    side_binary_dec_ov0_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [1] [] [] A B
+  ]).
+Time Qed.
+
+Lemma nonhalt96: ~halts (TM_from_str "1RB1LF_1RC0LD_0RD0RE_1LE0RA_0LF---_0RB0LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 4700%N 4 [
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [] A B;
+    side_binary_dec_ov1_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [0;1;0] [] A B;
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [] [] A B;
+    side_binary_dec_ov0_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [1] [] [] A B
+  ]).
+Time Qed.
+
+Lemma nonhalt97: ~halts (TM_from_str "1RB0LD_1RC0RA_1LA0RE_0RF0LE_1RA1LD_---0LC") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 2120%N 4 [
+    side_binary_dec_inc_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [] [] [] E A;
+    side_binary_dec_ov0_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [] [1] [] [] E A;
+    side_binary_dec_inc_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [1] [] [] E A;
+    side_binary_dec_ov1_rule [1;0;1;1;0;1] [1;0;1;1;1;1] [1] [] [0;1;0] [] E A
+  ]).
+Time Qed.
+
+Lemma nonhalt98: ~halts (TM_from_str "1RB0LC_0RC0RA_1LD0RF_0LE---_0RA0LF_1RA1LE") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 4700%N 4 [
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [] F A;
+    side_binary_dec_ov1_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [0;1;0] [] F A;
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [] [] F A;
+    side_binary_dec_ov0_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [1] [] [] F A
+  ]).
+Time Qed.
+
+Lemma nonhalt99: ~halts (TM_from_str "1RB0LC_0RC0RD_1LD0RF_0LE---_0RA0LF_1RA1LE") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 4700%N 4 [
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [] F A;
+    side_binary_dec_ov1_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [1] [] [0;1;0] [] F A;
+    side_binary_dec_inc_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [] [] F A;
+    side_binary_dec_ov0_rule [1;0;0;1;0;1] [1;0;0;1;1;1] [] [1] [] [] F A
+  ]).
+Time Qed.
+
+
+
+
+
+
+
+
+
+
+
 
