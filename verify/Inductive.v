@@ -51,6 +51,33 @@ match goal with
 |- ?a => destruct_spec_expr a f
 end.
 
+Ltac simpl_Forall :=
+  repeat rewrite Forall_cons_iff;
+  repeat rewrite Forall_app;
+  repeat rewrite Forall_nil_iff.
+
+Lemma and_feq P1 P2 Q1 Q2:
+  P1 <-> Q1 ->
+  P2 <-> Q2 ->
+  (P1 /\ P2) <-> (Q1 /\ Q2).
+Proof.
+  tauto.
+Qed.
+
+Ltac rw_eq_spec H:=
+  destruct H as [H1__ H2__];
+  repeat rewrite H1__;
+  repeat rewrite H2__;
+  clear H1__;
+  clear H2__.
+
+Ltac rw_hyp :=
+match goal with
+| [ H: _ |- _ ] => rewrite H
+end.
+
+Ltac rw_hyps :=
+  repeat rw_hyp.
 
 
 
@@ -79,7 +106,69 @@ Definition exgcd(a b:N):N*N :=
   (Z.to_N (if x <? 0 then (x+Z.of_N b) else x),Z.to_N (if y <? 0 then (y+Z.of_N a) else y))%Z.
 
 
+Fixpoint check_formula(ls:list N)(f:N->N)(x:N):bool :=
+match ls with
+| nil => true
+| h::t => (f x =? h)%N && check_formula t f (N.succ x)
+end.
 
+Definition check_geoseq(ls:list N):option (N*N) :=
+(match ls with
+| a0::a1::t =>
+  if (negb (a0 =? 0) && (a0 <? a1) && (a1 mod a0 =? 0)) then
+    let k := (a1/a0) in
+    if check_formula ls (fun x => (a0*(k^x))) 0 then Some (a0,k)
+    else None
+  else None
+| _ => None
+end)%N.
+
+Definition check_constseq(ls:list N):option (N) :=
+(match ls with
+| a0::t =>
+  if check_formula ls (fun x => a0) 0 then Some a0
+  else None
+| _ => None
+end)%N.
+
+Fixpoint list_diff(ls:list N):option (list N) :=
+(match ls with
+| a0::((a1::t1) as t) =>
+  if a0 <=? a1 then
+  match list_diff t with
+  | Some t' => Some ((a1-a0)::t')
+  | None => None
+  end
+  else None
+| _ => Some []
+end)%N.
+
+
+Inductive Nformula :=
+| N_arithseq(a b:N) (* a+bx *)
+| N_geoseq_sum(a0 a1 k:N) (* a0+a1*((k+2)^x-1)/(k+1) *)
+.
+
+Definition Nformula_to_Nfunc(f:Nformula):=
+(match f with
+| N_arithseq a b => fun x => a+b*x
+| N_geoseq_sum a0 a1 k => fun x => a0+a1*(((k+2)^x-1)/(k+1))
+end)%N.
+
+Definition find_Nformula_v1(ls:list N):option Nformula :=
+match list_diff ls with
+| None => None
+| Some ls' =>
+  let a0 := hd N0 ls in
+  match check_constseq ls' with
+  | Some k => Some (N_arithseq a0 k)
+  | None =>
+    match check_geoseq ls' with
+    | Some (a1,k) => Some (N_geoseq_sum a0 a1 (k-2))
+    | None => None
+    end
+  end
+end.
 
 
 Module Inductive(Ctx:Ctx).
@@ -141,10 +230,39 @@ match x with
 end.
 
 
+Definition cnat_expr := N.
+
+Inductive cseg_expr :=
+| cseg_nil
+| cseg_sym(a:Sym)
+| cseg_concat(a:cseg_expr)(b:cseg_expr)
+| cseg_repeat(a:cseg_expr)(n:cnat_expr)
+| cseg_arithseq(a:list ((list Sym)*Z*cnat_expr))(n:cnat_expr)
+.
+
+Inductive cside_expr :=
+| cside_0inf
+| cside_concat(a:cseg_expr)(b:cside_expr)
+| cside_binary(d1:list Sym)(n:cnat_expr)
+| cside_binary_Pos(d0 d1 d1a:list Sym)(n:cnat_expr)
+| cside_binary_dec(d0 d1 d1a:list Sym)(len n1 n2:cnat_expr)
+.
+
+Definition to_cexpr_type(x:type_t):Type :=
+match x with
+| nat_t => cnat_expr
+| seg_t => cseg_expr
+| side_t => cside_expr
+end.
+
+Definition cconfig_expr:Type := cside_expr*cside_expr*Q*dir.
+
+
 Inductive nat_expr :=
 | from_nat(n:N)
 | nat_add(a b:nat_expr)
 | nat_mul(a b:nat_expr)
+| nat_powsum(k:N)(n:nat_expr)
 | nat_var(i:id_t)
 | nat_ivar
 .
@@ -164,6 +282,7 @@ Inductive side_expr :=
 | side_concat(a:seg_expr)(b:side_expr)
 | side_binary(d1:list Sym)(n:nat_expr)
 | side_binary_Pos(d0 d1 d1a:list Sym)(n:nat_expr)
+| side_binary_dec(d0 d1 d1a:list Sym)(len n1 n2:nat_expr)
 .
 
 Definition to_expr_type(x:type_t):Type :=
@@ -173,8 +292,8 @@ match x with
 | side_t => side_expr
 end.
 
-Definition expr_expr := {x:type_t & to_expr_type x}.
-Definition make_expr_expr(t:type_t)(x:to_expr_type t):expr_expr.
+Definition any_expr := {x:type_t & to_expr_type x}.
+Definition make_any_expr(t:type_t)(x:to_expr_type t):any_expr.
   exists t.
   apply x.
 Defined.
@@ -187,6 +306,9 @@ Inductive prop0_expr :=
 | seg_eq(a b:seg_expr)
 | side_eq(a b:side_expr)
 | config_eq(a b:config_expr)
+| seg_rw(a b:seg_expr)
+| side_rw(a b:side_expr)
+| config_rw(a b:config_expr)
 | false_prop0
 | multistep_expr(a b:config_expr)(n:nat_expr)
 | multistep_lb_expr(a b:config_expr)(n:nat_expr)
@@ -240,6 +362,7 @@ match a,b with
 | from_nat a0,from_nat b0 => (a0 =? b0)%N
 | nat_add a0 a1,nat_add b0 b1 => (nat_expr_eqb a0 b0) && (nat_expr_eqb a1 b1)
 | nat_mul a0 a1,nat_mul b0 b1 => (nat_expr_eqb a0 b0) && (nat_expr_eqb a1 b1)
+| nat_powsum a0 a1,nat_powsum b0 b1 => (a0 =? b0)%N && (nat_expr_eqb a1 b1)
 | nat_var a0,nat_var b0 => (a0 =? b0)%positive
 | nat_ivar,nat_ivar => true
 | _,_ => false
@@ -255,6 +378,8 @@ Proof.
   - destruct (IHa1 b1),(IHa2 b2); subst; cbn;
     solve_Bool_reflect.
   - destruct (IHa1 b1),(IHa2 b2); subst; cbn;
+    solve_Bool_reflect.
+  - destruct (N.eqb_spec k k0); destruct (IHa b); subst; cbn;
     solve_Bool_reflect.
   - destruct (Pos.eqb_spec i i0);
     solve_Bool_reflect.
@@ -304,6 +429,7 @@ match a,b with
 | side_concat a0 a1,side_concat b0 b1 => seg_expr_eqb a0 b0 && side_expr_eqb a1 b1
 | side_binary d10 n0,side_binary d11 n1 => list_eqb sym_eqb d10 d11 && nat_expr_eqb n0 n1
 | side_binary_Pos d00 d10 d1a0 n0,side_binary_Pos d01 d11 d1a1 n1 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb n0 n1
+| side_binary_dec d00 d10 d1a0 len0 n10 n20,side_binary_dec d01 d11 d1a1 len1 n11 n21 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb len0 len1 && nat_expr_eqb n10 n11 && nat_expr_eqb n20 n21
 | _,_ => false
 end.
 
@@ -327,6 +453,18 @@ Proof.
     destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec);
     solve_Bool_reflect.
     destruct (nat_expr_eqb_spec n n0);
+    solve_Bool_reflect.
+  - destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (nat_expr_eqb_spec len len0);
+    solve_Bool_reflect.
+    destruct (nat_expr_eqb_spec n1 n0);
+    solve_Bool_reflect.
+    destruct (nat_expr_eqb_spec n2 n3);
     solve_Bool_reflect.
 Qed.
 
@@ -365,6 +503,9 @@ match a,b with
 | seg_eq a0 a1,seg_eq b0 b1 => seg_expr_eqb a0 b0 && seg_expr_eqb a1 b1
 | side_eq a0 a1,side_eq b0 b1 => side_expr_eqb a0 b0 && side_expr_eqb a1 b1
 | config_eq a0 a1,config_eq b0 b1 => config_expr_eqb a0 b0 && config_expr_eqb a1 b1
+| seg_rw a0 a1,seg_rw b0 b1 => seg_expr_eqb a0 b0 && seg_expr_eqb a1 b1
+| side_rw a0 a1,side_rw b0 b1 => side_expr_eqb a0 b0 && side_expr_eqb a1 b1
+| config_rw a0 a1,config_rw b0 b1 => config_expr_eqb a0 b0 && config_expr_eqb a1 b1
 | false_prop0,false_prop0 => true
 | multistep_expr a0 a1 an,multistep_expr b0 b1 bn =>
   config_expr_eqb a0 b0 && config_expr_eqb a1 b1 && nat_expr_eqb an bn
@@ -380,6 +521,12 @@ Proof.
   destruct a,b; cbn; solve_Bool_reflect.
   - destruct (nat_expr_eqb_spec a a0); solve_Bool_reflect.
     destruct (nat_expr_eqb_spec b0 b); solve_Bool_reflect.
+  - destruct (seg_expr_eqb_spec a a0); solve_Bool_reflect.
+    destruct (seg_expr_eqb_spec b0 b); solve_Bool_reflect.
+  - destruct (side_expr_eqb_spec a a0); solve_Bool_reflect.
+    destruct (side_expr_eqb_spec b0 b); solve_Bool_reflect.
+  - destruct (config_expr_eqb_spec a a0); solve_Bool_reflect.
+    destruct (config_expr_eqb_spec b0 b); solve_Bool_reflect.
   - destruct (seg_expr_eqb_spec a a0); solve_Bool_reflect.
     destruct (seg_expr_eqb_spec b0 b); solve_Bool_reflect.
   - destruct (side_expr_eqb_spec a a0); solve_Bool_reflect.
@@ -522,6 +669,10 @@ match a with
   add_to_affine_map a1 sgn f0
 | nat_mul a0 (from_nat a1) =>
   add_to_affine_map a0 (sgn*(Z.of_N a1))%Z f
+| nat_powsum k (nat_add a (from_nat 1)) =>
+  affine_map_upd (affine_map_upd f (nat_powsum k a) (sgn*(Z.of_N (k+2)))%Z) (from_nat 1) sgn
+| nat_powsum k (from_nat 0) =>
+  f
 | from_nat a1 => affine_map_upd f (from_nat 1) (sgn*(Z.of_N a1))%Z
 | _ => affine_map_upd f a sgn
 end.
@@ -600,6 +751,7 @@ match a,b with
 | side_concat a0 a1,side_concat b0 b1 => (solve_seg_eq a0 b0) ++ (solve_side_eq a1 b1)
 | side_binary d10 n0,side_binary d11 n1 => if list_eqb sym_eqb d10 d11 then solve_nat_eq n0 n1 else [false_prop0]
 | side_binary_Pos d00 d10 d1a0 n0,side_binary_Pos d01 d11 d1a1 n1 => if list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 then solve_nat_eq n0 n1 else [false_prop0]
+| side_binary_dec d00 d10 d1a0 len0 n10 n20,side_binary_dec d01 d11 d1a1 len1 n11 n21 => if list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 then (solve_nat_eq len0 len1) ++ (solve_nat_eq n10 n11) ++ (solve_nat_eq n20 n21) else [false_prop0]
 | _,_ => [side_eq a b]
 end.
 
@@ -667,6 +819,7 @@ match a,b with
 | side_concat a0 a1,side_concat b0 b1 => seg_expr_eqb a0 b0 && side_expr_eqb a1 b1
 | side_binary d10 n0,side_binary d11 n1 => list_eqb sym_eqb d10 d11 && nat_expr_eqb n0 n1
 | side_binary_Pos d00 d10 d1a0 n0,side_binary_Pos d01 d11 d1a1 n1 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb n0 n1
+| side_binary_dec d00 d10 d1a0 len0 n10 n20,side_binary_dec d01 d11 d1a1 len1 n11 n21 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb len0 len1 && nat_expr_eqb n10 n11 && nat_expr_eqb n20 n21
 | _,_ => false
 end.
 
@@ -727,6 +880,7 @@ match x with
 | from_nat x0 => s
 | nat_add a b => nat_allFV a (nat_allFV b s)
 | nat_mul a b => nat_allFV a (nat_allFV b s)
+| nat_powsum a b => (nat_allFV b s)
 | nat_var i0 => add_var s i0
 | nat_ivar => s
 end.
@@ -751,10 +905,11 @@ match x with
 | side_concat a b => seg_allFV a (side_allFV b s)
 | side_binary d1 n => nat_allFV n s
 | side_binary_Pos d0 d1 d1a n => nat_allFV n s
+| side_binary_dec d0 d1 d1a len n1 n2 => nat_allFV len (nat_allFV n1 (nat_allFV n2 s))
 end.
 
 
-Definition expr_allFV(e:expr_expr):=
+Definition expr_allFV(e:any_expr):=
 match e with
 | existT _ nat_t x => nat_allFV x
 | existT _ seg_t x => seg_allFV x
@@ -772,6 +927,9 @@ match x with
 | seg_eq a b => seg_allFV b (seg_allFV a s)
 | side_eq a b => side_allFV b (side_allFV a s)
 | config_eq a b => config_allFV b (config_allFV a s)
+| seg_rw a b => seg_allFV b (seg_allFV a s)
+| side_rw a b => side_allFV b (side_allFV a s)
+| config_rw a b => config_allFV b (config_allFV a s)
 | false_prop0 => s
 | multistep_expr a b n => config_allFV a (config_allFV b (nat_allFV n s))
 | multistep_lb_expr a b n => config_allFV a (config_allFV b (nat_allFV n s))
@@ -812,6 +970,7 @@ match x with
 | side_concat a b => side_concat (simpl_seg a) (simpl_side b)
 | side_binary d1 n => side_binary d1 (simpl_nat n)
 | side_binary_Pos d0 d1 d1a n => side_binary_Pos d0 d1 d1a (simpl_nat n)
+| side_binary_dec d0 d1 d1a len n1 n2 => side_binary_dec d0 d1 d1a (simpl_nat len) (simpl_nat n1) (simpl_nat n2)
 end.
 
 Definition simpl_config(x:config_expr) :=
@@ -824,6 +983,9 @@ match x with
 | seg_eq a b => seg_eq (simpl_seg a) (simpl_seg b)
 | side_eq a b => side_eq (simpl_side a) (simpl_side b)
 | config_eq a b => config_eq (simpl_config a) (simpl_config b)
+| seg_rw a b => seg_rw (simpl_seg a) (simpl_seg b)
+| side_rw a b => side_rw (simpl_side a) (simpl_side b)
+| config_rw a b => config_rw (simpl_config a) (simpl_config b)
 | false_prop0 => false_prop0
 | multistep_expr x0 x1 n => multistep_expr (simpl_config x0) (simpl_config x1) (simpl_nat n)
 | multistep_lb_expr x0 x1 n => multistep_lb_expr (simpl_config x0) (simpl_config x1) (simpl_nat n)
@@ -850,6 +1012,7 @@ match x with
 | from_nat n => x
 | nat_add a b => nat_add (subst_nat a) (subst_nat b)
 | nat_mul a b => nat_mul (subst_nat a) (subst_nat b)
+| nat_powsum a b => nat_powsum a (subst_nat b)
 | nat_var i => (mp i nat_t)
 | nat_ivar => mpi
 end.
@@ -871,6 +1034,7 @@ match x with
 | side_concat a b => side_concat (subst_seg a) (subst_side b)
 | side_binary d1 n => side_binary d1 (subst_nat n)
 | side_binary_Pos d0 d1 d1a n => side_binary_Pos d0 d1 d1a (subst_nat n)
+| side_binary_dec d0 d1 d1a len n1 n2 => side_binary_dec d0 d1 d1a (subst_nat len) (subst_nat n1) (subst_nat n2)
 end.
 
 Definition subst_expr(t:type_t)(x:to_expr_type t):to_expr_type t.
@@ -890,6 +1054,9 @@ match x with
 | seg_eq a b => seg_eq (subst_seg a) (subst_seg b)
 | side_eq a b => side_eq (subst_side a) (subst_side b)
 | config_eq a b => config_eq (subst_config a) (subst_config b)
+| seg_rw a b => seg_rw (subst_seg a) (subst_seg b)
+| side_rw a b => side_rw (subst_side a) (subst_side b)
+| config_rw a b => config_rw (subst_config a) (subst_config b)
 | false_prop0 => false_prop0
 | multistep_expr x0 x1 n => multistep_expr (subst_config x0) (subst_config x1) (subst_nat n)
 | multistep_lb_expr x0 x1 n => multistep_lb_expr (subst_config x0) (subst_config x1) (subst_nat n)
@@ -922,7 +1089,7 @@ Definition lookup_var t t0 (v:to_expr_type t)(v0:to_expr_type t0):to_expr_type t
 Defined.
 
 
-Definition subst_vars(mp:PositiveMap.tree expr_expr)(i0:id_t)(t0:type_t):to_expr_type t0 :=
+Definition subst_vars(mp:PositiveMap.tree any_expr)(i0:id_t)(t0:type_t):to_expr_type t0 :=
   match PositiveMap.find i0 mp with
   | None => mk_var i0 t0
   | Some (existT _ t v) => lookup_var t t0 v (mk_var i0 t0)
@@ -966,9 +1133,9 @@ Hypothesis cfg:Config.
 
 (* lhs vars, rhs vars, fresh var *)
 Definition subst_state:Type :=
-  (PositiveMap.tree expr_expr)*(PositiveMap.tree unit)*id_t.
+  (PositiveMap.tree any_expr)*(PositiveMap.tree unit)*id_t.
 
-Definition subst1(l1:id_t)(e:expr_expr)(s:subst_state):subst_state :=
+Definition subst1(l1:id_t)(e:any_expr)(s:subst_state):subst_state :=
 if negb (cfg.(allowed_lhs_vars) l1) then s else
 let '(sl,sr,p'):=s in
 match PositiveMap.find l1 sl with (* l1 not in sl *)
@@ -1016,11 +1183,11 @@ Definition find_subst_exgcd'(x y:id_t)(a b c:N)(s:subst_state):subst_state :=
     let s:=
     (if (a =? 1)%N then s else
     let (i,s):=fresh_var s in
-    subst1 y (make_expr_expr nat_t (nat_add (nat_mul (nat_var i) (from_nat a)) (from_nat ((a-((c*y') mod a)) mod a)))) s) in
+    subst1 y (make_any_expr nat_t (nat_add (nat_mul (nat_var i) (from_nat a)) (from_nat ((a-((c*y') mod a)) mod a)))) s) in
 
     (if (b =? 1)%N then s else
     let (i,s):=fresh_var s in
-    subst1 x (make_expr_expr nat_t (nat_add (nat_mul (nat_var i) (from_nat b)) (from_nat ((c*x') mod b)))) s)
+    subst1 x (make_any_expr nat_t (nat_add (nat_mul (nat_var i) (from_nat b)) (from_nat ((c*x') mod b)))) s)
   else
     s.
 
@@ -1039,10 +1206,10 @@ end.
 
 Definition find_subst(x:prop0_expr)(s:subst_state):subst_state :=
 match x with
-| nat_eq (nat_var i0) b => subst1 i0 (make_expr_expr nat_t b) s
+| nat_eq (nat_var i0) b => subst1 i0 (make_any_expr nat_t b) s
 | nat_eq a b => if cfg.(enable_subst_exgcd) then find_subst_exgcd a b s else s
-| seg_eq (seg_var i0) b => subst1 i0 (make_expr_expr seg_t b) s
-| side_eq (side_var i0) b => subst1 i0 (make_expr_expr side_t b) s
+| seg_eq (seg_var i0) b => subst1 i0 (make_any_expr seg_t b) s
+| side_eq (side_var i0) b => subst1 i0 (make_any_expr side_t b) s
 | _ => s
 end.
 
@@ -1102,6 +1269,11 @@ let (H1,G1):=x1 in
 let (H2,G2):=SubstExpr.subst_prop (rename_var_by_add di) nat_ivar x2 in
 (H1++H2,G1++G2).
 
+Definition cprop_merge(x1 x2:prop_expr):prop_expr :=
+let (H1,G1):=x1 in
+let (H2,G2):=x2 in
+(H1++H2,G1++G2).
+
 Definition prop_multistep'_trans(x:prop_expr): option prop_expr :=
 match x with
 | (H,[multistep'_expr s1 s2 n1;multistep'_expr s3 s4 n2]) => Some ((config_eq s2 s3)::H,[multistep'_expr s1 s4 (n1||n2)])
@@ -1120,6 +1292,165 @@ match prop_multistep'_trans x with
   match solve_assumptions solve_assumptions_iter_limit TrySubst.config_normal x (i1+i2+1)%positive with
   | None => None
   | Some (x,_) => Some (simpl_rule x)
+  end
+end.
+
+Definition cfollow_rule(w1 w2:prop_expr'):option (prop_expr'*_) :=
+let (x1,i1):=w1 in
+if negb (i1 =? 1)%positive then None else
+let (x2,i2):=w2 in
+let x:=(cprop_merge x1 x2) in
+match prop_multistep'_trans x with
+| None => None
+| Some x =>
+  match solve_assumptions solve_assumptions_iter_limit TrySubst.config_normal x i2 with
+  | None => None
+  | Some (x,mp) => Some (simpl_rule x,mp)
+  end
+end.
+
+Fixpoint to_nat_const(x:nat_expr):option N :=
+match x with
+| from_nat n => Some n
+| nat_add a b =>
+  match to_nat_const a,to_nat_const b with
+  | Some a0,Some b0 => Some (a0+b0)%N
+  | _,_ => None
+  end
+| nat_mul a b =>
+  match to_nat_const a,to_nat_const b with
+  | Some a0,Some b0 => Some (a0*b0)%N
+  | _,_ => None
+  end
+| nat_powsum k n =>
+  match to_nat_const n with
+  | Some n0 => Some (((k+2)^n0-1)/(k+1))%N
+  | None => None
+  end
+| _ => None
+end.
+
+Fixpoint subst_list_map(mp:list (PositiveMap.tree any_expr))(i:id_t)(t:type_t):to_expr_type t :=
+match mp with
+| nil => mk_var i t
+| mp0::mp =>
+  SubstExpr.subst_expr (subst_list_map mp) nat_ivar t (subst_vars mp0 i t)
+end.
+
+Definition cfollow_rule_and_get_vars(w0 w1:prop_expr'):option (prop_expr'*(list (id_t*N))) :=
+match cfollow_rule w0 w1 with
+| None => None
+| Some (w0',mp) =>
+  if negb (snd w0' =? 1)%positive then None else
+  let ls := fst (N.iter (N.pred (Npos (snd w1))) (fun '(x,p) =>
+    let x' :=
+    match to_nat_const (subst_list_map mp p nat_t) with
+    | None => x
+    | Some n => (p,n)::x
+    end in
+    (x',Pos.succ p)) ([],xH)) in
+  Some (w0',ls)
+end.
+
+Fixpoint cfollow_rules_and_get_vars(w0 w1:prop_expr')(n:nat):option (prop_expr'*(list (list (id_t*N)))) :=
+match n with
+| O => Some (w0,[])
+| Datatypes.S n0 =>
+  match cfollow_rule_and_get_vars w0 w1 with
+  | None => None
+  | Some (w0',ls) =>
+    match cfollow_rules_and_get_vars w0' w1 n0 with
+    | None => None
+    | Some (w0'',ls') => Some (w0'',(rev ls)::ls')
+    end
+  end
+end.
+
+Fixpoint transpose_0{T}(h:list T)(t:list (list T))(x0:T):list (list T) :=
+match h with
+| [] => []
+| hh::ht =>
+  (hh::(map (hd x0) t))::transpose_0 ht (map (@tl T) t) x0
+end.
+
+Definition transpose{T}(ls:list (list T))(x0:T):list (list T) :=
+match ls with
+| [] => []
+| h::t => transpose_0 h t x0
+end.
+
+Fixpoint fold_err{T S}(f:S->T->option S)(ls:list T)(s:S):option S :=
+match ls with
+| [] => Some s
+| h::t =>
+  match f s h with
+  | Some s' =>
+    fold_err f t s'
+  | None => None
+  end
+end.
+
+Definition Nformula_to_expr(f:Nformula) :=
+match f with
+| N_arithseq a0 a1 => (nat_add (nat_mul nat_ivar (from_nat a1)) (from_nat a0))
+| N_geoseq_sum a0 a1 k =>
+  (nat_add (nat_mul (nat_powsum k nat_ivar) (from_nat a1)) (from_nat a0))
+end.
+
+Definition find_Nformula(f:list N->option Nformula)(ls:list (id_t*(list N))):option (PositiveMap.t any_expr) :=
+fold_err (fun mp '(i,x) =>
+  match find_Nformula_v1 x with
+  | None => None
+  | Some f => Some (PositiveMap.add i (make_any_expr nat_t (Nformula_to_expr f)) mp)
+  end) ls (PositiveMap.empty any_expr).
+
+
+Definition get_vars_seq(w0 w1:prop_expr')(n:nat):option ((list (id_t*(list N)))) :=
+match cfollow_rules_and_get_vars w0 w1 n with
+| None => None
+| Some (_,ls) =>
+  let default_v := (1%positive,0%N) in
+  let s := transpose ls default_v in
+  let s := map (fun x => (fst (hd default_v x), map snd x)) s in
+  Some s
+end.
+
+Definition step0_refl s sgn:prop_expr' :=
+  let l:=side_var 1%positive in
+  let r:=side_var 2%positive in
+  (([],[multistep'_expr (l,r,s,sgn) (l,r,s,sgn) false]),
+  3%positive).
+
+Definition get_config_r(x:prop_expr') :=
+let '((H,G),i):=x in
+match G with
+| (multistep_lb_expr a b n)::_ => Some b
+| (multistep'_expr a b n)::_ => Some b
+| _ => None
+end.
+
+Definition get_config_l(x:prop_expr') :=
+let '((H,G),i):=x in
+match G with
+| (multistep_lb_expr a b n)::_ => Some a
+| (multistep'_expr a b n)::_ => Some a
+| _ => None
+end.
+
+Definition find_IH_v2(w0 w1:prop_expr'):option (prop_expr'*prop_expr'*_*(option N)) :=
+match get_vars_seq w0 w1 5 with
+| None => None
+| Some ls =>
+  match find_Nformula find_Nformula_v1 ls with
+  | None => None
+  | Some mp =>
+    match get_config_r w0,get_config_l w1 with
+    | Some c0,Some c1 =>
+      let c1' := SubstExpr.subst_config (subst_vars mp) (from_nat 0) c1 in
+      let '(_,_,s,sgn):=c1 in
+      Some (([],[multistep_lb_expr c0 c1' nat_ivar],1%positive),(step0_refl s sgn),[mp],None)
+    | _,_ => None
+    end
   end
 end.
 
@@ -1207,6 +1538,11 @@ match a,b,ca,cb with
   match visit_nat n0 n1 n2 n3 with
   | Some (n1',n2',ls) => Some (side_binary_Pos d0 d1 d1a n1',side_binary_Pos d0 d1 d1a n2',ls)
   | None => None
+  end
+| side_binary_dec d0 d1 d1a len0 n10 n20,side_binary_dec _ _ _ len1 n11 n21,side_binary_dec _ _ _ len2 n12 n22,side_binary_dec _ _ _ len3 n13 n23 =>
+  match visit_nat len0 len1 len2 len3,visit_nat n10 n11 n12 n13,visit_nat n20 n21 n22 n23 with
+  | Some (n1'0,n2'0,ls0),Some (n1'1,n2'1,ls1),Some (n1'2,n2'2,ls2) => Some (side_binary_dec d0 d1 d1a n1'0 n1'1 n1'2,side_binary_dec d0 d1 d1a n2'0 n2'1 n2'2,ls0++ls1++ls2)
+  | _,_,_ => None
   end
 | _,_,_,_ => None
 end.
@@ -1296,6 +1632,8 @@ match a,b,ca,cb with
   visit_nat n0 n1 n2 n3
 | side_binary_Pos _ _ _ n0,side_binary_Pos _ _ _ n1,side_binary_Pos _ _ _ n2,side_binary_Pos _ _ _ n3 =>
   visit_nat n0 n1 n2 n3
+| side_binary_dec _ _ _ len0 n10 n20,side_binary_dec _ _ _ len1 n11 n21,side_binary_dec _ _ _ len2 n12 n22,side_binary_dec _ _ _ len3 n13 n23 =>
+  oNmin (visit_nat len0 len1 len2 len3) (oNmin (visit_nat n10 n11 n12 n13) (visit_nat n20 n21 n22 n23))
 | _,_,_,_ => None
 end.
 
@@ -1315,7 +1653,7 @@ end.
 End Visit3.
 
 Definition min_ind_n:N := 0.
-Definition find_IH(x:prop_expr)(i:id_t)(x0' x0:prop_expr):option (prop_expr'*(prop_expr')*_*option N) :=
+Definition find_IH_v1(x:prop_expr)(i:id_t)(x0' x0:prop_expr):option (prop_expr'*(prop_expr')*_*option N) :=
 match x,x0',x0 with
 | (Hx,[a]),([],[multistep'_expr _ c' _]),([],[multistep'_expr _ c _]) =>
   match Visit1.visit_prop0 a c' c with
@@ -1345,6 +1683,12 @@ match x,x0',x0 with
 | _,_,_ => None
 end.
 
+Definition find_IH x i x0' x0 (use_exp:bool) :=
+match (if use_exp then find_IH_v2 (x0',1%positive) (x,i) else None) with
+| Some v => Some v
+| None => find_IH_v1 x i x0' x0
+end.
+
 End FindIH.
 
 
@@ -1355,6 +1699,8 @@ Definition d1_to_d0(d1:list Sym) :=
 Inductive ExtraRules :=
 | side_binary_inc_rule(d1 qL qR:list Sym)(QL QR:Q)
 | side_binary_Pos_inc_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
+| side_binary_dec_inc_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
+| side_binary_dec_ov_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
 .
 
 Definition ExtraRules_WF(tm:TM)(x:ExtraRules):Prop :=
@@ -1370,6 +1716,14 @@ match x with
   (forall r n,
     const s0 <* d1a <* d1^^n <{{QL}} qL *> r -[ tm ]->+
     const s0 <* d1a <* d0 <* d0^^n <* qR {{QR}}> r)
+| side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR =>
+  (forall l r n,
+    l <* d0 <* d1^^n <{{QL}} qL *> r -[ tm ]->+
+    l <* d1 <* d0^^n <* qR {{QR}}> r)
+| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+  (forall r n,
+    const s0 <* d1a <* d1^^n <{{QL}} qL *> r -[ tm ]->+
+    const s0 <* d1a <* d0 <* d0^^n <* qR {{QR}}> r)
 end.
 
 Record Config := {
@@ -1381,6 +1735,7 @@ Record Config := {
   mnc:N;
   max_period:N;
   ex_rules: list ExtraRules;
+  enable_exp_toplevel_loop: bool;
 }.
 
 Definition Config_WF(tm:TM)(x:Config):Prop :=
@@ -1395,6 +1750,7 @@ Definition default_config := {|
   mnc := 0;
   max_period := 0;
   ex_rules := [];
+  enable_exp_toplevel_loop := false;
 |}.
 Definition config_limited_repeater_size := {|
   max_repeater_len := 8;
@@ -1405,6 +1761,7 @@ Definition config_limited_repeater_size := {|
   mnc := 0;
   max_period := 0;
   ex_rules := [];
+  enable_exp_toplevel_loop := false;
 |}.
 Definition config_arithseq n := {|
   max_repeater_len := 8;
@@ -1415,6 +1772,7 @@ Definition config_arithseq n := {|
   mnc := 0;
   max_period := 0;
   ex_rules := [];
+  enable_exp_toplevel_loop := false;
 |}.
 Definition config_arithseq_fixed_block_size T0 n maxP := {|
   max_repeater_len := 16;
@@ -1425,6 +1783,7 @@ Definition config_arithseq_fixed_block_size T0 n maxP := {|
   mnc := 2;
   max_period := maxP;
   ex_rules := [];
+  enable_exp_toplevel_loop := false;
 |}.
 Definition config_BEC T0 n QL QR qL qR d1 := {|
   max_repeater_len := 16;
@@ -1435,6 +1794,7 @@ Definition config_BEC T0 n QL QR qL qR d1 := {|
   mnc := 2;
   max_period := 0;
   ex_rules := [side_binary_inc_rule d1 qL qR QL QR];
+  enable_exp_toplevel_loop := false;
 |}.
 Definition config_BEC_Pos T0 n QL QR qL qR d0 d1 d1a := {|
   max_repeater_len := 16;
@@ -1445,6 +1805,20 @@ Definition config_BEC_Pos T0 n QL QR qL qR d0 d1 d1a := {|
   mnc := 2;
   max_period := 0;
   ex_rules := [side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR];
+  enable_exp_toplevel_loop := false;
+|}.
+Definition config_SBC T0 n QL QR QL' QR' qL qR qL' qR' d0 d1 d1a := {|
+  max_repeater_len := 16;
+  max_repeater_size := match n with | O => None | _ => Some (N.of_nat n) end;
+  fixed_block_size := match n with | O => None | _ => Some n end;
+  enable_arithseq := false;
+  initial_steps := T0;
+  mnc := 4;
+  max_period := 0;
+  ex_rules :=
+    [side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR;
+     side_binary_dec_ov_rule d0 d1 d1a qL' qR' QL' QR'];
+  enable_exp_toplevel_loop := true;
 |}.
 
 Section tm_ctx.
@@ -1453,21 +1827,132 @@ Hypothesis cfg:Config.
 Hypothesis cfg_WF:Config_WF tm cfg.
 
 Section subst_var.
-Hypothesis mp:id_t->forall t:type_t, to_type t.
-Hypothesis mpi:N.
+Hypothesis mp:id_t->forall t:type_t, to_cexpr_type t.
+Hypothesis mpi:cnat_expr.
 
-Fixpoint to_nat(x:nat_expr) :=
+Fixpoint to_cnat(x:nat_expr):cnat_expr :=
 (match x with
 | from_nat n => n
-| nat_add a b => (to_nat a) + (to_nat b)
-| nat_mul a b => (to_nat a) * (to_nat b)
+| nat_add a b => (to_cnat a) + (to_cnat b)
+| nat_mul a b => (to_cnat a) * (to_cnat b)
+| nat_powsum k n => (((k+2)^(to_cnat n)-1)/(k+1))%N
 | nat_var i => (mp i nat_t)
 | nat_ivar => mpi
 end)%N.
 
-Definition seg_arithseq_entry_to_seg(n1 n2:nat)(x:(list Sym)*Z*nat_expr):list Sym :=
+Fixpoint to_cseg(x:seg_expr):cseg_expr :=
+match x with
+| seg_nil => cseg_nil
+| seg_sym a => cseg_sym a
+| seg_concat a b => cseg_concat (to_cseg a) (to_cseg b)
+| seg_repeat a n => cseg_repeat (to_cseg a) (to_cnat n)
+| seg_arithseq a n => cseg_arithseq (map (fun '(x0,x1,x2) => (x0,x1,to_cnat x2)) a) (to_cnat n)
+| seg_var i => (mp i seg_t)
+end.
+
+Fixpoint to_cside(x:side_expr):cside_expr :=
+match x with
+| side_0inf => cside_0inf
+| side_var i => (mp i side_t)
+| side_concat a b => cside_concat (to_cseg a) (to_cside b)
+| side_binary d1 n => cside_binary d1 (to_cnat n)
+| side_binary_Pos d0 d1 d1a n => cside_binary_Pos d0 d1 d1a (to_cnat n)
+| side_binary_dec d0 d1 d1a len n1 n2 => cside_binary_dec d0 d1 d1a (to_cnat len) (to_cnat n1) (to_cnat n2)
+end.
+
+Definition to_cconfig(x:config_expr):cconfig_expr :=
+let '(l,r,q,d):=x in
+(to_cside l,to_cside r,q,d).
+
+Definition to_cexpr t1 (e1:to_expr_type t1): to_cexpr_type t1.
+destruct t1; cbn in e1; cbn.
+- apply (to_cnat e1).
+- apply (to_cseg e1).
+- apply (to_cside e1).
+Defined.
+
+Fixpoint cseg_WF(x:cseg_expr) :=
+match x with
+| cseg_nil => True
+| cseg_sym a => True
+| cseg_concat a b => (cseg_WF a) /\ (cseg_WF b)
+| cseg_repeat a n => (cseg_WF a)
+| cseg_arithseq a n => True
+end.
+
+Fixpoint cside_WF(x:cside_expr) :=
+match x with
+| cside_0inf => True
+| cside_concat a b => (cseg_WF a) /\ (cside_WF b)
+| cside_binary d1 n => True
+| cside_binary_Pos d0 d1 d1a n => True
+| cside_binary_dec d0 d1 d1a len n1 n2 => (n1+n2+1 = 2^len)%N
+end.
+
+Definition cconfig_WF(x:cconfig_expr) :=
+let '(l,r,q,d):=x in
+cside_WF l /\ cside_WF r.
+
+Fixpoint seg_WFb(x:seg_expr) :=
+match x with
+| seg_nil => true
+| seg_sym a => true
+| seg_concat a b => (seg_WFb a) && (seg_WFb b)
+| seg_repeat a n => (seg_WFb a)
+| seg_arithseq a n => true
+| seg_var _ => false
+end.
+
+Fixpoint side_WFb(x:side_expr) :=
+match x with
+| side_0inf => true
+| side_concat a b => (seg_WFb a) && (side_WFb b)
+| side_binary d1 n => true
+| side_binary_Pos d0 d1 d1a n => true
+| side_binary_dec d0 d1 d1a len n1 n2 => false
+| side_var _ => false
+end.
+
+Definition config_WFb(x:config_expr) :=
+let '(l,r,q,d):=x in
+side_WFb l && side_WFb r.
+
+Lemma seg_WFb_spec x:
+  seg_WFb x = true ->
+  cseg_WF (to_cseg x).
+Proof.
+  induction x; cbn;
+  repeat rewrite and_true_iff.
+  all: try tauto; try congruence.
+Qed.
+
+Lemma side_WFb_spec x:
+  side_WFb x = true ->
+  cside_WF (to_cside x).
+Proof.
+  induction x; cbn;
+  repeat rewrite and_true_iff; intros; repeat split.
+  all: try tauto; try congruence.
+  - apply seg_WFb_spec; tauto.
+Qed.
+
+Lemma config_WFb_spec x:
+  config_WFb x = true ->
+  cconfig_WF (to_cconfig x).
+Proof.
+  destruct x as [[[l r] s] sgn]; cbn.
+  repeat rewrite and_true_iff; intros; repeat split.
+  all: apply side_WFb_spec; tauto.
+Qed.
+
+
+
+
+Definition cto_nat(x:cnat_expr):N := x.
+
+Definition seg_arithseq_entry_to_seg(n1 n2:nat)(x:(list Sym)*Z*cnat_expr):list Sym :=
 let '(x0,x1,x2):=x in
-let x2 := N.to_nat (to_nat x2) in
+let x2 := N.to_nat (cto_nat x2) in
 match x1 with
 | Zpos x1 => x0 ^^ ((Pos.to_nat x1)*n1+x2)
 | Zneg x1 => x0 ^^ ((Pos.to_nat x1)*n2+x2)
@@ -1482,14 +1967,13 @@ match n with
   seg_arithseq_to_seg a n0 (Datatypes.S n2)
 end.
 
-Fixpoint to_seg(x:seg_expr):list Sym :=
+Fixpoint cto_seg(x:cseg_expr):list Sym :=
 match x with
-| seg_nil => []
-| seg_sym a => [a]
-| seg_concat a b => (to_seg a) ++ (to_seg b)
-| seg_repeat a n => (to_seg a) ^^ (N.to_nat (to_nat n))
-| seg_arithseq a n => seg_arithseq_to_seg a (N.to_nat (to_nat n)) O
-| seg_var i => (mp i seg_t)
+| cseg_nil => []
+| cseg_sym a => [a]
+| cseg_concat a b => (cto_seg a) ++ (cto_seg b)
+| cseg_repeat a n => (cto_seg a) ^^ (N.to_nat (cto_nat n))
+| cseg_arithseq a n => seg_arithseq_to_seg a (N.to_nat (cto_nat n)) O
 end.
 
 Fixpoint binary_positive_to_side d1 n :=
@@ -1512,40 +1996,68 @@ match n with
 | xO n0 => d0 *> binary_Pos_to_side d0 d1 d1a n0
 end.
 
-Fixpoint to_side(x:side_expr):side :=
-match x with
-| side_0inf => const s0
-| side_var i => (mp i side_t)
-| side_concat a b => to_seg a *> to_side b
-| side_binary d1 n => binary_to_side d1 (to_nat n)
-| side_binary_Pos d0 d1 d1a n => binary_Pos_to_side d0 d1 d1a (N.succ_pos (to_nat n))
+Fixpoint binary_dec_to_side d0 d1 d1a (len:nat)(n1:N) :=
+match len with
+| O => d1a *> const s0
+| Datatypes.S len0 =>
+  (if (n1 mod 2 =? 0)%N then d0 else d1) *> binary_dec_to_side d0 d1 d1a len0 (n1/2)%N
 end.
 
+Fixpoint cto_side(x:cside_expr):side :=
+match x with
+| cside_0inf => const s0
+| cside_concat a b => cto_seg a *> cto_side b
+| cside_binary d1 n => binary_to_side d1 (cto_nat n)
+| cside_binary_Pos d0 d1 d1a n => binary_Pos_to_side d0 d1 d1a (N.succ_pos (cto_nat n))
+| cside_binary_dec d0 d1 d1a len n1 n2 => binary_dec_to_side d0 d1 d1a (N.to_nat (cto_nat len)) (cto_nat n1)
+end.
 
-Definition to_expr t1 (e1:to_expr_type t1): to_type t1.
+Definition cto_expr t1 (e1:to_cexpr_type t1): to_type t1.
 destruct t1; cbn in e1; cbn.
-- apply (to_nat e1).
-- apply (to_seg e1).
-- apply (to_side e1).
+- apply (cto_nat e1).
+- apply (cto_seg e1).
+- apply (cto_side e1).
 Defined.
 
-Definition to_config(x:config_expr) :=
+Definition cto_config(x:cconfig_expr) :=
 let '(l,r,q,d):=x in
 match d with
-| L => (to_side r) <{{q}} (to_side l)
-| R => (to_side l) {{q}}> (to_side r)
+| L => (cto_side r) <{{q}} (cto_side l)
+| R => (cto_side l) {{q}}> (cto_side r)
 end.
+
+Definition to_nat x := cto_nat (to_cnat x).
+Definition to_seg x := cto_seg (to_cseg x).
+Definition to_side x := cto_side (to_cside x).
+Definition to_config x := cto_config (to_cconfig x).
+
+Definition seg_WF x := cseg_WF (to_cseg x).
+Definition side_WF x := cside_WF (to_cside x).
+Definition config_WF x := cconfig_WF (to_cconfig x).
+
 
 Definition to_prop0(x:prop0_expr):Prop :=
 match x with
 | nat_eq a b => to_nat a = to_nat b
-| seg_eq a b => to_seg a = to_seg b
-| side_eq a b => to_side a = to_side b
-| config_eq a b => to_config a = to_config b
+| seg_eq a b => to_seg a = to_seg b /\ (seg_WF a <-> seg_WF b)
+| side_eq a b => to_side a = to_side b /\ (side_WF a <-> side_WF b)
+| config_eq a b => to_config a = to_config b /\ (config_WF a <-> config_WF b)
+| seg_rw a b => seg_WF a -> (seg_WF b /\ to_seg a = to_seg b)
+| side_rw a b => side_WF a -> (side_WF b /\ to_side a = to_side b)
+| config_rw a b => config_WF a -> (config_WF b /\ to_config a = to_config b)
 | false_prop0 => False
-| multistep_expr x0 x1 n => (to_config x0) -[tm]->> (N.to_nat (to_nat n)) / (to_config x1)
-| multistep_lb_expr x0 x1 n => multistep_lb tm (N.to_nat (to_nat n)) (to_config x0) (to_config x1)
-| multistep'_expr x0 x1 n => multistep' tm n (to_config x0) (to_config x1)
+| multistep_expr x0 x1 n =>
+  config_WF x0 ->
+  (config_WF x1 /\
+  (to_config x0) -[tm]->> (N.to_nat (to_nat n)) / (to_config x1))
+| multistep_lb_expr x0 x1 n =>
+  config_WF x0 ->
+  (config_WF x1 /\
+  multistep_lb tm (N.to_nat (to_nat n)) (to_config x0) (to_config x1))
+| multistep'_expr x0 x1 n =>
+  config_WF x0 ->
+  (config_WF x1 /\
+  multistep' tm n (to_config x0) (to_config x1))
 end.
 
 Definition to_prop0_list(x:list prop0_expr):Prop :=
@@ -1556,6 +2068,12 @@ let (H,G):=x in
 to_prop0_list H ->
 to_prop0_list G.
 
+Ltac unfold_to_xx :=
+repeat (match goal with
+| [ H: _ |- _ ] =>
+  unfold to_nat,to_seg,to_side,to_config,seg_WF,side_WF,config_WF,cto_nat in H || fail
+end);
+unfold to_nat,to_seg,to_side,to_config,seg_WF,side_WF,config_WF,cto_nat.
 
 Definition affine_map_to_Z(f:affine_map):Z :=
 let (v1,v2):=from_affine_map f in
@@ -1568,6 +2086,7 @@ Proof.
   unfold affine_map_to_Z.
   cbn.
   destruct (from_affine_map f) as [v1 v2].
+  unfold_to_xx.
   destruct y0 as [|y0|y0]; cbn; lia.
 Qed.
 
@@ -1602,6 +2121,21 @@ Proof.
     lia.
 Qed.
 
+Lemma powsum_mod k n:
+  (((k + 2) ^ n - 1) mod (k + 1))%N = 0%N.
+Proof.
+  induction n using N.peano_ind.
+  1: reflexivity.
+  rewrite N.pow_succ_r'.
+  replace ((k+2)*(k+2)^n-1)%N with ((k+2)^n-1+(k+2)^n*(k+1))%N by lia.
+  rewrite N.Div0.mod_add.
+  apply IHn.
+Qed.
+
+Ltac rw_affine_map_upd_spec :=
+  try ((rewrite affine_map_upd_spec;
+  reflexivity) || fail).
+  
 Lemma add_to_affine_map_spec a u f:
   affine_map_to_Z (add_to_affine_map a u f) =
   ((affine_map_to_Z f)+(Z.of_N (to_nat a))*u)%Z.
@@ -1609,14 +2143,43 @@ Proof.
   gen u f.
   induction a; intros; cbn.
   - rewrite affine_map_upd_spec.
-    cbn[to_nat]. lia.
+    unfold_to_xx.
+    cbn[to_cnat]. cbn[cto_nat]. lia.
   - rewrite IHa2,IHa1.
+    unfold_to_xx.
     lia.
   - destruct a2.
+    unfold_to_xx.
     1: cbn; rewrite IHa1; lia.
-    all:
-      rewrite affine_map_upd_spec;
-      reflexivity.
+    all: rw_affine_map_upd_spec.
+  - destruct a.
+    all: rw_affine_map_upd_spec.
+    1:{
+      destruct n.
+      all: rw_affine_map_upd_spec.
+      cbn. lia.
+    }
+    destruct a2.
+    all: rw_affine_map_upd_spec.
+    destruct n.
+    all: rw_affine_map_upd_spec.
+    destruct p.
+    all: rw_affine_map_upd_spec.
+    repeat rewrite affine_map_upd_spec.
+    unfold_to_xx. cbn[to_cnat].
+    rewrite N.pow_add_r,N.pow_1_r.
+    pose proof (N.pow_nonzero (k+2) (to_cnat a1))%N as Hnz.
+    remember (to_cnat a1) as v1.
+    replace ((k+2)^v1*(k+2)-1)%N with ((k+2)^v1-1+(k+2)^v1*(k+1))%N by lia.
+    rewrite N.div_add. 2: lia.
+    replace (Z.of_N (((k + 2) ^ v1 - 1) / (k + 1))%N * (u * Z.of_N (k + 2)%N))%Z with
+    ((Z.of_N ((((k+2)^v1-1)/(k+1)+(k+1)*(((k+2)^v1-1)/(k+1)))))%N*u)%Z by lia.
+    replace ((k+1)*(((k+2)^v1-1)/(k+1)))%N with ((k+2)^v1-1)%N. 2:{
+      rewrite N.Div0.div_exact.
+      apply powsum_mod.
+    }
+    replace ((k+2)^v1)%N with ((k+2)^v1-1+1)%N by lia.
+    repeat rewrite N.add_sub. lia.
   - rewrite affine_map_upd_spec;
     reflexivity.
   - rewrite affine_map_upd_spec.
@@ -1648,12 +2211,13 @@ Lemma from_affine_map_spec f:
   let (v1,v2):=from_affine_map f in
   (affine_map_to_Z f = Z.of_N (to_nat v1) - Z.of_N (to_nat v2))%Z.
 Proof.
+  unfold_to_xx.
   induction f as [|[x0 y0] f].
   1: cbn; lia.
   cbn.
   rewrite affine_map_to_Z_cons.
   destruct (from_affine_map f) as [v1 v2].
-  destruct y0 as [|y0|y0]; cbn; lia.
+  destruct y0 as [|y0|y0]; cbn; unfold_to_xx; lia.
 Qed.
 
 Lemma from_affine_map_spec' f:
@@ -1676,7 +2240,7 @@ Proof.
     all: try reflexivity.
     + destruct n.
       * reflexivity.
-      * cbn[simpl_nat_expr]. cbn[to_nat]. lia.
+      * unfold_to_xx. cbn[simpl_nat_expr]. cbn[to_cnat]. cbn[cto_nat]. lia.
     + destruct x1_2.
       all: try reflexivity.
       cbn. lia.
@@ -1686,7 +2250,7 @@ Proof.
     try reflexivity.
     all: try destruct n0 as [|[n0|n0|]];
     try reflexivity.
-    all: cbn[to_nat]; lia.
+    all: unfold_to_xx; cbn[to_cnat]; cbn[cto_nat]; lia.
 Qed.
 
 Lemma simpls_nat_expr_spec x:
@@ -1697,10 +2261,12 @@ Proof.
   - cbn[simpls_nat_expr].
     repeat rewrite simpl_nat_expr_spec.
     cbn.
+    unfold_to_xx.
     congruence.
   - cbn[simpls_nat_expr].
     repeat rewrite simpl_nat_expr_spec.
     cbn.
+    unfold_to_xx.
     congruence.
 Qed.
 
@@ -1766,43 +2332,48 @@ Qed.
 
 Lemma solve_nat_eq_spec a b:
   to_prop0_list (solve_nat_eq a b) ->
-  to_prop0 (nat_eq a b).
+  cto_nat (to_cnat a) = cto_nat (to_cnat b).
 Proof.
   cbn.
   intro E.
   unfold solve_nat_eq in E.
   pose proof (from_affine_map_simpl_div_spec _ E) as H'.
   repeat rewrite add_to_affine_map_spec in H'.
-  cbn in H'. lia.
+  cbn in H'.
+  unfold_to_xx.
+  lia.
 Qed.
 
 Lemma solve_seg_eq_spec a b:
   to_prop0_list (solve_seg_eq a b) ->
-  to_prop0 (seg_eq a b).
+  (cto_seg (to_cseg a) = cto_seg (to_cseg b) /\ (cseg_WF (to_cseg a) <-> cseg_WF (to_cseg b))).
 Proof.
   cbn.
   gen b.
   induction a; intros b E; destruct b; unfold to_prop0_list in E; cbn; cbn in E.
   all: repeat (rewrite Forall_cons_iff in E; cbn in E).
   all: try tauto.
-  - destruct (sym_eqb_spec a a0); try congruence.
+  - destruct (sym_eqb_spec a a0); split; try tauto; try congruence.
     repeat rewrite Forall_cons_iff in E.
     cbn in E.
     tauto.
   - rewrite Forall_app in E.
-    rewrite (IHa1 b1). 2: tauto.
-    rewrite (IHa2 b2). 2: tauto.
-    reflexivity.
+    destruct E as [E1 E2].
+    rw_eq_spec (IHa1 _ E1).
+    rw_eq_spec (IHa2 _ E2).
+    tauto.
   - rewrite Forall_app in E.
-    rewrite (IHa b). 2: tauto.
+    destruct E as [E1 E2].
+    rw_eq_spec (IHa _ E1).
     rewrite (solve_nat_eq_spec n n0). 2: tauto.
-    reflexivity.
+    tauto.
   - rewrite Forall_app in E.
     rewrite (solve_nat_eq_spec n n0). 2: tauto.
     generalize 0.
-    induction (N.to_nat (to_nat n0)); intros n2.
-    1: reflexivity.
+    induction (N.to_nat (cto_nat (to_cnat n0))); intros n2.
+    1: tauto.
     cbn.
+    split. 2: tauto.
     f_equal.
     2: apply IHn1. clear IHn1.
     destruct E as [E _].
@@ -1832,7 +2403,7 @@ Proof.
       cbn.
       rewrite H1'. reflexivity.
   - destruct (Pos.eqb_spec i i0).
-    + congruence.
+    + subst; tauto.
     + rewrite Forall_cons_iff in E.
       cbn in E.
       tauto.
@@ -1840,28 +2411,31 @@ Qed.
 
 Lemma solve_side_eq_spec a b:
   to_prop0_list (solve_side_eq a b) ->
-  to_prop0 (side_eq a b).
+  (cto_side (to_cside a) = cto_side (to_cside b) /\ (cside_WF (to_cside a) <-> cside_WF (to_cside b))).
 Proof.
   gen b.
   induction a; intros b E; destruct b; unfold to_prop0_list in E; cbn; cbn in E.
   all: repeat (rewrite Forall_cons_iff in E; cbn in E).
   all: try tauto.
   - destruct (Pos.eqb_spec i i0).
-    + congruence.
+    + subst; tauto.
     + rewrite Forall_cons_iff in E.
       cbn in E.
       tauto.
   - rewrite Forall_app in E.
-    rewrite (IHa b). 2: tauto.
-    rewrite (solve_seg_eq_spec a a1). 2: tauto.
-    reflexivity.
-  - destruct (list_eqb_spec sym_eqb d1 d0 sym_eqb_spec).
+    destruct E as [E1 E2].
+    rw_eq_spec (IHa _ E2).
+    rw_eq_spec (solve_seg_eq_spec _ _ E1).
+    tauto.
+  - split. 2: tauto.
+    destruct (list_eqb_spec sym_eqb d1 d0 sym_eqb_spec).
     + subst.
       f_equal.
       apply solve_nat_eq_spec,E.
     + rewrite Forall_cons_iff in E.
       cbn in E. tauto.
-  - destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec).
+  - split. 2: tauto.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec).
     2: rewrite Forall_cons_iff in E; cbn in E; tauto.
     destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec).
     2: rewrite Forall_cons_iff in E; cbn in E; tauto.
@@ -1871,6 +2445,23 @@ Proof.
     f_equal.
     f_equal.
     apply solve_nat_eq_spec,E.
+  - destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    subst.
+    repeat rewrite Forall_app in E.
+    destruct E as [E1 [E2 E3]].
+    pose proof (solve_nat_eq_spec _ _ E1) as H1.
+    pose proof (solve_nat_eq_spec _ _ E2) as H2.
+    pose proof (solve_nat_eq_spec _ _ E3) as H3.
+    unfold_to_xx.
+    repeat rewrite H1.
+    repeat rewrite H2.
+    repeat rewrite H3.
+    tauto.
 Qed.
 
 Lemma solve_config_eq_spec a b:
@@ -1886,11 +2477,9 @@ Proof.
       unfold to_prop0_list.
       rewrite Forall_app.
       intros [Ha Hb].
-      pose proof (solve_side_eq_spec l1 l2 Ha) as H1.
-      pose proof (solve_side_eq_spec r1 r2 Hb) as H2.
-      cbn in H1,H2.
-      rewrite H1,H2.
-      congruence.
+      rw_eq_spec (solve_side_eq_spec l1 l2 Ha).
+      rw_eq_spec (solve_side_eq_spec r1 r2 Hb).
+      tauto.
     + unfold to_prop0_list; cbn; rewrite Forall_cons_iff; cbn; tauto.
   - unfold to_prop0_list; cbn; rewrite Forall_cons_iff; cbn; tauto.
 Qed.
@@ -1900,18 +2489,11 @@ Lemma solve_eq_spec x:
   to_prop0 x.
 Proof.
   destruct x; cbn.
-  - apply solve_nat_eq_spec.
-  - apply solve_seg_eq_spec.
-  - apply solve_side_eq_spec.
-  - apply solve_config_eq_spec.
-  - unfold to_prop0_list.
-    rewrite Forall_cons_iff; cbn; tauto.
-  - unfold to_prop0_list.
-    rewrite Forall_cons_iff; cbn; tauto.
-  - unfold to_prop0_list.
-    rewrite Forall_cons_iff; cbn; tauto.
-  - unfold to_prop0_list.
-    rewrite Forall_cons_iff; cbn; tauto.
+  1: apply solve_nat_eq_spec.
+  1: apply solve_seg_eq_spec.
+  1: apply solve_side_eq_spec.
+  1: apply solve_config_eq_spec.
+  all: unfold to_prop0_list; simpl_Forall; cbn; tauto.
 Qed.
 
 
@@ -1952,7 +2534,7 @@ Import ExprEq.
 
 Lemma ExprEq_nat_spec a b:
   nat_expr_eqb a b = true ->
-  to_nat a = to_nat b.
+  (to_cnat a) = (to_cnat b).
 Proof.
   unfold nat_expr_eqb.
   pose proof (solve_nat_eq_spec a b).
@@ -1965,22 +2547,27 @@ Qed.
 
 Lemma ExprEq_seg_spec a b:
   seg_expr_eqb a b = true ->
-  to_seg a = to_seg b.
+  (cto_seg (to_cseg a) = cto_seg (to_cseg b) /\
+  (cseg_WF (to_cseg a) <-> cseg_WF (to_cseg b))).
 Proof.
   gen b.
   induction a; intros b; destruct b; cbn; try congruence;
   repeat rewrite and_true_iff.
-  - destruct (sym_eqb_spec a a0); congruence.
+  - tauto.
+  - destruct (sym_eqb_spec a a0); try congruence; subst; tauto.
   - intros [H1 H2].
-    erewrite IHa1; eauto.
-    erewrite IHa2; eauto.
+    rw_eq_spec (IHa1 b1 H1).
+    rw_eq_spec (IHa2 b2 H2).
+    tauto.
   - intros [H1 H2].
-    erewrite IHa; eauto.
+    rw_eq_spec (IHa b H1).
     erewrite ExprEq_nat_spec; eauto.
+    tauto.
   - intros [H1 H2].
+    split. 2: tauto.
     erewrite ExprEq_nat_spec; eauto.
     generalize 0.
-    induction (N.to_nat (to_nat n0)); intros n2.
+    induction (N.to_nat (cto_nat (to_cnat n0))); intros n2.
     1: reflexivity.
     cbn.
     rewrite IHn1. clear IHn1.
@@ -2003,77 +2590,99 @@ Proof.
     subst.
     rewrite (ExprEq_nat_spec _ _ H3).
     reflexivity.
-  - destruct (Pos.eqb_spec i i0); congruence.
+  - destruct (Pos.eqb_spec i i0); try congruence; subst; tauto.
 Qed.
 
 Lemma ExprEq_side_spec a b:
   side_expr_eqb a b = true ->
-  to_side a = to_side b.
+  (cto_side (to_cside a) = cto_side (to_cside b) /\
+  (cside_WF (to_cside a) <-> cside_WF (to_cside b))).
 Proof.
   gen b.
   induction a; intros b; destruct b; cbn; try congruence;
   repeat rewrite and_true_iff.
-  - destruct (Pos.eqb_spec i i0); congruence.
+  - tauto.
+  - destruct (Pos.eqb_spec i i0); try congruence; subst; tauto.
   - intros [H1 H2].
-    erewrite IHa; eauto.
-    erewrite ExprEq_seg_spec; eauto.
+    rw_eq_spec (IHa _ H2).
+    rw_eq_spec (ExprEq_seg_spec _ _ H1).
+    tauto.
   - intros [H1 H2].
     erewrite ExprEq_nat_spec; eauto.
-    destruct (list_eqb_spec sym_eqb d1 d0 sym_eqb_spec); congruence.
+    destruct (list_eqb_spec sym_eqb d1 d0 sym_eqb_spec); try congruence; subst; tauto.
   - intros [[[H1 H2] H3] H4].
     erewrite ExprEq_nat_spec; eauto.
     destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); try congruence.
     destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); try congruence.
     destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); try congruence.
+    subst; tauto.
+  - intros [[[[[H1 H2] H3] H4] H5] H6].
+    repeat rewrite (ExprEq_nat_spec _ _ H4).
+    repeat rewrite (ExprEq_nat_spec _ _ H5).
+    repeat rewrite (ExprEq_nat_spec _ _ H6).
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); try congruence.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); try congruence.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); try congruence.
+    subst; tauto.
 Qed.
 
 Lemma ExprEq_config_spec a b:
   config_expr_eqb a b = true ->
-  to_config a = to_config b.
+  (cto_config (to_cconfig a) = cto_config (to_cconfig b) /\
+  (cconfig_WF (to_cconfig a) <-> cconfig_WF (to_cconfig b))).
 Proof.
   destruct a as [[[l1 r1] s1] sgn1].
   destruct b as [[[l2 r2] s2] sgn2].
   cbn.
   repeat rewrite and_true_iff.
   intros [[[H0 H1] H2] H3].
-  rewrite (ExprEq_side_spec l1 l2); auto.
-  rewrite (ExprEq_side_spec r1 r2); auto.
+  rw_eq_spec (ExprEq_side_spec _ _ H2).
+  rw_eq_spec (ExprEq_side_spec _ _ H3).
   destruct (q_eqb_spec s1 s2); try congruence.
   destruct (dir_eqb_spec sgn1 sgn2); try congruence.
-  subst. reflexivity.
+  subst. tauto.
 Qed.
 
 Lemma ExprEq_prop0_spec a b:
   prop0_eqb a b = true ->
-  to_prop0 a = to_prop0 b.
+  to_prop0 a <-> to_prop0 b.
 Proof.
   destruct a,b; cbn;
   repeat rewrite and_true_iff;
+  unfold_to_xx;
   try congruence.
   - intros [H1 H2].
-    rewrite (ExprEq_nat_spec a a0); auto.
-    rewrite (ExprEq_nat_spec b0 b); auto.
+    rewrite (ExprEq_nat_spec _ _ H1).
+    rewrite (ExprEq_nat_spec _ _ H2).
+    tauto.
   - intros [H1 H2].
-    rewrite (ExprEq_seg_spec a a0); auto.
-    rewrite (ExprEq_seg_spec b0 b); auto.
+    rw_eq_spec (ExprEq_seg_spec _ _ H1).
+    rw_eq_spec (ExprEq_seg_spec _ _ H2).
+    tauto.
   - intros [H1 H2].
-    rewrite (ExprEq_side_spec a a0); auto.
-    rewrite (ExprEq_side_spec b0 b); auto.
+    rw_eq_spec (ExprEq_side_spec _ _ H1).
+    rw_eq_spec (ExprEq_side_spec _ _ H2).
+    tauto.
   - intros [H1 H2].
-    rewrite (ExprEq_config_spec a a0); auto.
-    rewrite (ExprEq_config_spec b0 b); auto.
+    rw_eq_spec (ExprEq_config_spec _ _ H1).
+    rw_eq_spec (ExprEq_config_spec _ _ H2).
+    tauto.
+  - tauto.
   - intros [[H1 H2] H3].
-    rewrite (ExprEq_config_spec a a0); auto.
-    rewrite (ExprEq_config_spec b0 b); auto.
-    rewrite (ExprEq_nat_spec n n0); auto.
+    rw_eq_spec (ExprEq_config_spec _ _ H1).
+    rw_eq_spec (ExprEq_config_spec _ _ H2).
+    rewrite (ExprEq_nat_spec _ _ H3).
+    tauto.
   - intros [[H1 H2] H3].
-    rewrite (ExprEq_config_spec a a0); auto.
-    rewrite (ExprEq_config_spec b0 b); auto.
-    rewrite (ExprEq_nat_spec n n0); auto.
+    rw_eq_spec (ExprEq_config_spec _ _ H1).
+    rw_eq_spec (ExprEq_config_spec _ _ H2).
+    rewrite (ExprEq_nat_spec _ _ H3).
+    tauto.
   - intros [[H1 H2] H3].
-    rewrite (ExprEq_config_spec a a0); auto.
-    rewrite (ExprEq_config_spec b0 b); auto.
-    destruct (Bool.eqb_spec n n0); congruence.
+    rw_eq_spec (ExprEq_config_spec _ _ H1).
+    rw_eq_spec (ExprEq_config_spec _ _ H2).
+    destruct (Bool.eqb_spec n n0); try congruence.
+    subst; tauto.
 Qed.
 
 Lemma ExprEq_list_prop0_spec a b:
@@ -2111,23 +2720,26 @@ End ExprEq_spec.
 Section simpl_spec.
 Import SimplExpr.
 Lemma nat_simpl_spec x:
-  to_nat (simpl_nat x) = to_nat x.
+  (to_cnat (simpl_nat x)) = (to_cnat x).
 Proof.
   unfold simpl_nat.
-  rewrite simpls_nat_expr_spec.
+  pose proof simpls_nat_expr_spec as H.
+  unfold_to_xx.
+  rewrite H.
   apply simpl_nat_expr_by_affine_map_spec.
 Qed.
 
+Ltac rw_nat_simpl_spec :=
+  repeat rewrite nat_simpl_spec.
+
 Lemma seg_simpl_spec x:
-  to_seg (simpl_seg x) = to_seg x.
+  cto_seg (to_cseg (simpl_seg x)) = cto_seg (to_cseg x).
 Proof.
   induction x; cbn.
+  all: rw_nat_simpl_spec.
   all: try congruence.
-  - rewrite (nat_simpl_spec n).
-    congruence.
-  - rewrite (nat_simpl_spec n).
-    generalize 0.
-    induction (N.to_nat (to_nat n)); intros n2.
+  - generalize 0.
+    induction (N.to_nat (cto_nat (to_cnat n))); intros n2.
     1: reflexivity.
     cbn.
     rewrite IHn0. clear IHn0.
@@ -2138,51 +2750,81 @@ Proof.
     rewrite IHa.
     f_equal.
     destruct a as [[x0 x1] x2]; cbn.
-    rewrite nat_simpl_spec.
+    rw_nat_simpl_spec.
     reflexivity.
 Qed.
 
-Lemma side_simpl_spec x:
-  to_side (simpl_side x) = to_side x.
+Lemma seg_simpl_WF x:
+  cseg_WF (to_cseg (simpl_seg x)) <-> cseg_WF (to_cseg x).
 Proof.
   induction x; cbn.
-  all: try congruence.
-  - rewrite seg_simpl_spec.
-    congruence.
-  - rewrite nat_simpl_spec.
-    congruence.
-  - rewrite nat_simpl_spec.
-    congruence.
+  all: rw_nat_simpl_spec.
+  all: try tauto.
 Qed.
+
+Ltac rw_seg_simpl_spec :=
+  rw_nat_simpl_spec;
+  repeat rewrite seg_simpl_spec;
+  repeat rewrite seg_simpl_WF.
+
+Lemma side_simpl_spec x:
+  cto_side (to_cside (simpl_side x)) = cto_side (to_cside x).
+Proof.
+  induction x; cbn.
+  all: rw_seg_simpl_spec.
+  all: try congruence.
+Qed.
+
+Lemma side_simpl_WF x:
+  cside_WF (to_cside (simpl_side x)) <-> cside_WF (to_cside x).
+Proof.
+  induction x; cbn.
+  all: rw_seg_simpl_spec.
+  all: try tauto.
+Qed.
+
+Ltac rw_side_simpl_spec :=
+  rw_seg_simpl_spec;
+  repeat rewrite side_simpl_spec;
+  repeat rewrite side_simpl_WF.
 
 Lemma config_simpl_spec x:
-  to_config (simpl_config x) = to_config x.
+  cto_config (to_cconfig (simpl_config x)) = cto_config (to_cconfig x).
 Proof.
   destruct x as [[[l r] s] sgn]; cbn.
-  destruct sgn;
-  repeat rewrite side_simpl_spec;
-  congruence.
+  all: rw_side_simpl_spec.
+  all: try congruence.
 Qed.
 
-Lemma prop0_simpl_spec x:
-  to_prop0 (simpl_prop0 x) = to_prop0 x.
+Lemma config_simpl_WF x:
+  cconfig_WF (to_cconfig (simpl_config x)) <-> cconfig_WF (to_cconfig x).
 Proof.
-  destruct x; cbn.
-  all: repeat rewrite nat_simpl_spec.
-  all: repeat rewrite seg_simpl_spec.
-  all: repeat rewrite side_simpl_spec.
-  all: repeat rewrite config_simpl_spec.
-  all: try congruence.
+  destruct x as [[[l r] s] sgn]; cbn.
+  all: rw_side_simpl_spec.
+  all: try tauto.
+Qed.
+
+Ltac rw_config_simpl_spec :=
+  rw_side_simpl_spec;
+  repeat rewrite config_simpl_spec;
+  repeat rewrite config_simpl_WF.
+
+Lemma prop0_simpl_spec x:
+  to_prop0 (simpl_prop0 x) <-> to_prop0 x.
+Proof.
+  destruct x; cbn;
+  unfold_to_xx.
+  all: rw_config_simpl_spec.
+  all: try tauto.
 Qed.
 
 Lemma list_prop0_simpl_spec x:
   to_prop0_list (simpl_prop0_list x) <-> to_prop0_list x.
 Proof.
   unfold to_prop0_list.
-  induction x; cbn.
-  - repeat rewrite Forall_nil_iff; tauto.
-  - repeat rewrite Forall_cons_iff.
-    rewrite prop0_simpl_spec; tauto.
+  induction x; cbn; simpl_Forall.
+  - tauto.
+  - rewrite prop0_simpl_spec; tauto.
 Qed.
 
 Lemma prop_simpl_spec x:
@@ -2197,49 +2839,43 @@ End simpl_spec.
 
 End subst_var.
 
-
+Ltac unfold_to_xx :=
+repeat (match goal with
+| [ H: _ |- _ ] =>
+  unfold to_nat,to_seg,to_side,to_config,seg_WF,side_WF,config_WF,cto_nat in H || fail
+end);
+unfold to_nat,to_seg,to_side,to_config,seg_WF,side_WF,config_WF,cto_nat.
 
 Section subst_spec.
 Import SubstExpr.
-Hypothesis mp':id_t->forall t, to_type t.
-Hypothesis mpi':N.
+Hypothesis mp':id_t->forall t, to_cexpr_type t.
+Hypothesis mpi':cnat_expr.
 Hypothesis mp0:id_t->forall t, to_expr_type t.
 Hypothesis mpi0:nat_expr.
-Definition mp(i:id_t) t: to_type t := (to_expr mp' mpi' t (mp0 i t)).
-Definition mpi:N := to_expr mp' mpi' nat_t mpi0.
+Definition mp(i:id_t) t: to_cexpr_type t := (to_cexpr mp' mpi' t (mp0 i t)).
+Definition mpi:cnat_expr := to_cexpr mp' mpi' nat_t mpi0.
 
 Lemma nat_subst_spec x:
-  to_nat mp' mpi' (subst_nat mp0 mpi0 x) = to_nat mp mpi x.
+  (to_cnat mp' mpi' (subst_nat mp0 mpi0 x)) = (to_cnat mp mpi x).
 Proof.
-  induction x.
-  - reflexivity.
-  - cbn.
-    rewrite IHx1,IHx2.
-    reflexivity.
-  - cbn.
-    rewrite IHx1,IHx2.
-    reflexivity.
-  - reflexivity.
-  - reflexivity.
+  induction x; cbn.
+  all: rw_hyps.
+  all: try reflexivity.
 Qed.
 
+Ltac rw_nat_subst_spec :=
+  rw_hyps;
+  repeat rewrite nat_subst_spec.
+
 Lemma seg_subst_spec x:
-  to_seg mp' mpi' (subst_seg mp0 mpi0 x) = to_seg mp mpi x.
+  cto_seg (to_cseg mp' mpi' (subst_seg mp0 mpi0 x)) = cto_seg (to_cseg mp mpi x).
 Proof.
-  induction x.
-  - reflexivity.
-  - reflexivity.
+  induction x; cbn.
+  all: rw_nat_subst_spec.
+  all: try reflexivity.
   - cbn.
-    rewrite IHx1,IHx2.
-    reflexivity.
-  - cbn.
-    rewrite IHx,nat_subst_spec.
-    reflexivity.
-  - cbn.
-    rewrite nat_subst_spec.
-    unfold mpi. cbn.
     generalize 0.
-    induction (N.to_nat (to_nat mp (to_nat mp' mpi' mpi0) n)); intros n2.
+    induction (N.to_nat (cto_nat (to_cnat mp (to_cnat mp' mpi' mpi0) n))); intros n2.
     1: reflexivity.
     cbn.
     rewrite IHn0. clear IHn0.
@@ -2252,67 +2888,82 @@ Proof.
     destruct a0 as [[a0 a1] a2]; cbn.
     rewrite nat_subst_spec.
     reflexivity.
-  - reflexivity.
 Qed.
+
+Lemma seg_subst_WF x:
+  cseg_WF (to_cseg mp' mpi' (subst_seg mp0 mpi0 x)) <->
+  cseg_WF (to_cseg mp (to_cnat mp' mpi' mpi0) x).
+Proof.
+  induction x; cbn.
+  all: rw_nat_subst_spec.
+  all: try reflexivity.
+Qed.
+
+Ltac rw_seg_subst_spec :=
+  rw_nat_subst_spec;
+  repeat rewrite seg_subst_spec;
+  repeat rewrite seg_subst_WF.
 
 Lemma side_subst_spec x:
-  to_side mp' mpi' (subst_side mp0 mpi0 x) = to_side mp mpi x.
+  cto_side (to_cside mp' mpi' (subst_side mp0 mpi0 x)) = cto_side (to_cside mp mpi x).
 Proof.
-  induction x.
-  - reflexivity.
-  - reflexivity.
-  - cbn.
-    rewrite IHx,seg_subst_spec.
-    reflexivity.
-  - cbn.
-    rewrite nat_subst_spec.
-    reflexivity.
-  - cbn.
-    rewrite nat_subst_spec.
-    reflexivity.
+  induction x; cbn.
+  all: rw_seg_subst_spec.
+  all: try reflexivity.
 Qed.
+
+Lemma side_subst_WF x:
+  cside_WF (to_cside mp' mpi' (subst_side mp0 mpi0 x)) <->
+  cside_WF (to_cside mp (to_cnat mp' mpi' mpi0) x).
+Proof.
+  induction x; cbn.
+  all: rw_seg_subst_spec.
+  all: try reflexivity.
+Qed.
+
+Ltac rw_side_subst_spec :=
+  rw_seg_subst_spec;
+  repeat rewrite side_subst_spec;
+  repeat rewrite side_subst_WF.
 
 Lemma config_subst_spec x:
-  to_config mp' mpi' (subst_config mp0 mpi0 x) = to_config mp mpi x.
+  cto_config (to_cconfig mp' mpi' (subst_config mp0 mpi0 x)) = cto_config (to_cconfig mp mpi x).
 Proof.
-  destruct x as [[[l r] s] sgn].
-  cbn.
-  destruct sgn;
-  repeat rewrite side_subst_spec;
-  reflexivity.
+  destruct x as [[[l r] s] sgn]; cbn.
+  all: rw_side_subst_spec.
+  all: try reflexivity.
 Qed.
 
+Lemma config_subst_WF x:
+  cconfig_WF (to_cconfig mp' mpi' (subst_config mp0 mpi0 x)) <->
+  cconfig_WF (to_cconfig mp (to_cnat mp' mpi' mpi0) x).
+Proof.
+  destruct x as [[[l r] s] sgn]; cbn.
+  all: rw_side_subst_spec.
+  all: try reflexivity.
+Qed.
+
+Ltac rw_config_subst_spec :=
+  rw_side_subst_spec;
+  repeat rewrite config_subst_spec;
+  repeat rewrite config_subst_WF.
+
 Lemma prop0_subst_spec x:
-  to_prop0 mp' mpi' (subst_prop0 mp0 mpi0 x) = to_prop0 mp mpi x.
+  to_prop0 mp' mpi' (subst_prop0 mp0 mpi0 x) <-> to_prop0 mp mpi x.
 Proof.
   destruct x; cbn.
-  - repeat rewrite nat_subst_spec.
-    reflexivity.
-  - repeat rewrite seg_subst_spec.
-    reflexivity.
-  - repeat rewrite side_subst_spec.
-    reflexivity.
-  - repeat rewrite config_subst_spec.
-    reflexivity.
-  - reflexivity.
-  - repeat rewrite config_subst_spec.
-    repeat rewrite nat_subst_spec.
-    reflexivity.
-  - repeat rewrite config_subst_spec.
-    repeat rewrite nat_subst_spec.
-    reflexivity.
-  - repeat rewrite config_subst_spec.
-    reflexivity.
+  all: unfold to_nat,to_seg,to_side,to_config,seg_WF,side_WF,config_WF.
+  all: rw_config_subst_spec.
+  all: try tauto.
 Qed.
 
 Lemma prop0_list_subst_spec x:
   to_prop0_list mp' mpi' (subst_prop0_list mp0 mpi0 x) <-> to_prop0_list mp mpi x.
 Proof.
   unfold to_prop0_list.
-  induction x; cbn.
-  - repeat rewrite Forall_nil_iff; tauto.
-  - repeat rewrite Forall_cons_iff.
-    rewrite prop0_subst_spec.
+  induction x; cbn; simpl_Forall.
+  - tauto.
+  - rewrite prop0_subst_spec.
     tauto.
 Qed.
 
@@ -2419,28 +3070,6 @@ match follow_rule w wS with
   solve_apply w' ((SubstExpr.subst_prop subst_identity (nat_add nat_ivar (from_nat 1)) (fst w)),(snd w))
 end.
 
-Definition step0_refl s sgn:prop_expr' :=
-  let l:=side_var 1%positive in
-  let r:=side_var 2%positive in
-  (([],[multistep'_expr (l,r,s,sgn) (l,r,s,sgn) false]),
-  3%positive).
-
-Definition get_config_r(x:prop_expr') :=
-let '((H,G),i):=x in
-match G with
-| (multistep_lb_expr a b n)::_ => Some b
-| (multistep'_expr a b n)::_ => Some b
-| _ => None
-end.
-
-Definition get_config_l(x:prop_expr') :=
-let '((H,G),i):=x in
-match G with
-| (multistep_lb_expr a b n)::_ => Some a
-| (multistep'_expr a b n)::_ => Some a
-| _ => None
-end.
-
 Definition find_step0_refl(x:prop_expr'):option prop_expr' :=
 match get_config_r x with
 | Some (_,_,s,sgn) => Some (step0_refl s sgn)
@@ -2484,36 +3113,12 @@ let (x,i):=x in
 let x:=SubstExpr.subst_prop subst_identity (from_nat n) x in
 simpl_rule x.
 
-Fixpoint subst_list_map(mp:list (PositiveMap.tree expr_expr))(i:id_t)(t:type_t):to_expr_type t :=
-match mp with
-| nil => mk_var i t
-| mp0::mp =>
-  SubstExpr.subst_expr (subst_list_map mp) nat_ivar t (subst_vars mp0 i t)
-end.
-
-Fixpoint to_nat_const(x:nat_expr):option N :=
-match x with
-| from_nat n => Some n
-| nat_add a b =>
-  match to_nat_const a,to_nat_const b with
-  | Some a0,Some b0 => Some (a0+b0)%N
-  | _,_ => None
-  end
-| nat_mul a b =>
-  match to_nat_const a,to_nat_const b with
-  | Some a0,Some b0 => Some (a0*b0)%N
-  | _,_ => None
-  end
-| _ => None
-end.
-
 Section TryInd.
-Hypothesis mnc:N.
-Definition subst_small_vars(mp:list (PositiveMap.tree expr_expr))(i:id_t)(t:type_t):to_expr_type t :=
+Definition subst_small_vars(mp:list (PositiveMap.tree any_expr))(i:id_t)(t:type_t):to_expr_type t :=
 match t as t0 return (to_expr_type t0) with
 | nat_t =>
     match to_nat_const (subst_list_map mp i nat_t) with
-    | Some n => if (n<?mnc)%N then from_nat n else mk_var i _
+    | Some n => if (n<?cfg.(mnc))%N then from_nat n else mk_var i _
     | None => mk_var i _
     end
 | _ => mk_var i _
@@ -2522,7 +3127,7 @@ end.
   this increases readability of some rules, but may not solve more TMs
  *)
 Definition subst_small_vars_for_follow(w0 w1 w1':prop_expr'):option prop_expr' :=
-if (mnc =? N0)%N then Some w1' else
+if (cfg.(mnc) =? N0)%N then Some w1' else
 match get_config_r w0,get_config_l w1 with
 | Some c0,Some c1 =>
   match solve_assumptions solve_assumptions_iter_limit TrySubst.config_normal (config_eq c0 c1 :: fst (fst w1),[]) (snd w1)%positive with
@@ -2533,7 +3138,7 @@ match get_config_r w0,get_config_l w1 with
 | _,_ => None
 end.
 
-Definition subst_ind_S(w:prop_expr') (mp:list (PositiveMap.tree expr_expr)):prop_expr' :=
+Definition subst_ind_S(w:prop_expr') (mp:list (PositiveMap.tree any_expr)):prop_expr' :=
   let w1 := w in
   (SubstExpr.subst_prop (subst_list_map mp) nat_ivar (fst w1),snd w1).
 
@@ -2545,7 +3150,7 @@ Definition subst_ind_S(w:prop_expr') (mp:list (PositiveMap.tree expr_expr)):prop
 *)
 Definition try_ind(w1 w0' w0:prop_expr'):option (prop_expr'*prop_expr') :=
 let (x1,i1):=w1 in
-match FindIH.find_IH x1 i1 (fst w0') (fst w0) with
+match FindIH.find_IH x1 i1 (fst w0') (fst w0) cfg.(enable_exp_toplevel_loop) with
 | Some (w2,x3,mp,n) =>
   match (find_step0_refl w1) with
   | None => None
@@ -2592,7 +3197,7 @@ end.
 
 
 Section ivar.
-Hypothesis mpi:N.
+Hypothesis mpi:cnat_expr.
 Definition to_prop'' x :=
   forall mp, to_prop mp mpi x.
 
@@ -2628,6 +3233,25 @@ Proof.
   - apply H; tauto.
 Qed.
 
+Lemma cprop_merge_spec x1 x2:
+  to_prop'' x1 ->
+  to_prop'' x2 ->
+  to_prop'' (cprop_merge x1 x2).
+Proof.
+  unfold to_prop''.
+  unfold prop_merge.
+  destruct x1 as [H1 G1].
+  destruct x2 as [H2 G2].
+  cbn.
+  unfold to_prop0_list.
+  intros Hx1 Hx2 mp.
+  repeat rewrite Forall_app.
+  intros.
+  split.
+  - apply Hx1; tauto.
+  - apply Hx2; tauto.
+Qed.
+
 Lemma prop_multistep'_trans_spec x:
 match prop_multistep'_trans x with
 | None => True
@@ -2650,13 +3274,20 @@ Proof.
   repeat rewrite Forall_cons_iff.
   repeat rewrite Forall_nil_iff.
   cbn.
+  unfold config_WF,to_config.
   intros H [H0 H1].
-  rewrite H0 in H.
-  split; trivial.
-  destruct (H H1) as [Ha [Hb _]].
-
+  gen H.
+  rw_eq_spec H0.
+  intros H.
+  destruct (H H1) as [H12 [H23 _]].
+  clear H.
   rewrite Nnat.N2Nat.inj_add.
-  eapply multistep_lb_trans; eauto.
+  split; trivial.
+  intros Ha.
+  split. 1: tauto.
+  eapply multistep_lb_trans.
+  - apply H12,Ha.
+  - apply H23,H12,Ha.
 }
 {
   destruct G as [|G0 G]; cbn; trivial.
@@ -2672,11 +3303,17 @@ Proof.
   repeat rewrite Forall_nil_iff.
   cbn.
   intros H [H0 H1].
-  rewrite H0 in H.
+  gen H.
+  rw_eq_spec H0.
+  intros H.
+  destruct (H H1) as [H12 [H23 _]].
+  clear H.
   split; trivial.
-  destruct (H H1) as [Ha [Hb _]].
-
-  eapply multistep'_trans; eauto.
+  intros Ha.
+  split. 1: tauto.
+  eapply multistep'_trans.
+  - apply H12,Ha.
+  - apply H23,H12,Ha.
 }
 Qed.
 
@@ -2701,7 +3338,7 @@ Lemma try_subst_spec cfg0 x i:
 Proof.
   destruct x as [H G].
   cbn.
-  destruct (TrySubst.list_find_subst cfg0 H (PositiveMap.empty expr_expr, PositiveMap.empty unit, i)) as [[sl _] _].
+  destruct (TrySubst.list_find_subst cfg0 H (PositiveMap.empty any_expr, PositiveMap.empty unit, i)) as [[sl _] _].
   intros H0.
   apply (subst_spec (H,G)),H0.
 Qed.
@@ -2780,6 +3417,28 @@ Proof.
   apply simpl_rule_spec. tauto.
 Qed.
 
+Lemma cfollow_rule_spec w1 w2:
+to_prop'' (fst w1) ->
+to_prop'' (fst w2) ->
+match cfollow_rule w1 w2 with
+| None => True
+| Some (w,_) =>
+  to_prop'' (fst w)
+end.
+Proof.
+  destruct w1 as [x1 i1].
+  destruct w2 as [x2 i2].
+  cbn[cfollow_rule].
+  destruct (negb (i1 =? 1)%positive).
+  1: tauto.
+  intros H1 H2.
+  pose proof (cprop_merge_spec x1 x2 H1 H2) as H.
+  destruct_spec prop_multistep'_trans_spec. 2: tauto.
+  destruct_spec solve_assumptions_spec; trivial.
+  destruct p0.
+  apply simpl_rule_spec. tauto.
+Qed.
+
 Transparent solve_assumptions_iter_limit.
 
 
@@ -2805,24 +3464,29 @@ End ivar.
 
 
 Section fext.
-Hypothesis mp mp': (id_t -> forall t : type_t, to_type t).
-Hypothesis mpi: N.
+Hypothesis mp mp': (id_t -> forall t : type_t, to_cexpr_type t).
+Hypothesis mpi: cnat_expr.
 Hypothesis mp_eq: forall i t, mp i t = mp' i t.
 
 Lemma to_nat_fext x:
-  to_nat mp mpi x = to_nat mp' mpi x.
+  (to_cnat mp mpi x) = (to_cnat mp' mpi x).
 Proof.
   induction x; cbn.
   all: congruence.
 Qed.
 
+Ltac solve_nat_fext :=
+  rw_hyps;
+  repeat rewrite to_nat_fext.
+
 Lemma to_seg_fext x:
-  to_seg mp mpi x = to_seg mp' mpi x.
+  cto_seg (to_cseg mp mpi x) = cto_seg (to_cseg mp' mpi x).
 Proof.
   induction x; cbn.
-  all: repeat rewrite to_nat_fext; try congruence.
+  all: solve_nat_fext.
+  all: try congruence.
   generalize 0.
-  induction (N.to_nat (to_nat mp' mpi n)); intro n2; cbn.
+  induction (N.to_nat (cto_nat (to_cnat mp' mpi n))); intro n2; cbn.
   1: reflexivity.
   rewrite IHn0. clear IHn0.
   f_equal.
@@ -2834,39 +3498,75 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma to_side_fext x:
-  to_side mp mpi x = to_side mp' mpi x.
+Lemma seg_WF_fext x:
+  cseg_WF (to_cseg mp mpi x) <-> cseg_WF (to_cseg mp' mpi x).
 Proof.
   induction x; cbn.
-  all: repeat rewrite to_seg_fext; repeat rewrite to_nat_fext; congruence.
+  all: solve_nat_fext.
+  all: try reflexivity.
 Qed.
 
+Ltac solve_seg_fext :=
+  solve_nat_fext;
+  repeat rewrite to_seg_fext;
+  repeat rewrite seg_WF_fext.
+
+Lemma to_side_fext x:
+  cto_side (to_cside mp mpi x) = cto_side (to_cside mp' mpi x).
+Proof.
+  induction x; cbn.
+  all: solve_seg_fext.
+  all: try reflexivity.
+Qed.
+
+Lemma side_WF_fext x:
+  cside_WF (to_cside mp mpi x) <-> cside_WF (to_cside mp' mpi x).
+Proof.
+  induction x; cbn.
+  all: solve_seg_fext.
+  all: try reflexivity.
+Qed.
+
+Ltac solve_side_fext :=
+  solve_seg_fext;
+  repeat rewrite to_side_fext;
+  repeat rewrite side_WF_fext.
+
 Lemma to_config_fext x:
-  to_config mp mpi x = to_config mp' mpi x.
+  cto_config (to_cconfig mp mpi x) = cto_config (to_cconfig mp' mpi x).
 Proof.
   destruct x as [[[l r] s] sgn]; cbn.
-  repeat rewrite to_side_fext.
+  solve_side_fext.
   reflexivity.
 Qed.
 
+Lemma config_WF_fext x:
+  cconfig_WF (to_cconfig mp mpi x) <-> cconfig_WF (to_cconfig mp' mpi x).
+Proof.
+  destruct x as [[[l r] s] sgn]; cbn.
+  solve_side_fext.
+  reflexivity.
+Qed.
+
+Ltac solve_config_fext :=
+  solve_side_fext;
+  repeat rewrite to_config_fext;
+  repeat rewrite config_WF_fext.
+
 Lemma to_prop0_fext x:
-  to_prop0 mp mpi x = to_prop0 mp' mpi x.
+  to_prop0 mp mpi x <-> to_prop0 mp' mpi x.
 Proof.
   destruct x; cbn.
-  all: repeat rewrite to_nat_fext.
-  all: repeat rewrite to_seg_fext.
-  all: repeat rewrite to_side_fext.
-  all: repeat rewrite to_config_fext.
-  all: congruence.
+  all: unfold to_nat,to_seg,to_side,to_config,seg_WF,side_WF,config_WF.
+  all: solve_config_fext.
+  all: try tauto.
 Qed.
 
 Lemma to_prop0_list_fext x:
   to_prop0_list mp mpi x <-> to_prop0_list mp' mpi x.
 Proof.
   unfold to_prop0_list.
-  induction x; cbn.
-  all: repeat rewrite Forall_nil_iff.
-  all: repeat rewrite Forall_cons_iff.
+  induction x; cbn; simpl_Forall.
   all: repeat rewrite to_prop0_fext.
   all: tauto.
 Qed.
@@ -2903,7 +3603,7 @@ Qed.
 
 Lemma subst_ivar_spec w n n0:
   to_prop'' n (SubstExpr.subst_prop subst_identity n0 w) ->
-  forall mp, to_prop mp (to_nat mp n n0) w.
+  forall mp, to_prop mp (to_cnat mp n n0) w.
 Proof.
   intros H mp.
   specialize (H mp).
@@ -2997,11 +3697,10 @@ Proof.
   intros mp mpi.
   cbn.
   unfold to_prop0_list.
-  repeat rewrite Forall_cons_iff.
-  repeat rewrite Forall_nil_iff.
+  simpl_Forall.
   cbn.
   destruct sgn; cbn;
-  intro; split; trivial.
+  intro; repeat split; trivial; tauto.
 Qed.
 
 Lemma find_step0_refl_spec x:
@@ -3034,6 +3733,7 @@ Proof.
   intros H0 H1.
   specialize (H0 H1).
   split; try tauto.
+  intro; split. 1: tauto.
   apply progress_evstep. tauto.
 Qed.
 
@@ -3057,7 +3757,8 @@ Proof.
   split; try tauto.
   gen H1.
   cbn.
-  apply progress_evstep.
+  intro; split. 1: tauto.
+  apply progress_evstep. tauto.
 Qed.
 
 Lemma multistep_evstep a b n:
@@ -3121,7 +3822,10 @@ Proof.
   split; try tauto.
   gen H1.
   cbn.
-  intros [n0 [H0 H1]].
+  intros H_.
+  intro; split. 1: tauto.
+  destruct (H_ H0) as [_ Hlb].
+  destruct Hlb as [n' [H0' H1']].
   eapply multistep_evstep; eauto.
 Qed.
 
@@ -3145,8 +3849,10 @@ Proof.
   gen H1; cbn.
 
   destruct n; intro H1.
-  - apply progress_multistep_lb,H1.
-  - apply evstep_multistep_lb,H1.
+  - intro; split. 1: tauto.
+    apply progress_multistep_lb; tauto.
+  - intro; split. 1: tauto.
+    apply evstep_multistep_lb; tauto.
 Qed.
 
 Lemma subst_ind_S_spec w mp:
@@ -3169,12 +3875,11 @@ Proof.
   intros H' mpi.
   apply H; trivial.
 Qed.
-
-Lemma subst_small_vars_for_follow_spec mnc w0 w1 w2:
+Lemma subst_small_vars_for_follow_spec w0 w1 w2:
   to_prop' (fst w0) ->
   to_prop' (fst w1) ->
   to_prop' (fst w2) ->
-  match subst_small_vars_for_follow mnc w0 w1 w2 with
+  match subst_small_vars_for_follow w0 w1 w2 with
   | None => True
   | Some w => to_prop' (fst w)
   end.
@@ -3192,10 +3897,10 @@ Proof.
   apply H2.
 Qed.
 
-Lemma try_ind_spec mnc w1 w0' w0:
+Lemma try_ind_spec w1 w0' w0:
   to_prop' (fst w1) ->
   to_prop' (fst w0') ->
-  match try_ind mnc w1 w0' w0 with
+  match try_ind w1 w0' w0 with
   | None => True
   | Some (x,x0) => to_prop' (fst x) /\ to_prop' (fst x0)
   end.
@@ -3254,7 +3959,7 @@ Proof.
   unfold to_prop0'.
   intros. cbn.
   rewrite <-const_unfold.
-  reflexivity.
+  tauto.
 Qed.
 
 Fixpoint side_concat_unfold(r0:seg_expr)(r:side_expr):side_expr :=
@@ -3266,13 +3971,20 @@ match r0 with
 end.
 
 Lemma side_concat_unfold_spec r0 r mp mpi:
-  to_side mp mpi (side_concat_unfold r0 r) =
-  to_seg mp mpi r0 *> to_side mp mpi r.
+  cto_side (to_cside mp mpi (side_concat_unfold r0 r)) =
+  cto_seg (to_cseg mp mpi r0) *> cto_side (to_cside mp mpi r).
 Proof.
   induction r0; try reflexivity.
   cbn.
   rewrite IHr0_2,Str_app_assoc.
   reflexivity.
+Qed.
+
+Lemma side_concat_unfold_WF r0 r mp mpi:
+  cside_WF (to_cside mp mpi (side_concat_unfold r0 r)) <->
+  (cseg_WF (to_cseg mp mpi r0) /\ cside_WF (to_cside mp mpi r)).
+Proof.
+  induction r0; cbn; try tauto.
 Qed.
 
 Definition seg_concat_def(r0:seg_expr):=
@@ -3288,7 +4000,11 @@ Proof.
   unfold to_prop0'.
   intros.
   cbn.
+  unfold to_side.
   rewrite side_concat_unfold_spec.
+  split. 1: reflexivity.
+  unfold side_WF.
+  rewrite side_concat_unfold_WF.
   reflexivity.
 Qed.
 
@@ -3299,6 +4015,12 @@ Definition repeat_S_def(r0:seg_expr):=
   (side_concat (seg_repeat r0 (nat_add n (from_nat 1))) r)
   (side_concat_unfold r0 (side_concat (seg_repeat r0 n) r)),
   3%positive).
+
+Ltac rw_side_concat_unfold :=
+  unfold_to_xx;
+  repeat rewrite side_concat_unfold_spec;
+  repeat rewrite side_concat_unfold_WF; cbn;
+  try tauto.
 
 Lemma repeat_S_def_spec r0:
   to_prop0' (fst (repeat_S_def r0)).
@@ -3313,8 +4035,7 @@ Proof.
   change (N.to_nat 1) with 1.
   cbn.
   rewrite List.app_nil_r.
-  rewrite side_concat_unfold_spec.
-  reflexivity.
+  rw_side_concat_unfold.
 Qed.
 
 Definition repeat_2_def(r0:seg_expr):=
@@ -3334,13 +4055,12 @@ Proof.
   cbn.
   repeat rewrite Str_app_assoc.
   cbn.
-  do 2 rewrite side_concat_unfold_spec.
-  reflexivity.
+  rw_side_concat_unfold.
 Qed.
 
 Definition repeat_0_def(r0:seg_expr):=
   let r:=side_var 1%positive in
-  (side_eq
+  (side_rw
   (side_concat (seg_repeat r0 (from_nat 0)) r)
   r,
   2%positive).
@@ -3349,21 +4069,9 @@ Lemma repeat_0_def_spec r0:
   to_prop0' (fst (repeat_0_def r0)).
 Proof.
   unfold to_prop0'.
-  reflexivity.
-Qed.
-
-Definition repeat_0_def'(r0:seg_expr):=
-  let r:=side_var 1%positive in
-  (side_eq
-  r
-  (side_concat (seg_repeat r0 (from_nat 0)) r),
-  2%positive).
-
-Lemma repeat_0_def_spec' r0:
-  to_prop0' (fst (repeat_0_def' r0)).
-Proof.
-  unfold to_prop0'.
-  reflexivity.
+  cbn.
+  intros.
+  tauto.
 Qed.
 
 
@@ -3393,10 +4101,12 @@ Proof.
   induction x; cbn; trivial.
   - destruct_spec to_seg_const; trivial.
     destruct_spec to_seg_const; trivial.
+    unfold_to_xx.
     congruence.
   - destruct n; trivial.
     destruct_spec to_seg_const; trivial.
     cbn.
+    unfold_to_xx.
     congruence.
 Qed.
 
@@ -3411,7 +4121,7 @@ match x with
 end.
 
 Lemma from_seg_spec x0 mp mpi:
-  to_seg mp mpi (from_seg x0) = x0.
+  cto_seg (to_cseg mp mpi (from_seg x0)) = x0.
 Proof.
   induction x0.
   1: reflexivity.
@@ -3420,6 +4130,18 @@ Proof.
   cbn.
   cbn in IHx0.
   congruence.
+Qed.
+
+Lemma from_seg_WF x0 mp mpi:
+  cseg_WF (to_cseg mp mpi (from_seg x0)) <-> True.
+Proof.
+  induction x0.
+  1: reflexivity.
+  destruct x0.
+  1: reflexivity.
+  cbn.
+  cbn in IHx0.
+  tauto.
 Qed.
 
 Fixpoint side_concat_list_seg(r0:list seg_expr)(r:side_expr):side_expr :=
@@ -3436,7 +4158,19 @@ Proof.
   1: reflexivity.
   cbn.
   rewrite Str_app_assoc.
+  unfold_to_xx.
   congruence.
+Qed.
+
+Lemma side_concat_list_seg_WF mp mpi r0 r:
+  cside_WF (to_cside mp mpi (side_concat_list_seg r0 r)) <->
+  (Forall (seg_WF mp mpi) r0 /\ cside_WF (to_cside mp mpi r)).
+Proof.
+  induction r0; simpl_Forall; cbn.
+  1: tauto.
+  unfold_to_xx.
+  rewrite IHr0.
+  tauto.
 Qed.
 
 Definition seg_arithseq_entry_S(n:nat_expr)(x:seg_expr*Z*N)(p:id_t):
@@ -3479,11 +4213,13 @@ Definition arithseq_S_def(r0:list (seg_expr*Z*N)):=
   match seg_arithseq_S n r0 (3%positive) with
   | None => None
   | Some (r1,r2,r3,p) =>
+    if forallb seg_WFb r3 then
     Some
     (side_eq
     (side_concat (seg_arithseq r1 (nat_add n (from_nat 1))) r)
     (side_concat_list_seg r3 (side_concat (seg_arithseq r2 n) r)),
     p)
+    else None
   end.
 
 Lemma arithseq_S_def_spec r0:
@@ -3499,6 +4235,8 @@ Proof.
   unfold arithseq_S_def in E'.
   destruct (seg_arithseq_S (nat_var 1%positive) r0 3%positive) as [[[[r1 r2] r3] p]|] eqn:E.
   2: congruence.
+  destruct (forallb seg_WFb r3) eqn:Ewf.
+  2: congruence.
   inverts E'.
   cbn.
   rewrite Nnat.N2Nat.inj_add.
@@ -3507,6 +4245,19 @@ Proof.
   rewrite side_concat_list_seg_spec.
   rewrite Str_app_assoc.
   cbn.
+  split. 2: {
+    unfold_to_xx.
+    rewrite side_concat_list_seg_WF.
+    cbn.
+    split. 2: tauto.
+    intros.
+    repeat split; try tauto.
+    rewrite Forall_forall.
+    rewrite forallb_forall in Ewf.
+    intros x Ix.
+    apply seg_WFb_spec,Ewf,Ix.
+  }
+  clear Ewf.
   f_equal.
 {
   gen r1 r2 r3 p'.
@@ -3526,6 +4277,7 @@ Proof.
     pose proof (to_seg_const_spec x0) as H3.
     destruct (to_seg_const x0) as [x0'|] eqn:E3.
     2: congruence.
+    unfold_to_xx.
     destruct x1 as [|x1|x1];
     inverts E2; cbn;
     rewrite H3.
@@ -3609,11 +4361,14 @@ Definition arithseq_3_def(r0:list (seg_expr*Z*N)):=
   match seg_arithseq_3 r0 (3%positive) with
   | None => None
   | Some (r1,r2,r3,r4,p) =>
+    let r123:=r1++r2++r3 in
+    if forallb seg_WFb (r123) then
     Some
     (side_eq
     (side_concat (seg_arithseq r4 (from_nat 3)) r)
-    (side_concat_list_seg (r1++r2++r3) r),
+    (side_concat_list_seg (r123) r),
     p)
+    else None
   end.
 
 Lemma arithseq_3_def_spec r0:
@@ -3629,6 +4384,8 @@ Proof.
   unfold arithseq_3_def in E'.
   destruct (seg_arithseq_3 r0 3%positive) as [[[[[r1 r2] r3] r4] p]|] eqn:E.
   2: congruence.
+  destruct (forallb seg_WFb (r1++r2++r3)) eqn:Ewf.
+  2: congruence.
   inverts E'.
   cbn.
   rewrite side_concat_list_seg_spec.
@@ -3637,6 +4394,19 @@ Proof.
   cbn.
   repeat rewrite Str_app_assoc.
   cbn.
+  split. 2:{
+    unfold_to_xx.
+    rewrite side_concat_list_seg_WF.
+    cbn.
+    split. 2: tauto.
+    intros.
+    repeat split; try tauto.
+    rewrite Forall_forall.
+    rewrite forallb_forall in Ewf.
+    intros x Ix.
+    apply seg_WFb_spec,Ewf,Ix.
+  }
+  clear Ewf.
   f_equal; [|f_equal; [|f_equal]];
   gen r1 r2 r3 r4 p';
   (induction r0; intros;
@@ -3657,6 +4427,7 @@ Proof.
   try congruence;
   destruct x1 as [|x1|x1];
   inverts E2; cbn;
+  unfold_to_xx;
   rewrite H3; try reflexivity;
   f_equal; lia.
 Qed.
@@ -3674,7 +4445,7 @@ end.
 Definition arithseq_0_def r0 :=
   let (r0,p):=generalize_arithseq r0 (1%positive) in
   let (r,p):=(side_var p,Pos.succ p) in
-  (side_eq
+  (side_rw
   (side_concat (seg_arithseq r0 (from_nat 0)) r)
   r,
   p).
@@ -3684,25 +4455,9 @@ Lemma arithseq_0_def_spec r0:
 Proof.
   unfold to_prop0'.
   unfold arithseq_0_def.
+  intros.
   destruct (generalize_arithseq r0 1%positive).
-  reflexivity.
-Qed.
-
-Definition arithseq_0_def' r0 :=
-  let (r0,p):=generalize_arithseq r0 (1%positive) in
-  let (r,p):=(side_var p,Pos.succ p) in
-  (side_eq
-  r
-  (side_concat (seg_arithseq r0 (from_nat 0)) r),
-  p).
-
-Lemma arithseq_0_def_spec' r0:
-  to_prop0' (fst (arithseq_0_def' r0)).
-Proof.
-  unfold to_prop0'.
-  unfold arithseq_0_def'.
-  destruct (generalize_arithseq r0 1%positive).
-  reflexivity.
+  cbn. tauto.
 Qed.
 
 Definition binary_0_def(d1:list Sym):=
@@ -3745,6 +4500,30 @@ Definition binary_Pos_mul2add1_def(d0 d1 d1a:list Sym):=
   (side_concat_unfold (from_seg d1) (side_binary_Pos d0 d1 d1a n)),
   2%positive).
 
+Definition binary_dec_0_def(d0 d1 d1a:list Sym):=
+  (side_eq
+  (side_binary_dec d0 d1 d1a (from_nat 0) (from_nat 0) (from_nat 0))
+  (side_concat_unfold (from_seg d1a) side_0inf),
+  1%positive).
+
+Definition binary_dec_mul2_def(d0 d1 d1a:list Sym):=
+  let len:=nat_var 1%positive in
+  let n1:=nat_var 2%positive in
+  let n2:=nat_var 3%positive in
+  (side_eq
+  (side_binary_dec d0 d1 d1a (nat_add len (from_nat 1)) ((nat_mul n1 (from_nat 2))) (nat_add (nat_mul n2 (from_nat 2)) (from_nat 1)))
+  (side_concat_unfold (from_seg d0) (side_binary_dec d0 d1 d1a len n1 n2)),
+  4%positive).
+
+Definition binary_dec_mul2add1_def(d0 d1 d1a:list Sym):=
+  let len:=nat_var 1%positive in
+  let n1:=nat_var 2%positive in
+  let n2:=nat_var 3%positive in
+  (side_eq
+  (side_binary_dec d0 d1 d1a (nat_add len (from_nat 1)) (nat_add (nat_mul n1 (from_nat 2)) (from_nat 1)) ((nat_mul n2 (from_nat 2))))
+  (side_concat_unfold (from_seg d1) (side_binary_dec d0 d1 d1a len n1 n2)),
+  4%positive).
+
 Lemma d1_to_d0_spec d1:
   d1_to_d0 d1 *> const s0 = const s0.
 Proof.
@@ -3760,7 +4539,8 @@ Lemma binary_0_def_spec d1:
   to_prop0' (fst (binary_0_def d1)).
 Proof.
   unfold to_prop0'.
-  reflexivity.
+  intros.
+  cbn. tauto.
 Qed.
 
 Lemma binary_mul2_def_spec d1:
@@ -3769,6 +4549,14 @@ Proof.
   unfold to_prop0'.
   intros.
   cbn.
+  unfold_to_xx.
+  split. 2: {
+    split. 2: tauto.
+    intros _.
+    rewrite side_concat_unfold_WF,from_seg_WF.
+    cbn.
+    tauto.
+  }
   rewrite side_concat_unfold_spec.
   rewrite from_seg_spec.
   cbn.
@@ -3789,6 +4577,14 @@ Proof.
   unfold to_prop0'.
   intros.
   cbn.
+  unfold_to_xx.
+  split. 2: {
+    split. 2: tauto.
+    intros _.
+    rewrite side_concat_unfold_WF,from_seg_WF.
+    cbn.
+    tauto.
+  }
   rewrite side_concat_unfold_spec.
   rewrite from_seg_spec.
   cbn.
@@ -3806,9 +4602,10 @@ Lemma binary_Pos_1_def_spec d0 d1 d1a:
 Proof.
   unfold to_prop0'.
   intros mp mpi. cbn.
-  rewrite side_concat_unfold_spec.
-  rewrite from_seg_spec. cbn.
-  reflexivity.
+  unfold_to_xx.
+  rw_side_concat_unfold.
+  rewrite from_seg_spec,from_seg_WF. cbn.
+  tauto.
 Qed.
 
 Lemma binary_Pos_mul2_def_spec d0 d1 d1a:
@@ -3817,13 +4614,13 @@ Proof.
   unfold to_prop0'.
   intros mp mpi.
   cbn.
-  rewrite side_concat_unfold_spec.
-  rewrite from_seg_spec.
+  rw_side_concat_unfold.
+  rewrite from_seg_spec,from_seg_WF.
   cbn.
   generalize (mp 1%positive nat_t). cbn.
   intros n.
   replace (N.succ_pos (n*2+1)) with ((N.succ_pos n)~0)%positive by lia.
-  reflexivity.
+  tauto.
 Qed.
 
 Lemma binary_Pos_mul2add1_def_spec d0 d1 d1a:
@@ -3832,13 +4629,64 @@ Proof.
   unfold to_prop0'.
   intros mp mpi.
   cbn.
-  rewrite side_concat_unfold_spec.
-  rewrite from_seg_spec.
+  rw_side_concat_unfold.
+  rewrite from_seg_spec,from_seg_WF.
   cbn.
   generalize (mp 1%positive nat_t). cbn.
   intros n.
   replace (N.succ_pos (n*2+2)) with ((N.succ_pos n)~1)%positive by lia.
-  reflexivity.
+  tauto.
+Qed.
+
+Lemma binary_dec_0_def_spec d0 d1 d1a:
+  to_prop0' (fst (binary_dec_0_def d0 d1 d1a)).
+Proof.
+  unfold to_prop0'.
+  intros mp mpi. cbn.
+  unfold_to_xx.
+  rw_side_concat_unfold.
+  rewrite from_seg_spec,from_seg_WF. cbn.
+  tauto.
+Qed.
+
+Lemma binary_dec_mul2_def_spec d0 d1 d1a:
+  to_prop0' (fst (binary_dec_mul2_def d0 d1 d1a)).
+Proof.
+  unfold to_prop0'.
+  intros mp mpi.
+  cbn.
+  rw_side_concat_unfold.
+  rewrite from_seg_spec,from_seg_WF.
+  cbn.
+  generalize (mp 1%positive nat_t). cbn. intros len.
+  generalize (mp 2%positive nat_t). cbn. intros n1.
+  generalize (mp 3%positive nat_t). cbn. intros n2.
+  replace (N.to_nat (len+1)) with (Datatypes.S (N.to_nat len)) by lia.
+  cbn.
+  replace ((n1*2) mod 2)%N with 0%N by lia. cbn.
+  split.
+  - do 2 f_equal. lia.
+  - rewrite N.pow_add_r; cbn. lia.
+Qed.
+
+Lemma binary_dec_mul2add1_def_spec d0 d1 d1a:
+  to_prop0' (fst (binary_dec_mul2add1_def d0 d1 d1a)).
+Proof.
+  unfold to_prop0'.
+  intros mp mpi.
+  cbn.
+  rw_side_concat_unfold.
+  rewrite from_seg_spec,from_seg_WF.
+  cbn.
+  generalize (mp 1%positive nat_t). cbn. intros len.
+  generalize (mp 2%positive nat_t). cbn. intros n1.
+  generalize (mp 3%positive nat_t). cbn. intros n2.
+  replace (N.to_nat (len+1)) with (Datatypes.S (N.to_nat len)) by lia.
+  cbn.
+  replace ((n1*2+1) mod 2)%N with 1%N by lia. cbn.
+  split.
+  - do 2 f_equal. lia.
+  - rewrite N.pow_add_r; cbn. lia.
 Qed.
 
 
@@ -3860,12 +4708,37 @@ Definition side_binary_Pos_inc d0 d1 d1a qL qR QL QR :=
   true,
   3%positive).
 
+Definition side_binary_dec_inc d0 d1 d1a qL qR QL QR :=
+  let r:=side_var 1%positive in
+  let len:=nat_var 2%positive in
+  let n1:=nat_var 3%positive in
+  let n2:=nat_var 4%positive in
+  (multistep'_expr
+  (side_concat_unfold (from_seg qL) r,side_binary_dec d0 d1 d1a len n1 (nat_add n2 (from_nat 1)),QL,L)
+  (side_concat_unfold (from_seg qR) (side_binary_dec d0 d1 d1a len (nat_add n1 (from_nat 1)) n2),r,QR,R)
+  true,
+  5%positive).
+
+Definition side_binary_dec_ov d0 d1 d1a qL qR QL QR :=
+  let r:=side_var 1%positive in
+  let len:=nat_var 2%positive in
+  let n1:=nat_var 3%positive in
+  (multistep'_expr
+  (side_concat_unfold (from_seg qL) r,side_binary_dec d0 d1 d1a len n1 (from_nat 0),QL,L)
+  (side_concat_unfold (from_seg qR) (side_binary_dec d0 d1 d1a (nat_add len (from_nat 1)) (from_nat 0) (nat_add (nat_mul n1 (from_nat 2)) (from_nat 1))),r,QR,R)
+  true,
+  4%positive).
+
 Definition ExtraRules_WF'(x:ExtraRules):Prop :=
 match x with
 | side_binary_inc_rule d1 qL qR QL QR =>
   to_prop0' (fst (side_binary_inc d1 qL qR QL QR))
 | side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR =>
   to_prop0' (fst (side_binary_Pos_inc d0 d1 d1a qL qR QL QR))
+| side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR =>
+  to_prop0' (fst (side_binary_dec_inc d0 d1 d1a qL qR QL QR))
+| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+  to_prop0' (fst (side_binary_dec_ov d0 d1 d1a qL qR QL QR))
 end.
 
 Lemma binary_to_side_spec d1 n:
@@ -3945,6 +4818,66 @@ Proof.
     tauto.
 Qed.
 
+Lemma binary_dec_to_side_inc_spec d0 d1 d1a len n:
+  (n+1 < 2^len ->
+  exists len0 n0 n1,
+  binary_dec_to_side d0 d1 d1a (N.to_nat len) n =
+  d1^^n1 *> d0 *> binary_dec_to_side d0 d1 d1a (N.to_nat len0) n0 /\
+  binary_dec_to_side d0 d1 d1a (N.to_nat len) (n+1) =
+  d0^^n1 *> d1 *> binary_dec_to_side d0 d1 d1a (N.to_nat len0) n0 /\
+  (N.of_nat n1)+len0+1=len)%N.
+Proof.
+  gen n.
+  induction len using N.peano_ind; intros n H.
+  1: cbn in H; lia.
+  rewrite Nnat.N2Nat.inj_succ.
+  cbn.
+  destruct (N.eqb_spec (n mod 2) 0)%N.
+  - exists len (n/2)%N 0.
+    repeat split.
+    + replace ((n+1) mod 2)%N with 1%N by lia. cbn.
+      do 2 f_equal. lia.
+    + lia.
+  - rewrite N.pow_succ_r' in H.
+    eassert (IH:_) by (apply (IHlen (n/2)%N); lia).
+    clear IHlen.
+    destruct IH as [len0' [n0' [n1' [H0 [H1 H2]]]]].
+    exists len0' n0' (Datatypes.S n1').
+    repeat split.
+    + rewrite H0. cbn.
+      rewrite Str_app_assoc.
+      reflexivity.
+    + replace ((n+1) mod 2)%N with 0%N by lia. cbn.
+      rewrite Str_app_assoc.
+      rewrite <-H1.
+      do 2 f_equal. lia.
+    + lia.
+Qed.
+
+Lemma binary_dec_to_side_ov_spec d0 d1 d1a len n:
+  (n+1 = 2^len ->
+  binary_dec_to_side d0 d1 d1a (N.to_nat len) n =
+  d1^^(N.to_nat len) *> d1a *> const s0 /\
+  binary_dec_to_side d0 d1 d1a (N.to_nat (N.succ len)) 0 =
+  d0^^(N.to_nat (N.succ len)) *> d1a *> const s0)%N.
+Proof.
+  gen n.
+  induction len using N.peano_ind; intros n H.
+  - cbn.
+    change (Pos.to_nat 1) with 1. cbn.
+    rewrite List.app_nil_r.
+    tauto.
+  - do 2 rewrite Nnat.N2Nat.inj_succ. cbn.
+    repeat rewrite Str_app_assoc.
+    rewrite N.pow_succ_r' in H.
+    replace (n mod 2)%N with 1%N by lia.
+    cbn.
+    eassert (IH:_) by (apply (IHlen (n/2)%N); lia).
+    clear IHlen.
+    destruct IH as [H1 H2].
+    rewrite H1,H2.
+    tauto.
+Qed.
 
 Lemma ExtraRules_WF'_spec x:
   ExtraRules_WF tm x ->
@@ -3953,27 +4886,71 @@ Proof.
   destruct x; cbn; intro H.
   - intros mp mpi.
     cbn.
-    repeat rewrite side_concat_unfold_spec.
+    rw_side_concat_unfold.
     repeat rewrite from_seg_spec.
+    repeat rewrite from_seg_WF.
     cbn.
     generalize (mp 1%positive side_t). cbn; intros r.
     generalize (mp 2%positive nat_t). cbn; intros n.
     destruct (binary_to_side_spec d1 n) as [n0 [n1 [H0 H1]]].
     rewrite H0,H1.
+    intro. split. 1: tauto.
     apply H.
   - intros mp mpi.
     cbn.
-    repeat rewrite side_concat_unfold_spec.
+    rw_side_concat_unfold.
     repeat rewrite from_seg_spec.
+    repeat rewrite from_seg_WF.
     cbn.
     generalize (mp 1%positive side_t). cbn; intros r.
     generalize (mp 2%positive nat_t). cbn; intros n.
     replace (N.succ_pos (n+1)) with ((N.succ_pos n)+1)%positive by lia.
     destruct (binary_Pos_to_side_spec d0 d1 d1a (N.succ_pos n)) as [[n0 [n1 [H0 H1]]]|[n1 [H0 H1]]].
     + rewrite H0,H1.
+      intro. split. 1: tauto.
       apply H.
     + rewrite H0,H1.
+      intro. split. 1: tauto.
       apply H.
+  - intros mp mpi.
+    cbn.
+    rw_side_concat_unfold.
+    repeat rewrite from_seg_spec.
+    repeat rewrite from_seg_WF.
+    cbn.
+    generalize (mp 1%positive side_t). cbn; intros r.
+    generalize (mp 2%positive nat_t). cbn; intros len.
+    generalize (mp 3%positive nat_t). cbn; intros n1.
+    generalize (mp 4%positive nat_t). cbn; intros n2.
+    intro Hpre.
+    split.
+    1: repeat split; try lia; tauto.
+    destruct (binary_dec_to_side_inc_spec d0 d1 d1a len n1) as [len' [n1' [n2' [H0 [H1 H2]]]]].
+    1: lia.
+    rewrite H0,H1.
+    apply H.
+  - intros mp mpi.
+    cbn.
+    rw_side_concat_unfold.
+    repeat rewrite from_seg_spec.
+    repeat rewrite from_seg_WF.
+    cbn.
+    generalize (mp 1%positive side_t). cbn; intros r.
+    generalize (mp 2%positive nat_t). cbn; intros len.
+    generalize (mp 3%positive nat_t). cbn; intros n1.
+    intro Hpre.
+    split.
+    1: rewrite N.pow_add_r;
+      repeat split; try lia; tauto.
+    destruct (binary_dec_to_side_ov_spec d0 d1 d1a len n1) as [H1 H2].
+    1: lia.
+    replace (len+1)%N with (N.succ len) by lia.
+    rewrite H1,H2.
+    cbn.
+    replace (N.to_nat (N.succ len)) with ((N.to_nat len)+1) by lia.
+    rewrite lpow_add,Str_app_assoc. cbn.
+    rewrite app_nil_r.
+    apply H.
 Qed.
 
 
@@ -4010,7 +4987,7 @@ Proof.
   destruct (tm (s,m)) as [[[m' sgn'] s']|] eqn:E.
   2: trivial.
   destruct sgn,sgn'; unfold to_prop0'; intros; cbn.
-  all: apply progress_base; constructor; apply E.
+  all: intro; split; [tauto|]; apply progress_base; constructor; apply E.
 Qed.
 
 Fixpoint side_find_repeat_2_fold(ls1 ls2:side_expr)(n:nat):=
@@ -4159,8 +5136,8 @@ end.
 
 Definition side_find_repeat_O_fold ls :=
 match ls with
-| side_concat (seg_repeat h (from_nat 0)) _ => Some (repeat_0_def' h)
-| side_concat (seg_arithseq h (from_nat 0)) _ => Some (arithseq_0_def' h)
+| side_concat (seg_repeat h (from_nat 0)) _ => Some (repeat_0_def h)
+| side_concat (seg_arithseq h (from_nat 0)) _ => Some (arithseq_0_def h)
 | _ => None
 end.
 
@@ -4249,6 +5226,9 @@ match x with
 | (side_eq a b,p) =>
   let (v,p):=(seg_var p,Pos.succ p) in
   (side_eq (side_concat v a) (side_concat v b),p)
+| (side_rw a b,p) =>
+  let (v,p):=(seg_var p,Pos.succ p) in
+  (side_rw (side_concat v a) (side_concat v b),p)
 | _ => x
 end.
 
@@ -4261,7 +5241,16 @@ Proof.
   cbn.
   intros H mp mpi.
   specialize (H mp mpi).
-  destruct x; cbn; cbn in H; congruence.
+  destruct x; cbn; cbn in H; try tauto.
+  - split. 2: tauto.
+    unfold_to_xx.
+    rw_eq_spec H.
+    tauto.
+  - split. 1: tauto.
+    unfold_to_xx.
+    destruct H0 as [H0 H1].
+    destruct (H H1) as [H2 H3].
+    congruence.
 Qed.
 
 Definition is_seg_repeat(x:seg_expr) :=
@@ -4398,10 +5387,10 @@ Proof.
   destruct a; cbn; trivial.
   - destruct n; trivial.
     destruct n; trivial.
-    apply repeat_0_def_spec'.
+    apply repeat_0_def_spec.
   - destruct n; trivial.
     destruct n; trivial.
-    apply arithseq_0_def_spec'.
+    apply arithseq_0_def_spec.
 Qed.
 
 Lemma side_find_repeat_fold_dynlen_spec ls:
@@ -4421,6 +5410,7 @@ Proof.
     1: tauto.
     destruct_spec enable_arithseq; trivial.
     destruct_spec side_find_arithseq_fold_2_spec; tauto.
+  - cbn. trivial.
   - cbn. trivial.
   - cbn. trivial.
 Qed.
@@ -4444,6 +5434,7 @@ Proof.
     destruct_spec enable_arithseq; trivial.
     destruct_spec is_seg_repeat; trivial.
     destruct_spec side_find_arithseq_fold_2_spec; tauto.
+  - cbn; trivial.
   - cbn; trivial.
   - cbn; trivial.
 Qed.
@@ -4528,6 +5519,40 @@ match side_find_binary_Pos_fold_0 ls1 d0 d1 d1a with
   end
 end.
 
+Definition side_find_binary_dec_fold_0 ls1 d0 d1 d1a :=
+if side_startswith ls1 d1a then
+  match Nat.iter (length d1a) side_tl ls1 with
+  | side_0inf => Some (binary_dec_0_def d0 d1 d1a)
+  | _ => None
+  end
+else None.
+
+Fixpoint side_find_binary_dec_fold ls1 ls2 d0 d1 d1a :=
+match side_find_binary_dec_fold_0 ls1 d0 d1 d1a with
+| Some v =>
+  Some v
+| None =>
+  match ls1 with
+  | side_concat h1 t1 =>
+    match side_find_binary_dec_fold t1 (side_tl ls2) d0 d1 d1a with
+    | Some v => Some (side_concat_rw_2 v)
+    | None =>
+      match ls2 with
+      | side_binary_dec d0' d1' d1a' _ _ _ =>
+        if list_eqb sym_eqb d0 d0' && list_eqb sym_eqb d1 d1' && list_eqb sym_eqb d1a d1a' then
+          if side_startswith ls1 d1 then
+            Some (binary_dec_mul2add1_def d0 d1 d1a)
+          else if side_startswith ls1 d0 then
+            Some (binary_dec_mul2_def d0 d1 d1a)
+          else None
+        else None
+      | _ => None
+      end
+    end
+  | _ => None
+  end
+end.
+
 Lemma side_find_binary_fold_spec ls1 ls2 d1:
 match side_find_binary_fold ls1 ls2 d1 with
 | None => True
@@ -4584,11 +5609,49 @@ Proof.
     trivial.
 Qed.
 
+Lemma side_find_binary_dec_fold_0_spec ls1 d0 d1 d1a:
+match side_find_binary_dec_fold_0 ls1 d0 d1 d1a with
+| None => True
+| Some x => to_prop0' (fst x)
+end.
+Proof.
+  unfold side_find_binary_dec_fold_0.
+  destruct_spec side_startswith; trivial.
+  destruct_spec Nat.iter; trivial.
+  apply binary_dec_0_def_spec.
+Qed.
+
+Lemma side_find_binary_dec_fold_spec ls1 ls2 d0 d1 d1a:
+match side_find_binary_dec_fold ls1 ls2 d0 d1 d1a with
+| None => True
+| Some x => to_prop0' (fst x)
+end.
+Proof.
+  gen ls2.
+  induction ls1; intros ls2; cbn[side_find_binary_dec_fold].
+  all: destruct_spec side_find_binary_dec_fold_0_spec; trivial.
+  specialize (IHls1 (side_tl ls2)).
+  destruct_spec side_find_binary_dec_fold.
+  + apply side_concat_rw_2_spec,IHls1.
+  + destruct ls2; trivial.
+    destruct (list_eqb sym_eqb d0 d2); trivial.
+    destruct (list_eqb sym_eqb d1 d3); trivial.
+    destruct (list_eqb sym_eqb d1a d1a0); trivial.
+    destruct_spec side_startswith.
+    1: apply binary_dec_mul2add1_def_spec.
+    destruct_spec side_startswith.
+    1: apply binary_dec_mul2_def_spec.  
+    trivial.
+Qed.
+
 Definition config_rw_l(x:prop0_expr*id_t) s sgn:prop0_expr*id_t :=
 match x with
 | (side_eq l1 l2,p) =>
   let (r,p):=(side_var p,Pos.succ p) in 
   (config_eq (l1,r,s,sgn) (l2,r,s,sgn),p)
+| (side_rw l1 l2,p) =>
+  let (r,p):=(side_var p,Pos.succ p) in 
+  (config_rw (l1,r,s,sgn) (l2,r,s,sgn),p)
 | _ => x
 end.
 
@@ -4597,6 +5660,9 @@ match x with
 | (side_eq r1 r2,p) =>
   let (l,p):=(side_var p,Pos.succ p) in 
   (config_eq (l,r1,s,sgn) (l,r2,s,sgn),p)
+| (side_rw r1 r2,p) =>
+  let (l,p):=(side_var p,Pos.succ p) in 
+  (config_rw (l,r1,s,sgn) (l,r2,s,sgn),p)
 | _ => x
 end.
 
@@ -4606,9 +5672,19 @@ Lemma config_rw_l_spec x s sgn:
 Proof.
   unfold to_prop0'.
   destruct x as [x i]; cbn.
-  intros H mp.
-  specialize (H mp).
-  destruct x,sgn; cbn; cbn in H; try tauto; congruence.
+  intros H mp mpi.
+  specialize (H mp mpi).
+  destruct x; cbn; cbn in H; try tauto; try congruence.
+  - split. 2: tauto.
+    unfold_to_xx.
+    rw_eq_spec H.
+    reflexivity.
+  - split. 1: tauto.
+    unfold_to_xx.
+    destruct H0 as [H0 H1].
+    destruct (H H0) as [H2 H3].
+    rewrite H3.
+    reflexivity.
 Qed.
 
 Lemma config_rw_r_spec x s sgn:
@@ -4617,9 +5693,19 @@ Lemma config_rw_r_spec x s sgn:
 Proof.
   unfold to_prop0'.
   destruct x as [x i]; cbn.
-  intros H mp.
-  specialize (H mp).
-  destruct x,sgn; cbn; cbn in H; try tauto; congruence.
+  intros H mp mpi.
+  specialize (H mp mpi).
+  destruct x; cbn; cbn in H; try tauto; try congruence.
+  - split. 2: tauto.
+    unfold_to_xx.
+    rw_eq_spec H.
+    reflexivity.
+  - split. 1: tauto.
+    unfold_to_xx.
+    destruct H0 as [H0 H1].
+    destruct (H H1) as [H2 H3].
+    rewrite H3.
+    reflexivity.
 Qed.
 
 Definition config_find_repeat_fold(c:config_expr) :=
@@ -4707,6 +5793,35 @@ Proof.
     apply config_rw_l_spec,H.
 Qed.
 
+Definition config_find_binary_dec_fold (c:config_expr) d0 d1 d1a :=
+let '(l,r,s,sgn):=c in
+match sgn with
+| L =>
+  match side_find_binary_dec_fold r (Nat.iter (length d1) side_tl r) d0 d1 d1a with
+  | None => None
+  | Some v => Some (config_rw_r v s sgn)
+  end
+| R =>
+  match side_find_binary_dec_fold l (Nat.iter (length d1) side_tl l) d0 d1 d1a with
+  | None => None
+  | Some v => Some (config_rw_l v s sgn)
+  end
+end.
+
+Lemma config_find_binary_dec_fold_spec c d0 d1 d1a:
+  match config_find_binary_dec_fold c d0 d1 d1a with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  destruct c as [[[l r] s] sgn].
+  destruct sgn; cbn.
+  - destruct_spec side_find_binary_dec_fold_spec; trivial.
+    apply config_rw_r_spec,H.
+  - destruct_spec side_find_binary_dec_fold_spec; trivial.
+    apply config_rw_l_spec,H.
+Qed.
+
 
 Definition side_find_repeat_unfold ls :=
 match ls with
@@ -4725,6 +5840,10 @@ match ls with
   if (n =? 0)%N then None else
   Some
   (if (n mod 2 =? 1)%N then binary_Pos_mul2_def d0 d1 d1a else binary_Pos_mul2add1_def d0 d1 d1a)
+| side_binary_dec d0 d1 d1a (from_nat len) (from_nat n) _ =>
+  if (len =? 0)%N then None else
+  Some
+  (if (n mod 2 =? 0)%N then binary_dec_mul2_def d0 d1 d1a else binary_dec_mul2add1_def d0 d1 d1a)
 | _ => None
 end.
 
@@ -4755,6 +5874,12 @@ Proof.
     destruct (n mod 2 =? 1)%N.
     + apply binary_Pos_mul2_def_spec.
     + apply binary_Pos_mul2add1_def_spec.
+  - destruct len; trivial.
+    destruct n1; trivial.
+    destruct (n =? 0)%N; trivial.
+    destruct (n0 mod 2 =? 0)%N.
+    + apply binary_dec_mul2_def_spec.
+    + apply binary_dec_mul2add1_def_spec.
 Qed.
 
 Fixpoint side_find_repeat_unfold_limited_depth ls n {struct n} :=
@@ -4845,6 +5970,40 @@ match x with
     | _ => None
     end
   else None
+| side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR =>
+  let '(l,r,s,sgn):=c in
+  if dir_eqb sgn L && q_eqb s QL then
+    match r with
+    | side_binary_dec d0' d1' d1a' _ _ (from_nat (Npos _)) =>
+      if list_eqb sym_eqb d0 d0' && list_eqb sym_eqb d1 d1' && list_eqb sym_eqb d1a d1a' then
+        if side_startswith l qL then
+          Some (side_binary_dec_inc d0 d1 d1a qL qR QL QR)
+        else
+          match side_find_repeat_unfold_limited_depth l (length qL) with
+          | None => None
+          | Some v => Some (config_rw_l v s sgn)
+          end
+      else None
+    | _ => None
+    end
+  else None
+| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+  let '(l,r,s,sgn):=c in
+  if dir_eqb sgn L && q_eqb s QL then
+    match r with
+    | side_binary_dec d0' d1' d1a' _ _ (from_nat N0) =>
+      if list_eqb sym_eqb d0 d0' && list_eqb sym_eqb d1 d1' && list_eqb sym_eqb d1a d1a' then
+        if side_startswith l qL then
+          Some (side_binary_dec_ov d0 d1 d1a qL qR QL QR)
+        else
+          match side_find_repeat_unfold_limited_depth l (length qL) with
+          | None => None
+          | Some v => Some (config_rw_l v s sgn)
+          end
+      else None
+    | _ => None
+    end
+  else None
 end.
 
 Fixpoint config_find_unfold_ex(ls:list ExtraRules)(c:config_expr) :=
@@ -4893,6 +6052,34 @@ Proof.
     destruct_spec side_startswith; trivial.
     destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
     apply config_rw_l_spec,H1.
+  - cbn[config_find_unfold_ex_0].
+    destruct c as [[[l r] s] sgn].
+    destruct (dir_eqb_spec sgn L); trivial.
+    destruct (q_eqb_spec s QL); trivial.
+    destruct r; trivial.
+    destruct n2; trivial.
+    destruct n; trivial.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); trivial.
+    subst.
+    destruct_spec side_startswith; trivial.
+    destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
+    apply config_rw_l_spec,H1.
+  - cbn[config_find_unfold_ex_0].
+    destruct c as [[[l r] s] sgn].
+    destruct (dir_eqb_spec sgn L); trivial.
+    destruct (q_eqb_spec s QL); trivial.
+    destruct r; trivial.
+    destruct n2; trivial.
+    destruct n; trivial.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); trivial.
+    subst.
+    destruct_spec side_startswith; trivial.
+    destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
+    apply config_rw_l_spec,H1.
 Qed.
 
 Lemma config_find_unfold_ex_spec ls c:
@@ -4920,6 +6107,10 @@ match x with
   config_find_binary_fold c d1
 | side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR =>
   config_find_binary_Pos_fold c d0 d1 d1a
+| side_binary_dec_inc_rule d0 d1 d1a qL qR QL QR =>
+  config_find_binary_dec_fold c d0 d1 d1a
+| side_binary_dec_ov_rule d0 d1 d1a qL qR QL QR =>
+  None
 end.
 
 Fixpoint config_find_init_fold_ex(ls:list ExtraRules)(c:config_expr) :=
@@ -4939,9 +6130,10 @@ match config_find_init_fold_ex_0 x c with
 | Some v => to_prop0' (fst v)
 end.
 Proof.
-  destruct x; cbn[config_find_init_fold_ex_0].
+  destruct x; cbn[config_find_init_fold_ex_0]; trivial.
   - apply config_find_binary_fold_spec.
   - apply config_find_binary_Pos_fold_spec.
+  - apply config_find_binary_dec_fold_spec.
 Qed.
 
 Lemma config_find_init_fold_ex_spec ls c:
@@ -4963,12 +6155,16 @@ Definition step0_rw_l(x:prop0_expr*id_t) :=
 match x with
 | (config_eq c1 c2,p) =>
   (multistep'_expr c2 c1 false,p)
+| (config_rw c1 c2,p) =>
+  (multistep'_expr c1 c2 false,p)
 | _ => x
 end.
 
 Definition step0_rw_r(x:prop0_expr*id_t) :=
 match x with
 | (config_eq c1 c2,p) =>
+  (multistep'_expr c1 c2 false,p)
+| (config_rw c1 c2,p) =>
   (multistep'_expr c1 c2 false,p)
 | _ => x
 end.
@@ -4983,8 +6179,15 @@ Proof.
   intros H mp mpi.
   specialize (H mp mpi).
   destruct x; cbn; cbn in H; try tauto.
-  rewrite H.
-  constructor.
+  - unfold_to_xx.
+    rw_eq_spec H.
+    intro; split; [tauto|].
+    constructor.
+  - unfold_to_xx.
+    intro; split; [tauto|].
+    destruct (H H0) as [H2 H3].
+    rewrite H3.
+    constructor.
 Qed.
 
 Lemma step0_rw_r_spec x:
@@ -4997,8 +6200,15 @@ Proof.
   intros H mp mpi.
   specialize (H mp mpi).
   destruct x; cbn; cbn in H; try tauto.
-  rewrite H.
-  constructor.
+  - unfold_to_xx.
+    rw_eq_spec H.
+    intro; split; [tauto|].
+    constructor.
+  - unfold_to_xx.
+    intro; split; [tauto|].
+    destruct (H H0) as [H2 H3].
+    rewrite H3.
+    constructor.
 Qed.
 
 Definition prop0_to_prop(x:prop0_expr*id_t):prop_expr' :=
@@ -5132,7 +6342,7 @@ match ls with
   match follow_rule w1 u1 with
   | None => u
   | Some w1' =>
-    match try_ind cfg.(mnc) w1' w0_ u0 with
+    match try_ind w1' w0_ u0 with
     | Some (u1',u0') =>
       match follow_rule w1_ u1' with
       | None => reset_hlin_layers u0'
@@ -5174,8 +6384,8 @@ Proof.
   pose proof (follow_rule_spec' w1 u1).
   destruct (follow_rule w1 u1) as [w1'|].
   2: apply reset_hlin_layers_spec; tauto.
-  pose proof (try_ind_spec cfg.(mnc) w1' w0_ u0).
-  destruct (try_ind cfg.(mnc) w1' w0_ u0) as [[u1' u0']|].
+  pose proof (try_ind_spec w1' w0_ u0).
+  destruct (try_ind w1' w0_ u0) as [[u1' u0']|].
   - pose proof (follow_rule_spec' w1_ u1').
     destruct (follow_rule w1_ u1').
     2: apply reset_hlin_layers_spec; try tauto.
@@ -5526,7 +6736,7 @@ let '(l,r,s,sgn):=x in
 (DH_side_to_expr l,DH_side_to_expr r,s,sgn).
 
 Lemma DH_side_to_expr_spec l mp mpi:
-  to_side mp mpi (DH_side_to_expr l) = l *> const s0.
+  cto_side (to_cside mp mpi (DH_side_to_expr l)) = l *> const s0.
 Proof.
   induction l.
   1: reflexivity.
@@ -5536,7 +6746,7 @@ Proof.
 Qed.
 
 Lemma DH_config_to_expr_spec x mp mpi:
-  to_config mp mpi (DH_config_to_expr x) =
+  cto_config (to_cconfig mp mpi (DH_config_to_expr x)) =
   DH_config_to_config x.
 Proof.
   destruct x as [[[l r] s] sgn].
@@ -5556,6 +6766,24 @@ Proof.
     + destruct r; reflexivity.
     + rewrite DH_side_to_expr_spec.
       destruct r; reflexivity.
+Qed.
+
+Lemma DH_side_to_expr_WF x mp mpi:
+  cside_WF (to_cside mp mpi (DH_side_to_expr x)).
+Proof.
+  unfold DH_side_to_expr.
+  rewrite side_concat_list_seg_WF.
+  cbn. split; trivial.
+  induction x; cbn; simpl_Forall; trivial.
+  cbn; split; trivial.
+Qed.
+
+Lemma DH_config_to_expr_WF x mp mpi:
+  cconfig_WF (to_cconfig mp mpi (DH_config_to_expr x)).
+Proof.
+  destruct x as [[[l r] s] sgn].
+  cbn.
+  split; apply DH_side_to_expr_WF.
 Qed.
 
 
@@ -5695,8 +6923,10 @@ Proof.
   repeat rewrite Forall_nil_iff.
   cbn.
   intro; split; trivial.
-  applys_eq (DH_steps_from_init_spec).
-  apply DH_config_to_expr_spec.
+  intro; split.
+  - apply DH_config_to_expr_WF.
+  - applys_eq (DH_steps_from_init_spec).
+    apply DH_config_to_expr_spec.
 Qed.
 
 Definition initial_steps_ex_prop:prop_expr' :=
@@ -5742,11 +6972,11 @@ match x with
 end.
 
 
-Definition subst_for_nonhalt(n:N)(i:id_t)(t:type_t):to_type t :=
-match t with
+Definition subst_for_nonhalt(n:N)(i:id_t)(t:type_t):to_cexpr_type t :=
+match t return to_cexpr_type t with
 | nat_t => n
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end.
 
 Lemma check_nonhalt_spec x:
@@ -5764,6 +6994,7 @@ Proof.
   subst a.
   apply multistep_lb_nonhalt.
   intro n.
+  unfold to_prop' in H'.
   specialize (H' N0 (subst_for_nonhalt (N.of_nat n))).
   unfold to_prop'' in H'.
   cbn in H'.
@@ -5774,7 +7005,8 @@ Proof.
   destruct (H' I) as [H0 _].
   eexists.
   applys_eq H0.
-  lia.
+  - lia.
+  - tauto.
 Qed.
 
 

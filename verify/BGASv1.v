@@ -28,32 +28,25 @@ Proof.
       destruct H; auto.
 Qed.
 
-
-Lemma seg_arithseq_to_seg_eq mp1 mpi1 ls1 n1 mp2 mpi2 ls2 n2:
+Lemma seg_arithseq_to_seg_eq ls1 n1 ls2 n2:
   n1 = n2 ->
-  map (fun '(x0,x1,x2) => (x0,x1,to_nat mp1 mpi1 x2)) ls1 = map (fun '(x0,x1,x2) => (x0,x1,to_nat mp2 mpi2 x2)) ls2 ->
-  seg_arithseq_to_seg mp1 mpi1 ls1 n1 0 =
-  seg_arithseq_to_seg mp2 mpi2 ls2 n2 0.
+  ls1 = ls2 ->
+  seg_arithseq_to_seg ls1 n1 0 =
+  seg_arithseq_to_seg ls2 n2 0.
 Proof.
-  intro H.
-  subst n1.
-  gen ls1 ls2.
-  generalize 0%nat. 
-  induction n2.
-  1: intros; reflexivity.
-  cbn.
-  intros.
-  erewrite IHn2; eauto. clear IHn2.
-  f_equal.
-  gen ls2.
-  induction ls1 as [|h1 t1]; intros [|h2 t2].
-  1,2,3: cbn; congruence.
-  destruct h1 as [[x10 x11] x12].
-  destruct h2 as [[x20 x21] x22].
-  cbn.
-  intros H.
-  inverts H.
-  erewrite IHt1; eauto.
+  congruence.
+Qed.
+
+Lemma and_True_1 X:
+  True /\ X <-> X.
+Proof.
+  tauto.
+Qed.
+
+Lemma and_True_2 X:
+  X /\ True <-> X.
+Proof.
+  tauto.
 Qed.
 
 Ltac simpl_to_prop_goal :=
@@ -61,11 +54,23 @@ Ltac simpl_to_prop_goal :=
   repeat rewrite Forall_cons_iff;
   repeat rewrite Forall_nil_iff;
   cbn[to_prop0];
-  cbn[to_config];
-  cbn[to_side];
-  cbn[to_seg];
-  cbn[to_nat];
+  unfold to_config,config_WF;
+  cbn[to_cconfig];
+  cbn[cto_config];
+  cbn[cconfig_WF];
+  unfold to_side,side_WF;
+  cbn[to_cside];
+  cbn[cto_side];
+  cbn[cside_WF];
+  unfold to_seg,seg_WF;
+  cbn[to_cseg];
+  cbn[cto_seg];
+  cbn[cseg_WF];
+  unfold to_nat;
+  cbv[to_cnat];
+  cbv[cto_nat];
   cbn[app];
+  repeat (rewrite and_True_1 || rewrite and_True_2);
   unfold multistep'.
 
 Ltac simpl_to_prop H :=
@@ -73,19 +78,31 @@ Ltac simpl_to_prop H :=
   repeat rewrite Forall_cons_iff in H;
   repeat rewrite Forall_nil_iff in H;
   cbn[to_prop0] in H;
-  cbn[to_config] in H;
-  cbn[to_side] in H;
-  cbn[to_seg] in H;
-  cbn[to_nat] in H;
+  unfold to_config,config_WF in H;
+  cbn[to_cconfig] in H;
+  cbn[cto_config] in H;
+  cbn[cconfig_WF] in H;
+  unfold to_side,side_WF in H;
+  cbn[to_cside] in H;
+  cbn[cto_side] in H;
+  cbn[cside_WF] in H;
+  unfold to_seg,seg_WF in H;
+  cbn[to_cseg] in H;
+  cbn[cto_seg] in H;
+  cbn[cseg_WF] in H;
+  unfold to_nat in H;
+  cbv[to_cnat] in H;
+  cbv[cto_nat] in H;
   cbn[app] in H;
+  repeat (rewrite and_True_1 in H || rewrite and_True_2 in H);
   unfold multistep' in H.
 
 
-Definition mp_default(i:id_t)(t:type_t): to_type t :=
-match t return to_type t with
+Definition mp_default(i:id_t)(t:type_t): to_cexpr_type t :=
+match t return to_cexpr_type t with
 | nat_t => N0
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end.
 
 Ltac get_rule_from_inductive_decider cfg cfg_WF T tm :=
@@ -101,7 +118,7 @@ clear H0;
 cbn[fst] in H;
 unfold to_prop',to_prop'',to_prop,to_prop0_list in H;
 destruct H as [H0 H];
-eassert (H': forall (mp:id_t->forall t:type_t, to_type t),_) by (
+eassert (H': forall (mp:id_t->forall t:type_t, to_cexpr_type t),_) by (
   intros mp;
   specialize (H N0 mp);
   simpl_to_prop H;
@@ -111,8 +128,7 @@ clear H;
 eassert (H0':_) by (
   pose proof (H0 N0 mp_default) as H;
   simpl_to_prop H;
-  destruct (H I) as [H1 _];
-  exact H1
+  exact (H I)
 );
 clear H0.
 
@@ -132,7 +148,7 @@ Ltac feq2 :=
 
 Ltac tape_equal :=
 match goal with
-| |- seg_arithseq_to_seg _ _ _ _ _ = seg_arithseq_to_seg _ _ _ _ _ => apply seg_arithseq_to_seg_eq; cbn[map]
+| |- seg_arithseq_to_seg _ _ _ = seg_arithseq_to_seg _ _ _ => apply seg_arithseq_to_seg_eq; cbn[map]
 | |- Str_app _ _ = Str_app _ _ => feq2
 | |- Streams.hd _ = Streams.hd _ => feq1
 | |- Streams.tl _ = Streams.tl _ => feq1
@@ -141,6 +157,7 @@ match goal with
 | |- N.to_nat _ = N.to_nat _ => feq1
 | |- (_,_) = (_,_) => feq2
 | |- @eq (list Sym) _ _ => reflexivity
+| |- @eq cnat_expr _ _ => try reflexivity
 | |- @eq N _ _ => try reflexivity
 | |- @eq Z _ _ => try reflexivity
 | |- @eq Q _ _ => reflexivity
@@ -155,7 +172,7 @@ apply multistep_nonhalt with (c':=S0 mp0);
   apply progress_evstep;
   rewrite progress_rw;
   rewrite progress_rw in H0';
-  follow10 H0';
+  follow10 (H0' I);
   apply evstep_refl';
   unfold S0;
   simpl_to_prop_goal
@@ -175,10 +192,9 @@ eapply progress_nonhalt_cond with (P:=fun mp => P mp /\ P' mp) (C:=S0);
   split;
   [
     specialize (H' mp HP);
-    destruct H' as [H' _];
     rewrite progress_rw;
     rewrite progress_rw in H';
-    follow10 H';
+    follow10 (H' I);
     apply evstep_refl'
   |
     simpl_to_prop_goal
@@ -203,6 +219,85 @@ Opaque N.to_nat.
 
 
 
+Module TM61.
+Definition tm := Eval compute in (TM_from_str "1RB1RD_0LC1LE_1LD1LB_1RA1LF_---0RC_0LD0RE").
+
+Definition m_config := default_config.
+Lemma m_config_WF: forall tm, Config_WF tm m_config.
+Proof.
+  intro tm.
+  apply Config_WF_simple.
+  reflexivity.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+get_rule_from_inductive_decider m_config m_config_WF 5988 tm.
+
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
+mp 2%positive nat_t = 0 /\
+mp 1%positive nat_t = mp 3%positive nat_t + 1
+) as P'.
+
+pose (fun (i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
+| nat_t =>
+  let n1 := 18 in
+  let n3 := 17 in
+  let m1 := n3*2+12 in
+  let m5 := n3*2+10 in
+  let m2 := 0 in
+  let m4 := n1+9 in
+  let m6 := (m4+m5)/3-1 in
+  let m3 := m6*2+1 in
+  match i with
+  | 1%positive => m1
+  | 2%positive => m2
+  | 3%positive => m3
+  | 4%positive => m4
+  | 5%positive => m5
+  | 6%positive => m6
+  | _ => 0
+  end
+| seg_t => cseg_nil
+| side_t => cside_0inf
+end) as mp0.
+
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
+| nat_t =>
+  let n1 := mp 1%positive nat_t in
+  let n3 := mp 3%positive nat_t in
+  let m1 := n3*2+12 in
+  let m5 := n3*2+10 in
+  let m2 := 0 in
+  let m4 := n1+9 in
+  let m6 := (m4+m5)/3-1 in
+  let m3 := m6*2+1 in
+  match i with
+  | 1%positive => m1
+  | 2%positive => m2
+  | 3%positive => m3
+  | 4%positive => m4
+  | 5%positive => m5
+  | 6%positive => m6
+  | _ => 0
+  end
+| seg_t => cseg_nil
+| side_t => cside_0inf
+end) as mp1.
+solve_init H0' S0 mp0.
+1: repeat tape_equal.
+solve_closure H' S0 P P' mp1.
+- repeat tape_equal;
+  try lia.
+- repeat split;
+  try solve_OE_lia.
+- repeat split; cbn;
+  try solve_OE_lia.
+Time Qed.
+End TM61.
+
+
 Module TM60.
 Definition tm := Eval compute in (TM_from_str "1LB---_0LC1LF_1RD0LB_0RE1LB_1LE0RD_0LA1LB").
 
@@ -217,14 +312,14 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 30347 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t = 0 /\
 N.Even (mp 3%positive nat_t) /\
 18 <= mp 3%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 4 in
   let n3 := ((524238-38)/4+9)*2 in
@@ -245,12 +340,12 @@ match t return to_type t with
   | 7%positive => m7
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n3 := mp 3%positive nat_t in
@@ -271,8 +366,8 @@ match t return to_type t with
   | 7%positive => m7
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -305,12 +400,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 26493 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t = 1
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let m2 := 1 in
   let m1 := 3 in
@@ -321,12 +416,12 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n3 := mp 3%positive nat_t in
@@ -339,8 +434,8 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -372,12 +467,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 8573 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 2097169 in
   let n2 := 4 in
@@ -392,12 +487,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -412,8 +507,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -444,12 +539,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23332 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 15216514222579967910811 in
   let n2 := 2 in
@@ -472,12 +567,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -500,8 +595,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -532,12 +627,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23332 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 15216514222579967910811 in
   let n2 := 2 in
@@ -560,12 +655,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -588,8 +683,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -619,12 +714,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23228 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 5771781256840677483419 in
   let n2 := 2 in
@@ -647,12 +742,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -675,8 +770,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -706,12 +801,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23228 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 5771781256840677483419 in
   let n2 := 2 in
@@ -734,12 +829,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -762,8 +857,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -794,12 +889,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23297 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 10494147739710322697115 in
   let n2 := 2 in
@@ -822,12 +917,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -850,8 +945,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -883,12 +978,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23297 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 10494147739710322697115 in
   let n2 := 2 in
@@ -911,12 +1006,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -939,8 +1034,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -971,12 +1066,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 8013 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 31381059629 in
   let n2 := 4 in
@@ -995,12 +1090,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1019,8 +1114,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1051,12 +1146,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 9164 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 3486784419 in
   let n2 := 5 in
@@ -1071,12 +1166,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1091,8 +1186,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1122,12 +1217,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 5074 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 3188658 in
   let n2 := 2 in
@@ -1142,12 +1237,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1162,8 +1257,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1194,12 +1289,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18908 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 10750780360492 in
   let n2 := 4 in
@@ -1218,12 +1313,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1242,8 +1337,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1273,12 +1368,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18678 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1954687338284 in
   let n2 := 4 in
@@ -1297,12 +1392,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1321,8 +1416,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1353,12 +1448,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 30276 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 83886132 in
   let n2 := 7 in
@@ -1373,12 +1468,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1393,8 +1488,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1424,12 +1519,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 21526 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1073741856 in
   let n2 := 4 in
@@ -1446,12 +1541,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1468,8 +1563,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1499,12 +1594,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 17872 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 134217757 in
   let n2 := 3 in
@@ -1521,12 +1616,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1543,8 +1638,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1574,12 +1669,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 24142 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 8589934627 in
   let n2 := 5 in
@@ -1596,12 +1691,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1618,8 +1713,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1649,12 +1744,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 24142 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 8589934627 in
   let n2 := 5 in
@@ -1671,12 +1766,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1693,8 +1788,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1724,12 +1819,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 19652 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1073741856 in
   let n2 := 4 in
@@ -1746,12 +1841,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1768,8 +1863,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1801,12 +1896,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 20416 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 3145770 in
   let n2 := 5 in
@@ -1821,12 +1916,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1841,8 +1936,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1872,12 +1967,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 25848 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 34359738405 in
   let n2 := 1 in
@@ -1900,12 +1995,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -1928,8 +2023,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -1959,12 +2054,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 22394 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 34359738405 in
   let n2 := 1 in
@@ -1987,12 +2082,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2015,8 +2110,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2046,12 +2141,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 25848 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 34359738405 in
   let n2 := 1 in
@@ -2074,12 +2169,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2102,8 +2197,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2133,12 +2228,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 22394 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 34359738405 in
   let n2 := 1 in
@@ -2161,12 +2256,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2189,8 +2284,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2222,13 +2317,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 20680 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 536870965 in
   let n2 := 7 in
@@ -2245,12 +2340,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2267,8 +2362,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2302,12 +2397,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 38330 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 524326 in
   let n2 := 0 in
@@ -2322,12 +2417,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2342,8 +2437,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2373,13 +2468,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 20353 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 268435509 in
   let n2 := 7 in
@@ -2396,12 +2491,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2418,8 +2513,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2451,14 +2546,14 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 24222 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Even (mp 1%positive nat_t) /\
 N.Odd (mp 2%positive nat_t) /\
 mp 2%positive nat_t * 100 + 10000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 5726623098 in
   let n2 := 3 in
@@ -2481,12 +2576,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2509,8 +2604,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2543,12 +2638,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 38325 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 131110 in
   let n2 := 0 in
@@ -2563,12 +2658,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2583,8 +2678,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2614,13 +2709,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 17318 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 8388649 in
   let n2 := 6 in
@@ -2637,12 +2732,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2659,8 +2754,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2691,13 +2786,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 17027 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 4194345 in
   let n2 := 6 in
@@ -2714,12 +2809,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2736,8 +2831,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2769,13 +2864,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 9923 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 2097189 in
   let n2 := 11 in
@@ -2790,12 +2885,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2810,8 +2905,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2841,13 +2936,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 9923 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 2097189 in
   let n2 := 11 in
@@ -2862,12 +2957,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2882,8 +2977,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2913,13 +3008,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 10848 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 4194345 in
   let n2 := 13 in
@@ -2934,12 +3029,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -2954,8 +3049,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -2985,13 +3080,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 10848 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 4194345 in
   let n2 := 13 in
@@ -3006,12 +3101,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3026,8 +3121,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3058,12 +3153,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 35127 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1073741856 in
   let n2 := 2 in
@@ -3082,12 +3177,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3106,8 +3201,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3137,12 +3232,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 11188 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 16777237 in
   let n2 := 4 in
@@ -3157,12 +3252,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3177,8 +3272,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3208,12 +3303,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 11248 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 16777239 in
   let n2 := 4 in
@@ -3228,12 +3323,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3248,8 +3343,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3279,12 +3374,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 11376 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 8388629 in
   let n2 := 4 in
@@ -3299,12 +3394,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3319,8 +3414,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3350,13 +3445,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18373 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1048611 in
   let n2 := 9 in
@@ -3369,12 +3464,12 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3387,8 +3482,8 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3418,13 +3513,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18373 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1048611 in
   let n2 := 9 in
@@ -3437,12 +3532,12 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3455,8 +3550,8 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3486,13 +3581,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 20956 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Even (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 4294967360 in
   let n2 := 3 in
@@ -3515,12 +3610,12 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3543,8 +3638,8 @@ match t return to_type t with
   | 8%positive => m8
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3574,13 +3669,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18243 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 524323 in
   let n2 := 9 in
@@ -3593,12 +3688,12 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3611,8 +3706,8 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3643,13 +3738,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18243 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 524323 in
   let n2 := 9 in
@@ -3662,12 +3757,12 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3680,8 +3775,8 @@ match t return to_type t with
   | 3%positive => m3
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3712,12 +3807,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 32220 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 4194349 in
   let n2 := 6 in
@@ -3732,12 +3827,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3752,8 +3847,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3783,12 +3878,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 23318 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 65573 in
   let n2 := 4 in
@@ -3803,12 +3898,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3823,8 +3918,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3854,12 +3949,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 19475 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 33554459 in
   let n2 := 3 in
@@ -3874,12 +3969,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3894,8 +3989,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3925,12 +4020,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 4964 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 1594335 in
   let n2 := 2 in
@@ -3945,12 +4040,12 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -3965,8 +4060,8 @@ match t return to_type t with
   | 4%positive => m4
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -3996,12 +4091,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18236 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 64051194700380398 in
   let n2 := 3 in
@@ -4018,12 +4113,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4040,8 +4135,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4072,12 +4167,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 18236 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 64051194700380398 in
   let n2 := 3 in
@@ -4094,12 +4189,12 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4116,8 +4211,8 @@ match t return to_type t with
   | 5%positive => m5
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4147,12 +4242,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 7728 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 6973568821 in
   let n2 := 4 in
@@ -4169,12 +4264,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4191,8 +4286,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4224,13 +4319,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 8944 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Even (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 125269906 in
   let n2 := 6 in
@@ -4249,12 +4344,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4273,8 +4368,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4305,13 +4400,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 5392 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 139829 in
   let n2 := 1 in
@@ -4330,12 +4425,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4354,8 +4449,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4386,13 +4481,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 5342 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Even (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 55178 in
   let n2 := 2 in
@@ -4411,12 +4506,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4435,8 +4530,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4467,13 +4562,13 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 9124 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 N.Odd (mp 1%positive nat_t) /\
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := 17895725 in
   let n2 := 6 in
@@ -4492,12 +4587,12 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   let n1 := mp 1%positive nat_t in
   let n2 := mp 2%positive nat_t in
@@ -4516,8 +4611,8 @@ match t return to_type t with
   | 6%positive => m6
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4547,12 +4642,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 14628 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => (5230176645 - 12 - 16)*3 - 12 - 10
@@ -4561,12 +4656,12 @@ match t return to_type t with
   | 4%positive => 5230176645 - 12 - 16
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive =>
@@ -4577,8 +4672,8 @@ match t return to_type t with
   | 4%positive => (mp 1%positive nat_t - 8) * 3 - ((mp 2%positive nat_t + 1) * 4 + 16)
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4609,12 +4704,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 14304 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 16 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => (6392438112 - 12 - 16)*3 - 12 - 10
@@ -4623,12 +4718,12 @@ match t return to_type t with
   | 4%positive => 6392438112 - 12 - 16
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => ((mp 1%positive nat_t - 8) * 3 - ((mp 2%positive nat_t + 1) * 4 + 16))*3 - ((mp 2%positive nat_t + 1) * 4 + 10)
@@ -4637,8 +4732,8 @@ match t return to_type t with
   | 4%positive => (mp 1%positive nat_t - 8) * 3 - ((mp 2%positive nat_t + 1) * 4 + 16)
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4670,12 +4765,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 15753 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 10 + 1000 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => (78452649069 - 12 - 18)*3 - 12 - 12
@@ -4685,12 +4780,12 @@ match t return to_type t with
   | 5%positive => 78452649069 - 12 - 18
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => ((mp 1%positive nat_t - 8) * 3 - ((mp 2%positive nat_t + 1) * 4 + 18)) * 3 - ((mp 2%positive nat_t + 1) * 4 + 12)
@@ -4700,8 +4795,8 @@ match t return to_type t with
   | 5%positive => (mp 1%positive nat_t - 8) * 3 - ((mp 2%positive nat_t + 1) * 4 + 18)
   | _ => 0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
@@ -4733,12 +4828,12 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 get_rule_from_inductive_decider m_config m_config_WF 14372 tm.
 
-pose (fun (mp:id_t->forall t:type_t, to_type t) =>
+pose (fun (mp:id_t->forall t:type_t, to_cexpr_type t) =>
 mp 2%positive nat_t * 10 + 100 <= mp 1%positive nat_t
 ) as P'.
 
 pose (fun (i:id_t)(t:type_t) =>
-match t return to_type t with
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => (8716961043-12-14)*3-12-7
@@ -4747,12 +4842,12 @@ match t return to_type t with
   | 4%positive => 8716961043-12-14
   | _ => N0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp0.
 
-pose (fun (mp:id_t->forall t, to_type t)(i:id_t)(t:type_t) =>
-match t return to_type t with
+pose (fun (mp:id_t->forall t, to_cexpr_type t)(i:id_t)(t:type_t) =>
+match t return to_cexpr_type t with
 | nat_t =>
   match i with
   | 1%positive => ((mp 1%positive nat_t - 9) * 3 - (mp 2%positive nat_t + 1) * 4 - 14) * 3 - ((mp 2%positive nat_t + 1) * 4 + 7)
@@ -4761,8 +4856,8 @@ match t return to_type t with
   | 4%positive => (mp 1%positive nat_t-9)*3-(mp 2%positive nat_t+1)*4-14
   | _ => N0
   end
-| seg_t => []
-| side_t => const s0
+| seg_t => cseg_nil
+| side_t => cside_0inf
 end) as mp1.
 
 
