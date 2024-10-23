@@ -147,13 +147,194 @@ end)%N.
 Inductive Nformula :=
 | N_arithseq(a b:N) (* a+bx *)
 | N_geoseq_sum(a0 a1 k:N) (* a0+a1*((k+2)^x-1)/(k+1) *)
+| N_geoseq_sum2(a0 a1 a2 k:N) (* a0+a1*k+a2*((((k+2)^x-1)/(k+1)-x)/(k+1)) *)
 .
+
+Definition powsum k x := (((k+2)^x-1)/(k+1))%N.
+Definition powsum2 k x := (((powsum k x)-x)/(k+1))%N.
 
 Definition Nformula_to_Nfunc(f:Nformula):=
 (match f with
 | N_arithseq a b => fun x => a+b*x
-| N_geoseq_sum a0 a1 k => fun x => a0+a1*(((k+2)^x-1)/(k+1))
+| N_geoseq_sum a0 a1 k => fun x => a0+a1*(powsum k x)
+| N_geoseq_sum2 a0 a1 a2 k => fun x => a0+a1*x+a2*(powsum2 k x)
 end)%N.
+
+
+
+Lemma powsum_spec k x:
+  (powsum k (N.succ x) = powsum k x + (k+2)^x)%N.
+Proof.
+  replace (N.succ x) with (x+1)%N by lia.
+  unfold powsum.
+  rewrite N.pow_add_r,N.pow_1_r.
+  replace (k+2)%N with (k+1+1)%N by lia.
+  rewrite N.mul_add_distr_l.
+  replace (k+1+1)%N with (k+2)%N by lia.
+  pose proof (N.pow_nonzero (k+2) x).
+  remember ((k+2)^x)%N as v1.
+  remember (k+1)%N as v2.
+  rewrite N.mul_1_r.
+  replace (v1*v2+v1-1)%N with (v1*v2+(v1-1))%N by lia.
+  rewrite N.div_add_l; lia.
+Qed.
+
+Lemma powsum_lb k x:
+  (x <= powsum k x)%N.
+Proof.
+  induction x using N.peano_ind.
+  - cbn; lia.
+  - rewrite powsum_spec.
+    pose proof (N.pow_nonzero (k+2) x).
+    lia.
+Qed.
+
+Lemma sub_mod a b c:
+  (a>=b ->
+  c<>0 ->
+  ((a-b) mod c) =
+  ((a mod c)+(c-(b mod c))) mod c)%N.
+Proof.
+  intros H H0.
+  remember (a-b)%N as d.
+  replace a with (d+b)%N by lia.
+  rewrite N.Div0.add_mod_idemp_l.
+  pose proof (N.mod_upper_bound b c H0).
+  pose proof (N.Div0.mod_le b c).
+  replace (d+b+(c-b mod c))%N with (b+(d+c-(b mod c)))%N by lia.
+  rewrite <-N.Div0.add_mod_idemp_l.
+  replace (b mod c+(d+c-(b mod c)))%N with (d+c)%N by lia.
+  rewrite <-N.Div0.add_mod_idemp_r.
+  rewrite N.Div0.mod_same.
+  rewrite N.add_0_r.
+  reflexivity.
+Qed.
+
+Lemma pow_mod' k x:
+  (((k+2)^x) mod (k+1) = 1 mod (k+1))%N.
+Proof.
+  induction x using N.peano_ind.
+  - reflexivity.
+  - rewrite N.pow_succ_r'.
+    rewrite N.Div0.mul_mod,IHx.
+    replace (k+2)%N with (k+1+1)%N by lia.
+    remember (k+1)%N as v1.
+    rewrite <-N.Div0.add_mod_idemp_l.
+    rewrite N.Div0.mod_same. cbn.
+    assert (v1=1\/1<v1)%N as E by lia.
+    destruct E as [E|E].
+    + rewrite E. reflexivity.
+    + rewrite (N.mod_small _ _ E).
+      cbn.
+      apply (N.mod_small _ _ E).
+Qed.
+
+Lemma pow_mod k x:
+  (((k+2)^x - 1) mod (k+1) = 0)%N.
+Proof.
+  pose proof (N.pow_nonzero (k+2) x).
+  rewrite sub_mod. 2,3: lia.
+  rewrite pow_mod'.
+  remember (k+1)%N as v1.
+  assert (v1=1\/1<v1)%N as E by lia.
+  destruct E as [E|E].
+  + rewrite E. reflexivity.
+  + rewrite (N.mod_small _ _ E).
+    replace (1+(v1-1))%N with v1 by lia.
+    apply N.Div0.mod_same.
+Qed.
+
+Lemma powsum_mod' k x:
+  ((powsum k x) mod (k+1) = (x mod (k+1)))%N.
+Proof.
+  induction x using N.peano_ind.
+  1: reflexivity.
+  rewrite powsum_spec.
+  rewrite N.Div0.add_mod,IHx,pow_mod'.
+  rewrite <-N.Div0.add_mod.
+  f_equal. lia.
+Qed.
+
+Lemma powsum_mod k x:
+  (((powsum k x) - x) mod (k+1) = 0)%N.
+Proof.
+  unfold powsum.
+  pose proof (powsum_lb k x) as Hs.
+  unfold powsum in Hs.
+  rewrite sub_mod. 2,3: lia.
+  pose proof (powsum_mod' k x) as Hs'.
+  unfold powsum in Hs'.
+  rewrite Hs'.
+  remember (x mod (k+1))%N as v1.
+  pose proof (N.mod_lt x (k+1))%N as Hlt.
+  clear Hs Hs'.
+  replace (v1+(k+1-v1))%N with (k+1)%N by lia.
+  apply N.Div0.mod_same.
+Qed.
+
+Lemma div_mul a b:
+  (a mod b = 0 ->
+  a=b*(a/b))%N.
+Proof.
+  pose proof (N.div_mod' a b) as H.
+  lia.
+Qed.
+
+Lemma powsum2_spec k x:
+  (powsum2 k (N.succ x) = powsum2 k x + powsum k x)%N.
+Proof.
+  unfold powsum2.
+  rewrite powsum_spec.
+  replace (N.succ x) with (x+1)%N by lia.
+  unfold powsum.
+  pose proof (N.pow_nonzero (k+2) x).
+  pose proof (powsum_lb k x) as Hs.
+  unfold powsum in Hs.
+  remember ((k+2)^x)%N as v1.
+  remember (k+1)%N as v2.
+  remember ((v1-1)/v2)%N as v3.
+  replace (v3+v1-(x+1))%N with ((v3-x)+(v1-1))%N by lia.
+  assert (v3-x=v2*((v3-x)/v2))%N as He. {
+    subst.
+    apply div_mul.
+    pose proof (powsum_mod k x) as H0.
+    unfold powsum in H0.
+    apply H0.
+  }
+  rewrite He.
+  rewrite (N.mul_comm v2).
+  rewrite N.div_add_l. 2: lia.
+  rewrite N.div_mul. 2: lia.
+  congruence.
+Qed.
+
+Lemma powsum_spec' k x:
+  (powsum k (N.succ x) = (powsum k x)*(k+2)+1)%N.
+Proof.
+  rewrite powsum_spec.
+  unfold powsum.
+  pose proof (N.pow_nonzero (k+2)%N x).
+  replace (k+2)%N with (k+1+1)%N by lia.
+  rewrite N.mul_add_distr_l.
+  rewrite (N.mul_comm _ (k+1)%N).
+  rewrite <-div_mul.
+  2: applys_eq (pow_mod k x); do 3 f_equal; lia.
+  lia.
+Qed.
+
+Lemma powsum2_spec' k x:
+  (powsum2 k (N.succ x) = (powsum2 k x)*(k+2)+x)%N.
+Proof.
+  rewrite powsum2_spec.
+  replace (k+2)%N with (k+1+1)%N by lia.
+  rewrite N.mul_add_distr_l,N.mul_1_r.
+  unfold powsum2.
+  rewrite (N.mul_comm _ (k+1))%N.
+  rewrite <-div_mul.
+  2: apply powsum_mod.
+  pose proof (powsum_lb k x).
+  lia.
+Qed.
 
 Definition find_Nformula_v1(ls:list N):option Nformula :=
 match list_diff ls with
@@ -165,7 +346,20 @@ match list_diff ls with
   | None =>
     match check_geoseq ls' with
     | Some (a1,k) => Some (N_geoseq_sum a0 a1 (k-2))
-    | None => None
+    | None =>
+      match list_diff ls' with
+      | None => None
+      | Some ls'' =>
+        let a0' := hd N0 ls' in
+        match check_constseq ls'' with
+        | Some k => None
+        | None =>
+          match check_geoseq ls'' with
+          | Some (a1,k) => Some (N_geoseq_sum2 a0 a0' a1 (k-2))
+          | None => None
+          end
+        end
+      end
     end
   end
 end.
@@ -263,6 +457,7 @@ Inductive nat_expr :=
 | nat_add(a b:nat_expr)
 | nat_mul(a b:nat_expr)
 | nat_powsum(k:N)(n:nat_expr)
+| nat_powsum2(k:N)(n:nat_expr)
 | nat_var(i:id_t)
 | nat_ivar
 .
@@ -363,6 +558,7 @@ match a,b with
 | nat_add a0 a1,nat_add b0 b1 => (nat_expr_eqb a0 b0) && (nat_expr_eqb a1 b1)
 | nat_mul a0 a1,nat_mul b0 b1 => (nat_expr_eqb a0 b0) && (nat_expr_eqb a1 b1)
 | nat_powsum a0 a1,nat_powsum b0 b1 => (a0 =? b0)%N && (nat_expr_eqb a1 b1)
+| nat_powsum2 a0 a1,nat_powsum2 b0 b1 => (a0 =? b0)%N && (nat_expr_eqb a1 b1)
 | nat_var a0,nat_var b0 => (a0 =? b0)%positive
 | nat_ivar,nat_ivar => true
 | _,_ => false
@@ -378,6 +574,8 @@ Proof.
   - destruct (IHa1 b1),(IHa2 b2); subst; cbn;
     solve_Bool_reflect.
   - destruct (IHa1 b1),(IHa2 b2); subst; cbn;
+    solve_Bool_reflect.
+  - destruct (N.eqb_spec k k0); destruct (IHa b); subst; cbn;
     solve_Bool_reflect.
   - destruct (N.eqb_spec k k0); destruct (IHa b); subst; cbn;
     solve_Bool_reflect.
@@ -670,8 +868,12 @@ match a with
 | nat_mul a0 (from_nat a1) =>
   add_to_affine_map a0 (sgn*(Z.of_N a1))%Z f
 | nat_powsum k (nat_add a (from_nat 1)) =>
-  affine_map_upd (affine_map_upd f (nat_powsum k a) (sgn*(Z.of_N (k+2)))%Z) (from_nat 1) sgn
+  affine_map_upd (affine_map_upd f (nat_powsum k a) ((Z.of_N (k+2))*sgn)%Z) (from_nat 1) sgn
+| nat_powsum2 k (nat_add a (from_nat 1)) =>
+  affine_map_upd (affine_map_upd f (nat_powsum2 k a) ((Z.of_N (k+2))*sgn)%Z) a sgn
 | nat_powsum k (from_nat 0) =>
+  f
+| nat_powsum2 k (from_nat 0) =>
   f
 | from_nat a1 => affine_map_upd f (from_nat 1) (sgn*(Z.of_N a1))%Z
 | _ => affine_map_upd f a sgn
@@ -881,6 +1083,7 @@ match x with
 | nat_add a b => nat_allFV a (nat_allFV b s)
 | nat_mul a b => nat_allFV a (nat_allFV b s)
 | nat_powsum a b => (nat_allFV b s)
+| nat_powsum2 a b => (nat_allFV b s)
 | nat_var i0 => add_var s i0
 | nat_ivar => s
 end.
@@ -1013,6 +1216,7 @@ match x with
 | nat_add a b => nat_add (subst_nat a) (subst_nat b)
 | nat_mul a b => nat_mul (subst_nat a) (subst_nat b)
 | nat_powsum a b => nat_powsum a (subst_nat b)
+| nat_powsum2 a b => nat_powsum2 a (subst_nat b)
 | nat_var i => (mp i nat_t)
 | nat_ivar => mpi
 end.
@@ -1324,7 +1528,12 @@ match x with
   end
 | nat_powsum k n =>
   match to_nat_const n with
-  | Some n0 => Some (((k+2)^n0-1)/(k+1))%N
+  | Some n0 => Some (powsum k n0)%N
+  | None => None
+  end
+| nat_powsum2 k n =>
+  match to_nat_const n with
+  | Some n0 => Some (powsum2 k n0)%N
   | None => None
   end
 | _ => None
@@ -1395,6 +1604,8 @@ match f with
 | N_arithseq a0 a1 => (nat_add (nat_mul nat_ivar (from_nat a1)) (from_nat a0))
 | N_geoseq_sum a0 a1 k =>
   (nat_add (nat_mul (nat_powsum k nat_ivar) (from_nat a1)) (from_nat a0))
+| N_geoseq_sum2 a0 a1 a2 k =>
+  (nat_add (nat_add (nat_mul (nat_powsum2 k nat_ivar) (from_nat a2)) (nat_mul nat_ivar (from_nat a1))) (from_nat a0))
 end.
 
 Definition find_Nformula(f:list N->option Nformula)(ls:list (id_t*(list N))):option (PositiveMap.t any_expr) :=
@@ -1790,6 +2001,17 @@ Definition config_arithseq_fixed_block_size T0 n maxP := {|
   ex_rules := [];
   enable_exp_toplevel_loop := false;
 |}.
+Definition config_exploop cfg := {|
+  max_repeater_len := cfg.(max_repeater_len);
+  max_repeater_size := cfg.(max_repeater_size);
+  fixed_block_size := cfg.(fixed_block_size);
+  enable_arithseq := cfg.(enable_arithseq);
+  initial_steps := cfg.(initial_steps);
+  mnc := N.max 4 cfg.(mnc);
+  max_period := cfg.(max_period);
+  ex_rules := cfg.(ex_rules);
+  enable_exp_toplevel_loop := true;
+|}.
 Definition config_BEC T0 n QL QR qL qR d1 := {|
   max_repeater_len := 16;
   max_repeater_size := Some (N.of_nat n);
@@ -1851,7 +2073,8 @@ Fixpoint to_cnat(x:nat_expr):cnat_expr :=
 | from_nat n => n
 | nat_add a b => (to_cnat a) + (to_cnat b)
 | nat_mul a b => (to_cnat a) * (to_cnat b)
-| nat_powsum k n => (((k+2)^(to_cnat n)-1)/(k+1))%N
+| nat_powsum k n => (powsum k (to_cnat n))
+| nat_powsum2 k n => (powsum2 k (to_cnat n))
 | nat_var i => (mp i nat_t)
 | nat_ivar => mpi
 end)%N.
@@ -2137,17 +2360,6 @@ Proof.
     lia.
 Qed.
 
-Lemma powsum_mod k n:
-  (((k + 2) ^ n - 1) mod (k + 1))%N = 0%N.
-Proof.
-  induction n using N.peano_ind.
-  1: reflexivity.
-  rewrite N.pow_succ_r'.
-  replace ((k+2)*(k+2)^n-1)%N with ((k+2)^n-1+(k+2)^n*(k+1))%N by lia.
-  rewrite N.Div0.mod_add.
-  apply IHn.
-Qed.
-
 Ltac rw_affine_map_upd_spec :=
   try ((rewrite affine_map_upd_spec;
   reflexivity) || fail).
@@ -2183,19 +2395,29 @@ Proof.
     all: rw_affine_map_upd_spec.
     repeat rewrite affine_map_upd_spec.
     unfold_to_xx. cbn[to_cnat].
-    rewrite N.pow_add_r,N.pow_1_r.
-    pose proof (N.pow_nonzero (k+2) (to_cnat a1))%N as Hnz.
     remember (to_cnat a1) as v1.
-    replace ((k+2)^v1*(k+2)-1)%N with ((k+2)^v1-1+(k+2)^v1*(k+1))%N by lia.
-    rewrite N.div_add. 2: lia.
-    replace (Z.of_N (((k + 2) ^ v1 - 1) / (k + 1))%N * (u * Z.of_N (k + 2)%N))%Z with
-    ((Z.of_N ((((k+2)^v1-1)/(k+1)+(k+1)*(((k+2)^v1-1)/(k+1)))))%N*u)%Z by lia.
-    replace ((k+1)*(((k+2)^v1-1)/(k+1)))%N with ((k+2)^v1-1)%N. 2:{
-      rewrite N.Div0.div_exact.
-      apply powsum_mod.
+    pose proof (powsum_spec' k v1) as H.
+    replace (N.succ v1) with (v1+1)%N in H by lia.
+    rewrite H. lia.
+  - destruct a.
+    all: rw_affine_map_upd_spec.
+    1:{
+      destruct n.
+      all: rw_affine_map_upd_spec.
+      cbn. lia.
     }
-    replace ((k+2)^v1)%N with ((k+2)^v1-1+1)%N by lia.
-    repeat rewrite N.add_sub. lia.
+    destruct a2.
+    all: rw_affine_map_upd_spec.
+    destruct n.
+    all: rw_affine_map_upd_spec.
+    destruct p.
+    all: rw_affine_map_upd_spec.
+    repeat rewrite affine_map_upd_spec.
+    unfold_to_xx. cbn[to_cnat].
+    remember (to_cnat a1) as v1.
+    pose proof (powsum2_spec' k v1) as H.
+    replace (N.succ v1) with (v1+1)%N in H by lia.
+    rewrite H. lia.
   - rewrite affine_map_upd_spec;
     reflexivity.
   - rewrite affine_map_upd_spec.
