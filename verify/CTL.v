@@ -318,15 +318,16 @@ Some {|
 |}).
 
 Definition CTL_state_0 cfg len :=
-dfa_0 len &&& (fun dfa0 =>
+dfa_0 len &&& (fun dfa01 =>
+dfa_0 len &&& (fun dfa02 =>
 Some {|
-  ldfa := dfa0;
-  rdfa := dfa0;
+  ldfa := dfa01;
+  rdfa := dfa02;
   config_set := config_HashSet.hmap_make len;
   config_queue := nil;
   global_state := global_state_init cfg;
   init_flag := false;
-|}).
+|})).
 
 Definition dfa_get_trans st x y sgn0 :=
   dfa_trans_HashMap.hmap_get (x,y) (get_dfa st sgn0).(trans).
@@ -2556,7 +2557,7 @@ match arg with
           Ctx_NG_Sym.CTLCtx.len := N.to_nat NG_n;
           Ctx_NG_Sym.CTLCtx.maxS := N_to_int maxS;
         |} in
-      (CTL_NG_Sym.CTL_decide_nonhalt tm1 c1 cfg (N_to_int maxS) maxT)
+      (CTL_NG_Sym.CTL_decide_nonhalt tm1 c1 cfg (N_to_int maxS) (maxT*100))
   | inr c => false
   end
 end.

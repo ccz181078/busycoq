@@ -18,3 +18,11 @@ Ltac solve_cert cert :=
     vm_cast_no_check (eq_refl true)
   end.
 
+Ltac Nsolve_cert cert :=
+  match goal with
+  | |- ~halts (TM_from_str ?tm) c0 =>
+    idtac tm;
+    rewrite halts_halts';
+    eapply (decide_nonhalt_spec _ cert);
+    native_cast_no_check (eq_refl true)
+  end.
