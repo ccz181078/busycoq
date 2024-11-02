@@ -3,24 +3,9 @@ Require Import List.
 Require Import ZArith.
 Require Import Lia.
 Require Import FSets.FMapPositive.
-
-Notation "x || y" := (if x then true else y) : bool_scope.
-Notation "x && y" := (if x then y else false) : bool_scope.
+From BusyCoq Require Import HashTable.
+From BusyCoq Require Import Eqb.
 Open Scope bool.
-
-Lemma or_false_iff (a b:bool):
-  (a || b) = false <->
-  a = false /\ b = false.
-Proof.
-  destruct a,b; tauto.
-Qed.
-
-Lemma and_true_iff (a b:bool):
-  (a && b) = true <->
-  a = true /\ b = true.
-Proof.
-  destruct a,b; tauto.
-Qed.
 
 
 
@@ -514,43 +499,6 @@ Definition prop_expr:Type :=
   (list prop0_expr)*(list prop0_expr).
 
 
-Ltac solve_Bool_reflect :=
-  try (constructor; congruence).
-
-Fixpoint list_eqb{T}(T_eqb:T->T->bool)(a b:list T):bool :=
-match a,b with
-| a0::a1,b0::b1 => (T_eqb a0 b0) && (list_eqb T_eqb a1 b1)
-| nil,nil => true
-| _,_ => false
-end.
-
-Lemma list_eqb_spec {T} T_eqb (a b:list T):
-  (forall a0 b0, Bool.reflect (a0=b0) (T_eqb a0 b0)) ->
-  Bool.reflect (a=b) (list_eqb T_eqb a b).
-Proof.
-  intro H.
-  gen b.
-  induction a as [|a0 a1]; intros b; destruct b as [|b0 b1]; cbn.
-  all: solve_Bool_reflect.
-  destruct (H a0 b0),(IHa1 b1); solve_Bool_reflect.
-Qed.
-
-Definition prod_eqb{A B}(A_eqb:A->A->bool)(B_eqb:B->B->bool)(a b:A*B):bool :=
-match a,b with
-| (a0,a1),(b0,b1) =>
-  A_eqb a0 b0 && B_eqb a1 b1
-end.
-
-Lemma prod_eqb_spec{A B} A_eqb B_eqb (a b:A*B):
-  (forall a0 b0, Bool.reflect (a0=b0) (A_eqb a0 b0)) ->
-  (forall a0 b0, Bool.reflect (a0=b0) (B_eqb a0 b0)) ->
-  Bool.reflect (a=b) (prod_eqb A_eqb B_eqb a b).
-Proof.
-  intros Ha Hb.
-  destruct a as [a0 a1].
-  destruct b as [b0 b1]; cbn.
-  destruct (Ha a0 b0),(Hb a1 b1); solve_Bool_reflect.
-Qed.
 
 Fixpoint nat_expr_eqb(a b:nat_expr):bool :=
 match a,b with
@@ -775,8 +723,6 @@ Proof.
   destruct (list_prop0_eqb_spec a1 b1); solve_Bool_reflect.
 Qed.
 
-
-
 Definition affine_map := list (nat_expr*Z).
 Fixpoint affine_map_upd'(f:affine_map)(x:nat_expr)(u:Z):affine_map*bool :=
 match f with
@@ -988,7 +934,76 @@ Definition prop_has_false(x:prop_expr) :=
 let (H,G):=x in has_false H.
 
 
+Module ExprHash.
+Import HashConcat.
 
+Fixpoint nat_hash(x:nat_expr) :=
+match x with
+| from_nat x0 => hv1 ## N_hash x0
+| nat_add a b => hv2 ## nat_hash a ## nat_hash b
+| nat_mul a b => hv3 ## nat_hash a ## nat_hash b
+| nat_powsum a b => hv4 ## N_hash a ## nat_hash b
+| nat_powsum2 a b => hv5 ## N_hash a ## nat_hash b
+| nat_var i0 => hv6 ## Pos_hash i0
+| nat_ivar => hv7
+end.
+
+Fixpoint seg_hash(x:seg_expr) :=
+match x with
+| seg_nil => hv1
+| seg_sym a => hv2 ## (sym_hash a)
+| seg_concat a b => hv3 ## seg_hash a ## seg_hash b
+| seg_repeat a n => hv4 ## seg_hash a ## nat_hash n
+| seg_arithseq a n => hv5 ## list_hash (fun '(x0,x1,x2) => list_hash sym_hash x0 ## Z_hash x1 ## nat_hash x2) a ## nat_hash n
+| seg_var i0 => hv6 ## Pos_hash i0
+end.
+
+Fixpoint side_hash(x:side_expr) :=
+match x with
+| side_0inf => hv1
+| side_var i0 => hv2 ## Pos_hash i0
+| side_concat a b => hv3 ## seg_hash a ## side_hash b
+| side_binary d1 n => hv4 ## list_hash sym_hash d1 ## nat_hash n
+| side_binary_Pos d0 d1 d1a n => hv5 ## list_hash sym_hash d0 ## list_hash sym_hash d1 ## list_hash sym_hash d1a ## nat_hash n
+| side_binary_dec d0 d1 d1a len n1 n2 => hv6 ## list_hash sym_hash d0 ## list_hash sym_hash d1 ## list_hash sym_hash d1a ## nat_hash len ## nat_hash n1 ## nat_hash n2
+end.
+
+
+Definition config_hash(x:config_expr) :=
+  let '(l,r,s,sgn):=x in
+  side_hash l ## side_hash r ## q_hash s ## dir_hash sgn.
+
+Definition prop0_hash(x:prop0_expr) :=
+match x with
+| nat_eq a b => hv1 ## nat_hash a ## nat_hash b
+| seg_eq a b => hv2 ## seg_hash a ## seg_hash b
+| side_eq a b => hv3 ## side_hash a ## side_hash b
+| config_eq a b => hv4 ## config_hash a ## config_hash b
+| seg_rw a b => hv5 ## seg_hash a ## seg_hash b
+| side_rw a b => hv6 ## side_hash a ## side_hash b
+| config_rw a b => hv7 ## config_hash a ## config_hash b
+| false_prop0 => hv8
+| multistep_expr a b n => hv9 ## config_hash a ## config_hash b ## nat_hash n
+| multistep_lb_expr a b n => hv10 ## config_hash a ## config_hash b ## nat_hash n
+| multistep'_expr a b n => hv11 ## config_hash a ## config_hash b ## bool_hash n
+end.
+
+Definition list_prop0_hash(x:list prop0_expr) :=
+list_hash prop0_hash x.
+
+Definition prop_hash(x:prop_expr) :=
+let '(H,G):=x in
+list_prop0_hash H ## list_prop0_hash G.
+
+Module prop_Hash <: HashableType.
+Definition K := prop_expr.
+Definition K_hash := prop_hash.
+Definition K_eq := prop_eqb.
+Definition K_eq_spec := prop_eqb_spec.
+End prop_Hash.
+
+
+End ExprHash.
 
 (*
   syntatic equality (but nat_expr are compared using affine_map)
@@ -6582,6 +6597,7 @@ Proof.
   apply prop0_to_prop_spec,H0.
 Qed.
 
+
 Definition hlin_layer:Type := (prop_expr'*prop_expr')*(prop_expr'*prop_expr')*(N*N).
 
 Definition hlin_layer_WF(x:hlin_layer):Prop :=
@@ -7156,55 +7172,6 @@ Proof.
   apply hlin_layers_upd_spec; tauto.
 Qed.
 
-Fixpoint Pos_iter_until{S S'}(f:S->S+S')(x:S+S')(T:positive):S+S' :=
-match x with
-| inl s =>
-  match T with
-  | xH => f s
-  | xO T0 => Pos_iter_until f (Pos_iter_until f x T0) T0
-  | xI T0 => Pos_iter_until f (Pos_iter_until f (f s) T0) T0
-  end
-| _ => x
-end.
-
-Definition N_iter_until{S S'}(f:S->S+S')(x:S+S')(T:N):S+S' :=
-match T with
-| N0 => x
-| Npos T0 => Pos_iter_until f x T0
-end.
-
-Lemma N_iter_until_spec{S S'}{f:S->S+S'}{x:S+S'}{T:N}(P:S->Prop)(P':S'->Prop):
-(forall x0:S, P x0 ->
-match f x0 with
-| inl x1 => P x1
-| inr x1 => P' x1
-end) ->
-(match x with
-| inl x1 => P x1
-| inr x1 => P' x1
-end) ->
-match N_iter_until f x T with
-| inl x1 => P x1
-| inr x1 => P' x1
-end.
-Proof.
-  intros H.
-  destruct T as [|T].
-  1: cbn; tauto.
-  cbn.
-  gen x.
-  induction T; intros x Hx; cbn.
-  - destruct x.
-    + apply IHT,IHT,H,Hx.
-    + apply Hx.
-  - destruct x.
-    + apply IHT,IHT,Hx.
-    + apply Hx.
-  - destruct x.
-    + apply H,Hx.
-    + apply Hx.
-Qed.
-
 Definition steps_to_repeater_edge' w :=
 if (snd w =? 1)%positive then
   Some (fst (steps_to_repeater_edge w))
@@ -7435,6 +7402,36 @@ Proof.
   rewrite H.
   auto.
 Qed.
+
+(* TODO: add recursive record-breaking analysis *)
+Axiom srec_state:Type.
+Axiom srec_add_rule:srec_state->prop_expr'->prop_expr'->prop_expr'->srec_state.
+
+Definition find_srec_step(w0 w1 dw:prop_expr')(s:srec_state):option (prop_expr'*prop_expr'*srec_state) :=
+  follow_rule w0 dw &&& (fun w0' =>
+  follow_rule w1 dw &&& (fun w1' =>
+  Some (w0',w1',srec_add_rule s w1 dw w1')
+)).
+
+Fixpoint find_srec(w0 w1:prop_expr')(s:srec_state)(n:nat):option (prop_expr'*srec_state) :=
+match n with
+| O => None
+| Datatypes.S n0 =>
+  match find_step1 w0 with
+  | Some u =>
+    find_srec_step w0 w1 u s &&& (fun '(w0,w1,s) =>
+    find_step0_refl w1 &&& (fun w2 =>
+    find_srec w1 w2 s n0 &&& (fun '(u,s) =>
+    find_srec_step w0 w1 u s &&& (fun '(w0,w1,s) =>
+    find_srec w0 w1 s n0
+    ))))
+  | None => Some (w1,s)
+  end
+end.
+
+
+
+
 
 End tm_ctx.
 

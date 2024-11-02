@@ -47,6 +47,11 @@ Ltac solve_hlin_nonhalt cfg :=
     (solve_hlin_nonhalt_T (config_exploop cfg) 200000%N)
   end.
 
+Lemma nonhalt62: ~halts (TM_from_str "1RB0RE_1RC0RE_0LD0RB_0LE1LA_1RA0RF_1LC---") c0.
+Proof.
+  solve_hlin_nonhalt (config_arithseq_fixed_block_size 0 2 37).
+Time Qed.
+
 Lemma nonhalt61: ~halts (TM_from_str "1RB1RD_0LC1LE_1LD1LB_1RA1LF_---0RC_0LD0RE") c0.
 Proof.
   solve_hlin_nonhalt default_config.

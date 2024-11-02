@@ -45,6 +45,8 @@ Ltac solve_hlin_nonhalt cfg :=
     (solve_hlin_nonhalt_T cfg 200000%N)
   end.
 
+
+
 Module Eat2Digit.
 
 Lemma nonhalt1: ~halts (TM_from_str "1LB0LE_0LC1LD_1RA1LC_1RC---_1RF1LE_0RA0RF") c0.
@@ -247,6 +249,21 @@ Proof. solve_hlin_nonhalt (config_BEC_Pos 1000%N 3 D B [1] [0] [0;0;1;1] [0;0;0;
 Lemma nonhalt32: ~halts (TM_from_str "1LB1LF_1LC0LD_0LD0RC_1RE1LA_1RC---_0LB0LE") c0.
 Proof. solve_hlin_nonhalt (config_BEC_Pos 1000%N 3 A C [1] [0] [0;0;1;1] [0;0;0;1] []). Time Qed.
 
+Lemma nonhalt33: ~halts (TM_from_str "1LB1LC_0LC---_0LD1LA_1RD1RE_0LC1LF_1RC0RF") c0.
+Proof. solve_hlin_nonhalt (config_BEC 25077%N 3 C F [1;1] [0;0] [1;1]). Time Qed.
+
+Lemma nonhalt34: ~halts (TM_from_str "1RB0RA_0LB1LC_0LD1LF_0LE---_1RA1LD_0RF1LE") c0.
+Proof. solve_hlin_nonhalt (config_BEC 8100%N 2 D A [1] [0] [0;0;1]). Time Qed.
+
+Lemma nonhalt35: ~halts (TM_from_str "1RB1LF_1RC0RB_0LC1LD_0LE0RD_1LA0LF_1LE---") c0.
+Proof. solve_hlin_nonhalt (config_BEC 974%N 2 F B [] [] [0;0;1]). Time Qed.
+
+Lemma nonhalt36: ~halts (TM_from_str "1RB0RA_0LB1LC_0LD1LF_0LE---_1RA1LD_1RA1LE") c0.
+Proof. solve_hlin_nonhalt (config_BEC 3179%N 2 D A [1] [0] [0;0;1]). Time Qed.
+
+Lemma nonhalt37: ~halts (TM_from_str "1LB0RD_1LC1LE_1RA0LB_0RA1RC_1LC1LF_0LC---") c0.
+Proof. solve_hlin_nonhalt (config_BEC 198268%N 3 B D [] [] [0;1]). Time Qed.
+
 End Others.
 
 
@@ -287,8 +304,6 @@ Lemma nonhalt11: ~halts (TM_from_str "1RB1LF_0LC0RB_0RA1LD_0LE---_1LA0LF_1LE1LB"
 Proof. solve_hlin_nonhalt (config_BEC 1000000%N 2 F B [] [] [0;0;1]). Time Qed.
 
 End PeriodicBadDigit.
-
-
 
 
 

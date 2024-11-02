@@ -1,1 +1,1 @@
--Q . BusyCoq
+-Q . BusyCoq -native-compiler yes

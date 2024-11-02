@@ -6,6 +6,7 @@ From Coq Require Import Lists.Streams.
 From Coq Require Import PeanoNat.
 From Coq Require Import Lia.
 From BusyCoq Require Export Helper.
+From BusyCoq Require Import HashTable.
 Set Default Goal Selector "!".
 
 (** The direction a Turing machine can step in. *)
@@ -39,6 +40,8 @@ Module Type Ctx.
   Parameter sym_eqb : Sym->Sym->bool.
   Parameter q_eqb_spec : forall a b:Q, Bool.reflect (a=b) (q_eqb a b).
   Parameter sym_eqb_spec : forall a b:Sym, Bool.reflect (a=b) (sym_eqb a b).
+  Parameter q_hash : Q->HashConcat.hash_t.
+  Parameter sym_hash : Sym->HashConcat.hash_t.
 
   (** It is also useful, in some situations, to be able to enumerate
       all the symbols and states. *)
@@ -612,4 +615,138 @@ Proof with eauto.
     destruct (Hstep i HP) as [i' [Hi' HP']]...
 Qed.
 
+Lemma nonhalt_iff {tm c}:
+  ~halts tm c <->
+  forall n, exists c', c -[ tm ]->> n / c'.
+Proof.
+  split; intros H.
+  - unfold halts,halts_in in H.
+    intros n.
+    induction n.
+    + exists c. constructor.
+    + destruct IHn as [c' IHn].
+      epose proof (no_halted_step tm c' _) as H0.
+      destruct H0 as [c'0 H0].
+      eexists.
+      replace (S n) with (n+1) by lia.
+      eapply multistep_trans; eauto.
+      Unshelve.
+      intros H0.
+      apply H.
+      exists n c'; tauto.
+  - intros H0.
+    destruct H0 as [n H0].
+    specialize (H (n+1)).
+    destruct H as [c' H].
+    eapply exceeds_halt.
+    1: apply H0.
+    2: apply H.
+    lia.
+Qed.
+
+Definition step_c(tm:TM)(c:Q*tape):option (Q*tape) :=
+let '(q,(l,m,r)):=c in
+match tm (q,m) with
+| None => None
+| Some (m',L,q') => Some (q',move_left (l,m',r))
+| Some (m',R,q') => Some (q',move_right (l,m',r))
+end.
+
+Fixpoint multistep_c(tm:TM)(n:nat)(c:Q*tape) :=
+match n with
+| O => Some c
+| S n =>
+  match step_c tm c with
+  | Some c =>multistep_c tm n c
+  | None => None
+  end
+end.
+
+Definition halts_in' tm c n :=
+exists ch, multistep_c tm n c = Some ch /\ halted tm ch.
+
+Definition halts' tm c :=
+exists n, halts_in' tm c n.
+
+Lemma step_c_spec tm c c':
+  step_c tm c = Some c' <->
+  c -[ tm ]-> c'.
+Proof.
+  split; intros H.
+  - destruct c as [q [[l m] r]].
+    cbn in H.
+    destruct (tm (q,m)) as [[[m' d] q']|] eqn:E.
+    2: congruence.
+    destruct d; inverts H; constructor; auto.
+  - inverts H;
+    cbn; rewrite H0; reflexivity.
+Qed.
+
+Lemma multistep_c_spec tm n c c':
+  multistep_c tm n c = Some c' <->
+  c -[ tm ]->> n / c'.
+Proof.
+  gen c c'.
+  induction n; intros.
+  - split; intros H; inverts H; constructor.
+  - split; intros H.
+    + cbn in H.
+      destruct (step_c tm c) eqn:E; try congruence.
+      rewrite step_c_spec in E.
+      rewrite IHn in H.
+      eauto.
+    + inverts H. cbn.
+      rewrite <-step_c_spec in H1.
+      rewrite H1,IHn.
+      assumption.
+Qed.
+
+Lemma halts_in_halts_in' {tm c n}:
+  halts_in tm c n <-> halts_in' tm c n.
+Proof.
+  unfold halts_in,halts_in'.
+  split; intros [ch [H H0]]; exists ch; (split;[|tauto]).
+  - rewrite multistep_c_spec.
+    apply H.
+  - rewrite <-multistep_c_spec.
+    apply H.
+Qed.
+
+Lemma halts_halts' {tm c}:
+  halts tm c <-> halts' tm c.
+Proof.
+  unfold halts,halts'.
+  split; intros [n H]; exists n.
+  - rewrite <-halts_in_halts_in'.
+    apply H.
+  - rewrite halts_in_halts_in'.
+    apply H.
+Qed.
+
 End TM.
+
+
+Definition dir_rev(sgn:dir):=
+match sgn with
+| L => R
+| R => L
+end.
+
+Definition dir_eqb(d1 d2:dir) :=
+match d1,d2 with
+| L,L | R,R => true
+| _,_ => false
+end.
+
+Lemma dir_eqb_spec d1 d2: Bool.reflect (d1=d2) (dir_eqb d1 d2).
+Proof.
+  destruct d1,d2; solve_Bool_reflect.
+Qed.
+
+Definition dir_hash(x:dir) :=
+match x with
+| L => HashConcat.hv1
+| R => HashConcat.hv2
+end.
+
+

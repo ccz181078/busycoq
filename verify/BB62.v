@@ -2,6 +2,7 @@
 
 From Coq Require Import Lists.List. Import ListNotations.
 From BusyCoq Require Export Flip.
+From BusyCoq Require Import HashTable.
 Set Default Goal Selector "!".
 
 Inductive state := A | B | C | D | E | F.
@@ -52,6 +53,24 @@ Module BB62 <: Ctx.
   Proof.
     destruct a,b; cbn; constructor; congruence.
   Qed.
+
+  Import HashConcat.
+
+  Definition q_hash(a:Q) :=
+  match a with
+  | A => hv1
+  | B => hv2
+  | C => hv3
+  | D => hv4
+  | E => hv5
+  | F => hv6
+  end.
+
+  Definition sym_hash(a:sym) :=
+  match a with
+  | S0 => hv1
+  | S1 => hv2
+  end.
 
   Definition all_qs := [A; B; C; D; E; F].
 
