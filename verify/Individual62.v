@@ -378,8 +378,8 @@ match x with
   end
 end.
 
-Notation "x &&& y" := (if x then y else false) (at level 80, right associativity).
-Notation "x ||| y" := (if x then true else y) (at level 85, right associativity).
+Local Notation "x &&& y" := (if x then y else false) (at level 80, right associativity).
+Local Notation "x ||| y" := (if x then true else y) (at level 85, right associativity).
 
 Lemma andb_shortcut_spec(a b:bool):
   (a&&&b) = (a&&b)%bool.

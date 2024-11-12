@@ -36,7 +36,7 @@ Ltac solve_hlin_nonhalt_T cfg T :=
     unfold s0;
     rewrite progress_rw;
     try (es; fail)
-  | vm_cast_no_check (eq_refl true)].
+  | native_cast_no_check (eq_refl true)].
 
 Ltac solve_hlin_nonhalt cfg :=
   match goal with
@@ -46,6 +46,148 @@ Ltac solve_hlin_nonhalt cfg :=
   end.
 
 
+Module BL.
+Lemma nonhalt1: ~halts (TM_from_str "1LB0RA_1RC1LF_---1RD_1RE1LD_0LB0RC_1RA0LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 3288%N 3
+    F A [] [] [0;0] [1;0] [1]
+    F D [] [1;0;1] [0;1;1] [0;0;1;1] [0;1;1;1;0;1;1] [1;0] [1;0;1] [1;0;1;1;1;0;1]).
+Time Qed.
+
+Lemma nonhalt2: ~halts (TM_from_str "1LB0LA_1LC0LF_1RD0RA_1RE1LD_0LC0RE_---1LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 3273%N 3
+    D E [] [] [0] [1] [1]
+    B E [] [1;1;0] [1;1;0] [1;0;0;1;0] [1;1;0;1;0;1;1;0] [1;0;1] [1;1;0] [1;1;1;1;0;1;1;0]).
+Time Qed.
+
+Lemma nonhalt3: ~halts (TM_from_str "1RB0RE_1LC0LF_1RE1LD_0LC0LD_0RA0LB_---1RC") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 2832%N 3
+    C E [] [] [0;0] [1;0] [1]
+    C E [] [1;1;0] [0;0;1] [0;0;0;1] [0;0;1;0;1;1;1] [0;1;1] [1;1;0] [1;1;1;0;1;1;0]).
+Time Qed.
+
+Lemma nonhalt4: ~halts (TM_from_str "1RB0LD_1LC0RE_1RA1LD_1LA0LA_0RB0RF_---0RD") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 5456%N 4
+    A B [] [] [0;0] [1;0] [1]
+    D D [] [0;0;0;1] [0;1;1;1] [0;0;0;1;1;1] [0;1;1;1;1;1;0;1;1;1] [1;1;0] [1;0;0;1] [1;0;0;1;1;1;1;0;0;1]).
+Time Qed.
+
+Lemma nonhalt5: ~halts (TM_from_str "1RB0RA_1RC---_1RD1LC_0LE0RC_1RA1LF_1LE0LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 2797%N 3
+    E A [] [] [0;0] [1;0] [1]
+    F C [] [0;1;1] [0;1;1] [0;0;1;1] [0;1;1;1;0;1;1] [1;0] [0;1;1] [0;1;1;1;0;1;1]).
+Time Qed.
+
+Lemma nonhalt6: ~halts (TM_from_str "1LB0RA_1RC1LE_---1RD_1RA0LF_1RA0LE_0LC1LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 5148%N 4
+    E A [] [] [0;0] [1;0] [1]
+    E A [] [1;1;1;0] [1;1;0;0] [1;1;0;0;0;0] [1;1;0;0;1;1;0;1;1;0] [1;1;0;1;1] [1;1;1;0] [1;1;1;1;1;0;1;1;1;0]).
+Time Qed.
+
+Lemma nonhalt7: ~halts (TM_from_str "1RB0LA_1RC---_1LD0RF_0LA1LE_1LA1LC_0LE1RE") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 9408%N 5
+    D E [1;1] [1;0] [0;0;0] [1;1;0] [1;1]
+    D F [] [0;1;1;0;0] [1;1;1;1;0] [1;1;1;1;0;0;0] [1;1;1;1;0;1;1;1;1;1;0;0] [1;1;1;1;1;0] [0;1;1;0;0] [0;1;1;1;1;0;0;0;1;1;0;0]).
+Time Qed.
+
+Lemma nonhalt8: ~halts (TM_from_str "1RB0LA_1RC---_1LD0RF_0LA1LE_1LA1LC_0LF1RE") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 9664%N 5
+    D E [1;1] [1;0] [0;0;0] [1;1;0] [1;1]
+    D F [] [0;1;1;0;0] [1;1;1;1;0] [1;1;1;1;0;0;0] [1;1;1;1;0;1;1;1;1;1;0;0] [1;1;1;1;1;0] [0;1;1;0;0] [0;1;1;1;1;0;0;0;1;1;0;0]).
+Time Qed.
+
+Lemma nonhalt9: ~halts (TM_from_str "1LB---_1RC1LE_0LA1RD_0RC0RD_0RA0LF_0LE1LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 3893%N 4
+    F D [] [] [0;0] [1;1] [1;1]
+    F D [] [1;0;1;1] [1;0;0;1] [1;0;0;0;0;1] [1;0;0;1;0;1;1;0;0;1] [0;1;1;0] [1;0;1;1] [1;0;1;0;1;1;1;0;1;1]).
+Time Qed.
+
+Lemma nonhalt10: ~halts (TM_from_str "1LB0RA_1LC1LE_0LD0RD_1LE1RA_1RA0LF_0LE---") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 12405%N 6
+    E A [] [] [0;0;0;0] [1;0;0;0] [1]
+    E A [] [0;0;0;1;0;0] [1;1;0;1;1;0] [1;1;0;1;1;0;0;0] [1;1;0;1;1;0;1;1;0;1;0;1;1;0] [1;1;0;1;0;1;1] [1;0;0;1;0;0] [1;0;1;0;0;1;0;0;1;0;0;1;0;0]).
+Time Qed.
+
+Lemma nonhalt12: ~halts (TM_from_str "1LB1LF_0RC---_0LA1RD_1RE0RD_1RC1LE_1LA0LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 2829%N 4
+    A D [] [] [0;0] [1;0] [1;0]
+    A D [] [1;1;1;0] [1;0;0;1] [1;0;0;0;0;1] [1;0;0;1;1;0;1;0;0;1] [0] [1;1;1;0] [1;1;1;1;1;0;1;1;1;0]).
+Time Qed.
+
+Lemma nonhalt13: ~halts (TM_from_str "1RB0RA_1RC1LB_0LD1RA_1LF1LE_1LD0LE_0RC---") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 2965%N 4
+    D A [] [] [0;0] [1;0] [1;0]
+    D A [] [1;1;1;0] [1;0;0;1] [1;0;0;0;0;1] [1;0;0;1;1;0;1;0;0;1] [1;0;1;0] [1;1;1;0] [1;1;1;1;1;0;1;1;1;0]).
+Time Qed.
+
+Lemma nonhalt14: ~halts (TM_from_str "1RB0RF_1RC1LB_0LD1RF_1RF1LE_1LD0LE_---0RA") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 2835%N 4
+    D F [] [] [0;0] [1;0] [1]
+    D F [] [1;1;1;0] [1;0;0;1] [1;0;0;0;0;1] [1;0;0;1;1;0;1;0;0;1] [1;0;1;0] [1;1;1;0] [1;1;1;1;1;0;1;1;1;0]).
+Time Qed.
+
+Lemma nonhalt15: ~halts (TM_from_str "1LB0RA_1RB1RC_1RD0LC_0RE---_1LE1LF_1RA0LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 10169%N 6
+    F A [] [] [0;0;0] [1;0;0] [1]
+    F E [] [0;1;1;1;0;0] [1;1;1;0;0;0] [1;1;1;0;0;0;0;0;0] [1;1;1;0;0;0;1;1;1;0;1;1;1;0;0] [1;1;1;0;1;1;1] [1;1;1;1;0;0] [1;1;1;1;1;1;1;0;0;1;1;1;1;0;0]).
+Time Qed.
+
+Lemma nonhalt19: ~halts (TM_from_str "1LB0RA_0LC1LA_1LD0LF_1RE1RB_0RA0RD_0LB---") c0.
+Proof.
+  solve_hlin_nonhalt (config_BLEC 6990%N 7
+    B A [1;1;1] [0;0;0] [0;0;0;0] [1;0;1;0] [1;0;1]
+    C E [] [1;0;1;0;1;0;0] [0;1;1;1;1;0;0] [0;0;0;0;1;1;1;1;0;0] [0;1;1;1;1;0;0;0;1;0;0;1;1;1;1;0;0] [0;1] [1;0;1;0;1;0;0] [1;0;1;0;1;0;0;1;0;0;1;0;1;0;1;0;0]).
+Time Qed.
+
+Lemma nonhalt20: ~halts (TM_from_str "1LB1LF_1LC1RD_1LD0RA_1RB0LE_---0RD_1LA0LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 4206%N 4 A B [] [1;0;1;0] [1;1;1;1] [1;1;1;0;0;1] [1;1;1;1;1;0;1;1;1;1] [1;0;1;1;1] [1;0;1;0] [1;1;1;0;1;0;1;0;1;0]).
+Time Qed.
+
+Lemma nonhalt21: ~halts (TM_from_str "1LB1LF_1LC1RD_1LD1LA_1RB0LE_---0RD_1LA0LF") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 4078%N 4 A B [] [1;0;1;0] [1;1;1;1] [1;1;1;0;0;1] [1;1;1;1;1;0;1;1;1;1] [1;0;1;1;1] [1;0;1;0] [1;1;1;0;1;0;1;0;1;0]).
+Time Qed.
+
+Lemma nonhalt22: ~halts (TM_from_str "1RB0LC_0RC0RF_1RD0LA_0LE0RC_1LE1LA_0RD---") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 1881%N 2 A D [] [1;0] [1;0] [1;0;0;0] [1;0;1;1;1;0] [1;1;1;0] [1;0] [1;1;1;0;1;0]).
+Time Qed.
+
+Lemma nonhalt23: ~halts (TM_from_str "1RB1LA_0LC0RA_0RF1LD_1LE0LD_0RE1RC_---0RA") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 2874%N 2 D B [0] [1;0;1] [1;0] [1;0;0] [1;0;1;1;0] [1;1;0] [0;1] [1;0;1;0;1]).
+Time Qed.
+
+Lemma nonhalt24: ~halts (TM_from_str "1LB1RB_1LC0RD_0RA0LC_0LE1RE_0RF0LB_1RD---") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 3299%N 2 C D [] [1;0] [1;1] [1;1;0] [1;1;1;0;0] [1;0;0] [1;0] [1;1;0;1;0]).
+Time Qed.
+
+Lemma nonhalt25: ~halts (TM_from_str "1RB1LA_0LC0RA_---1LD_1LE0LD_0RE1RF_0RB1LD") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 2874%N 2 D B [0] [1;0;1] [1;0] [1;0;0] [1;0;1;1;0] [1;1;0] [0;1] [1;0;1;0;1]).
+Time Qed.
+
+Lemma nonhalt26: ~halts (TM_from_str "1LB0RD_1LC0LB_0RA1LE_1RF1RC_1RA0LE_0RC---") c0.
+Proof.
+  solve_hlin_nonhalt (config_BL 7994%N 3 B C [0;0] [1;0;0;1;0] [0;1;1] [0;0;0;1;1] [0;1;1;1;1;0;1;1] [1;1] [0;1;0] [0;1;0;1;1;0;1;0]).
+Time Qed.
+
+End BL.
 
 Module Eat2Digit.
 

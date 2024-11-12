@@ -4,7 +4,7 @@ Require Import ZArith.
 Require Import Lia.
 Require Import FSets.FMapPositive.
 From BusyCoq Require Import HashTable.
-From BusyCoq Require Import Eqb.
+From BusyCoq Require Export Eqb.
 Open Scope bool.
 
 
@@ -425,6 +425,7 @@ Inductive cside_expr :=
 | cside_binary(d1:list Sym)(n:cnat_expr)
 | cside_binary_Pos(d0 d1 d1a:list Sym)(n:cnat_expr)
 | cside_binary_dec(d0 d1 d1a:list Sym)(len n1 n2:cnat_expr)
+| cside_BL(f0 d0 d1 d1a:list Sym)(n:cnat_expr)
 .
 
 Definition to_cexpr_type(x:type_t):Type :=
@@ -463,6 +464,7 @@ Inductive side_expr :=
 | side_binary(d1:list Sym)(n:nat_expr)
 | side_binary_Pos(d0 d1 d1a:list Sym)(n:nat_expr)
 | side_binary_dec(d0 d1 d1a:list Sym)(len n1 n2:nat_expr)
+| side_BL(f0 d0 d1 d1a:list Sym)(n:nat_expr)
 .
 
 Definition to_expr_type(x:type_t):Type :=
@@ -576,6 +578,7 @@ match a,b with
 | side_binary d10 n0,side_binary d11 n1 => list_eqb sym_eqb d10 d11 && nat_expr_eqb n0 n1
 | side_binary_Pos d00 d10 d1a0 n0,side_binary_Pos d01 d11 d1a1 n1 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb n0 n1
 | side_binary_dec d00 d10 d1a0 len0 n10 n20,side_binary_dec d01 d11 d1a1 len1 n11 n21 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb len0 len1 && nat_expr_eqb n10 n11 && nat_expr_eqb n20 n21
+| side_BL f00 d00 d10 d1a0 n0,side_BL f01 d01 d11 d1a1 n1 => list_eqb sym_eqb f00 f01 && list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb n0 n1
 | _,_ => false
 end.
 
@@ -611,6 +614,16 @@ Proof.
     destruct (nat_expr_eqb_spec n1 n0);
     solve_Bool_reflect.
     destruct (nat_expr_eqb_spec n2 n3);
+    solve_Bool_reflect.
+  - destruct (list_eqb_spec sym_eqb f0 f1 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec);
+    solve_Bool_reflect.
+    destruct (nat_expr_eqb_spec n n0);
     solve_Bool_reflect.
 Qed.
 
@@ -900,6 +913,7 @@ match a,b with
 | side_binary d10 n0,side_binary d11 n1 => if list_eqb sym_eqb d10 d11 then solve_nat_eq n0 n1 else [false_prop0]
 | side_binary_Pos d00 d10 d1a0 n0,side_binary_Pos d01 d11 d1a1 n1 => if list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 then solve_nat_eq n0 n1 else [false_prop0]
 | side_binary_dec d00 d10 d1a0 len0 n10 n20,side_binary_dec d01 d11 d1a1 len1 n11 n21 => if list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 then (solve_nat_eq len0 len1) ++ (solve_nat_eq n10 n11) ++ (solve_nat_eq n20 n21) else [false_prop0]
+| side_BL f00 d00 d10 d1a0 n0,side_BL f01 d01 d11 d1a1 n1 => if list_eqb sym_eqb f00 f01 && list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 then solve_nat_eq n0 n1 else [false_prop0]
 | _,_ => [side_eq a b]
 end.
 
@@ -966,6 +980,7 @@ match x with
 | side_binary d1 n => hv4 ## list_hash sym_hash d1 ## nat_hash n
 | side_binary_Pos d0 d1 d1a n => hv5 ## list_hash sym_hash d0 ## list_hash sym_hash d1 ## list_hash sym_hash d1a ## nat_hash n
 | side_binary_dec d0 d1 d1a len n1 n2 => hv6 ## list_hash sym_hash d0 ## list_hash sym_hash d1 ## list_hash sym_hash d1a ## nat_hash len ## nat_hash n1 ## nat_hash n2
+| side_BL f0 d0 d1 d1a n => hv7 ## list_hash sym_hash f0 ## list_hash sym_hash d0 ## list_hash sym_hash d1 ## list_hash sym_hash d1a ## nat_hash n
 end.
 
 
@@ -1037,6 +1052,7 @@ match a,b with
 | side_binary d10 n0,side_binary d11 n1 => list_eqb sym_eqb d10 d11 && nat_expr_eqb n0 n1
 | side_binary_Pos d00 d10 d1a0 n0,side_binary_Pos d01 d11 d1a1 n1 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb n0 n1
 | side_binary_dec d00 d10 d1a0 len0 n10 n20,side_binary_dec d01 d11 d1a1 len1 n11 n21 => list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb len0 len1 && nat_expr_eqb n10 n11 && nat_expr_eqb n20 n21
+| side_BL f00 d00 d10 d1a0 n0,side_BL f01 d01 d11 d1a1 n1 => list_eqb sym_eqb f00 f01 && list_eqb sym_eqb d00 d01 && list_eqb sym_eqb d10 d11 && list_eqb sym_eqb d1a0 d1a1 && nat_expr_eqb n0 n1
 | _,_ => false
 end.
 
@@ -1124,6 +1140,7 @@ match x with
 | side_binary d1 n => nat_allFV n s
 | side_binary_Pos d0 d1 d1a n => nat_allFV n s
 | side_binary_dec d0 d1 d1a len n1 n2 => nat_allFV len (nat_allFV n1 (nat_allFV n2 s))
+| side_BL f0 d0 d1 d1a n => nat_allFV n s
 end.
 
 
@@ -1189,6 +1206,7 @@ match x with
 | side_binary d1 n => side_binary d1 (simpl_nat n)
 | side_binary_Pos d0 d1 d1a n => side_binary_Pos d0 d1 d1a (simpl_nat n)
 | side_binary_dec d0 d1 d1a len n1 n2 => side_binary_dec d0 d1 d1a (simpl_nat len) (simpl_nat n1) (simpl_nat n2)
+| side_BL f0 d0 d1 d1a n => side_BL f0 d0 d1 d1a (simpl_nat n)
 end.
 
 Definition simpl_config(x:config_expr) :=
@@ -1254,6 +1272,7 @@ match x with
 | side_binary d1 n => side_binary d1 (subst_nat n)
 | side_binary_Pos d0 d1 d1a n => side_binary_Pos d0 d1 d1a (subst_nat n)
 | side_binary_dec d0 d1 d1a len n1 n2 => side_binary_dec d0 d1 d1a (subst_nat len) (subst_nat n1) (subst_nat n2)
+| side_BL f0 d0 d1 d1a n => side_BL f0 d0 d1 d1a (subst_nat n)
 end.
 
 Definition subst_expr(t:type_t)(x:to_expr_type t):to_expr_type t.
@@ -1770,6 +1789,11 @@ match a,b,ca,cb with
   | Some (n1'0,n2'0,ls0),Some (n1'1,n2'1,ls1),Some (n1'2,n2'2,ls2) => Some (side_binary_dec d0 d1 d1a n1'0 n1'1 n1'2,side_binary_dec d0 d1 d1a n2'0 n2'1 n2'2,ls0++ls1++ls2)
   | _,_,_ => None
   end
+| side_BL f0 d0 d1 d1a n0,side_BL _ _ _ _ n1,side_BL _ _ _ _ n2,side_BL _ _ _ _ n3 =>
+  match visit_nat n0 n1 n2 n3 with
+  | Some (n1',n2',ls) => Some (side_BL f0 d0 d1 d1a n1',side_BL f0 d0 d1 d1a n2',ls)
+  | None => None
+  end
 | _,_,_,_ => None
 end.
 
@@ -1860,6 +1884,8 @@ match a,b,ca,cb with
   visit_nat n0 n1 n2 n3
 | side_binary_dec _ _ _ len0 n10 n20,side_binary_dec _ _ _ len1 n11 n21,side_binary_dec _ _ _ len2 n12 n22,side_binary_dec _ _ _ len3 n13 n23 =>
   oNmin (visit_nat len0 len1 len2 len3) (oNmin (visit_nat n10 n11 n12 n13) (visit_nat n20 n21 n22 n23))
+| side_BL _ _ _ _ n0,side_BL _ _ _ _ n1,side_BL _ _ _ _ n2,side_BL _ _ _ _ n3 =>
+  visit_nat n0 n1 n2 n3
 | _,_,_,_ => None
 end.
 
@@ -1928,6 +1954,7 @@ Inductive ExtraRules :=
 | side_binary_dec_inc_rule(d0 d1 d1a qL qR:list Sym)(QL QR:Q)
 | side_binary_dec_ov0_rule(d0 d1 d1a d1b qL qR:list Sym)(QL QR:Q)
 | side_binary_dec_ov1_rule(d0 d1 d1a d1b qL qR:list Sym)(QL QR:Q)
+| side_BL_inc_rule(f0 d0 d1 d1a f0' d1' qL qR:list Sym)(QL QR:Q)
 .
 
 Definition ExtraRules_WF(tm:TM)(x:ExtraRules):Prop :=
@@ -1955,6 +1982,19 @@ match x with
   (forall r n,
     const s0 <* d1a <* d1^^n <{{QL}} qL *> r -[ tm ]->+
     const s0 <* d1b <* d0^^(1+n) <* qR {{QR}}> r)
+| side_BL_inc_rule f0 d0 d1 d1a f0' d1' qL qR QL QR =>
+  (forall l r n,
+  l <* qR {{QR}}> f0^^n *> d0 *> r -[ tm ]->+
+  l <{{QL}} qL *> f0^^n *> d1 *> r) /\
+  (forall l r n,
+  l <* qR {{QR}}> f0^^n *> d1 *> r -[ tm ]->+
+  l <* f0'^^n <* d1' <* qR {{QR}}> r) /\
+  (forall l r n,
+  l <* f0'^^n <* d1' <{{QL}} qL *> r -[ tm ]->+
+  l <{{QL}} qL *> f0^^(1+n) *> d0 *> r) /\
+  (forall l,
+  l <* qR {{QR}}> d1a *> const s0 -[ tm ]->+
+  l <{{QL}} qL *> f0^^0 *> d0 *> d1a *> const s0)
 end.
 
 Record Config := {
@@ -1968,6 +2008,54 @@ Record Config := {
   ex_rules: list ExtraRules;
   enable_exp_toplevel_loop: bool;
 }.
+
+Inductive SetConfig :=
+| set_max_repeater_len(n:nat)
+| set_max_repeater_size(n:option N)
+| set_fixed_block_size(n:option nat)
+| set_enable_arithseq(b:bool)
+| set_initial_steps(n:N)
+| set_mnc(n:N)
+| set_max_period(n:N)
+| set_ex_rules(ls:list ExtraRules)
+| add_ex_rules(ls:list ExtraRules)
+| set_enable_exp_toplevel_loop(b:bool)
+.
+
+Fixpoint get_config{T}(f:SetConfig->option T)(x:list SetConfig)(v0:T) :=
+match x with
+| nil => v0
+| h::t =>
+    match f h with
+    | None => get_config f t v0
+    | Some v => v
+    end
+end.
+
+Fixpoint get_ex_rules(x:list SetConfig)(v0:list ExtraRules) :=
+match x with
+| nil => v0
+| h::t =>
+  match h with
+  | add_ex_rules ls => ls ++ get_ex_rules t v0
+  | set_ex_rules ls => ls
+  | _ => get_ex_rules t v0
+  end
+end.
+
+Definition upd_config(ls:list SetConfig)(cfg:Config):Config := {|
+  max_repeater_len := get_config (fun x => match x with | set_max_repeater_len n => Some n | _ => None end) ls cfg.(max_repeater_len);
+  max_repeater_size := get_config (fun x => match x with | set_max_repeater_size n => Some n | _ => None end) ls cfg.(max_repeater_size);
+  fixed_block_size := get_config (fun x => match x with | set_fixed_block_size n => Some n | _ => None end) ls cfg.(fixed_block_size);
+  enable_arithseq := get_config (fun x => match x with | set_enable_arithseq n => Some n | _ => None end) ls cfg.(enable_arithseq);
+  initial_steps := get_config (fun x => match x with | set_initial_steps n => Some n | _ => None end) ls cfg.(initial_steps);
+  mnc := get_config (fun x => match x with | set_mnc n => Some n | _ => None end) ls cfg.(mnc);
+  max_period := get_config (fun x => match x with | set_max_period n => Some n | _ => None end) ls cfg.(max_period);
+  ex_rules := get_ex_rules ls cfg.(ex_rules);
+  enable_exp_toplevel_loop := get_config (fun x => match x with | set_enable_exp_toplevel_loop n => Some n | _ => None end) ls cfg.(enable_exp_toplevel_loop);
+|}.
+
+
 
 Definition Config_WF(tm:TM)(x:Config):Prop :=
 Forall (ExtraRules_WF tm) x.(ex_rules).
@@ -2027,28 +2115,6 @@ Definition config_exploop cfg := {|
   ex_rules := cfg.(ex_rules);
   enable_exp_toplevel_loop := true;
 |}.
-Definition config_BEC T0 n QL QR qL qR d1 := {|
-  max_repeater_len := 16;
-  max_repeater_size := Some (N.of_nat n);
-  fixed_block_size := Some n;
-  enable_arithseq := false;
-  initial_steps := T0;
-  mnc := 2;
-  max_period := 0;
-  ex_rules := [side_binary_inc_rule d1 qL qR QL QR];
-  enable_exp_toplevel_loop := false;
-|}.
-Definition config_BEC_Pos T0 n QL QR qL qR d0 d1 d1a := {|
-  max_repeater_len := 16;
-  max_repeater_size := Some (N.of_nat n);
-  fixed_block_size := Some n;
-  enable_arithseq := false;
-  initial_steps := T0;
-  mnc := 2;
-  max_period := 0;
-  ex_rules := [side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR];
-  enable_exp_toplevel_loop := false;
-|}.
 Definition config_SBC T0 n QL QR QL' QR' qL qR qL' qR' d0 d1 d1a := {|
   max_repeater_len := 16;
   max_repeater_size := match n with | O => None | _ => Some (N.of_nat n) end;
@@ -2073,6 +2139,51 @@ Definition config_SBC' T0 n ex := {|
   ex_rules := ex;
   enable_exp_toplevel_loop := true;
 |}.
+
+Definition config_fixed_block_size n :=
+match n with
+| O => default_config
+| _ => upd_config [
+    set_max_repeater_size (Some (N.of_nat n));
+    set_fixed_block_size (Some n)
+    ] default_config
+end.
+
+Definition config_BEC T0 n QL QR qL qR d1 :=
+upd_config [
+  set_ex_rules [
+    side_binary_inc_rule d1 qL qR QL QR
+  ];
+  set_initial_steps T0;
+  set_mnc 2
+] (config_fixed_block_size n).
+
+Definition config_BEC_Pos T0 n QL QR qL qR d0 d1 d1a :=
+upd_config [
+  set_ex_rules [
+    side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR
+  ];
+  set_initial_steps T0;
+  set_mnc 2
+] (config_fixed_block_size n).
+
+Definition config_BL T0 n
+  rQL rQR rqL rqR rf0 rd0 rd1 rd1a rf0' rd1' :=
+upd_config [
+  set_ex_rules [
+    side_BL_inc_rule rf0 rd0 rd1 rd1a rf0' rd1' rqL rqR rQL rQR
+  ];
+  set_initial_steps T0;
+  set_mnc 2
+] (config_fixed_block_size n).
+
+Definition config_BLEC T0 n
+  QL QR qL qR d0 d1 d1a
+  rQL rQR rqL rqR rf0 rd0 rd1 rd1a rf0' rd1' :=
+upd_config [
+  add_ex_rules [side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR]
+] (config_BL T0 n rQL rQR rqL rqR rf0 rd0 rd1 rd1a rf0' rd1').
+
 
 Section tm_ctx.
 Hypothesis tm:TM.
@@ -2112,6 +2223,7 @@ match x with
 | side_binary d1 n => cside_binary d1 (to_cnat n)
 | side_binary_Pos d0 d1 d1a n => cside_binary_Pos d0 d1 d1a (to_cnat n)
 | side_binary_dec d0 d1 d1a len n1 n2 => cside_binary_dec d0 d1 d1a (to_cnat len) (to_cnat n1) (to_cnat n2)
+| side_BL f0 d0 d1 d1a n => cside_BL f0 d0 d1 d1a (to_cnat n)
 end.
 
 Definition to_cconfig(x:config_expr):cconfig_expr :=
@@ -2141,6 +2253,7 @@ match x with
 | cside_binary d1 n => True
 | cside_binary_Pos d0 d1 d1a n => True
 | cside_binary_dec d0 d1 d1a len n1 n2 => (n1+n2+1 = 2^len)%N
+| cside_BL f0 d0 d1 d1a n => True
 end.
 
 Definition cconfig_WF(x:cconfig_expr) :=
@@ -2164,6 +2277,7 @@ match x with
 | side_binary d1 n => true
 | side_binary_Pos d0 d1 d1a n => true
 | side_binary_dec d0 d1 d1a len n1 n2 => false
+| side_BL f0 d0 d1 d1a n => true
 | side_var _ => false
 end.
 
@@ -2257,6 +2371,13 @@ match len with
   (if (n1 mod 2 =? 0)%N then d0 else d1) *> binary_dec_to_side d0 d1 d1a len0 (n1/2)%N
 end.
 
+Fixpoint BL_to_seg (f0 d0 d1 d1a:list Sym) (n:positive) :=
+match n with
+| xH => d1a
+| xI n0 => f0^^(Nat.pred (Pos.to_nat n0)) ++ d1 ++ BL_to_seg f0 d0 d1 d1a n0
+| xO n0 => f0^^(Nat.pred (Pos.to_nat n0)) ++ d0 ++ BL_to_seg f0 d0 d1 d1a n0
+end.
+
 Fixpoint cto_side(x:cside_expr):side :=
 match x with
 | cside_0inf => const s0
@@ -2264,6 +2385,7 @@ match x with
 | cside_binary d1 n => binary_to_side d1 (cto_nat n)
 | cside_binary_Pos d0 d1 d1a n => binary_Pos_to_side d0 d1 d1a (N.succ_pos (cto_nat n))
 | cside_binary_dec d0 d1 d1a len n1 n2 => binary_dec_to_side d0 d1 d1a (N.to_nat (cto_nat len)) (cto_nat n1)
+| cside_BL f0 d0 d1 d1a n => BL_to_seg f0 d0 d1 d1a (N.succ_pos (cto_nat n)) *> const s0
 end.
 
 Definition cto_expr t1 (e1:to_cexpr_type t1): to_type t1.
@@ -2715,6 +2837,18 @@ Proof.
     repeat rewrite H2.
     repeat rewrite H3.
     tauto.
+  - split. 2: tauto.
+    destruct (list_eqb_spec sym_eqb f0 f1 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec).
+    2: rewrite Forall_cons_iff in E; cbn in E; tauto.
+    subst.
+    do 3 f_equal.
+    apply solve_nat_eq_spec,E.
 Qed.
 
 Lemma solve_config_eq_spec a b:
@@ -2873,6 +3007,13 @@ Proof.
     repeat rewrite (ExprEq_nat_spec _ _ H4).
     repeat rewrite (ExprEq_nat_spec _ _ H5).
     repeat rewrite (ExprEq_nat_spec _ _ H6).
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); try congruence.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); try congruence.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); try congruence.
+    subst; tauto.
+  - intros [[[[H1 H2] H3] H4] H5].
+    erewrite ExprEq_nat_spec; eauto.
+    destruct (list_eqb_spec sym_eqb f0 f1 sym_eqb_spec); try congruence.
     destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); try congruence.
     destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); try congruence.
     destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); try congruence.
@@ -4777,6 +4918,26 @@ Definition binary_dec_mul2add1_def(d0 d1 d1a:list Sym):=
   (side_concat_unfold (from_seg d1) (side_binary_dec d0 d1 d1a len n1 n2)),
   4%positive).
 
+Definition BL_def(f0 d0 d1 d1a:list Sym)(n:N):=
+  (side_eq
+  (side_BL f0 d0 d1 d1a (from_nat n))
+  (side_concat_unfold (from_seg (BL_to_seg f0 d0 d1 d1a (N.succ_pos n))) side_0inf),
+  1%positive).
+
+Definition BL_mul2_def(f0 d0 d1 d1a:list Sym):=
+  let n:=nat_var 1%positive in
+  (side_eq
+  (side_BL f0 d0 d1 d1a (nat_add (nat_mul n (from_nat 2)) (from_nat 1)))
+  (side_concat (seg_repeat (from_seg f0) n) (side_concat (from_seg d0) (side_BL f0 d0 d1 d1a n))),
+  2%positive).
+
+Definition BL_mul2add1_def(f0 d0 d1 d1a:list Sym):=
+  let n:=nat_var 1%positive in
+  (side_eq
+  (side_BL f0 d0 d1 d1a (nat_add (nat_mul n (from_nat 2)) (from_nat 2)))
+  (side_concat (seg_repeat (from_seg f0) n) (side_concat (from_seg d1) (side_BL f0 d0 d1 d1a n))),
+  2%positive).
+
 Lemma d1_to_d0_spec d1:
   d1_to_d0 d1 *> const s0 = const s0.
 Proof.
@@ -4942,6 +5103,52 @@ Proof.
   - rewrite N.pow_add_r; cbn. lia.
 Qed.
 
+Lemma BL_def_spec f0 d0 d1 d1a n:
+  to_prop0' (fst (BL_def f0 d0 d1 d1a n)).
+Proof.
+  unfold to_prop0'.
+  intros mp mpi.
+  cbn.
+  rw_side_concat_unfold.
+  repeat rewrite from_seg_spec,from_seg_WF.
+  tauto.
+Qed.
+
+Lemma BL_mul2_def_spec f0 d0 d1 d1a:
+  to_prop0' (fst (BL_mul2_def f0 d0 d1 d1a)).
+Proof.
+  unfold to_prop0'.
+  intros mp mpi.
+  cbn.
+  repeat rewrite from_seg_spec,from_seg_WF.
+  cbn.
+  generalize (mp 1%positive nat_t). cbn.
+  intros n.
+  replace (N.succ_pos (n*2+1)) with ((N.succ_pos n)~0)%positive by lia.
+  cbn.
+  repeat rewrite Str_app_assoc.
+  split. 2: tauto.
+  do 2 f_equal.
+  lia.
+Qed.
+
+Lemma BL_mul2add1_def_spec f0 d0 d1 d1a:
+  to_prop0' (fst (BL_mul2add1_def f0 d0 d1 d1a)).
+Proof.
+  unfold to_prop0'.
+  intros mp mpi.
+  cbn.
+  repeat rewrite from_seg_spec,from_seg_WF.
+  cbn.
+  generalize (mp 1%positive nat_t). cbn.
+  intros n.
+  replace (N.succ_pos (n*2+2)) with ((N.succ_pos n)~1)%positive by lia.
+  cbn.
+  repeat rewrite Str_app_assoc.
+  split. 2: tauto.
+  do 2 f_equal.
+  lia.
+Qed.
 
 Definition side_binary_inc d1 qL qR QL QR :=
   let r:=side_var 1%positive in
@@ -4992,6 +5199,15 @@ Definition side_binary_dec_ov1 d0 d1 d1a d1b qL qR QL QR :=
   true,
   4%positive).
 
+Definition side_BL_inc f0 d0 d1 d1a qL qR QL QR :=
+  let l:=side_var 1%positive in
+  let n:=nat_var 2%positive in
+  (multistep'_expr
+  (side_concat_unfold (from_seg qR) l,side_BL f0 d0 d1 d1a n,QR,R)
+  (side_concat_unfold (from_seg qL) (side_BL f0 d0 d1 d1a (nat_add n (from_nat 1))),l,QL,L)
+  true,
+  3%positive).
+
 Definition ExtraRules_WF'(x:ExtraRules):Prop :=
 match x with
 | side_binary_inc_rule d1 qL qR QL QR =>
@@ -5004,6 +5220,8 @@ match x with
   to_prop0' (fst (side_binary_dec_ov0 d0 d1 d1a d1b qL qR QL QR))
 | side_binary_dec_ov1_rule d0 d1 d1a d1b qL qR QL QR =>
   to_prop0' (fst (side_binary_dec_ov1 d0 d1 d1a d1b qL qR QL QR))
+| side_BL_inc_rule f0 d0 d1 d1a f0' d1' qL qR QL QR =>
+  to_prop0' (fst (side_BL_inc f0 d0 d1 d1a qL qR QL QR))
 end.
 
 Lemma binary_to_side_spec d1 n:
@@ -5256,6 +5474,34 @@ Proof.
     replace (N.to_nat (N.succ len)) with (1+(N.to_nat len)) by lia.
     cbn.
     apply H.
+  - destruct H as [RL [R_carry [R_return ROv]]].
+    intros mp mpi.
+    cbn.
+    rw_side_concat_unfold.
+    repeat rewrite from_seg_spec.
+    repeat rewrite from_seg_WF.
+    cbn.
+    generalize (cto_side (mp 1%positive side_t)). cbn; intros l.
+    generalize (mp 2%positive nat_t). cbn; intros n.
+    split. 1: tauto.
+    clear H.
+    replace (N.succ_pos (n+1)) with ((N.succ_pos n)+1)%positive by lia.
+    generalize (N.succ_pos n). clear n. intros n.
+    gen l.
+    induction n; intros l; cbn; repeat rewrite Str_app_assoc.
+    + eapply progress_trans.
+      1: apply R_carry.
+      eapply progress_trans.
+      1: apply IHn.
+      eapply progress_evstep_trans.
+      1: apply R_return.
+      applys_eq evstep_refl.
+      replace (Nat.pred (Pos.to_nat (Pos.succ n))) with (Datatypes.S (Nat.pred (Pos.to_nat n))) by lia.
+      cbn.
+      repeat rewrite Str_app_assoc.
+      repeat (lia || f_equal).
+    + eapply RL.
+    + eapply ROv.
 Qed.
 
 
@@ -5718,6 +5964,7 @@ Proof.
   - cbn. trivial.
   - cbn. trivial.
   - cbn. trivial.
+  - cbn. trivial.
 Qed.
 
 Lemma side_find_repeat_fold_fixedlen_spec ls1 ls2 n:
@@ -5739,6 +5986,7 @@ Proof.
     destruct_spec enable_arithseq; trivial.
     destruct_spec is_seg_repeat; trivial.
     destruct_spec side_find_arithseq_fold_2_spec; tauto.
+  - cbn; trivial.
   - cbn; trivial.
   - cbn; trivial.
   - cbn; trivial.
@@ -6127,6 +6375,30 @@ Proof.
     apply config_rw_l_spec,H.
 Qed.
 
+Definition config_find_BL_fold (c:config_expr) f0 d0 d1 d1a n :=
+let '(l,r,s,sgn):=c in
+match sgn with
+| L => None
+| R =>
+  match r with
+  | side_concat _ _ => Some (config_rw_r (BL_def f0 d0 d1 d1a n) s sgn)
+  | _ => None
+  end
+end.
+
+Lemma config_find_BL_fold_spec c f0 d0 d1 d1a n:
+  match config_find_BL_fold c f0 d0 d1 d1a n with
+  | None => True
+  | Some x => to_prop0' (fst x)
+  end.
+Proof.
+  destruct c as [[[l r] s] sgn].
+  destruct sgn; cbn[config_find_BL_fold]; trivial.
+  destruct r; trivial.
+  apply config_rw_r_spec.
+  apply BL_def_spec.
+Qed.
+
 
 Definition side_find_repeat_unfold ls :=
 match ls with
@@ -6149,6 +6421,10 @@ match ls with
   if (len =? 0)%N then None else
   Some
   (if (n mod 2 =? 0)%N then binary_dec_mul2_def d0 d1 d1a else binary_dec_mul2add1_def d0 d1 d1a)
+| side_BL f0 d0 d1 d1a (from_nat n) =>
+  if (n =? 0)%N then None else
+  Some
+  (if (n mod 2 =? 1)%N then BL_mul2_def f0 d0 d1 d1a else BL_mul2add1_def f0 d0 d1 d1a)
 | _ => None
 end.
 
@@ -6185,6 +6461,11 @@ Proof.
     destruct (n0 mod 2 =? 0)%N.
     + apply binary_dec_mul2_def_spec.
     + apply binary_dec_mul2add1_def_spec.
+  - destruct n; trivial.
+    destruct (n =? 0)%N; trivial.
+    destruct (n mod 2 =? 1)%N.
+    + apply BL_mul2_def_spec.
+    + apply BL_mul2add1_def_spec.
 Qed.
 
 Fixpoint side_find_repeat_unfold_limited_depth ls n {struct n} :=
@@ -6326,6 +6607,23 @@ match x with
     | _ => None
     end
   else None
+| side_BL_inc_rule f0 d0 d1 d1a f0'' d1'' qL qR QL QR =>
+  let '(l,r,s,sgn):=c in
+  if dir_eqb sgn R && q_eqb s QR then
+    match r with
+    | side_BL f0' d0' d1' d1a' _ =>
+      if list_eqb sym_eqb f0 f0' && list_eqb sym_eqb d0 d0' && list_eqb sym_eqb d1 d1' && list_eqb sym_eqb d1a d1a' then
+        if side_startswith l qR then
+          Some (side_BL_inc f0 d0 d1 d1a qL qR QL QR)
+        else
+          match side_find_repeat_unfold_limited_depth l (length qR) with
+          | None => None
+          | Some v => Some (config_rw_l v s sgn)
+          end
+      else None
+    | _ => None
+    end
+  else None
 end.
 
 Fixpoint config_find_unfold_ex(ls:list ExtraRules)(c:config_expr) :=
@@ -6416,6 +6714,19 @@ Proof.
     destruct_spec side_startswith; trivial.
     destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
     apply config_rw_l_spec,H1.
+  - cbn[config_find_unfold_ex_0].
+    destruct c as [[[l r] s] sgn].
+    destruct (dir_eqb_spec sgn R); trivial.
+    destruct (q_eqb_spec s QR); trivial.
+    destruct r; trivial.
+    destruct (list_eqb_spec sym_eqb f0 f1 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d0 d2 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1 d3 sym_eqb_spec); trivial.
+    destruct (list_eqb_spec sym_eqb d1a d1a0 sym_eqb_spec); trivial.
+    subst.
+    destruct_spec side_startswith; trivial.
+    destruct_spec side_find_repeat_unfold_limited_depth_spec; trivial.
+    apply config_rw_l_spec,H1.
 Qed.
 
 Lemma config_find_unfold_ex_spec ls c:
@@ -6449,6 +6760,8 @@ match x with
   None
 | side_binary_dec_ov1_rule d0 d1 d1a d1b qL qR QL QR =>
   None
+| side_BL_inc_rule f0 d0 d1 d1a f0' d1' qL qR QL QR =>
+  config_find_BL_fold c f0 d0 d1 d1a 9
 end.
 
 Fixpoint config_find_init_fold_ex(ls:list ExtraRules)(c:config_expr) :=
@@ -6472,6 +6785,7 @@ Proof.
   - apply config_find_binary_fold_spec.
   - apply config_find_binary_Pos_fold_spec.
   - apply config_find_binary_dec_fold_spec.
+  - apply config_find_BL_fold_spec.
 Qed.
 
 Lemma config_find_init_fold_ex_spec ls c:

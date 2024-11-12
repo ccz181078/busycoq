@@ -3,6 +3,7 @@ COQMFFLAGS := -Q . BusyCoq
 ALLVFILES := LibTactics.v Helper.v Pigeonhole.v TM.v Compute.v Flip.v Permute.v DirectedCompute.v Subtape.v \
 	Cyclers.v TranslatedCyclers.v BackwardsReasoning.v Bouncers.v Individual.v \
 	Eqb.v HashTable.v DHTM.v CTL.v Inductive.v \
+	BinaryCounterFull.v BinaryCounter.v UnaryCounter.v \
 	BB62.v Individual62.v CTL62.v
 	#BB52.v Individual52.v FixedBin.v ShiftOverflow.v ShiftOverflowBins.v Skelet15.v Skelet26.v Skelet33.v Skelet34.v Skelet35.v \
 	Skelet10.v Skelet17.v Skelet1.v Finned.v Finned1.v Finned2.v Finned3.v Finned4.v Finned5.v Extraction.v \
