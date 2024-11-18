@@ -42,9 +42,245 @@ Ltac solve_hlin_nonhalt cfg :=
   match goal with
   | |- ~halts (TM_from_str ?x) c0 =>
     idtac x;
-    (solve_hlin_nonhalt_T cfg 200000%N)
+    (solve_hlin_nonhalt_T cfg 1000000%N)
   end.
 
+Module hlin.
+
+Lemma nonhalt1: ~halts (TM_from_str "1RB0RF_1LC1RE_1LD0LC_0LE0LB_1LA1RA_---1RB") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt2: ~halts (TM_from_str "1LB0RE_1LC0LB_0LD0LA_1LE1RE_1RA1LF_1RD---") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt3: ~halts (TM_from_str "1LB1RB_1RC0RD_1LE1RA_---1RC_1LF0LE_0LA0LC") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt4: ~halts (TM_from_str "1LB1RD_1LC0LB_0LD0LA_1LE1RE_1RA0RF_---1RA") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt5: ~halts (TM_from_str "1LB1RB_1RC1LF_1LD0RB_1LE0LD_0LA0LC_1RA---") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt6: ~halts (TM_from_str "1RB1LF_1LC0RA_1LD0LC_0LE0LB_1LA1RA_1RE---") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt7: ~halts (TM_from_str "1LB0LA_0LC0LE_1LD1RD_1RE1LF_1LA0RD_1RC---") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt8: ~halts (TM_from_str "1LB0LA_0LC0LE_1LD1RD_1RE0RF_1LA1RC_---1RE") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_allowed_repeaters (Some [
+      [0;1;0;1;1];
+      [0;0;1;0;1];
+      [0;1];
+      [0;1]^^10 ++ [1];
+      [0;1]^^9 ++ [1;1;1]
+    ]);
+    set_max_period 37
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+Lemma nonhalt9: ~halts (TM_from_str "1RB0RC_1LC0RA_1LE1LD_1LE0LF_0RD0LB_1LA---") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    set_max_repeater_len 16;
+    set_allowed_repeaters (Some [
+      [0;1];
+      [0;1;1;1];
+      [0;1]^^4 ++ [0;1;1]^^2 ++ [0;1]^^2 ++ [0;1;1]^^2
+    ]);
+    set_max_period 97
+  ]
+  (config_T_bsz 100000%N 0)).
+Time Qed.
+
+End hlin.
+
+Module _3ary.
+Lemma nonhalt1: ~halts (TM_from_str "1LB0LA_1LC0LE_1LD0LE_1LE0RD_1RF1LA_---1RD") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0;0] [1;1;0;0;0] [0;1;0;0;0] [1;1] [0;1] [1;1;1;1;1] [] [] D D] 
+  ]
+  (config_BL 8472%N 0 B D [] [0;1;1;0] [1;1;0;1] [1;0;0;1;0;1] [1;1;0;1;0;1;1;1;0;1] [0;1;1] [0;1;1;0] [0;1;1;1;1;0;0;1;1;0])).
+Time Qed.
+
+Lemma nonhalt2: ~halts (TM_from_str "1LB0RA_1RC1LD_---1RA_1LE0LD_1LF0LB_1LA0LB") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0;0] [1;1;0;0;0] [0;1;0;0;0] [1;1] [0;1] [1;1;1;1;1] [] [] A A] 
+  ]
+  (config_BL 8475%N 0 E A [] [0;1;1;0] [1;1;0;1] [1;0;0;1;0;1] [1;1;0;1;0;1;1;1;0;1] [0;1;1] [0;1;1;0] [0;1;1;1;1;0;0;1;1;0])).
+Time Qed.
+
+Lemma nonhalt3: ~halts (TM_from_str "1LB0LC_1LC0RB_1RD1LF_---1RE_1LA0RB_1LA0LF") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config [
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [1] [0] B B] 
+  ]
+  (config_T_bsz 745%N 3)).
+Time Qed.
+
+Lemma nonhalt4: ~halts (TM_from_str "1LB1RA_1LC0LF_1LD0RC_1RE1LA_0LE1RC_---0LD") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [
+    set_max_repeater_len 13;
+    set_allowed_repeaters (Some [[0;1];[1;1];[0;1;0;1;0;1;1;0;1;1;0;1;1];[0;1;1;0;1;1;0;1;1;1;1;1;1]]);
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [] [] C C] 
+  ]
+  (config_T_bsz 1227570%N 0)).
+Time Qed.
+
+Lemma nonhalt5: ~halts (TM_from_str "1LB0LF_1LC0RB_1RD1LE_0LD1RB_1LA1RE_---0LC") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [
+    set_max_repeater_len 13;
+    set_allowed_repeaters (Some [[0;1];[1;1];[0;1;0;1;0;1;1;0;1;1;0;1;1];[0;1;1;0;1;1;0;1;1;1;1;1;1]]);
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [] [] B B] 
+  ]
+  (config_T_bsz 1679956%N 0)).
+Time Qed.
+
+Lemma nonhalt6: ~halts (TM_from_str "1LB0RA_1RC1LD_0LC1RA_1LE1RD_1LA0LF_---0LB") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [
+    set_max_repeater_len 13;
+    set_allowed_repeaters (Some [[0;1];[1;1];[0;1;0;1;0;1;1;0;1;1;0;1;1];[0;1;1;0;1;1;0;1;1;1;1;1;1]]);
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [] [] A A] 
+  ]
+  (config_T_bsz 861135%N 0)).
+Time Qed.
+
+Lemma nonhalt7: ~halts (TM_from_str "1LB1RA_1LC0LF_1LD0RC_1RE1LA_1LD1RC_---0LD") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [
+    set_max_repeater_len 13;
+    set_allowed_repeaters (Some [[0;1];[1;1];[0;1;0;1;0;1;1;0;1;1;0;1;1];[0;1;1;0;1;1;0;1;1;1;1;1;1]]);
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [] [] C C] 
+  ]
+  (config_T_bsz 747405%N 0)).
+Time Qed.
+
+Lemma nonhalt8: ~halts (TM_from_str "1LB0LF_1LC0RB_1RD1LE_1LC1RB_1LA1RE_---0LC") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [
+    set_max_repeater_len 13;
+    set_allowed_repeaters (Some [[0;1];[1;1];[0;1;0;1;0;1;1;0;1;1;0;1;1];[0;1;1;0;1;1;0;1;1;1;1;1;1]]);
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [] [] B B] 
+  ]
+  (config_T_bsz 472948%N 0)).
+Time Qed.
+
+Lemma nonhalt9: ~halts (TM_from_str "1LB0RA_1RC1LD_1LB1RA_1LE1RD_1LA0LF_---0LB") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [
+    set_max_repeater_len 13;
+    set_allowed_repeaters (Some [[0;1];[1;1];[0;1;0;1;0;1;1;0;1;1;0;1;1];[0;1;1;0;1;1;0;1;1;1;1;1;1]]);
+    add_ex_rules [side_3ary_Pos_inc_rule [0;0;0;0] [1;1;0;0] [0;1;0;0] [1;1] [0;1] [1;1;1;1] [] [] A A] 
+  ]
+  (config_T_bsz 637217%N 0)).
+Time Qed.
+
+End _3ary.
 
 Module BL.
 Lemma nonhalt1: ~halts (TM_from_str "1LB0RA_1RC1LF_---1RD_1RE1LD_0LB0RC_1RA0LF") c0.

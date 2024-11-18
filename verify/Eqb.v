@@ -66,6 +66,42 @@ Proof.
   destruct (Ha a0 b0),(Hb a1 b1); solve_Bool_reflect.
 Qed.
 
+Class Eqb A := {
+  eqb : A -> A -> bool ;
+  eqb_spec : forall x y, Bool.reflect (x=y) (eqb x y)
+}.
+
+#[export] Instance List_eqb A:
+  Eqb A ->
+  Eqb (list A).
+Proof.
+  intro H.
+  unshelve esplit.
+  - apply list_eqb,eqb.
+  - intros. apply list_eqb_spec,eqb_spec.
+Defined.
+
+#[export] Instance Prod_eqb A B:
+  Eqb A ->
+  Eqb B ->
+  Eqb (A*B).
+Proof.
+  intros HA HB.
+  unshelve esplit.
+  - apply prod_eqb; apply eqb.
+  - intros; apply prod_eqb_spec; apply eqb_spec.
+Defined.
+
+#[export] Instance Nat_eqb: Eqb nat := Build_Eqb _ Nat.eqb Nat.eqb_spec.
+
+#[export] Instance Pos_eqb: Eqb positive := Build_Eqb _ Pos.eqb Pos.eqb_spec.
+
+#[export] Instance N_eqb: Eqb N := Build_Eqb _ N.eqb N.eqb_spec.
+
+#[export] Instance Z_eqb: Eqb Z := Build_Eqb _ Z.eqb Z.eqb_spec.
+
+#[export] Instance bool_Eqb: Eqb bool := Build_Eqb _ Bool.eqb Bool.eqb_spec.
+
 Fixpoint Pos_iter_until{S S'}(f:S->S+S')(x:S+S')(T:positive):S+S' :=
 match x with
 | inl s =>

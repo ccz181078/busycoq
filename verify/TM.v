@@ -723,8 +723,24 @@ Proof.
     apply H.
 Qed.
 
-End TM.
+#[export] Instance Q_Eqb:
+  Eqb Q.
+Proof.
+  esplit; intros.
+  eapply q_eqb_spec.
+Defined.
 
+#[export] Instance Sym_Eqb:
+  Eqb Sym.
+Proof.
+  esplit; intros.
+  eapply sym_eqb_spec.
+Defined.
+
+Import HashConcat.
+#[export] Instance Q_Hash: Hash Q := (ltac:(split; apply q_hash)).
+#[export] Instance Sym_Hash: Hash Sym := (ltac:(split; apply sym_hash)).
+End TM.
 
 Definition dir_rev(sgn:dir):=
 match sgn with
@@ -743,10 +759,13 @@ Proof.
   destruct d1,d2; solve_Bool_reflect.
 Qed.
 
+#[export] Instance dir_Eqb: Eqb dir := Build_Eqb _ dir_eqb dir_eqb_spec.
+
 Definition dir_hash(x:dir) :=
 match x with
 | L => HashConcat.hv1
 | R => HashConcat.hv2
 end.
 
+#[export] Instance dir_Hash: HashConcat.Hash dir := HashConcat.Build_Hash _ dir_hash.
 

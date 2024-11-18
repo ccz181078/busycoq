@@ -4,6 +4,7 @@ Require Import Streams.
 Require Import ZArith.
 Require Import Lia.
 From BusyCoq Require Import HashTable.
+From BusyCoq Require Import RWLAcc.
 Require Uint63.
 
 Module Type CTLCtx(K:HashableType)(Ctx:Ctx).
@@ -2487,10 +2488,13 @@ Module CTL_NG_QSym := CTL
   TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx
   Ctx_NG_QSym.CTLCtx.
 
+Module RWLAcc := RWLAcc Ctx.
+
 Inductive DeciderParameter :=
 | RWL_mod(simT maxT maxS bsz bmaxT mnc mod_ len1 len2:N)
 | CPS_LRU(simT maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
 | NG(simT maxT maxS NG_n len1 len2 LRU_n:N)(asth:bool)
+| RWLAcc(simT bsz bmaxT:N)
 .
 
 Section tm_ctx.
@@ -2560,6 +2564,8 @@ match arg with
       (CTL_NG_Sym.CTL_decide_nonhalt tm1 c1 cfg (N_to_int maxS) (maxT*100))
   | inr c => false
   end
+| RWLAcc simT bsz bmaxT =>
+  RWLAcc.decide_nonhalt tm (N.to_nat bsz) (N.to_nat bmaxT) simT
 end.
 
 Lemma decide_nonhalt_spec:
@@ -2607,6 +2613,10 @@ Proof.
       rewrite CTL_NG_Sym.TM.halts_halts' in H1.
       eapply TapeHistoryImpl.ListSymTapeHistoryTMFromDHTM.inv_map_nonhalt.
       apply H1.
+  - apply DHTMFromTM.map_nonhalt.
+    pose proof (RWLAcc.decide_nonhalt_spec _ _ _ _ H) as H0.
+    rewrite RWLAcc.DHTM.halts_halts' in H0.
+    apply H0.
 Qed.
 
 End tm_ctx.

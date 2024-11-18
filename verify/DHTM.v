@@ -157,6 +157,32 @@ Proof.
   induction H1; simpl; eauto.
 Qed.
 
+Lemma progress_trans : forall tm c c' c'',
+  c  -[ tm ]->+ c' ->
+  c' -[ tm ]->+ c'' ->
+  c  -[ tm ]->+ c''.
+Proof.
+  introv H1 H2.
+  induction H1; simpl; eauto.
+Qed.
+
+Lemma evstep_progress_trans : forall tm c c' c'',
+  c  -[ tm ]->* c' ->
+  c' -[ tm ]->+ c'' ->
+  c  -[ tm ]->+ c''.
+Proof.
+  introv H1 H2.
+  induction H1; simpl; eauto.
+Qed.
+
+Lemma progress_evstep : forall tm c c',
+  c -[ tm ]->+ c' ->
+  c -[ tm ]->* c'.
+Proof.
+  introv H.
+  induction H; simpl; eauto.
+Qed.
+
 Lemma multistep_trans : forall tm n m c c' c'',
   c  -[ tm ]->> n / c' ->
   c' -[ tm ]->> m / c'' ->
@@ -581,6 +607,23 @@ Proof.
     apply H.
 Qed.
 
+#[export] Instance Q_Eqb:
+  Eqb Q.
+Proof.
+  esplit; intros.
+  eapply q_eqb_spec.
+Defined.
+
+#[export] Instance Sym_Eqb:
+  Eqb Sym.
+Proof.
+  esplit; intros.
+  eapply sym_eqb_spec.
+Defined.
+
+Import HashConcat.
+#[export] Instance Q_Hash: Hash Q := (ltac:(split; apply q_hash)).
+#[export] Instance Sym_Hash: Hash Sym := (ltac:(split; apply sym_hash)).
 End DHTM.
 
 

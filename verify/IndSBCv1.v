@@ -38,7 +38,7 @@ Ltac solve_rule :=
 Ltac solve_hlin_nonhalt_T cfg T :=
   apply (decide_hlin_nonhalt_spec cfg T);
   [ solve_rule
-  | vm_cast_no_check (eq_refl true)].
+  | native_cast_no_check (eq_refl true)].
 
 Ltac solve_hlin_nonhalt cfg :=
   match goal with
@@ -480,14 +480,78 @@ Proof.
   ]).
 Time Qed.
 
+Lemma nonhalt100: ~halts (TM_from_str "1LB0RB_1RC0LF_1RA0RD_1RE---_0RB1RB_1LB0LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC 46568%N 3 A B A C [] [] [0;0;1;0;0;1] [1;0;1;1]
+  [0;1;1;0;1;1;1;1;0;1]
+  [0;1;1;0;1;1;0;1;0;1]
+  [0;1;1;0;1;0;1;1;1;0;1;0;1;0;1;0;1;1;0;0;1]
+  ).
+  destruct n as [|n].
+  1: er.
+  es; er.
+  eapply Compute.TM.evstep_trans.
+  1: apply (shift_rule_R [_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_]);
+    find_shift_rule.
+  es.
+Time Qed.
 
+Lemma nonhalt101: ~halts (TM_from_str "1RB0LD_1RC0RE_1LA0RA_1LA0LC_1RF---_0RA1RA") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC 17391%N 3 A C A B [] [] [1;0;0;1;0;0;1] [1;0;1;1;0]
+  [1;1;0;1;1;1;1;0;1;0]
+  [1;1;0;1;1;0;1;0;1;0]
+  [1;1;0;1;0;1;1;1;0;1;0;1;0;1;0;1;1;0;0;1]
+  ).
+  destruct n as [|n].
+  1: er.
+  es; er.
+  eapply Compute.TM.evstep_trans.
+  1: apply (shift_rule_R [_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_]);
+    find_shift_rule.
+  es.
+Time Qed.
 
+Lemma nonhalt102: ~halts (TM_from_str "1RB0RE_1LC0RC_1RA0LD_1LC0LB_1RF---_0RC1RC") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC 17267%N 3 C B C A [] [] [1;0;0;1;0;0;1] [1;0;1;1;0]
+  [1;1;0;1;1;1;1;0;1;0]
+  [1;1;0;1;1;0;1;0;1;0]
+  [1;1;0;1;0;1;1;1;0;1;0;1;0;1;0;1;1;0;0;1]
+  ).
+  destruct n as [|n].
+  1: er.
+  es; er.
+  eapply Compute.TM.evstep_trans.
+  1: apply (shift_rule_R [_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_]);
+    find_shift_rule.
+  es.
+Time Qed.
 
+Lemma nonhalt103: ~halts (TM_from_str "1RB---_0RC1RC_1RD0LF_1RE0RA_1LC0RC_1LC0LE") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC 17073%N 3 C E C D [] [] [1;0;0;1;0;0;1] [1;0;1;1;0]
+  [1;1;0;1;1;1;1;0;1;0]
+  [1;1;0;1;1;0;1;0;1;0]
+  [1;1;0;1;0;1;1;1;0;1;0;1;0;1;0;1;1;0;0;1]
+  ).
+  destruct n as [|n].
+  1: er.
+  es; er.
+  eapply Compute.TM.evstep_trans.
+  1: apply (shift_rule_R [_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_;_]);
+    find_shift_rule.
+  es.
+Time Qed.
 
-
-
-
-
-
+Lemma nonhalt104: ~halts (TM_from_str "1RB0LB_1RC0RE_1LD---_0LA1LA_0LD1RF_1RA0RB") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 1436%N 4 [
+    side_binary_dec_inc_rule [0;1;0;0;1;0] [0;1;0;1;1;0] [0;1;0;1] [0] [0] B E;
+    side_binary_dec_ov1_rule [0;1;0;0;1;0] [0;1;0;1;1;0] [0;1;0;1] [1] [0] [] B B;
+    side_binary_dec_inc_rule [0;1;0;0;1;0] [0;1;0;1;1;0] [1] [0] [0] B E;
+    side_binary_dec_ov0_rule [0;1;0;0;1;0] [0;1;0;1;1;0] [1] [0;1;0;1] [0] [0] B E
+  ]).
+Time Qed.
 
 
