@@ -554,4 +554,14 @@ Proof.
   ]).
 Time Qed.
 
+Lemma nonhalt105: ~halts (TM_from_str "1LB0LA_1LC1LF_1RD1RE_1LA0RE_0RA0RC_1LD---") c0.
+Proof.
+  solve_hlin_nonhalt (config_SBC' 2090%N 5 [
+    side_binary_dec_inc_rule [0;1;0;1] [0;1;0;0] [] [] [] A C;
+    side_binary_dec_ov0_rule [0;1;0;1] [0;1;0;0] [] [0;0;1] [] [] A C;
+    side_binary_dec_inc_rule [0;1;0;1] [0;1;0;0] [0;0;1] [] [] A C;
+    side_binary_dec_ov1_rule [0;1;0;1] [0;1;0;0] [0;0;1] [] [0] [] A A
+  ]).
+Time Qed.
+
 

@@ -41,7 +41,8 @@ Module DHTM := DHTM Ctx.
 Export DHTM.
 Section bsz.
 Hypothesis tm:TM.
-Hypothesis bsz bmaxT:nat.
+Hypothesis bsz:nat.
+Hypothesis bmaxT:N.
 Definition RW:Type := (list Sym)*N*N.
 Definition RWL:Type := list RW.
 Definition RWL_config:Type := RWL*RWL*Q*dir.

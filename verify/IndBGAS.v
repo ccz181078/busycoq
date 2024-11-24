@@ -38,7 +38,7 @@ Ltac solve_rule :=
 Ltac solve_hlin_nonhalt_T cfg T :=
   apply (decide_hlin_nonhalt_spec cfg T);
   [ solve_rule
-  | vm_cast_no_check (eq_refl true)].
+  | native_cast_no_check (eq_refl true)].
 
 Ltac solve_hlin_nonhalt cfg :=
   match goal with
@@ -46,6 +46,12 @@ Ltac solve_hlin_nonhalt cfg :=
     idtac x;
     (solve_hlin_nonhalt_T (config_exploop cfg) 200000%N)
   end.
+
+
+Lemma nonhalt63: ~halts (TM_from_str "1RB---_0RC0LE_1RD1RC_0RE0RB_0LF0LA_1LB1LD") c0.
+Proof.
+  solve_hlin_nonhalt (config_arithseq_fixed_block_size 0 6 37).
+Time Qed.
 
 Lemma nonhalt62: ~halts (TM_from_str "1RB0RE_1RC0RE_0LD0RB_0LE1LA_1RA0RF_1LC---") c0.
 Proof.

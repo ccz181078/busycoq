@@ -2022,13 +2022,15 @@ Definition config_arithseq n :=
 
 Definition config_arithseq_fixed_block_size T0 n maxP :=
   upd_config
-  [set_enable_arithseq true;
+  [set_max_repeater_len 16;
+  set_enable_arithseq true;
   set_max_period maxP]
   (config_T_bsz T0 n).
 
 Definition config_exploop cfg := 
   upd_config
-  [set_enable_exp_toplevel_loop true]
+  [set_enable_exp_toplevel_loop true;
+  set_mnc (N.max 4 (cfg.(mnc)))]
   cfg.
 
 Definition config_SBC T0 n QL QR QL' QR' qL qR qL' qR' d0 d1 d1a :=

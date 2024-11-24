@@ -1712,7 +1712,8 @@ Proof.
 Qed.
 
 Section BlockSize.
-Hypothesis block_size block_time_limit:nat.
+Hypothesis block_size:nat.
+Hypothesis block_time_limit:N.
 Hypothesis block_size_nonzero: block_size <> O.
 Hypothesis tm:DHTM.TM.
 
@@ -2506,7 +2507,7 @@ match arg with
   match DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT with
   | inl c =>
     let bsz := N.max 1 bsz in
-    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (N.to_nat bmaxT) tm) in
+    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (bmaxT) tm) in
     let c1 := (BlockTMFromDHTM.inv_map_cconfig (N.to_nat bsz) c) in
     let cfg :=
       {|
@@ -2524,7 +2525,7 @@ match arg with
   match DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT with
   | inl c =>
     let bsz := N.max 1 bsz in
-    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (N.to_nat bmaxT) tm) in
+    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (bmaxT) tm) in
     let c1 := (BlockTMFromDHTM.inv_map_cconfig (N.to_nat bsz) c) in
     let cfg := 
       {|
@@ -2565,7 +2566,7 @@ match arg with
   | inr c => false
   end
 | RWLAcc simT bsz bmaxT =>
-  RWLAcc.decide_nonhalt tm (N.to_nat bsz) (N.to_nat bmaxT) simT
+  RWLAcc.decide_nonhalt tm (N.to_nat bsz) bmaxT simT
 end.
 
 Lemma decide_nonhalt_spec:

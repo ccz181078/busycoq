@@ -299,20 +299,23 @@ match r with
   end
 end.
 
-Fixpoint DH_config_bounded_steps(x:DH_cconfig)(T:nat):DH_cconfig :=
-match T with
-| O => x
-| S T =>
-  match DH_cconfig_bounded_step x with
-  | None => x
-  | Some x => DH_config_bounded_steps x T
-  end
+Definition DH_cconfig_bounded_step'(x:DH_cconfig):DH_cconfig+DH_cconfig :=
+match DH_cconfig_bounded_step x with
+| Some x' => inl x'
+| None => inr x
 end.
 
-Definition DH_cconfig_bounded_progress(x:DH_cconfig)(T:nat):option DH_cconfig :=
+Definition DH_config_bounded_steps(x:DH_cconfig)(T:N):DH_cconfig+DH_cconfig :=
+N_iter_until DH_cconfig_bounded_step' (inl x) T.
+
+Definition DH_cconfig_bounded_progress(x:DH_cconfig)(T:N):option DH_cconfig :=
 match DH_cconfig_bounded_step x with
 | None => None
-| Some x => Some (DH_config_bounded_steps x T)
+| Some x =>
+  match DH_config_bounded_steps x T with
+  | inl x => Some x
+  | inr x => Some x
+  end
 end.
 
 Definition DH_cconfig_step(x:DH_cconfig):option DH_cconfig :=
@@ -370,23 +373,32 @@ Proof.
 Qed.
 
 Lemma DH_cconfig_bounded_steps_spec c T:
-  let c' := (DH_config_bounded_steps c T) in
-  clength c = clength c' /\
-  forall l0 r0,
-  DH_cconfig_to_bounded_config c l0 r0 -[ tm ]->* DH_cconfig_to_bounded_config c' l0 r0.
+  match DH_config_bounded_steps c T with
+  | inl c' =>
+    clength c = clength c' /\
+    forall l0 r0,
+    DH_cconfig_to_bounded_config c l0 r0 -[ tm ]->* DH_cconfig_to_bounded_config c' l0 r0
+  | inr c' =>
+    clength c = clength c' /\
+    forall l0 r0,
+    DH_cconfig_to_bounded_config c l0 r0 -[ tm ]->* DH_cconfig_to_bounded_config c' l0 r0
+  end.
 Proof.
-  gen c.
-  induction T; intros; cbn.
-  - split; constructor.
-  - destruct (DH_cconfig_bounded_step c) eqn:E.
-    2: split; constructor.
-    split.
-    + destruct (DH_cconfig_bounded_step_spec _ _ E) as [H _].
-      rewrite H.
-      apply (IHT p).
-    + econstructor.
-      2: apply IHT.
-      apply DH_cconfig_bounded_step_spec,E.
+  apply N_iter_until_spec.
+  2: split; constructor.
+  introv [Hlen Hev].
+  unfold DH_cconfig_bounded_step'.
+  destruct (DH_cconfig_bounded_step x0) eqn:E.
+  2: tauto.
+  destruct (DH_cconfig_bounded_step_spec _ _ E) as [H H0].
+  split.
+  1: congruence.
+  intros.
+  eapply evstep_trans.
+  1: apply Hev.
+  econstructor.
+  1: apply H0.
+  constructor.
 Qed.
 
 Lemma DH_cconfig_bounded_progress_spec c T:
@@ -400,14 +412,24 @@ Lemma DH_cconfig_bounded_progress_spec c T:
 Proof.
   unfold DH_cconfig_bounded_progress.
   destruct (DH_cconfig_bounded_step c) eqn:E; trivial.
+  epose proof (DH_cconfig_bounded_steps_spec p T) as H.
+  destruct (DH_config_bounded_steps p T).
+  {
+  destruct H as [Hlen Hev].
   split.
-  + epose proof (DH_cconfig_bounded_steps_spec p T) as [H _].
-    rewrite <-H.
+  + rewrite <-Hlen.
     eapply DH_cconfig_bounded_step_spec,E.
   + intros.
     eapply step_evstep_progress.
     - eapply DH_cconfig_bounded_step_spec,E.
-    - eapply DH_cconfig_bounded_steps_spec.
+    - eapply Hev.
+  }
+  destruct H as [Hlen Hev].
+  epose proof (DH_cconfig_bounded_step_spec _ _ E) as [H H0].
+  split.
+  1: congruence.
+  intros.
+  eapply step_evstep_progress; eauto.
 Qed.
 
 Lemma DH_cconfig_step_spec c:
