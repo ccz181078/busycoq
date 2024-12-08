@@ -44,9 +44,13 @@ Ltac solve_hlin_nonhalt cfg :=
   match goal with
   | |- ~halts (TM_from_str ?x) c0 =>
     idtac x;
-    (solve_hlin_nonhalt_T (config_exploop cfg) 200000%N)
+    (solve_hlin_nonhalt_T (config_exploop cfg) 1000000%N)
   end.
 
+Lemma nonhalt64: ~halts (TM_from_str "1RB0LF_1LC0RD_0LA1LA_---0RE_1RA0RA_0RB1LB") c0.
+Proof.
+  solve_hlin_nonhalt (upd_config [set_dec_min 2] default_config).
+Time Qed.
 
 Lemma nonhalt63: ~halts (TM_from_str "1RB---_0RC0LE_1RD1RC_0RE0RB_0LF0LA_1LB1LD") c0.
 Proof.
