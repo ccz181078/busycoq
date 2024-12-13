@@ -29709,3 +29709,663 @@ Proof.
 Qed.
 
 End TM140.
+
+
+Module TM141.
+
+Definition tm := Eval compute in (TM_from_str "1LB1LF_0LC1RC_0RD1RE_1RB1RD_1LF---_1RD0LA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition hR:DH0 := (D,[]).
+Definition hL:DH0 := (A,[]).
+
+Definition hRL:= [(hR,hL)].
+
+Definition z0 := [0;0;0;0;0].
+Definition w0 := [0;1;1;0;1].
+Definition w1 := [0;1;0;1;1].
+Definition w1' := <[1;1;0;1;1].
+
+Definition d0 := <[1;1;0;1].
+Definition d1 := <[1;1;1;1].
+Definition d1' := [0;1;0;1].
+Definition d1a(b:bool) := [] *> const 0.
+
+Fixpoint RC(w:list Sym)(ls:list nat):list Sym :=
+match ls with
+| nil => nil
+| n::ls0 => (RC w ls0) ++ ((w^^n) ++ d1')
+end.
+
+Fixpoint Rn(n0:nat)(ls:list nat):Z :=
+(match ls with
+| nil => Z.of_nat n0
+| n::ls0 => ((Rn n0 ls0) - (Z.of_nat n))*2
+end)%Z.
+
+Lemma Rn_spec n0 ls:
+  (0 <= (Rn n0 ls))%Z ->
+  segRLs tm (hRL^^n0) (hRL^^(Z.to_nat (Rn n0 ls))) (RC w0 ls) (RC w1 ls).
+Proof.
+  induction ls.
+  - intros H.
+    cbn.
+    rewrite Nat2Z.id.
+    apply segRLs_nil.
+  - cbn.
+    intros H.
+    eapply segRLs_concat.
+    1: apply IHls; lia.
+    eapply segRLs_concat.
+    + replace (Z.to_nat (Rn n0 ls)) with (a + (Z.to_nat (Rn n0 ls) - a)) by lia.
+      eapply (UC1.Incs tm hR hL w0 w1 w1'); execute.
+    + applys_eq (BCR.Incs tm hR hL d0 d1 d1'); execute.
+      f_equal; lia.
+Qed.
+
+Lemma RC_rot ls r:
+  [0;1] *> RC w0 ls *> r = RC w1 ls *> [0;1] *> r.
+Proof.
+  gen r.
+  induction ls; intros.
+  1: reflexivity.
+  cbn.
+  gen IHls.
+  unfold w0,w1,d1'.
+  repeat rewrite Str_app_assoc.
+  cbn.
+  intros IHls.
+  rewrite IHls.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Definition R0 ls n :=
+  (RC w0 ls *> w0^^n *> [0;1;1] *> const 0).
+
+Definition R1 ls n :=
+  (RC w1 ls *> w1^^n *> [0;1;0;1;1] *> const 0).
+
+Lemma R_rot ls n:
+  R1 ls n = [0;1] *> R0 ls n.
+Proof.
+  unfold R0,R1,w0,w1.
+  simpl_tape.
+  epose proof RC_rot.
+  unfold w0,w1 in H; cbn in H.
+  rewrite H.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma R_spec n0 ls n:
+  ((Z.of_nat n)+2 <= (Rn n0 ls))%Z ->
+  sideRLs tm (hRL^^n0) (R0 ls n)
+  (R1 (n::ls) ((Z.to_nat (Rn n0 ls - (Z.of_nat n) - 2)))).
+Proof.
+  unfold R0,R1.
+  intros H.
+  cbn[RC].
+  repeat rewrite Str_app_assoc.
+  eapply segRLs_sideRLs_concat.
+  1: apply Rn_spec; lia.
+  remember (Rn n0 ls) as v1.
+  remember (Z.of_nat n) as v2.
+  replace (Z.to_nat v1) with (Z.to_nat v2 + (2+Z.to_nat (v1-v2-2)%Z)) by lia.
+  eapply segRLs_sideRLs_concat.
+  1: applys_eq (UC1.Incs tm hR hL w0 w1 w1').
+  1,2: f_equal; lia.
+  1,2,3: execute.
+  remember (Z.to_nat (v1-v2-2)) as v3.
+  clear Heqv3.
+  rewrite (Nat.add_comm 2).
+  induction v3.
+  - cbn.
+    econstructor.
+    1: execute.
+    econstructor.
+    1: execute.
+    constructor.
+  - replace (S v3+2) with (v3+2+1) by lia.
+    rewrite lpow_add.
+    eapply sideRLs_trans.
+    1: apply IHv3.
+    cbn.
+    econstructor.
+    2: constructor.
+    unfold w1.
+    execute; es.
+Qed.
+
+Definition S0 k ls n b :=
+  d1a b <* (d0)^^k {{{ (hR,R) }}} R0 ls n.
+
+Lemma BigStep k ls n b:
+  (Z.of_nat n + 2 <= Rn (2 ^ k) ls)%Z ->
+  (S0 k ls n b) -[ tm ]->+
+  (S0 (S k) (n::ls) (Z.to_nat (Rn (2^k) ls - Z.of_nat n - 2)%Z) (negb b)).
+Proof.
+  intros H.
+  eapply progress_trans.
+  - unfold S0.
+    eapply sideRLs_concat.
+    + eapply segRLs_sideRLs_concat.
+      1: eapply (BC.Incs _ hL hR d0 d1 d1'); execute.
+      constructor.
+    + rewrite lrcons_lpow1.
+      2: eapply Nat.pow_nonzero; lia.
+      eapply R_spec.
+      lia.
+  - rewrite R_rot.
+    unfold S0.
+    unfold d0,d1,d1a.
+    destruct b;
+    solve_LOverflow.
+Qed.
+
+Lemma Rn_2 n0 ls:
+  (Rn (2*n0) ls =
+  (Rn n0 ls)*2 - Rn 0 ls)%Z.
+Proof.
+  induction ls.
+  - cbn; lia.
+  - gen IHls; cbn; lia.
+Qed.
+
+Definition k0 := 3.
+Definition config_t:Type := (nat*(list nat)*nat*bool).
+Definition config (x : config_t) :=
+  let '(k,ls,n,b):=x in
+  S0 (k+k0) ls n b.
+Definition P (x : config_t) :=
+  let '(k,ls,n,_):=x in
+  (
+  (Z.of_nat n + 2 <= Rn (2 ^ (k+k0))%nat ls) /\
+  (Rn (2*2^(k+k0)) ls - Rn (2^(k+k0)) ls = Z.of_nat (2*4^(k))) /\
+  True)%Z.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=(config (2,[],6,true)%nat)).
+  1: cbn; solve_init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: cbn; try lia.
+  unfold P.
+  intros [[[k ls] n] b] [HP0 [HP1 HP2]].
+  eexists (S k,_,_,_).
+  split.
+  - unfold config.
+    eapply BigStep.
+    lia.
+  - repeat split.
+    + cbn[Nat.add].
+      cbn[Nat.pow].
+      cbn[Rn].
+      lia.
+    + cbn[Nat.add].
+      cbn[Nat.pow].
+      cbn[Rn].
+      gen HP1.
+      repeat rewrite Rn_2.
+      lia.
+Qed.
+
+End TM141.
+
+
+Module TM142.
+
+Definition tm := Eval compute in (TM_from_str "1LB0LF_1RC1RB_0LD1RD_0RB1RE_1LA---_1LC1LA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition hR:DH0 := (B,[]).
+Definition hL:DH0 := (F,[]).
+
+Definition hRL:= [(hR,hL)].
+
+Definition z0 := [0;0;0;0;0].
+Definition w0 := [0;1;1;0;1].
+Definition w1 := [0;1;0;1;1].
+Definition w1' := <[1;1;0;1;1].
+
+Definition d0 := <[1;1;0;1].
+Definition d1 := <[1;1;1;1].
+Definition d1' := [0;1;0;1].
+Definition d1a(b:bool) := [] *> const 0.
+
+Fixpoint RC(w:list Sym)(ls:list nat):list Sym :=
+match ls with
+| nil => nil
+| n::ls0 => (RC w ls0) ++ ((w^^n) ++ d1')
+end.
+
+Fixpoint Rn(n0:nat)(ls:list nat):Z :=
+(match ls with
+| nil => Z.of_nat n0
+| n::ls0 => ((Rn n0 ls0) - (Z.of_nat n))*2
+end)%Z.
+
+Lemma Rn_spec n0 ls:
+  (0 <= (Rn n0 ls))%Z ->
+  segRLs tm (hRL^^n0) (hRL^^(Z.to_nat (Rn n0 ls))) (RC w0 ls) (RC w1 ls).
+Proof.
+  induction ls.
+  - intros H.
+    cbn.
+    rewrite Nat2Z.id.
+    apply segRLs_nil.
+  - cbn.
+    intros H.
+    eapply segRLs_concat.
+    1: apply IHls; lia.
+    eapply segRLs_concat.
+    + replace (Z.to_nat (Rn n0 ls)) with (a + (Z.to_nat (Rn n0 ls) - a)) by lia.
+      eapply (UC1.Incs tm hR hL w0 w1 w1'); execute.
+    + applys_eq (BCR.Incs tm hR hL d0 d1 d1'); execute.
+      f_equal; lia.
+Qed.
+
+Lemma RC_rot ls r:
+  [0;1] *> RC w0 ls *> r = RC w1 ls *> [0;1] *> r.
+Proof.
+  gen r.
+  induction ls; intros.
+  1: reflexivity.
+  cbn.
+  gen IHls.
+  unfold w0,w1,d1'.
+  repeat rewrite Str_app_assoc.
+  cbn.
+  intros IHls.
+  rewrite IHls.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Definition R0 ls n :=
+  (RC w0 ls *> w0^^n *> [0;1;1] *> const 0).
+
+Definition R1 ls n :=
+  (RC w1 ls *> w1^^n *> [0;1;0;1;1] *> const 0).
+
+Lemma R_rot ls n:
+  R1 ls n = [0;1] *> R0 ls n.
+Proof.
+  unfold R0,R1,w0,w1.
+  simpl_tape.
+  epose proof RC_rot.
+  unfold w0,w1 in H; cbn in H.
+  rewrite H.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma R_spec n0 ls n:
+  ((Z.of_nat n)+2 <= (Rn n0 ls))%Z ->
+  sideRLs tm (hRL^^n0) (R0 ls n)
+  (R1 (n::ls) ((Z.to_nat (Rn n0 ls - (Z.of_nat n) - 2)))).
+Proof.
+  unfold R0,R1.
+  intros H.
+  cbn[RC].
+  repeat rewrite Str_app_assoc.
+  eapply segRLs_sideRLs_concat.
+  1: apply Rn_spec; lia.
+  remember (Rn n0 ls) as v1.
+  remember (Z.of_nat n) as v2.
+  replace (Z.to_nat v1) with (Z.to_nat v2 + (2+Z.to_nat (v1-v2-2)%Z)) by lia.
+  eapply segRLs_sideRLs_concat.
+  1: applys_eq (UC1.Incs tm hR hL w0 w1 w1').
+  1,2: f_equal; lia.
+  1,2,3: execute.
+  remember (Z.to_nat (v1-v2-2)) as v3.
+  clear Heqv3.
+  rewrite (Nat.add_comm 2).
+  induction v3.
+  - cbn.
+    econstructor.
+    1: execute.
+    econstructor.
+    1: execute.
+    constructor.
+  - replace (S v3+2) with (v3+2+1) by lia.
+    rewrite lpow_add.
+    eapply sideRLs_trans.
+    1: apply IHv3.
+    cbn.
+    econstructor.
+    2: constructor.
+    unfold w1.
+    execute; es.
+Qed.
+
+Definition S0 k ls n b :=
+  d1a b <* (d0)^^k {{{ (hR,R) }}} R0 ls n.
+
+Lemma BigStep k ls n b:
+  (Z.of_nat n + 2 <= Rn (2 ^ k) ls)%Z ->
+  (S0 k ls n b) -[ tm ]->+
+  (S0 (S k) (n::ls) (Z.to_nat (Rn (2^k) ls - Z.of_nat n - 2)%Z) (negb b)).
+Proof.
+  intros H.
+  eapply progress_trans.
+  - unfold S0.
+    eapply sideRLs_concat.
+    + eapply segRLs_sideRLs_concat.
+      1: eapply (BC.Incs _ hL hR d0 d1 d1'); execute.
+      constructor.
+    + rewrite lrcons_lpow1.
+      2: eapply Nat.pow_nonzero; lia.
+      eapply R_spec.
+      lia.
+  - rewrite R_rot.
+    unfold S0.
+    unfold d0,d1,d1a.
+    destruct b;
+    solve_LOverflow.
+Qed.
+
+Lemma Rn_2 n0 ls:
+  (Rn (2*n0) ls =
+  (Rn n0 ls)*2 - Rn 0 ls)%Z.
+Proof.
+  induction ls.
+  - cbn; lia.
+  - gen IHls; cbn; lia.
+Qed.
+
+Definition k0 := 3.
+Definition config_t:Type := (nat*(list nat)*nat*bool).
+Definition config (x : config_t) :=
+  let '(k,ls,n,b):=x in
+  S0 (k+k0) ls n b.
+Definition P (x : config_t) :=
+  let '(k,ls,n,_):=x in
+  (
+  (Z.of_nat n + 2 <= Rn (2 ^ (k+k0))%nat ls) /\
+  (Rn (2*2^(k+k0)) ls - Rn (2^(k+k0)) ls = Z.of_nat (2*4^(k))) /\
+  True)%Z.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=(config (2,[],6,true)%nat)).
+  1: cbn; solve_init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: cbn; try lia.
+  unfold P.
+  intros [[[k ls] n] b] [HP0 [HP1 HP2]].
+  eexists (S k,_,_,_).
+  split.
+  - unfold config.
+    eapply BigStep.
+    lia.
+  - repeat split.
+    + cbn[Nat.add].
+      cbn[Nat.pow].
+      cbn[Rn].
+      lia.
+    + cbn[Nat.add].
+      cbn[Nat.pow].
+      cbn[Rn].
+      gen HP1.
+      repeat rewrite Rn_2.
+      lia.
+Qed.
+
+End TM142.
+
+
+Module TM143.
+
+Definition tm := Eval compute in (TM_from_str "1LB1RE_0LC0RD_1RD0LD_0RA1RB_0RB1RF_1RC---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition hR:DH0 := (E,[1]).
+Definition hL:DH0 := (D,[0]).
+
+Definition hR':DH0 := (E,[1]).
+Definition hL':DH0 := (D,[0]).
+
+Definition hRL:= [(hR,hL)].
+
+Definition w0 := [1;0;0;1;0;0].
+Definition w1 := [0;0;0;0;0;0].
+Definition w2 := [0;0;1;0;0;0].
+Definition w3 := [0;0;1;0;0;1].
+Definition w3' := <[1;1;0;1;1;0].
+
+Definition ld0 := <[1;0;0;0].
+Definition ld1 := <[1;0;1;0].
+Definition ld1' := [0;1;0;1].
+Definition ld1a := [0;1] *> const 0.
+
+Definition d0 := <[1;1;0;1; 0;0;0].
+Definition d0' := [1;0;1; 0;1;0;0].
+Definition d1 := <[1;1;0;1; 0;1;0].
+Definition d1' := [0;0;1; 0;1;0;1].
+
+Fixpoint RC(w d:list Sym)(ls:list nat):list Sym :=
+match ls with
+| nil => nil
+| n::ls0 => (RC w d ls0) ++ ((w^^n) ++ d)
+end.
+
+Fixpoint Rn(n0:nat)(ls:list nat):Z :=
+(match ls with
+| nil => Z.of_nat n0
+| n::ls0 => ((Rn n0 ls0) - (Z.of_nat n)*3)*2 - 5
+end)%Z.
+
+Lemma Rn_spec n0 ls:
+  (0 <= (Rn n0 ls))%Z ->
+  segRLs tm (hRL^^n0) (hRL^^(Z.to_nat (Rn n0 ls))) (RC w0 d0' ls) (RC w3 d1' ls).
+Proof.
+  induction ls.
+  - intros H.
+    cbn.
+    rewrite Nat2Z.id.
+    apply segRLs_nil.
+  - cbn.
+    intros H.
+    eapply segRLs_concat.
+    1: apply IHls; lia.
+    eapply segRLs_concat.
+    + replace (Z.to_nat (Rn n0 ls)) with (a*3 + (3 + (Z.to_nat (Rn n0 ls) - a*3 - 3))) by lia.
+      eapply (UC3.Incs tm hR hL w0 w1 w2 w3 w3'); execute.
+    + replace (Z.to_nat ((Rn n0 ls - Z.of_nat a * 3) * 2 - 5))%Z with (1+(Z.to_nat ((Rn n0 ls - Z.of_nat a * 3 - 3) * 2))%Z) by lia.
+      do 2 rewrite lpow_add.
+      eapply segRLs_trans.
+      2: applys_eq (BCR.Incs tm hR hL d0 d1 d1'); execute.
+      2: f_equal; try lia.
+      eapply @segRLs_S with (w2:=[0;0;0;0;1;0;0]); execute.
+      eapply @segRLs_S with (w2:=[0;0;1;0;1;0;0]); execute.
+      eapply @segRLs_S' with (w2:=d1) (w3:=d1'); execute.
+      constructor.
+Qed.
+
+Lemma RC_rot ls r:
+  [0;0] *> RC w0 d0' ls *> r = RC w3 d1' ls *> [0;0] *> r.
+Proof.
+  gen r.
+  induction ls; intros.
+  1: reflexivity.
+  cbn.
+  gen IHls.
+  unfold w0,w3,d1',d0'.
+  repeat rewrite Str_app_assoc.
+  cbn.
+  intros IHls.
+  rewrite IHls.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Definition R0 ls n :=
+  (RC w0 d0' ls *> w0^^n *> [1;0;0;0;0;0;0;0;0;0] *> const 0).
+
+Definition R1 ls n :=
+  (RC w3 d1' ls *> [0;0;1] *> w3^^n *> const 0).
+
+Lemma R_rot ls n:
+  R1 ls n = [0;0] *> R0 ls n.
+Proof.
+  unfold R0,R1,w0,w3,d0',d1'.
+  simpl_tape.
+  epose proof RC_rot.
+  unfold w0,w3,d0',d1' in H; cbn in H.
+  rewrite H.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma R_spec n0 ls n:
+  ((Z.of_nat n)*3+3 <= (Rn n0 ls))%Z ->
+  sideRLs tm (hRL^^n0) (R0 ls n)
+  (R1 (n::ls) ((Z.to_nat (Rn n0 ls - (Z.of_nat n)*3 - 3)))).
+Proof.
+  unfold R0,R1.
+  intros H.
+  cbn[RC].
+  repeat rewrite Str_app_assoc.
+  eapply segRLs_sideRLs_concat.
+  1: apply Rn_spec; lia.
+  remember (Rn n0 ls) as v1.
+  remember (Z.of_nat n) as v2.
+  replace (Z.to_nat v1) with (Z.to_nat v2 * 3 + (3+Z.to_nat (v1-v2*3-3)%Z)) by lia.
+  eapply segRLs_sideRLs_concat.
+  1: applys_eq (UC3.Incs tm hR hL w0 w1 w2 w3 w3'); execute.
+  1,2: f_equal; lia.
+  remember (Z.to_nat (v1-v2*3-3)) as v3.
+  rewrite lpow_add.
+  rewrite <-(Str_app_assoc d1').
+  eapply segRLs_sideRLs_concat.
+  - eapply @segRLs_trans with (w2:=d1'++[0;0;1]) (ls2:=[]).
+    + eapply @segRLs_S with (w2:=[0;0;0;0;1;0;0;0;0;0]); execute.
+      eapply @segRLs_S with (w2:=[0;0;1;0;1;0;0;0;0;0]); execute.
+      eapply segRLs_S.
+      2: econstructor.
+      execute.
+    + eapply BCR.Incs with (d0:=d0 <+ <[1;1;0]) (d1:=d1 <+ <[1;1;0]); execute.
+  - cbn[app].
+    change w3 with ([0;0;1]^^2).
+    rewrite <-lpow_mul.
+    rewrite <-(lpow_all0 [0;0;0] (v3*2)).
+    2: solve_const0_eq.
+    eapply segRLs_sideRLs_concat.
+    2: rewrite lpow_all0; [constructor|solve_const0_eq].
+    epose proof (UC1.Incs' tm hR hL [0;0;0] [0;0;1] <[1;1;0] _ _ _ (v3*2)).
+    applys_eq H0.
+    Unshelve. all: execute.
+Qed.
+
+Definition S0 k ls n :=
+  ld1a <* (ld0)^^k <* ld1 <* [] {{{ (hR,R) }}} R0 ls n.
+
+Lemma BigStep k ls n:
+  (Z.of_nat n * 3 + 3 <= Rn (2^k*2-1) ls)%Z ->
+  (S0 k ls n) -[ tm ]->+
+  (S0 (S k) (n::ls) (Z.to_nat (Rn (2^k*2-1) ls - Z.of_nat n * 3 - 3)%Z)).
+Proof.
+  intros H.
+  eapply progress_trans.
+  - unfold S0.
+    eapply sideRLs_concat.
+    + rewrite <-(Str_app_assoc ld1).
+      eapply segRLs_sideRLs_concat.
+      1: eapply (@segRLs_wall' _ hL hR hL' hR' [] []); execute.
+      eapply segRLs_sideRLs_concat.
+      1: eapply (BC.IncsMul2 _ hL' hR' ld0 ld1 ld1'); execute.
+      constructor.
+    + replace (2^k*2-2) with (2^k*2-1-1) by lia.
+      rewrite lrcons_lpow1.
+      2: epose proof (Nat.pow_nonzero 2 k); lia.
+      eapply R_spec.
+      lia.
+  - rewrite R_rot.
+    unfold S0.
+    unfold ld0,ld1,ld1a.
+    solve_LOverflow.
+Qed.
+Fixpoint Rn'(n0:nat)(ls:list nat):Z :=
+(match ls with
+| nil => (Z.of_nat n0)-1
+| n::ls0 => ((Rn' n0 ls0) - (Z.of_nat n)*3)*2 - 5
+end)%Z.
+
+Lemma Rn'_spec n ls:
+  n<>O ->
+  Rn' (n) ls = Rn (n-1) ls.
+Proof.
+  destruct n as [|n].
+  1: lia.
+  intros _.
+  replace (S n - 1) with n by lia.
+  induction ls;
+  cbn[Rn']; cbn[Rn]; lia.
+Qed.
+
+Lemma Rn'_2 n0 ls:
+  (Rn' (2*n0) ls =
+  (Rn' n0 ls)*2 - Rn' 0 ls)%Z.
+Proof.
+  induction ls.
+  - cbn[Rn']. lia.
+  - gen IHls; cbn[Rn']; lia.
+Qed.
+
+Definition k0:nat := 3.
+Definition config '(k,ls,n) := S0 (k+k0) ls n.
+Definition P '(k,ls,n) :=
+  (
+  (Z.of_nat n * 3 + 3 <= Rn' (2^(k+k0)*2) ls) /\
+  (Rn' (2*2^(k+k0)*2) ls - Rn' (2^(k+k0)*2) ls = Z.of_nat (1*4^(k+2))) /\
+  Rn' 0 ls <= 0)%Z.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=config (0,[],2)%nat).
+  1: cbn; solve_init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: cbn; try lia.
+  unfold P.
+  intros [[k ls] n] [HP0 [HP1 HP2]].
+  eexists (S k,_,_).
+  split.
+  - unfold config.
+    eapply BigStep.
+    pose proof (Nat.pow_nonzero 2 (k+k0)).
+    rewrite <-Rn'_spec;
+    try lia.
+  - repeat split.
+    + cbn[Nat.add].
+      cbn[Nat.pow].
+      cbn[Rn'].
+      pose proof (Nat.pow_nonzero 2 (k+k0)).
+      rewrite <-Rn'_spec; try lia.
+      epose proof (Nat.pow_nonzero 4 (k+2)).
+      gen HP1.
+      repeat rewrite <-Nat.mul_assoc.
+      repeat rewrite Rn'_2.
+      remember (Rn' (2 ^ (k + k0) * 2) ls) as v1.
+      remember (Rn' 0 ls) as v2.
+      rewrite Z2Nat.id. 2: lia.
+      intros HP1.
+      lia.
+    + cbn[Nat.add].
+      cbn[Nat.pow].
+      cbn[Rn'].
+      gen HP1.
+      repeat rewrite <-Nat.mul_assoc.
+      repeat rewrite Rn'_2.
+      lia.
+    + cbn[Rn'].
+      lia.
+Qed.
+
+End TM143.

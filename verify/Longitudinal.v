@@ -462,6 +462,16 @@ Proof.
     eapply IHls; eauto.
 Qed.
 
+Lemma sideRL_1 tm h1 h2 r1 r2:
+  sideRL tm h1 h2 r1 r2 ->
+  sideRLs tm [(h1,h2)] r1 r2.
+Proof.
+  intros H.
+  econstructor.
+  2: constructor.
+  apply H.
+Qed.
+
 Lemma segRLs_nil {tm ls}:
   segRLs tm ls ls [] [].
 Proof.
@@ -506,6 +516,20 @@ Proof.
   intros.
   eapply segRLs_lrcons; eauto.
   1: constructor.
+Qed.
+
+Lemma segRLs_1_2 {tm h1 h2 h3 h4 h5 h6 w1 w2 w3 w4}:
+  segRR tm h1 h3 w1 w3 ->
+  segLR tm h5 h6 w3 w4 ->
+  segLL tm h4 h2 w4 w2 ->
+  segRLs tm ((h1,h2)::nil) ((h3,h5)::(h6,h4)::nil) w1 w2.
+Proof.
+  intros.
+  change ((h3,h5)::(h6,h4)::nil) with ((lrcons h3 [(h5,h6)] h4)++nil).
+  eapply segRLs_lrcons; eauto.
+  2: constructor.
+  econstructor; eauto.
+  constructor.
 Qed.
 
 Module UC1.

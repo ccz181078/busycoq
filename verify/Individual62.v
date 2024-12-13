@@ -340,9 +340,41 @@ Ltac use_shift_rule :=
       (fail)
   |].
 
+Ltac use_shift_rule' :=
+  match goal with
+  | |- (_ -[ _ ]->+ _) => eapply evstep_progress_trans
+  | |- (_ -[ _ ]->* _) => eapply evstep_trans
+  | _ => idtac "fail1"; fail
+  end; [
+    let x :=
+    match goal with
+    | |- (_ <* _ ^^ _ <{{ _ }} _ -[ _ ]->* _) => shift_rule_L
+    | |- (_ {{ _ }}> _ ^^ _ *> _ -[ _ ]->* _) => shift_rule_R
+    | _ => idtac "fail2"; fail
+    end in
+      (eapply (x []); find_shift_rule) ||
+      (eapply (x [_]); find_shift_rule) ||
+      (eapply (x [_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (fail)
+  |].
+
 Ltac execute_with_shift_rule :=
   intros;
   repeat (execute_with_rotate; use_shift_rule).
+
+Ltac execute_with_shift_rule' :=
+  intros;
+  repeat (execute_with_rotate; use_shift_rule').
 
 Ltac simpl_flat_map :=
   repeat rewrite List.flat_map_app;
