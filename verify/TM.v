@@ -723,6 +723,287 @@ Proof.
     apply H.
 Qed.
 
+Lemma evstep_multistep tm c c':
+  c -[ tm ]->* c' ->
+  exists n, c -[ tm ]->> n / c'.
+Proof.
+  intro H.
+  induction H.
+  - exists O.
+    constructor.
+  - destruct IHevstep as [n IH].
+    exists (S n).
+    econstructor; eauto.
+Qed.
+
+
+Definition sigma_score_sym: Sym->nat :=
+  fun s =>
+  (if sym_eqb s s0 then 0 else 1)%nat.
+
+Fixpoint sigma_score_seg(ls:list Sym):nat :=
+match ls with
+| nil => 0
+| h::t => sigma_score_sym h + sigma_score_seg t
+end.
+
+Inductive sigma_score_side: side->nat->Prop :=
+| sigma_score_side_O:
+    sigma_score_side (const s0) 0
+| sigma_score_side_S h t n1 n2:
+    sigma_score_sym h = n1 ->
+    sigma_score_side t n2 ->
+    sigma_score_side (h>>t) (n1+n2).
+
+Inductive sigma_score: (Q*tape)->nat->Prop :=
+| sigma_score_intro q l m r n1 n2 n3:
+    sigma_score_side l n1 ->
+    sigma_score_sym m = n2 ->
+    sigma_score_side r n3 ->
+    sigma_score (q,(l,m,r)) (n1+n2+n3).
+
+Lemma sigma_score_s0:
+  sigma_score_sym s0 = O.
+Proof.
+  unfold sigma_score_sym.
+  destruct (sym_eqb_spec s0 s0); congruence.
+Qed.
+
+Lemma sigma_score_side_const0_0 n:
+  sigma_score_side (const s0) n ->
+  n = O.
+Proof.
+  intro H.
+  remember (const s0) as s1.
+  induction H.
+  1: reflexivity.
+  rewrite const_unfold in Heqs1.
+  inverts Heqs1.
+  rewrite IHsigma_score_side.
+  2: reflexivity.
+  rewrite <-H.
+  rewrite sigma_score_s0.
+  reflexivity.
+Qed.
+
+Lemma sigma_score_side_unique s1 n1 n2:
+  sigma_score_side s1 n1 ->
+  sigma_score_side s1 n2 ->
+  n1 = n2.
+Proof.
+  intro H1.
+  gen n2.
+  induction H1; intros.
+  - rewrite sigma_score_side_const0_0; auto.
+  - inverts H0.
+    + rewrite const_unfold in H3.
+      inverts H3.
+      rewrite <-H.
+      rewrite sigma_score_s0.
+      rewrite (sigma_score_side_const0_0 n2); auto.
+    + rewrite  <-(IHsigma_score_side _ H6).
+      congruence.
+Qed.
+
+Lemma sigma_score_unique c1 n1 n2:
+  sigma_score c1 n1 ->
+  sigma_score c1 n2 ->
+  n1 = n2.
+Proof.
+  intros H1 H2.
+  inverts H1.
+  inverts H2.
+  f_equal.
+  2: eapply sigma_score_side_unique; eauto.
+  f_equal.
+  1: eapply sigma_score_side_unique; eauto.
+Qed.
+
+Lemma sigma_score_sym_bounded m:
+  (0 <= sigma_score_sym m <= 1)%nat.
+Proof.
+  unfold sigma_score_sym.
+  destruct (sym_eqb m s0); lia.
+Qed.
+
+Lemma sigma_score_step_bounded tm c1 c2 n1:
+  c1 -[ tm ]-> c2 ->
+  sigma_score c1 n1 ->
+  exists n2,
+  sigma_score c2 n2 /\
+  n2 <= n1+1.
+Proof.
+  intros H H1.
+  inverts H1.
+  inverts H.
+  - inverts H0.
+    + cbn.
+      eexists. split.
+      1: econstructor.
+      1: constructor.
+      1: reflexivity.
+      1: econstructor; eauto.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      rewrite sigma_score_s0.
+      lia.
+    + cbn.
+      eexists. split.
+      1: econstructor; eauto.
+      1: econstructor; eauto.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      lia.
+  - inverts H3.
+    + cbn.
+      eexists. split.
+      1: econstructor.
+      1: econstructor; eauto.
+      1: reflexivity.
+      1: econstructor.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      rewrite sigma_score_s0.
+      lia.
+    + cbn.
+      eexists. split.
+      1: econstructor; eauto.
+      1: econstructor; eauto.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      lia.
+Qed.
+
+Lemma sigma_score_bounded tm c1 c2 n n1 n2:
+  c1 -[ tm ]->> n / c2 ->
+  sigma_score c1 n1 ->
+  sigma_score c2 n2 ->
+  n2 <= n1+n.
+Proof.
+  intro H.
+  gen n1 n2.
+  induction H; intros.
+  - replace n2 with n1 by (eapply sigma_score_unique; eauto).
+    lia.
+  - epose proof (sigma_score_step_bounded _ _ _ _ H H1) as [n' [Ha Hb]].
+    specialize (IHmultistep _ _ Ha H2).
+    lia.
+Qed.
+
+Lemma sigma_score_bounded_fromc0 tm c2 n n2:
+  c0 -[ tm ]->> n / c2 ->
+  sigma_score c2 n2 ->
+  n2 <= n.
+Proof.
+  intros H H0.
+  eapply sigma_score_bounded with (c1:=c0) (n1:=O); eauto.
+  change O with (O+O+O).
+  econstructor.
+  1,3: econstructor.
+  apply sigma_score_s0.
+Qed.
+
+Lemma sigma_score_unbounded_nonhalt tm:
+  (forall n, exists c1 n', c0 -[ tm ]->* c1 /\ sigma_score c1 n' /\ n<=n') ->
+  ~halts tm c0.
+Proof.
+  intros h [n [c1 [Hm Hh]]].
+  destruct (h (S n)) as [c1' [n' [He' [Hs Hle]]]].
+  epose proof (evstep_multistep _ _ _ He') as [n'' Hm'].
+  epose proof (sigma_score_bounded_fromc0 _ _ _ _ Hm' Hs).
+  eapply exceeds_halt with (k:=n).
+  3: apply Hm'.
+  2: lia.
+  eauto.
+Qed.
+
+Lemma sigma_score_Str_app a b n1 n2:
+  sigma_score_seg a = n1 ->
+  sigma_score_side b n2 ->
+  sigma_score_side (a *> b) (n1 + n2).
+Proof.
+  gen b n1 n2.
+  induction a; intros.
+  - cbn in H.
+    rewrite <-H.
+    apply H0.
+  - cbn.
+    cbn in H.
+    rewrite <-H.
+    rewrite <-Nat.add_assoc.
+    econstructor; eauto.
+Qed.
+
+Lemma sigma_score_app a b:
+  sigma_score_seg (a++b) =
+  sigma_score_seg a + sigma_score_seg b.
+Proof.
+  induction a.
+  1: reflexivity.
+  cbn.
+  lia.
+Qed.
+
+Lemma sigma_score_lpow a n n1:
+  sigma_score_seg a = n1 ->
+  sigma_score_seg (a^^n) = n1*n.
+Proof.
+  gen a n1.
+  induction n; intros.
+  1: cbn; lia.
+  cbn.
+  rewrite sigma_score_app,H.
+  erewrite IHn; eauto.
+  lia.
+Qed.
+
+Lemma sigma_score_headL q a b n1 n2:
+  sigma_score_side a n1 ->
+  sigma_score_side b n2 ->
+  sigma_score (a <{{ q }} b) (n1+n2).
+Proof.
+  intros.
+  inverts H.
+  - cbn.
+    replace n2 with (O+O+n2) by lia.
+    econstructor; eauto.
+    2: apply sigma_score_s0.
+    constructor.
+  - cbn.
+    rewrite (Nat.add_comm _ n3).
+    econstructor; eauto.
+Qed.
+
+Lemma sigma_score_headR q a b n1 n2:
+  sigma_score_side a n1 ->
+  sigma_score_side b n2 ->
+  sigma_score (a {{ q }}> b) (n1+n2).
+Proof.
+  intros.
+  inverts H0.
+  - cbn.
+    replace n1 with (n1+(O+O)) by lia.
+    econstructor; eauto.
+    1: apply sigma_score_s0.
+    constructor.
+  - cbn.
+    rewrite (Nat.add_assoc).
+    econstructor; eauto.
+Qed.
+
+Ltac solve_sigma_score :=
+  (apply sigma_score_headL ||
+  apply sigma_score_headR ||
+  apply sigma_score_intro);
+  repeat (
+  apply sigma_score_side_O ||
+  apply sigma_score_lpow ||
+  apply sigma_score_Str_app ||
+  (cbn; reflexivity)
+  ).
+
+
+
 #[export] Instance Q_Eqb:
   Eqb Q.
 Proof.

@@ -103,19 +103,6 @@ Ltac shift_rule :=
     | idtac ]
   end.
 
-Lemma evstep_multistep tm c c':
-  c -[ tm ]->* c' ->
-  exists n, c -[ tm ]->> n / c'.
-Proof.
-  intro H.
-  induction H.
-  - exists O.
-    constructor.
-  - destruct IHevstep as [n IH].
-    exists (S n).
-    econstructor; eauto.
-Qed.
-
 
 Lemma halts_evstep tm c c':
   halts tm c' ->
