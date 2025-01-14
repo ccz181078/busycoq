@@ -3,10 +3,11 @@
 From Coq Require Export Lists.Streams.
 From Coq Require Import Lia.
 From BusyCoq Require Export Permute.
+From BusyCoq Require Export Enumerate.
 Set Default Goal Selector "!".
 
 Module Individual (Ctx : Ctx).
-  Module Permute := Permute Ctx. Export Permute.
+  Module Enumerate := Enumerate Ctx. Export Enumerate.
 
 (** Trivial lemmas, but [simpl] in these situations leaves a mess. *)
 Lemma move_left_const : forall s0 s r,

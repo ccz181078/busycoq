@@ -690,3 +690,44 @@ Definition TM_from_str(x:string):TM :=
   | E,0 => E0  | E,1 => E1
   | F,0 => F0  | F,1 => F1
   end.
+
+Definition Sym_to_str(x:Sym):string :=
+match x with
+| S0 => "0"
+| S1 => "1"
+end.
+
+Definition dir_to_str(x:dir):string :=
+match x with
+| L => "L"
+| R => "R"
+end.
+
+Definition Q_to_str(x:Q):string :=
+match x with
+| A => "A"
+| B => "B"
+| C => "C"
+| D => "D"
+| E => "E"
+| F => "F"
+end.
+
+Definition Trans_to_str(x:option (Sym*dir*Q)):string :=
+match x with
+| None => "---"
+| Some (o,d,s) => (Sym_to_str o) ++ (dir_to_str d) ++ (Q_to_str s)
+end.
+
+Definition TM_Q_to_str(tm:TM)(q:Q):string :=
+  (Trans_to_str (tm (q,S0))) ++
+  (Trans_to_str (tm (q,S1))).
+
+Definition TM_to_str(tm:TM):string :=
+  (TM_Q_to_str tm A) ++ "_" ++
+  (TM_Q_to_str tm B) ++ "_" ++
+  (TM_Q_to_str tm C) ++ "_" ++
+  (TM_Q_to_str tm D) ++ "_" ++
+  (TM_Q_to_str tm E) ++ "_" ++
+  (TM_Q_to_str tm F).
+

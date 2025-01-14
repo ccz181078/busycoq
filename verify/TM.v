@@ -218,6 +218,18 @@ Definition halts (tm : TM) (c0 : Q * tape) :=
 
 #[export] Hint Unfold halts halts_in : core.
 
+Inductive halts_at: TM->Q*tape->nat->Q*Sym->Prop :=
+| halts_at_intro tm c n q l m r:
+  c -[ tm ]->> n / (q,(l,m,r)) ->
+  halted tm (q,(l,m,r)) ->
+  halts_at tm c n (q,m).
+
+Inductive DecideResult :=
+| Halt(h:Q*Sym)
+| NonHalt
+| Unknown
+.
+
 Lemma move_left_tape0 :
   move_left tape0 = tape0.
 Proof.
