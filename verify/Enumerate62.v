@@ -2,11 +2,8 @@ Require Import List.
 Require Import Lia.
 From BusyCoq Require Import Individual62.
 From BusyCoq Require Import CTL62.
-From BusyCoq Require Import TC.
+From BusyCoq Require Import TC62.
 From BusyCoq Require Import Eqb.
-
-Module TC := TC BB62.
-Import TC.
 
 Definition makeTM(a0 a1 b0 b1 c0 c1 d0 d1 e0 e1 f0 f1:option (Sym*dir*Q)):TM :=
 fun '(s,m) =>

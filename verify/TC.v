@@ -772,6 +772,22 @@ Proof.
   constructor; auto.
 Qed.
 
+Definition decide_TC ls :=
+  match (TC_state.decide tm ls) with
+  | (NonHalt,_) => true
+  | _ => false
+  end.
+
+Lemma decide_TC_spec ls:
+  decide_TC ls = true ->
+  ~halts tm c0.
+Proof.
+  unfold decide_TC.
+  pose proof (TC_state_decide_spec ls).
+  destruct (TC_state.decide tm ls).
+  destruct d; try congruence.
+Qed.
+
 End tm_ctx.
 
 End TC.

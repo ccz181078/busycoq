@@ -224,6 +224,8 @@ Inductive halts_at: TM->Q*tape->nat->Q*Sym->Prop :=
   halted tm (q,(l,m,r)) ->
   halts_at tm c n (q,m).
 
+Definition halts_at_trans tm c1 tr := exists n, halts_at tm c1 n tr.
+
 Inductive DecideResult :=
 | Halt(h:Q*Sym)
 | NonHalt

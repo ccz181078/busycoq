@@ -7884,6 +7884,20 @@ match get_config_r x with
   end
 end.
 
+Definition check_halt x :=
+match get_config_r x with
+| None => false
+| Some (l,r,s,sgn) =>
+    match r with
+    | side_concat (seg_sym m) r0 =>
+      match tm (s,m) with
+      | None => true
+      | _ => false
+      end
+    | _ => false
+    end
+end.
+
 Lemma find_repeat_unfold_spec x:
 to_prop' (fst x) ->
 match find_repeat_unfold x with
@@ -8015,8 +8029,10 @@ Definition unfold_step1_fold w0 :=
 let w := (step0_refl' w0,w0) in
 let w := rep_rw cfg.(rep_rw_limit) find_repeat_unfold w in
 let w := rep_rw cfg.(rep_rw_limit) find_step1 w in
-let w := rep_rw cfg.(rep_rw_limit) find_repeat_fold w in
-w.
+if check_halt (snd w) then w
+else
+(let w := rep_rw cfg.(rep_rw_limit) find_repeat_fold w in
+w).
 
 Lemma unfold_step1_fold_spec w0:
 to_prop' (fst w0) ->
@@ -8026,7 +8042,13 @@ to_prop' (fst w0).
 Proof.
   intros H.
   unfold unfold_step1_fold.
-  repeat apply rep_rw_spec.
+  destruct_spec check_halt.
+  1,2: repeat apply rep_rw_spec.
+  - apply find_step1_spec.
+  - apply find_repeat_unfold_spec.
+  - split.
+    + apply step0_refl'_spec,H.
+    + apply H.
   - apply find_repeat_fold_spec.
   - apply find_step1_spec.
   - apply find_repeat_unfold_spec.
@@ -8132,7 +8154,7 @@ Proof.
 Qed.
 
 Definition steps_to_repeater_edge' w :=
-if (snd w =? 1)%positive then
+if (snd w =? 1)%positive && negb (check_halt w) then
   Some (fst (steps_to_repeater_edge w))
 else None.
 
@@ -8145,7 +8167,7 @@ end.
 Proof.
   intro H.
   unfold steps_to_repeater_edge'.
-  destruct (snd x =? 1)%positive; trivial.
+  destruct ((snd x =? 1)%positive && negb (check_halt x)); trivial.
   pose proof (steps_to_repeater_edge_spec x).
   destruct (steps_to_repeater_edge); cbn; tauto.
 Qed.
@@ -8220,10 +8242,32 @@ match x with
 | _ => false
 end.
 
+Definition get_halts_at(x:prop_expr):option (Q*Sym) :=
+match x with
+| ([],[multistep'_expr s1 (l,r,s,sgn) _]) =>
+  if s1 == (side_0inf,side_0inf,q0,R) then
+    match r with
+    | side_concat (seg_sym m) _ =>
+      match tm (s,m) with
+      | None => Some (s,m)
+      | _ => None
+      end
+    | _ => None
+    end
+  else None
+| _ => None
+end.
 
 Definition subst_for_nonhalt(n:N)(i:id_t)(t:type_t):to_cexpr_type t :=
 match t return to_cexpr_type t with
 | nat_t => n
+| seg_t => cseg_nil
+| side_t => cside_0inf
+end.
+
+Definition subst_trivial t:to_cexpr_type t :=
+match t return to_cexpr_type t with
+| nat_t => N0
 | seg_t => cseg_nil
 | side_t => cside_0inf
 end.
@@ -8258,6 +8302,55 @@ Proof.
   - tauto.
 Qed.
 
+Lemma multistep'_multistep n1 s1 s2:
+  multistep' tm n1 s1 s2 ->
+  exists n2, s1 -[ tm ]->> n2 / s2.
+Proof.
+  intros H.
+  destruct n1; cbn in H.
+  - eapply with_counter.
+    eapply progress_evstep,H.
+  - eapply with_counter,H.
+Qed.
+
+Lemma get_halts_at_spec x:
+  to_prop' x ->
+  match get_halts_at x with
+  | Some a => halts_at_trans tm c0 a
+  | None => True
+  end.
+Proof.
+  intro H'.
+  destruct x as [H G]; cbn - [eqb].
+  destruct H; trivial.
+  destruct G as [|G G0]; trivial.
+  destruct G; trivial.
+  destruct b as [[[l r] s] sgn].
+  destruct G0; trivial.
+  eqb_cases a (side_0inf,side_0inf,q0,R).
+  subst a.
+  destruct r; trivial.
+  destruct a; trivial.
+  destruct (tm (s,a)) eqn:E; trivial.
+  specialize (H' N0 (fun _ => subst_trivial)).
+  unfold to_prop'' in H'.
+  cbn in H'.
+  unfold to_prop0_list in H'.
+  repeat rewrite Forall_cons_iff in H'.
+  repeat rewrite Forall_nil_iff in H'.
+  cbn in H'.
+  destruct (H' I) as [H0 _].
+  eassert (H1:_). {
+    eapply H0. tauto.
+  }
+  clear H' H0.
+  destruct H1 as [_ H1].
+  eapply multistep'_multistep in H1.
+  destruct H1 as [n0 H1].
+  exists n0.
+  destruct sgn;
+  econstructor; eauto.
+Qed.
 
 Definition get_rule T :=
 match hlin_layers_steps T with
@@ -8331,6 +8424,12 @@ match hlin_layers_steps T with
 | _ => false
 end.
 
+Definition decide_hlin_halt T :=
+match hlin_layers_steps T with
+| inr ((_,(w1,w0),_)::_) => get_halts_at (fst w0)
+| _ => None
+end.
+
 Lemma decide_hlin_nonhalt_spec_0 T:
   if decide_hlin_nonhalt T then ~halts tm c0 else True.
 Proof.
@@ -8347,6 +8446,31 @@ Lemma decide_hlin_nonhalt_spec_1 T:
   decide_hlin_nonhalt T = true -> ~halts tm c0.
 Proof.
   pose proof (decide_hlin_nonhalt_spec_0 T) as H.
+  intro H0.
+  rewrite H0 in H.
+  apply H.
+Qed.
+
+Lemma decide_hlin_halt_spec_0 T:
+  match decide_hlin_halt T with
+  | None => True
+  | Some x => halts_at_trans tm c0 x
+  end.
+Proof.
+  unfold decide_hlin_halt.
+  destruct_spec hlin_layers_steps_spec; trivial.
+  destruct l as [|[[[w3 w2] [w1 w0]] p] ls]; trivial.
+  unfold hlin_layers_WF in H.
+  rewrite Forall_cons_iff in H.
+  cbn in H.
+  destruct_spec get_halts_at_spec; trivial.
+  tauto.
+Qed.
+
+Lemma decide_hlin_halt_spec_1 T x:
+  decide_hlin_halt T = Some x -> halts_at_trans tm c0 x.
+Proof.
+  pose proof (decide_hlin_halt_spec_0 T) as H.
   intro H0.
   rewrite H0 in H.
   apply H.
@@ -8460,6 +8584,16 @@ Lemma decide_hlin_nonhalt_spec cfg T:
 Proof.
   intros tm H.
   apply decide_hlin_nonhalt_spec_1,H.
+Qed.
+
+Lemma decide_hlin_halt_spec cfg T x:
+  forall tm,
+  Config_WF tm cfg ->
+  decide_hlin_halt tm cfg T = Some x ->
+  halts_at_trans tm c0 x.
+Proof.
+  intros tm H.
+  apply decide_hlin_halt_spec_1,H.
 Qed.
 
 Lemma get_rule_spec cfg T:
