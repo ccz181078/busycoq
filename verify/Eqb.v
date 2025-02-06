@@ -66,6 +66,43 @@ Proof.
   destruct (Ha a0 b0),(Hb a1 b1); solve_Bool_reflect.
 Qed.
 
+Definition sum_eqb{A B}(A_eqb:A->A->bool)(B_eqb:B->B->bool)(a b:A+B):bool :=
+match a,b with
+| inl a0,inl b0 =>
+  A_eqb a0 b0
+| inr a1,inr b1 =>
+  B_eqb a1 b1
+| _,_ => false
+end.
+
+Lemma sum_eqb_spec{A B} A_eqb B_eqb (a b:A+B):
+  (forall a0 b0, Bool.reflect (a0=b0) (A_eqb a0 b0)) ->
+  (forall a0 b0, Bool.reflect (a0=b0) (B_eqb a0 b0)) ->
+  Bool.reflect (a=b) (sum_eqb A_eqb B_eqb a b).
+Proof.
+  intros Ha Hb.
+  destruct a,b; solve_Bool_reflect; unfold sum_eqb.
+  - destruct (Ha a a0); solve_Bool_reflect.
+  - destruct (Hb b0 b); solve_Bool_reflect.
+Qed.
+
+Definition option_eqb{A}(A_eqb:A->A->bool)(a b:option A):bool :=
+match a,b with
+| Some a0,Some b0 =>
+  A_eqb a0 b0
+| None,None => true
+| _,_ => false
+end.
+
+Lemma option_eqb_spec{A} A_eqb (a b:option A):
+  (forall a0 b0, Bool.reflect (a0=b0) (A_eqb a0 b0)) ->
+  Bool.reflect (a=b) (option_eqb A_eqb a b).
+Proof.
+  intros Ha.
+  destruct a,b; cbn; solve_Bool_reflect.
+  destruct (Ha a a0); solve_Bool_reflect.
+Qed.
+
 Class Eqb A := {
   eqb : A -> A -> bool ;
   eqb_spec : forall x y, Bool.reflect (x=y) (eqb x y)
@@ -90,6 +127,27 @@ Proof.
   unshelve esplit.
   - apply prod_eqb; apply eqb.
   - intros; apply prod_eqb_spec; apply eqb_spec.
+Defined.
+
+#[export] Instance Sum_eqb A B:
+  Eqb A ->
+  Eqb B ->
+  Eqb (A+B).
+Proof.
+  intros HA HB.
+  unshelve esplit.
+  - apply sum_eqb; apply eqb.
+  - intros; apply sum_eqb_spec; apply eqb_spec.
+Defined.
+
+#[export] Instance Option_eqb A:
+  Eqb A ->
+  Eqb (option A).
+Proof.
+  intros HA.
+  unshelve esplit.
+  - apply option_eqb; apply eqb.
+  - intros; apply option_eqb_spec; apply eqb_spec.
 Defined.
 
 #[export] Instance Nat_eqb: Eqb nat := Build_Eqb _ Nat.eqb Nat.eqb_spec.
