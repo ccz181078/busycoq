@@ -71,6 +71,18 @@ Definition list_hash{A} f (ls:list A) := list_hash' f ls hv2.
 Definition prod_hash{A B} f g (x:A*B) :=
   let (a,b):=x in hv1 ## (f a) ## (g b).
 
+Definition sum_hash{A B} f g (x:A+B) :=
+  match x with
+  | inl x0 => hv1 ## f x0
+  | inr x1 => hv2 ## g x1
+  end.
+
+Definition option_hash{A} f (x:option A) :=
+  match x with
+  | Some x0 => hv1 ## f x0
+  | None => hv2
+  end.
+
 Definition bool_hash(x:bool) :=
 match x with
 | true => hv1
@@ -87,6 +99,9 @@ Class Hash A := {
 #[export] Instance Z_Hash: Hash Z := (ltac: (split; apply Z_hash)).
 #[export] Instance list_Hash A: Hash A -> Hash (list A) := (ltac: (esplit; apply list_hash,hash)).
 #[export] Instance prod_Hash A B: Hash A -> Hash B -> Hash (A*B) := (ltac: (esplit; apply prod_hash; apply hash)).
+#[export] Instance sum_Hash A B: Hash A -> Hash B -> Hash (A+B) := (ltac: (esplit; apply sum_hash; apply hash)).
+#[export] Instance option_Hash A: Hash A -> Hash (option A) := (ltac: (esplit; apply option_hash; apply hash)).
+
 
 End HashConcat.
 
