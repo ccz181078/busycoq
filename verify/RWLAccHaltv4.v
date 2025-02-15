@@ -145,4 +145,24 @@ Proof. solve_halt. Time Qed.
 Lemma tm249: halts_at_trans (TM_from_str "1RB0LC_1RC1RE_1LA0LD_0RB0RA_1RB0RF_1RD---") c0 (F,1).
 Proof. solve_halt. Time Qed.
 
+Lemma tm250: halts_at_trans (TM_from_str "1RB1LE_1RC0RF_1LD0RB_1RE0LC_1LA0RD_---0LA") c0 (F,0).
+Proof. solve_halt. Time Qed.
+
+Lemma tm251: halts_at_trans (TM_from_str "1RB0LE_0RC1RF_1RD0RB_1LA1RB_1LA0LD_1RA---") c0 (F,1).
+Proof. solve_halt. Time Qed.
+
+Lemma tm252: halts_at_trans (TM_from_str "1RB1RC_1LC0RF_1RA0LD_0LC0LE_1LD0RA_1RE---") c0 (F,1).
+Proof. solve_halt. Time Qed.
+
+Lemma tm253: halts_at_trans (TM_from_str "1RB---_1LC0RE_0LD0LB_1RE0LC_1RF1RD_1LD0RA") c0 (A,1).
+Proof. solve_halt. Time Qed.
+
+Lemma tm254: halts_at_trans (TM_from_str "1RB1LE_1RC1RF_1LD0RB_1RE0LC_1LA0RD_---1RC") c0 (F,0).
+Proof. solve_halt. Time Qed.
+
+Lemma tm255: halts_at_trans (TM_from_str "1RB0LD_1RC0RF_1LC1LA_0LE---_1LA0RB_0RC0RE") c0 (D,1).
+Proof. solve_halt. Time Qed.
+
+Lemma tm256: halts_at_trans (TM_from_str "1RB---_1RC1RA_1RD0RB_1LE0RC_0LF0LD_0LB1LA") c0 (A,1).
+Proof. solve_halt. Time Qed.
 

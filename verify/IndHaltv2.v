@@ -323,3 +323,9 @@ Proof. solve_hlin_halt. Time Qed.
 Lemma tm102: halts_at_trans (TM_from_str "1RB1LE_0RC1RA_1RD0RA_1LA1RE_1LC0RF_---0LD") c0 (F,0).
 Proof. solve_hlin_halt. Time Qed.
 
+Lemma tm103: halts_at_trans (TM_from_str "1RB0LF_1LC0RA_0RD1LB_1RB0RE_---1RF_1LA1RD") c0 (E,0).
+Proof. solve_hlin_halt. Time Qed.
+
+Lemma tm104: halts_at_trans (TM_from_str "1RB0LE_0LC1RA_1RE1LD_1LA1LF_1LA0RC_---0LC") c0 (F,0).
+Proof. solve_hlin_halt. Time Qed.
+

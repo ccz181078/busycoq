@@ -1327,6 +1327,6 @@ Proof. solve_halt. Time Qed.
 
 Lemma tm419: halts_at_trans (TM_from_str "1RB0LA_1RC1LD_1LB0RF_0RE0LB_---1LC_0RE0RA") c0 (E,0).
 Proof. solve_halt. Time Qed.
-:
+
 
 

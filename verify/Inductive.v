@@ -8486,31 +8486,6 @@ Proof.
   auto.
 Qed.
 
-(* TODO: add recursive record-breaking analysis *)
-Axiom srec_state:Type.
-Axiom srec_add_rule:srec_state->prop_expr'->prop_expr'->prop_expr'->srec_state.
-
-Definition find_srec_step(w0 w1 dw:prop_expr')(s:srec_state):option (prop_expr'*prop_expr'*srec_state) :=
-  follow_rule w0 dw &&& (fun w0' =>
-  follow_rule w1 dw &&& (fun w1' =>
-  Some (w0',w1',srec_add_rule s w1 dw w1')
-)).
-
-Fixpoint find_srec(w0 w1:prop_expr')(s:srec_state)(n:nat):option (prop_expr'*srec_state) :=
-match n with
-| O => None
-| Datatypes.S n0 =>
-  match find_step1 w0 with
-  | Some u =>
-    find_srec_step w0 w1 u s &&& (fun '(w0,w1,s) =>
-    find_step0_refl w1 &&& (fun w2 =>
-    find_srec w1 w2 s n0 &&& (fun '(u,s) =>
-    find_srec_step w0 w1 u s &&& (fun '(w0,w1,s) =>
-    find_srec w0 w1 s n0
-    ))))
-  | None => Some (w1,s)
-  end
-end.
 
 Definition urrba_block_layer:Type := prop_expr'*prop_expr'.
 Definition urrba_block_state:Type := 

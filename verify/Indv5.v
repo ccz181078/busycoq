@@ -128,4 +128,24 @@ Proof. solve_hlin_nonhalt. Time Qed.
 Lemma nonhalt36: ~halts (TM_from_str "1RB0LE_1RC0RB_1RD0RF_1LE0RA_1LA0LE_0RD---") c0.
 Proof. solve_hlin_nonhalt. Time Qed.
 
+Lemma nonhalt37: ~halts (TM_from_str "1RB0RF_1RC0LD_1LB1RD_1RE0LB_0RA0RD_1RA---") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt38: ~halts (TM_from_str "1RB0LC_1RC1LD_1LD0LC_1RE1LB_0RF0RE_1RA---") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt39: ~halts (TM_from_str "1RB0LC_1LA1RC_1RD0LA_0RE0RC_1RA0RF_1RE---") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt40: ~halts (TM_from_str "1RB0LD_0RC0RA_1RD0RF_1RE0LA_1LD1RA_1RC---") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt41: ~halts (TM_from_str "1RB---_1RC0LD_1RD1LE_1LE0LD_1RF1LC_0RA0RF") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt42: ~halts (TM_from_str "1RB0RD_1RC1RA_1LD0RE_1RF0LE_1LA1LC_---0RB") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt43: ~halts (TM_from_str "1RB1LC_1LA0RC_1LD0RB_0LE0LC_1LB0LF_1LE---") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
 

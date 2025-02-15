@@ -5,6 +5,7 @@ Require Import ZArith.
 Require Import Lia.
 From BusyCoq Require Import HashTable.
 Require Uint63.
+Require PArray.
 
 Module Type CTLCtx(K:HashableType)(Ctx:Ctx).
 Export K.
@@ -2436,6 +2437,32 @@ End CTLCtx.
 
 End NGramCPS.
 
+Module MITMDFA(Ctx:Ctx).
+Record config := {
+  ldfa: PArray.array Uint63.int;
+  rdfa: PArray.array Uint63.int;
+  sym_id: Ctx.Sym->Uint63.int;
+  n_sym: Uint63.int;
+}.
+Module SymHash := SymHash Ctx.
+Module DFAStateHash := ProdHash Uint63_K SymHash.
+Module CTLCtx <: CTLCtx DFAStateHash Ctx.
+Definition config_t:Type := config.
+Definition global_state_t:Type := config.
+Definition global_state_init:config_t->global_state_t := fun x=>x.
+Definition dfa_state_0:=(int0,Ctx.s0).
+Definition dfa_trans(x:Uint63.int*Ctx.Sym)(y:Ctx.Sym)(d:dir)(gs:global_state_t):Uint63.int*Ctx.Sym*global_state_t :=
+let dfa :=
+match d with
+| L => gs.(ldfa)
+| R => gs.(rdfa)
+end in
+let z := PArray.get dfa (Uint63.add (Uint63.mul (fst x) (gs.(n_sym))) (gs.(sym_id) (snd x))) in
+(z,y,gs).
+End CTLCtx.
+
+End MITMDFA.
+
 
 Module TapeHistoryImpl(Ctx:Ctx).
 Module QHash := QHash Ctx.
@@ -2464,6 +2491,9 @@ upd_skipn_LRU len1 len2 LRU_n QSymHash.K_eq ((s,m)::ls).
 End TapeHistoryImpl.
 
 Definition N_to_int x := Uint63.of_Z (Z.of_N x).
+Definition list_N_to_array_int(x:list N):PArray.array Uint63.int :=
+let a:=PArray.make (N_to_int (N.of_nat (List.length x))) int0 in
+fst (List.fold_left (fun '(a0,a1) b => (PArray.set a0 a1 (N_to_int b),Uint63.succ a1)) x (a,int0)).
 
 Module CTLDecider(Ctx:TM.Ctx).
 
@@ -2488,10 +2518,14 @@ Module CTL_NG_QSym := CTL
   TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx
   Ctx_NG_QSym.CTLCtx.
 
+Module Ctx_MITMDFA := MITMDFA Ctx.
+Module CTL_MITMDFA := CTL Ctx_MITMDFA.DFAStateHash DHTMFromTM.TMCtx Ctx_MITMDFA.CTLCtx.
+
 Inductive DeciderParameter :=
 | RWL_mod(simT maxT maxS bsz bmaxT mnc mod_ len1 len2:N)
 | CPS_LRU(simT maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
 | NG(simT maxT maxS NG_n len1 len2 LRU_n:N)(asth:bool)
+| MITMDFA(maxT maxS:N)(ldfa rdfa:list N)(sym_id:Ctx.Sym->Uint63.int)(n_sym:Uint63.int)
 .
 
 Section tm_ctx.
@@ -2561,6 +2595,15 @@ match arg with
       (CTL_NG_Sym.CTL_decide_nonhalt tm1 c1 cfg (N_to_int maxS) (maxT*100))
   | inr c => false
   end
+| MITMDFA maxT maxS ldfa rdfa sym_id n_sym =>
+    let cfg :=
+      {|
+        Ctx_MITMDFA.ldfa := list_N_to_array_int ldfa;
+        Ctx_MITMDFA.rdfa := list_N_to_array_int rdfa;
+        Ctx_MITMDFA.sym_id := sym_id;
+        Ctx_MITMDFA.n_sym := n_sym;
+      |} in
+    CTL_MITMDFA.CTL_decide_nonhalt tm DHTMFromTM.DHTM.cc0 cfg (N_to_int maxS) (maxT*100)
 end.
 
 Lemma decide_nonhalt_spec:
@@ -2608,6 +2651,10 @@ Proof.
       rewrite CTL_NG_Sym.TM.halts_halts' in H1.
       eapply TapeHistoryImpl.ListSymTapeHistoryTMFromDHTM.inv_map_nonhalt.
       apply H1.
+  - apply DHTMFromTM.map_nonhalt.
+    rewrite <-CTL_MITMDFA.TM.halts_halts'.
+    epose proof (CTL_MITMDFA.CTL_decide_nonhalt_spec _ _ _ _ _ H) as H1.
+    apply H1.
 Qed.
 
 End tm_ctx.

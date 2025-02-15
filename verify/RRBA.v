@@ -2241,7 +2241,6 @@ let '(l,r,s,sgn):=x in
 (seg2_sigma_score l)+
 (seg2_sigma_score r).
 
-
 Definition rule2_check_sigma_score_0(x:rule2):bool :=
 let '(c1,c2,c3,c4):=x in
 (match c4 with
@@ -4578,7 +4577,14 @@ Fixpoint run(st':State')(st:State)(n:nat)(is_top:bool):option ((option Rule0.T)*
 match n with
 | O => Some (None,init_State (Uint63.of_Z 0) (Uint63.of_Z 0))
 | S n =>
-  if PrimInt63.lesb st.(rest_T) (snd st.(rule0_id)) then Some (None,st) else
+  if PrimInt63.lesb st.(rest_T) (snd st.(rule0_id)) then
+  match st' with
+  | CheckStep1 w0 w1 => Some (Some w1,st)
+  | CheckRec w0 w1 => Some (Some w1,st)
+  | Call w0 => Some (Some (w0,w0),st)
+  | Ret w0 w1 => Some (Some w1,st)
+  end
+  else
   match st' with
   | CheckStep1 w0 w1 =>
     let '(l02,r02,s02,sgn02) := snd w0 in
@@ -4621,6 +4627,39 @@ end.
 
 Definition run0 maxS maxT :=
   run (Call ([],[],q0,R)) (init_State maxS maxT) MAXT true.
+
+Fixpoint seg_is_all0(x:seg):bool :=
+match x with
+| h::t =>
+  eqb h s0 && seg_is_all0 t
+| _ => true
+end.
+
+Definition check_halt(x:Rule0.T):option (Q*Sym) :=
+let '((l1,r1,s1,sgn1),(l2,r2,s2,sgn2)):=x in
+if (eqb (s1,sgn1) (q0,R) && seg_is_all0 l1 && seg_is_all0 r1)%bool then
+let m:=hd s0 r2 in
+match tm (s2,m) with
+| None => Some (s2,m)
+| _ => None
+end
+else None.
+
+Fixpoint decide_halt_0 (w0:Rule0.T) maxS maxT maxT' T :=
+match T with
+| O => None
+| S T =>
+  run (Call (snd w0)) (init_State maxS maxT) maxT' true &&& (fun '(w0',_) =>
+  w0' &&& (fun w0' =>
+  Rule0.follow_rule w0 w0' &&& (fun '(w0'',_) =>
+  check_halt w0'' |||
+  decide_halt_0 w0'' maxS maxT maxT' T
+  )))
+end.
+
+Definition decide_halt T1 T2 :=
+  let T1:=Uint63.of_Z (Z.of_N T1) in
+  decide_halt_0 (([],[],q0,R),([],[],q0,R)) T1 T1 MAXT (N.to_nat T2).
 
 Inductive State'_WF: State'->Prop :=
 | CheckStep1_WF w0 w1
@@ -4736,7 +4775,12 @@ Proof with trivial.
     apply init_State_spec.
   - cbn[run].
     unfold if_Some.
-    destruct_spec PrimInt63.lesb...
+    destruct_spec PrimInt63.lesb.
+    1: {
+      inverts H; split; auto.
+      cbn.
+      constructor.
+    }
     destruct st'.
     + destruct w0 as [w00 w01].
       unfold fst,snd.
@@ -4917,6 +4961,99 @@ Proof.
   intros H0.
   rewrite H0 in H.
   tauto.
+Qed.
+
+Lemma seg_is_all0_spec x:
+  if seg_is_all0 x then x *> const s0 = const s0 else True.
+Proof.
+  induction x; cbn - [eqb]; trivial.
+  destruct (eqb_spec a s0); trivial.
+  destruct_spec (seg_is_all0); trivial.
+  rewrite e,IHx,<-const_unfold.
+  reflexivity.
+Qed.
+
+Lemma check_halt_spec x:
+match check_halt x with
+| None => True
+| Some tr =>
+  Rule0.to_prop x tm ->
+  halts_at_trans tm c0 tr
+end.
+Proof with trivial.
+  destruct x as [[[[l1 r1] s1] sgn1] [[[l2 r2] s2] sgn2]].
+  cbn - [eqb].
+  destruct (eqb_spec (s1,sgn1) (q0,R))...
+  destruct_spec (seg_is_all0_spec)...
+  destruct_spec (seg_is_all0_spec)...
+  destruct (tm (s2,hd s0 r2)) eqn:E...
+  intros Hx.
+  specialize (Hx (const s0) (const s0)).
+  unfold halts_at_trans.
+  rewrite H,H0 in Hx.
+  epose proof (with_counter Hx) as [n Hh].
+  exists n.
+  cbn in Hh.
+  inverts e.
+  destruct r2;
+  destruct sgn2;
+  econstructor; eassumption.
+Qed.
+
+Lemma decide_halt_0_spec w0 maxS maxT maxT' T:
+match decide_halt_0 w0 maxS maxT maxT' T with
+| None => True
+| Some tr =>
+  Rule0.to_prop w0 tm ->
+  halts_at_trans tm c0 tr
+end.
+Proof with trivial.
+  gen w0.
+  induction T; intros; cbn...
+  unfold if_Some.
+  destruct_spec run_spec...
+  destruct p as [[w0'|] st]...
+  destruct_spec Rule0.follow_rule_spec...
+  destruct p as [w0'' _].
+  destruct_spec check_halt_spec.
+  - intros.
+    apply H1.
+    apply H0; auto.
+    apply H.
+    + constructor.
+    + apply init_State_spec.
+  - specialize (IHT w0'').
+    destruct_spec decide_halt_0...
+    intros.
+    apply IHT.
+    apply H0; auto.
+    apply H.
+    + constructor.
+    + apply init_State_spec.
+Qed.
+
+Lemma decide_halt_spec T1 T2:
+match decide_halt T1 T2 with
+| Some tr =>
+  halts_at_trans tm c0 tr
+| None => True
+end.
+Proof.
+  unfold decide_halt.
+  destruct_spec decide_halt_0_spec; trivial.
+  apply H.
+  cbn.
+  constructor.
+Qed.
+
+Lemma decide_halt_spec' T1 T2 tr:
+  decide_halt T1 T2 = Some tr ->
+  halts_at_trans tm c0 tr.
+Proof.
+  pose proof (decide_halt_spec T1 T2) as H.
+  intro H0.
+  rewrite H0 in H.
+  apply H.
 Qed.
 
 End run_ctx.

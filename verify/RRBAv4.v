@@ -8,13 +8,15 @@ Require Import NArith.
 Require Import String.
 
 
-Ltac solve_loop1'' min_b n_skip k T :=
+Ltac solve_loop1''' min_b mid_d n_skip k T :=
   rewrite halts_halts';
   apply BB62'spec.from_nonhalt;
   rewrite <-RRBA62.TM.halts_halts';
-  apply (RRBA62.decide_loop1_spec' _ (min_b,8%nat) n_skip k T).
+  apply (RRBA62.decide_loop1_spec' _ (min_b,mid_d) n_skip k T);
+  native_cast_no_check (eq_refl true).
+Ltac solve_loop1'' min_b n_skip k T := solve_loop1''' min_b 8 n_skip k T.
 Ltac solve_loop1' n_skip k T := solve_loop1'' 8 n_skip k T.
-Ltac solve_loop1_0 T := solve_loop1' 1%nat O T; native_cast_no_check (eq_refl true).
+Ltac solve_loop1_0 T := solve_loop1' 1%nat O T.
 Ltac solve_loop1 := solve_loop1_0 1000%N.
 
 Close Scope sym.
@@ -5674,5 +5676,59 @@ Proof. solve_loop1. Time Qed.
 
 Lemma tm1885: ~halts (TM_from_str "1RB1LF_0RC0RA_1LD---_0LE1RE_1RA0LD_0LA0LB") c0.
 Proof. solve_loop1. Time Qed.
+
+Lemma tm1886: ~halts (TM_from_str "1RB1RA_1LC1LB_0RD0LC_1RE1RA_1RF0RE_1LA---") c0.
+Proof. solve_loop1'' 22 0 1 4000%N. Time Qed.
+
+Lemma tm1887: ~halts (TM_from_str "1RB1RA_1LC1LB_0RD0LC_1RE1RA_1RF0RE_1RA---") c0.
+Proof. solve_loop1'' 22 0 1 4000%N. Time Qed.
+
+Lemma tm1888: ~halts (TM_from_str "1RB1RA_1LC1LB_0RD0LC_1RE1RA_1RF0RE_1LD---") c0.
+Proof. solve_loop1'' 22 0 1 4000%N. Time Qed.
+
+Lemma tm1889: ~halts (TM_from_str "1RB1LE_1LC0RD_1LF1LA_---1RE_0LF1RB_0RB1LB") c0.
+Proof. solve_loop1. Time Qed.
+
+Lemma tm1890: ~halts (TM_from_str "1RB1LF_0RC1LC_1LD0RE_1LB1LA_---1RF_0LB1RC") c0.
+Proof. solve_loop1. Time Qed.
+
+Lemma tm1891: ~halts (TM_from_str "1RB1LA_0LC1RE_1RA1LD_1RA0LF_1RD0RB_---1LC") c0.
+Proof. solve_loop1_0 4000%N. Time Qed.
+
+Lemma tm1892: ~halts (TM_from_str "1RB1RF_1RC1RD_1RD---_1LE0RA_0RC1LF_1RA0LE") c0.
+Proof. solve_loop1'' 20 0 1 2000%N. Time Qed.
+
+Lemma tm1893: ~halts (TM_from_str "1RB---_1LC0RE_0RA1LD_1RE0LC_1RF1RD_1RA1RB") c0.
+Proof. solve_loop1'' 20 0 1 2000%N. Time Qed.
+
+Lemma tm1894: ~halts (TM_from_str "1RB1RC_1RC---_1LD0RF_0RB1LE_1RF0LD_1RA1RE") c0.
+Proof. solve_loop1'' 20 0 1 2000%N. Time Qed.
+
+Lemma tm1895: ~halts (TM_from_str "1RB0LF_1RC1RA_1RD1RE_1RE---_1LF0RB_0RD1LA") c0.
+Proof. solve_loop1'' 20 0 1 2000%N. Time Qed.
+
+Lemma tm1896: ~halts (TM_from_str "1RB---_0RC0RA_1RD0RF_1LE0LD_1RC1LC_1RA1LC") c0.
+Proof. solve_loop1_0 8000%N. Time Qed.
+
+Lemma tm1897: ~halts (TM_from_str "1RB0RA_1LC1RC_1LA0LD_1LE1RC_1LF---_0LC0LE") c0.
+Proof. solve_loop1_0 8000%N. Time Qed.
+
+Lemma tm1898: ~halts (TM_from_str "1RB1LD_1RC---_0RD0RB_1RE0RA_1LF0LE_1RD1LD") c0.
+Proof. solve_loop1_0 8000%N. Time Qed.
+
+Lemma tm1899: ~halts (TM_from_str "1RB1LD_1RC0RB_1LA0LE_1LC0LA_1LF1RB_0LC---") c0.
+Proof. solve_loop1_0 8000%N. Time Qed.
+
+Lemma tm1900: ~halts (TM_from_str "1RB1RD_0LC1RF_0RE1LD_1RA0LC_1RE0RA_1LC---") c0.
+Proof. solve_loop1. Time Qed.
+
+Lemma tm1901: ~halts (TM_from_str "1RB---_0LC1RF_1LC0LD_1LE1LF_1RD1LA_1LD0RB") c0.
+Proof. solve_loop1. Time Qed.
+
+Lemma tm1902: ~halts (TM_from_str "1RB0LF_1RC1RA_1RD1RE_1RE---_1LF0RB_0RD1LA") c0.
+Proof. solve_loop1''' 24 10 0 1 8000%N. Time Qed.
+
+Lemma tm1903: ~halts (TM_from_str "1RB1RC_1RC0RB_0LD1RE_0LE1LD_1RF0RC_1RA---") c0.
+Proof. solve_loop1'' 20 0 1 8000%N. Time Qed.
 
 
