@@ -356,3 +356,6 @@ Proof. solve_halt'' 6 true. Time Qed.
 Lemma tm133: halts_at_trans (TM_from_str "1RB---_0RC1RE_1LD1RA_0RE0LF_1RC0RD_1LE1LD") c0 (A,1).
 Proof. solve_halt. Time Qed.
 
+Lemma tm134: halts_at_trans (TM_from_str "1RB0LE_0RC---_0LD0RF_1LA0LF_1LF1LD_0LA1LF") c0 (B,1).
+Proof. solve_halt. Time Qed.
+

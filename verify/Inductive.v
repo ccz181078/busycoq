@@ -730,7 +730,12 @@ end.
 
 Definition seg_ignore_repn(x:seg_expr) :=
 match x with
-| seg_repeat a n => seg_repeat a (from_nat 0)
+| seg_repeat a n =>
+  match n with
+  | from_nat 0 => seg_repeat a (from_nat 0)
+  | from_nat 1 => seg_repeat a (from_nat 1)
+  | _ => seg_repeat a (from_nat 2)
+  end
 | _ => x
 end.
 
@@ -1973,7 +1978,8 @@ Record Config := {
   enable_exp_toplevel_loop: bool;
   allowed_repeaters:option (list (list Sym));
   side_0inf_bsz:option nat;
-  rep_rw_limit:nat
+  rep_rw_limit:nat;
+  rep_step1_limit:nat;
 }.
 
 Inductive SetConfig :=
@@ -1991,6 +1997,7 @@ Inductive SetConfig :=
 | set_allowed_repeaters(ls:option (list (list Sym)))
 | set_side_0inf_bsz(n:option nat)
 | set_rep_rw_limit(n:nat)
+| set_rep_step1_limit(n:nat)
 .
 
 Fixpoint get_config{T}(f:SetConfig->option T)(x:list SetConfig)(v0:T) :=
@@ -2028,6 +2035,7 @@ Definition upd_config(ls:list SetConfig)(cfg:Config):Config := {|
   allowed_repeaters := get_config (fun x => match x with | set_allowed_repeaters n => Some n | _ => None end) ls cfg.(allowed_repeaters);
   side_0inf_bsz := get_config (fun x => match x with | set_side_0inf_bsz n => Some n | _ => None end) ls cfg.(side_0inf_bsz);
   rep_rw_limit := get_config (fun x => match x with | set_rep_rw_limit n => Some n | _ => None end) ls cfg.(rep_rw_limit);
+  rep_step1_limit := get_config (fun x => match x with | set_rep_step1_limit n => Some n | _ => None end) ls cfg.(rep_step1_limit);
 |}.
 
 
@@ -2049,6 +2057,7 @@ Definition default_config := {|
   allowed_repeaters := None;
   side_0inf_bsz := None;
   rep_rw_limit := 16;
+  rep_step1_limit := 16;
 |}.
 
 Definition config_fixed_block_size n :=
@@ -2136,6 +2145,11 @@ upd_config [
   add_ex_rules [side_binary_Pos_inc_rule d0 d1 d1a qL qR QL QR]
 ] (config_BL T0 n rQL rQR rqL rqR rf0 rd0 rd1 rd1a rf0' rd1').
 
+Definition config_ubrrba bsz :=
+upd_config [
+  set_rep_step1_limit 1;
+  set_side_0inf_bsz (Some bsz)
+] default_config.
 
 Section tm_ctx.
 Hypothesis tm:TM.
@@ -4400,21 +4414,14 @@ Definition repeat_S_block_def(r0:seg_expr):=
   (side_concat (seg_repeat r0 (from_nat 1)) (side_concat (seg_repeat r0 n) r)),
   3%positive).
 
-Definition repeat_add_cv_def(r0:seg_expr)(c:N):=
-  let n:=nat_var 1%positive in
-  let r:=side_var 2%positive in
+Definition repeat_add_def(r0:seg_expr):=
+  let n1:=nat_var 1%positive in
+  let n2:=nat_var 2%positive in
+  let r:=side_var 3%positive in
   (side_eq
-  (side_concat (seg_repeat r0 (nat_add n (from_nat c))) r)
-  (side_concat (seg_repeat r0 (from_nat c)) (side_concat (seg_repeat r0 n) r)),
-  3%positive).
-
-Definition repeat_add_vc_def(r0:seg_expr)(c:N):=
-  let n:=nat_var 1%positive in
-  let r:=side_var 2%positive in
-  (side_eq
-  (side_concat (seg_repeat r0 (nat_add n (from_nat c))) r)
-  (side_concat (seg_repeat r0 n) (side_concat (seg_repeat r0 (from_nat c)) r)),
-  3%positive).
+  (side_concat (seg_repeat r0 (nat_add n1 n2)) r)
+  (side_concat (seg_repeat r0 n1) (side_concat (seg_repeat r0 n2) r)),
+  4%positive).
 
 Definition repeat_S_def(r0:seg_expr):=
   let n:=nat_var 1%positive in
@@ -4443,21 +4450,8 @@ Proof.
   tauto.
 Qed.
 
-Lemma repeat_add_cv_def_spec r0 c:
-  to_prop0' (fst (repeat_add_cv_def r0 c)).
-Proof.
-  unfold to_prop0'.
-  intros.
-  cbn.
-  rewrite N.add_comm.
-  rewrite Nnat.N2Nat.inj_add.
-  rewrite lpow_add.
-  rewrite Str_app_assoc.
-  tauto.
-Qed.
-
-Lemma repeat_add_vc_def_spec r0 c:
-  to_prop0' (fst (repeat_add_vc_def r0 c)).
+Lemma repeat_add_def_spec r0:
+  to_prop0' (fst (repeat_add_def r0)).
 Proof.
   unfold to_prop0'.
   intros.
@@ -5905,29 +5899,30 @@ Qed.
 Definition block_step1 (c:DH_config) bmaxT: prop0_expr*positive :=
 let l := side_var 1%positive in
 let r := side_var 2%positive in
+let n := nat_var 3%positive in
 let '(l0,r0,s0,sgn0) := c in
 let '(l1,r1,s1,sgn1) := DH_bounded_steps c bmaxT in
 let bsz := length r0 in
 let l1a := firstn bsz l1 in
 let l1b := skipn bsz l1 in
 if (sgn0 == sgn1) && (s0 == s1) && (r1 == nil) && (l0 == l1a) then
-  let n := nat_var 3%positive in
   (multistep'_expr
-  (side_concat (seg_block l0) l, side_concat (seg_repeat (seg_block r0) (from_nat 1)) (side_concat (seg_repeat (seg_block r0) n) r), s0, sgn0)
-  (side_concat (seg_block l0) (side_concat (seg_repeat (seg_block l1b) (nat_add n (from_nat 1))) l), r, s1, sgn1)
+  (side_concat (seg_block l0) l, (side_concat (seg_repeat (seg_block r0) n) r), s0, sgn0)
+  (side_concat (seg_block l0) (side_concat (seg_repeat (seg_block l1b) n) l), r, s1, sgn1)
   false,
   4%positive) 
 else
-let (l',r') := if sgn0 == sgn1 then (l,r) else (r,l) in
+let r'' := side_concat (seg_repeat (seg_block r0) n) r in
+let (l',r') := if sgn0 == sgn1 then (l,r'') else (r'',l) in
   (multistep'_expr
-  (side_concat (seg_block l0) l, side_concat (seg_repeat (seg_block r0) (from_nat 1)) r, s0, sgn0)
+  (side_concat (seg_block l0) l, side_concat (seg_repeat (seg_block r0) (nat_add n (from_nat 1))) r, s0, sgn0)
   (side_concat (seg_block l1a) (side_concat (seg_repeat (seg_block l1b) (from_nat 1)) l'),
   match r1 with
   | nil =>r'
   | r2::r3 => side_concat (seg_sym r2) (side_concat (seg_block r3) r')
   end, s1, sgn1)
   false,
-  3%positive).
+  4%positive).
 
 Lemma lpow_1 {A} (ls:list A): ls ^^ 1 = ls.
 Proof.
@@ -5953,14 +5948,11 @@ Proof.
     eqb_cases l0 (firstn (length r0) l1).
     subst.
     cbn.
-    repeat rewrite lpow_1.
     intros H0; split; [tauto|].
-    repeat rewrite Nnat.N2Nat.inj_add.
     generalize (N.to_nat (mp 3%positive nat_t)); intro n. 
     generalize (cto_side (mp 1%positive side_t)); intro l.
     generalize (cto_side (mp 2%positive side_t)); intro r.
     cbn.
-    change (Pos.to_nat 1) with 1.
     destruct sgn1.
     - remember (firstn (length r0) l1) as l1a.
       remember (skipn (length r0) l1) as l1b.
@@ -5974,8 +5966,7 @@ Proof.
       }
       induction n.
       + cbn; intros.
-        rewrite app_nil_r.
-        apply Hs.
+        constructor.
       + cbn; intros.
         repeat rewrite Str_app_assoc.
         eapply evstep_trans.
@@ -5998,8 +5989,7 @@ Proof.
       }
       induction n.
       + cbn; intros.
-        rewrite app_nil_r.
-        apply Hs.
+        constructor.
       + cbn; intros.
         repeat rewrite Str_app_assoc.
         eapply evstep_trans.
@@ -6015,6 +6005,9 @@ Proof.
   all: repeat rewrite lpow_1.
   all: cbn.
   all: intros H0; split; [tauto|].
+  all: replace (N.to_nat (mp 3%positive nat_t + 1)) with (Datatypes.S(N.to_nat (mp 3%positive nat_t))) by lia.
+  all: cbn[lpow].
+  all: rewrite Str_app_assoc.
   all: remember (firstn (length r0) l1) as l1a.
   all: remember (skipn (length r0) l1) as l1b.
   all: applys_eq H; cbn.
@@ -6391,31 +6384,24 @@ Definition side_check_repeat_fold_block ls :=
 match ls with
 | side_concat (seg_repeat a0 (from_nat n0)) (side_concat (seg_repeat a1 (from_nat n1)) r) =>
   if a0 == a1 then
-    if (n0 <=? n1)%N then
-      Some (repeat_add_cv_def a0 n0)
-    else
-      Some (repeat_add_vc_def a0 n1)
+    Some (repeat_add_def a0)
   else
     None
 | _ => None
 end.
 
-Fixpoint side_find_repeat_fold_block ls n {struct n} :=
-match side_check_repeat_fold_block ls with
-| Some v => Some v
-| None =>
-match n with
-| O => None
-| Datatypes.S n =>
+Notation "a ||| b" := (match a with Some a0 => Some a0 | None => b end) (at level 40).
+
+Fixpoint side_find_repeat_fold_block ls :=
+(side_find_repeat_O_fold ls) |||
+(side_check_repeat_fold_block ls) |||
 match ls with
 | side_concat h t =>
-  match side_find_repeat_fold_block t n with
+  match side_find_repeat_fold_block t with
   | Some v => Some (side_concat_rw_2 v)
   | None => None
   end
 | _ => None
-end
-end
 end.
 
 Definition side_find_repeat_fold ls :=
@@ -6423,7 +6409,7 @@ match cfg.(fixed_block_size) with
 | None =>
     match cfg.(side_0inf_bsz) with
     | None => side_find_repeat_fold_dynlen ls
-    | Some _ => side_find_repeat_fold_block ls 1
+    | Some _ => side_find_repeat_fold_block ls
     end
 | Some n => side_find_repeat_fold_fixedlen ls (Nat.iter n side_tl ls) (Nat.pred n)
 end.
@@ -6571,25 +6557,22 @@ Proof.
   destruct a0; cbn; trivial.
   destruct n0; cbn; trivial.
   destruct (seg_expr_eqb a a0); trivial.
-  destruct (n <=? n0)%N.
-  - apply repeat_add_cv_def_spec.
-  - apply repeat_add_vc_def_spec.
+  apply repeat_add_def_spec.
 Qed.
 
-Lemma side_find_repeat_fold_block_spec s n:
-  match side_find_repeat_fold_block s n with
+Lemma side_find_repeat_fold_block_spec s:
+  match side_find_repeat_fold_block s with
   | None => True
   | Some x => to_prop0' (fst x)
   end.
 Proof.
-  gen s.
-  induction n; intros; cbn.
-  all: destruct_spec side_check_repeat_fold_block_spec; trivial.
-  destruct s; cbn; trivial.
-  specialize (IHn s).
+  induction s; intros; try (cbn; trivial; fail).
+  cbn[side_find_repeat_fold_block].
+  destruct_spec side_find_repeat_O_fold_spec; trivial.
+  destruct_spec side_check_repeat_fold_block_spec; trivial.
   destruct_spec side_find_repeat_fold_block; trivial.
   apply side_concat_rw_2_spec.
-  apply IHn.
+  apply IHs.
 Qed.
 
 Lemma side_find_repeat_fold_spec ls:
@@ -7123,7 +7106,7 @@ match ls with
       Some (repeat_2_def a)
     else
       Some (repeat_S_def a)
-  | Some _ => Some (repeat_S_block_def a)
+  | Some _ => None
   end
 | side_concat (seg_arithseq a (from_nat 0)) r => Some (arithseq_0_def a)
 | side_concat (seg_arithseq a _) r =>
@@ -7170,7 +7153,7 @@ Proof.
       1: destruct n.
       1: apply repeat_0_def_spec.
       all: destruct cfg.(side_0inf_bsz).
-      all: try (apply repeat_S_block_def_spec).
+      all: trivial.
       all: try (apply repeat_S_def_spec).
       destruct (nat_expr_eqb (from_nat (N.pos p)) (from_nat 2) && negb (dec_min cfg =? 0)%N); trivial.
       1: apply repeat_2_def_spec.
@@ -7868,7 +7851,7 @@ match get_config_r x with
   match cfg.(side_0inf_bsz) with
   | Some bsz =>
     match l,r with
-    | side_concat (seg_block l0) _, side_concat (seg_repeat (seg_block r0) (from_nat 1)) _ =>
+    | side_concat (seg_block l0) _, side_concat (seg_repeat (seg_block r0) (from_nat _)) _ =>
       Some (prop0_to_prop (block_step1 (l0,r0,s,sgn) (3200%N)))
     | _,_ => None
     end
@@ -7965,8 +7948,6 @@ Proof.
     destruct a0; trivial.
     destruct a0; trivial.
     destruct n0; trivial.
-    destruct n0; trivial.
-    destruct p; trivial.
     apply prop0_to_prop_spec.
     apply block_step1_spec.
   - destruct r; trivial.
@@ -8028,7 +8009,7 @@ Qed.
 Definition unfold_step1_fold w0 :=
 let w := (step0_refl' w0,w0) in
 let w := rep_rw cfg.(rep_rw_limit) find_repeat_unfold w in
-let w := rep_rw cfg.(rep_rw_limit) find_step1 w in
+let w := rep_rw cfg.(rep_step1_limit) find_step1 w in
 if check_halt (snd w) then w
 else
 (let w := rep_rw cfg.(rep_rw_limit) find_repeat_fold w in
@@ -8065,8 +8046,10 @@ end.
 
 Definition steps_to_repeater_edge w0 :=
 let w := unfold_step1_fold w0 in
-let w := rep_rw cfg.(rep_rw_limit) step1_to_repeater_edge w in
-w.
+match cfg.(side_0inf_bsz) with
+| None => rep_rw cfg.(rep_rw_limit) step1_to_repeater_edge w
+| _ => w
+end.
 
 Lemma steps_to_repeater_edge_spec w0:
 to_prop' (fst w0) ->
@@ -8076,6 +8059,8 @@ to_prop' (fst w0).
 Proof.
   intros H.
   unfold steps_to_repeater_edge.
+  destruct cfg.(side_0inf_bsz).
+  1: apply unfold_step1_fold_spec,H.
   apply rep_rw_spec.
   - intros x Hx.
     unfold step1_to_repeater_edge.
@@ -8487,21 +8472,21 @@ Proof.
 Qed.
 
 
-Definition urrba_block_layer:Type := prop_expr'*prop_expr'.
-Definition urrba_block_state:Type := 
+Definition ubrrba_layer:Type := prop_expr'*prop_expr'.
+Definition ubrrba_state:Type := 
   RuleMultimap.hmap_t*
-  (list urrba_block_layer)*
-  urrba_block_layer.
+  (list ubrrba_layer)*
+  ubrrba_layer.
 
-Definition urrba_block_gen_r(w0:prop_expr'):option prop_expr' :=
+Definition ubrrba_gen_r(w0:prop_expr'):option prop_expr' :=
 get_config_r w0 &&& (fun '(l,r,s,sgn) =>
 match sgn with
 | L =>
-  match r with
+  match l with
   | side_concat (seg_block a) _ =>
     let p := (snd w0) in
-    let r' := side_concat (seg_block a) (side_var p) in
-    let c' := (l,r',s,sgn) in
+    let l' := side_concat (seg_block a) (side_var p) in
+    let c' := (l',r,s,sgn) in
     let w0_ := multistep'_expr c' c' false in
     let w0' := (([],[w0_]),Pos.succ p) in
     Some w0'
@@ -8523,31 +8508,325 @@ match follow_rule_nohyp w1 w2 with
 | _ => false
 end.
 
-Definition urrba_block_upd(s:urrba_block_state):option urrba_block_state :=
+Definition ubrrba_follow(s:ubrrba_layer)(dw:prop_expr'):option ubrrba_layer :=
+let '(w1,w0):=s in
+follow_rule_nohyp w1 dw &&& (fun w1 =>
+follow_rule_nohyp w0 dw &&& (fun w0 =>
+Some (w1,w0)
+)).
+
+
+Definition ubrrba_ret(s:ubrrba_state):option ubrrba_state :=
+let '(mp,stk,(w1,w0)):=s in
+match stk with
+| nil => None
+| (w1',w0')::stk' =>
+  ubrrba_follow (w1',w0') w1 &&& (fun '(w1',w0') =>
+    get_config_l w0 &&& (fun c1 =>
+    let c1:=config_ignore_repn c1 in
+    let mp:=RuleMultimap.hmap_add c1 w1 mp in
+    Some (mp,stk',(w1',w0'))
+  ))
+end.
+
+Definition ubrrba_check_ret(w0:prop_expr'):bool :=
+check_halt w0 ||
+match get_config_r w0 with
+| Some (l,side_var _,s,R) =>
+  true
+| _ => false
+end.
+
+
+Definition ubrrba_upd(s:ubrrba_state):option (ubrrba_state*(option DecideResult)) :=
 (
 let '(mp,stk,(w1,w0)):=s in
-let (dw,w0) := unfold_step1_fold w0 in
-(* TODO: check halt, check return *)
-follow_rule_nohyp w1 dw &&& (fun w1 =>
-match urrba_block_gen_r w0 with
+let (dw,_) := unfold_step1_fold w0 in
+ubrrba_follow (w1,w0) dw &&& (fun '(w1,w0) =>
+if ubrrba_check_ret w0 then
+  match ubrrba_ret (mp,stk,(w1,w0)) with
+  | Some s => Some (s,None)
+  | None =>
+    get_halts_at (fst w0) &&& (fun tr =>
+      Some (mp,stk,(w1,w0),Some (Halt tr))
+    )
+  end
+else
+match ubrrba_gen_r w0 with
 | Some w0' =>
-  get_config_r w0' &&& (fun c2' =>
+  get_config_r w0' &&& (fun c2' => 
+  let c2':=config_ignore_repn c2' in
   let rs := RuleMultimap.hmap_get c2' mp in
   match find (check_follow_rule_nohyp w0') rs with
   | Some dw =>
-    follow_rule_nohyp w0 dw &&& (fun w0 =>
-    follow_rule_nohyp w1 dw &&& (fun w1 =>
-      Some (mp,stk,(w1,w0))
-    ))
+    ubrrba_follow (w1,w0) dw &&& (fun '(w1,w0) =>
+      Some (mp,stk,(w1,w0),None)
+    )
   | None =>
     find_step0_refl w0' &&& (fun w1' =>
-    Some (mp,(w1,w0)::stk,(w1',w0')))
+      Some (mp,(w1,w0)::stk,(w1',w0'),None)
+    )
   end
   )
-| None => Some (mp,stk,(w1,w0))
+| None => Some (mp,stk,(w1,w0),None)
 end)).
 
+Definition init_prop':prop_expr' :=
+let c0 := (side_0inf,side_0inf,q0,R) in
+let c1 :=
+  match cfg.(side_0inf_bsz) with
+  | None => c0
+  | Some k => (side_concat (seg_block (List.repeat s0 k)) side_0inf,side_0inf,q0,R)
+  end in
+([],[multistep'_expr c0 c1 false],1%positive).
 
+Definition ubrrba_init(maxS:N):ubrrba_state :=
+let mp := RuleMultimap.hmap_make (Uint63.of_Z (Z.of_N maxS)) in
+let w0 := init_prop' in
+let w1 := step0_refl' w0 in
+(mp,[],(w1,w0)).
+
+Definition ubrrba_upd'(s:ubrrba_state):ubrrba_state+DecideResult :=
+match ubrrba_upd s with
+| Some (s,None) => inl s
+| Some (s,Some x) => inr x
+| None => inr Unknown
+end.
+
+Definition ubrrba_upds(maxT:N)(maxS:N) :=
+  N_iter_until ubrrba_upd' (inl (ubrrba_init maxS)) maxT.
+
+Inductive ubrrba_layer_WF: ubrrba_layer->Prop :=
+| ubrrba_layer_WF_intro w1 w0
+  (Hw1':to_prop' (fst w1))
+  (Hw0':to_prop' (fst w0)):
+  ubrrba_layer_WF (w1,w0).
+
+Inductive ubrrba_state_WF: ubrrba_state->Prop :=
+| ubrrba_state_WF_intro mp stk cur
+  (Hmpwf: RuleMultimap.hmap_WF mp)
+  (Hmp:forall k,Forall (fun x => to_prop' (fst x)) (RuleMultimap.hmap_get k mp))
+  (Hstk:Forall ubrrba_layer_WF stk)
+  (Hcur:ubrrba_layer_WF cur):
+  ubrrba_state_WF (mp,stk,cur).
+
+Lemma follow_rule_nohyp_spec w dw:
+match follow_rule_nohyp w dw with
+| Some w' =>
+  to_prop' (fst w) ->
+  to_prop' (fst dw) ->
+  to_prop' (fst w')
+| _ => True
+end.
+Proof.
+  unfold follow_rule_nohyp,if_Some.
+  destruct_spec follow_rule_spec'; trivial.
+  destruct (fst (fst p)); trivial.
+Qed.
+
+Lemma ubrrba_follow_spec w dw:
+match ubrrba_follow w dw with
+| Some w' =>
+  ubrrba_layer_WF w ->
+  to_prop' (fst dw) ->
+  ubrrba_layer_WF w'
+| None => True
+end.
+Proof.
+  unfold ubrrba_follow,if_Some.
+  destruct w as [w1 w0].
+  destruct_spec follow_rule_nohyp_spec; trivial.
+  destruct_spec follow_rule_nohyp_spec; trivial.
+  intros Hwf Hdw.
+  inverts Hwf.
+  constructor; tauto.
+Qed.
+
+Lemma ubrrba_gen_r_spec x:
+match ubrrba_gen_r x with
+| Some w => to_prop' (fst w)
+| None => True
+end.
+Proof.
+  unfold ubrrba_gen_r,if_Some.
+  destruct_spec get_config_r; trivial.
+  destruct c as [[[l r] s] sgn].
+  destruct sgn; trivial.
+  destruct l; trivial.
+  destruct a; trivial.
+  intros mpi0 mp0 H.
+  unfold to_prop0_list.
+  simpl_Forall.
+  cbn.
+  split; trivial.
+  intros H0.
+  split. 1: tauto.
+  constructor.
+Qed.
+
+Lemma ubrrba_ret_spec s:
+match ubrrba_ret s with
+| Some s' =>
+  ubrrba_state_WF s ->
+  ubrrba_state_WF s'
+| _ => True
+end.
+Proof.
+  unfold ubrrba_ret,if_Some.
+  destruct s as [[mp stk] cur].
+  destruct cur as [w1 w0].
+  destruct stk as [|cur' stk']; trivial.
+  destruct cur' as [w1a w0a].
+  destruct_spec ubrrba_follow_spec; trivial.
+  destruct u as [w1b w0b].
+  destruct_spec get_config_l; trivial.
+  intros Hwf.
+  inverts Hwf.
+  pose proof Hcur as Hcur'.
+  inverts Hcur'.
+  rewrite Forall_cons_iff in Hstk.
+  constructor; try tauto.
+  1: apply RuleMultimap.hmap_add_WF; tauto.
+  intros k.
+  specialize (Hmp k).
+  rewrite Forall_forall in *.
+  intros.
+  remember (config_ignore_repn c) as k'.
+  eqb_cases k k'.
+  - subst k k'.
+    rewrite RuleMultimap.hmap_get_add_same in H0; try tauto.
+    destruct H0 as [H0|H0].
+    + subst x; tauto.
+    + apply Hmp,H0.
+  - rewrite RuleMultimap.hmap_get_add_other in H0; try tauto.
+    apply Hmp,H0.
+Qed.
+
+Lemma ubrrba_upd_spec s:
+match ubrrba_upd s with
+| Some (s',None) =>
+  ubrrba_state_WF s ->
+  ubrrba_state_WF s'
+| Some (s',Some (Halt tr)) =>
+  ubrrba_state_WF s ->
+  halts_at_trans tm c0 tr
+| _ => True
+end.
+Proof.
+  unfold ubrrba_upd,if_Some.
+  destruct s as [[mp stk] cur].
+  destruct cur as [w1 w0].
+  destruct_spec unfold_step1_fold_spec.
+  destruct_spec ubrrba_follow_spec; trivial.
+  destruct u as [w1a w0a].
+  destruct (ubrrba_check_ret w0a).
+  - destruct_spec ubrrba_ret_spec.
+    + intros Hwf.
+      inverts Hwf.
+      pose proof Hcur as Hcur'.
+      inverts Hcur'.
+      apply H1.
+      constructor; tauto.
+    + destruct_spec get_halts_at_spec; trivial.
+      intros Hwf.
+      inverts Hwf.
+      pose proof Hcur as Hcur'.
+      inverts Hcur'.
+      apply H2.
+      unshelve epose proof (H0 _ _) as H0; try tauto.
+      inverts H0; tauto.
+  - destruct_spec ubrrba_gen_r_spec.
+    + destruct_spec get_config_r; trivial.
+      destruct (find (check_follow_rule_nohyp p1) (RuleMultimap.hmap_get (config_ignore_repn c) mp)) eqn:E.
+      * pose proof (find_some _ _ E) as [E1 E2].
+        destruct_spec ubrrba_follow_spec; trivial.
+        destruct u as [w1b w0b].
+        intros Hwf.
+        inverts Hwf.
+        pose proof Hcur as Hcur'.
+        inverts Hcur'.
+        constructor; try tauto.
+        apply H2; try tauto.
+        epose proof (Hmp _) as Hmp.
+        rewrite Forall_forall in Hmp.
+        apply Hmp,E1.
+      * destruct_spec find_step0_refl_spec; trivial.
+        intros Hwf.
+        inverts Hwf.
+        pose proof Hcur as Hcur'.
+        inverts Hcur'.
+        constructor; try tauto.
+        2: constructor; tauto.
+        simpl_Forall.
+        tauto.
+    + intros Hwf.
+      inverts Hwf.
+      pose proof Hcur as Hcur'.
+      inverts Hcur'.
+      constructor; tauto.
+Qed.
+
+Lemma repeat_Str_app_const{T}(x:T) n:
+  repeat x n *> const x = const x.
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn,<-const_unfold.
+  reflexivity.
+Qed.
+
+Lemma init_prop'_spec:
+  to_prop' (fst init_prop').
+Proof.
+  unfold init_prop'.
+  destruct cfg.(side_0inf_bsz).
+  - intros mpi0 mp0 H.
+    unfold to_prop0_list.
+    simpl_Forall.
+    split; trivial.
+    cbn.
+    split; try tauto.
+    rewrite repeat_Str_app_const.
+    constructor.
+  - intros mpi0 mp0 H.
+    unfold to_prop0_list.
+    simpl_Forall.
+    split; trivial.
+    cbn.
+    split; try tauto.
+    constructor.
+Qed.
+
+Lemma ubrrba_upds_spec maxT maxS:
+match ubrrba_upds maxT maxS with
+| inl s => ubrrba_state_WF s
+| inr (Halt tr) => halts_at_trans tm c0 tr
+| _ => True
+end.
+Proof.
+  unfold ubrrba_upds.
+  apply N_iter_until_spec.
+  - intros s Hwf.
+    unfold ubrrba_upd'.
+    destruct_spec ubrrba_upd_spec; trivial.
+    destruct p as [s' o].
+    destruct o as [o|]; trivial.
+    + destruct o; trivial.
+      tauto.
+    + tauto.
+  - unfold ubrrba_init.
+    constructor.
+    + apply RuleMultimap.hmap_make_WF.
+    + intros k.
+      rewrite Forall_forall.
+      intros x Hx.
+      rewrite RuleMultimap.hmap_get_make in Hx.
+      destruct Hx.
+    + auto. 
+    + constructor.
+      * apply step0_refl'_spec.
+        apply init_prop'_spec.
+      * apply init_prop'_spec.
+Qed.
 
 End tm_ctx.
 
@@ -8569,6 +8848,18 @@ Lemma decide_hlin_halt_spec cfg T x:
 Proof.
   intros tm H.
   apply decide_hlin_halt_spec_1,H.
+Qed.
+
+Lemma decide_ubrrba_halt_spec cfg maxT maxS tr:
+  forall tm,
+  Config_WF tm cfg ->
+  ubrrba_upds tm cfg maxT maxS = inr (Halt tr) ->
+  halts_at_trans tm c0 tr.
+Proof.
+  intros tm H E.
+  epose proof (ubrrba_upds_spec _ _ H _ _) as H0.
+  rewrite E in H0.
+  apply H0.
 Qed.
 
 Lemma get_rule_spec cfg T:
