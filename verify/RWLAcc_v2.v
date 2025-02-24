@@ -90,3 +90,15 @@ Proof. solve_nonhalt 2. Time Qed.
 Lemma nonhalt28: ~halts (TM_from_str "1RB0RD_1LC0RA_1LA0LD_0RE0LF_1LF1RA_1LC---") c0.
 Proof. solve_nonhalt 2. Time Qed.
 
+Lemma nonhalt29: ~halts (TM_from_str "1RB0RD_1LC0LD_1RA0LB_0LE0RF_1RF1LB_1RA---") c0.
+Proof. solve_nonhalt 2. Time Qed.
+
+Lemma nonhalt30: ~halts (TM_from_str "1RB---_1RC0RE_1LD0LE_1RB0LC_0LF0RA_1RA1LC") c0.
+Proof. solve_nonhalt 4. Time Qed.
+
+Lemma nonhalt31: ~halts (TM_from_str "1RB---_1RC0RE_1LD0LE_1RB0LC_0LF0RA_1RD1LC") c0.
+Proof. solve_nonhalt 4. Time Qed.
+
+Lemma nonhalt32: ~halts (TM_from_str "1RB0RD_1LC0LD_1RA0LB_0LE0RF_1RC1LB_1RA---") c0.
+Proof. solve_nonhalt 2. Time Qed.
+

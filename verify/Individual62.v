@@ -12,6 +12,7 @@ Open Scope sym.
 
 Notation "0" := S0 : sym_scope.
 Notation "1" := S1 : sym_scope.
+Notation "'0inf'" := (const 0) : sym_scope.
 
 (* Make sure that [{{D}}>] still refers to the state, even if we shadowed
    [D] itself with something else. *)
@@ -230,6 +231,15 @@ Proof.
   - simpl_tape.
     rewrite IHn.
     apply H.
+Qed.
+
+Lemma lpow_add' (a:list Sym) n1 n2 r:
+  a^^n1 *> a^^n2 *> r =
+  a^^(n1+n2) *> r.
+Proof.
+  rewrite lpow_add.
+  rewrite Str_app_assoc.
+  reflexivity.
 Qed.
 
 

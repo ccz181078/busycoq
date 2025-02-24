@@ -540,4 +540,83 @@ Proof.
   - rewrite <-is_full_spec' in E; auto.
 Qed.
 
+Lemma rest_mul_pow2_ n i:
+  (rest (n*pow2 i) = ((rest n+1)*(Npos (pow2 i))-1))%N.
+Proof.
+  pose proof (rest_mul_pow2 n i).
+  lia.
+Qed.
+
+Lemma rest_pow2_ i:
+  (rest (pow2 i) = ((Npos (pow2 i))-1))%N.
+Proof.
+  pose proof (rest_pow2 i).
+  lia.
+Qed.
+
+Lemma pow2_spec_ n:
+  Npos (pow2 n) = (2^(N.of_nat n))%N.
+Proof.
+  induction n.
+  - reflexivity.
+  - rewrite Nnat.Nat2N.inj_succ.
+    rewrite N.pow_succ_r'.
+    cbn[pow2].
+    lia.
+Qed.
+
+Lemma log2_mul2 n:
+  log2 (n~0) = S (log2 n).
+Proof. reflexivity. Qed.
+
+Lemma log2_mul2add1 n:
+  log2 (n~1) = S (log2 n).
+Proof. reflexivity. Qed.
+
+Lemma log2_1:
+  log2 1 = O.
+Proof. reflexivity. Qed.
+
+Lemma rest_add a b:
+  ((Npos a) <= rest b ->
+  rest (a+b) + (Npos a) = rest b)%N.
+Proof.
+  generalize dependent b.
+  induction a using Pos.peano_ind; intros.
+  - pose proof (rest_S b).
+    rewrite <-H0;
+    repeat (lia || f_equal).
+  - rewrite Pos.add_succ_l.
+    specialize (IHa (Pos.succ b)).
+    rewrite Pos.add_succ_r in IHa.
+    pose proof (rest_S b) as Hb.
+    lia.
+Qed.
+
+Lemma rest_add_ a b:
+  ((Npos a) <= rest b ->
+  rest (a+b) = rest b - Npos a)%N.
+Proof.
+  pose proof (rest_add a b); lia.
+Qed.
+
+Lemma log2_add a b:
+  ((Npos a) <= rest b ->
+  log2 (a+b) = log2 b)%N.
+Proof.
+  generalize dependent b.
+  induction a using Pos.peano_ind; intros.
+  - replace (1+b)%positive with (Pos.succ b) by lia.
+    apply (not_full_log2_S).
+    rewrite not_full_iff_rest. lia.
+  - rewrite Pos.add_succ_l.
+    specialize (IHa (Pos.succ b)).
+    rewrite Pos.add_succ_r in IHa.
+    rewrite IHa.
+    + apply (not_full_log2_S).
+      rewrite not_full_iff_rest. lia.
+    + pose proof (rest_S b) as Hb. lia.
+Qed.
+
+
 Close Scope positive.

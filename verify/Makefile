@@ -7,7 +7,7 @@ ALLVFILES := LibTactics.v Helper.v Pigeonhole.v TM.v Compute.v Flip.v Permute.v 
 	BB62.v Individual62.v CTL62.v Inductive62.v TC62.v \
 	BB25.v Individual25.v \
 	RWLAcc.v RWLAcc62.v TC.v RRBA.v Enumerate62.v \
-	Longitudinal.v QSymMap.v TMLR.v TMAddOneSymbol.v TMLocalHistory.v
+	Longitudinal.v QSymMap.v TMLR.v TMAddOneSymbol.v TMLocalHistory.v SimplTape.v NatMod.v
 	#BB52.v Individual52.v FixedBin.v ShiftOverflow.v ShiftOverflowBins.v Skelet15.v Skelet26.v Skelet33.v Skelet34.v Skelet35.v \
 	Skelet10.v Skelet17.v Skelet1.v Finned.v Finned1.v Finned2.v Finned3.v Finned4.v Finned5.v Extraction.v \
 	BB33.v Individual33.v BB33_494.v \

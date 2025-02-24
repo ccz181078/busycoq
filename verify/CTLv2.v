@@ -1,5 +1,5 @@
 From BusyCoq Require Import CTL62.
-
+(*
 Lemma nonhalt1: ~halts (TM_from_str "1RB1LC_1RC1RE_1LD0RE_---0LE_0LF1RC_1RA0LA") c0.
 Proof. solve_cert (CPS_LRU 100000001 400000 400000 12 3200 2 6 0 0). Time Qed.
 
@@ -1400,4 +1400,295 @@ Proof. solve_cert (RWL_mod 1001 1000000 1000000 6 3200 2 4 6 0). Time Qed.
 
 Lemma nonhalt468: ~halts (TM_from_str "1RB0RA_1LC0LE_0LF0LD_1LE---_1LB0RB_1RF1LA") c0.
 Proof. solve_cert (CPS_LRU 1001 1000000 1000000 8 3200 2 4 0 0). Time Qed.
+
+Lemma nonhalt477: ~halts (TM_from_str "1RB0RA_1LC0RD_0LD0LB_1RA1LE_0LF0RA_---0LB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 16 0 0 true). Time Qed.
+
+Lemma nonhalt478: ~halts (TM_from_str "1RB0LE_0RC1RA_0LD0RE_1LA0LA_1LC0RF_0RA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 16 0 0 true). Time Qed.
+
+Lemma nonhalt479: ~halts (TM_from_str "1RB0LF_0RC0LA_1RD0RD_1LE0RA_0LB1LD_0LD---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 16 0 0 true). Time Qed.
+
+Lemma nonhalt480: ~halts (TM_from_str "1RB1RA_0RC0RE_1LD1LE_1LE1LC_1RF0LC_---0RA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 16 0 0 true). Time Qed.
+
+Lemma nonhalt481: ~halts (TM_from_str "1RB0RB_1LC1RA_1LF0LD_1RA1LE_1LD0LC_---1RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 16 0 0 true). Time Qed.
+
+Lemma nonhalt482: ~halts (TM_from_str "1RB0LD_0RC---_1LD0RF_1LE0LA_1RE1LD_0RB1RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 16 0 0 true). Time Qed.
+
+Lemma nonhalt483: ~halts (TM_from_str "1RB0RA_1LC0RD_0LD0LB_1RA1LE_0LC1LF_0LE---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 12 16 0 0 true). Time Qed.
+
+Lemma nonhalt484: ~halts (TM_from_str "1RB0RB_1LC1RA_0LF0LD_1RA1LE_1LD0LC_---1RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 16 0 0 true). Time Qed.
+
+Lemma nonhalt485: ~halts (TM_from_str "1RB0RA_1LC0RD_0LD0LB_1RA1LE_0LC1LF_1LA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 16 0 0 true). Time Qed.
+
+Lemma nonhalt486: ~halts (TM_from_str "1RB1RA_0RC0RE_1LD1LE_1RD1LC_1RF0LC_---0RA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 16 0 0 true). Time Qed.
+
+Lemma nonhalt487: ~halts (TM_from_str "1RB0RA_1LC0RD_0LD0LB_1RA1LE_0LC1LF_1RA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 16 0 0 true). Time Qed.
+
+Lemma nonhalt488: ~halts (TM_from_str "1RB1LF_1LB1LC_1RD0LE_---0RB_0RC0LA_1RC0RF") c0.
+Proof. solve_cert (NG 0 1000000 1000000 7 16 0 0 true). Time Qed.
+
+Lemma nonhalt489: ~halts (TM_from_str "1RB0RA_1LC0RD_0LD0LB_1RA1LE_0LC1LF_1LE---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 16 0 0 true). Time Qed.
+
+Lemma nonhalt490: ~halts (TM_from_str "1RB0LF_1RC0RC_1RD1RA_1LE1LF_---1LD_1LC1LA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 24 0 0 true). Time Qed.
+
+Lemma nonhalt491: ~halts (TM_from_str "1RB0LF_0RC1LD_0LD0RA_1LE0RD_0LA1LC_0LC---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 24 0 0 true). Time Qed.
+
+Lemma nonhalt492: ~halts (TM_from_str "1RB0LB_1LC0RB_0LF0LD_1LE0LD_1LA---_0RF1RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 24 0 0 true). Time Qed.
+
+Lemma nonhalt493: ~halts (TM_from_str "1RB0RA_1RC---_1LD0RD_1RE0LD_0RF0RA_0LF1LD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 24 0 0 true). Time Qed.
+
+Lemma nonhalt494: ~halts (TM_from_str "1RB---_1LC0RC_1RD0LC_0RE0RF_0LE1LC_1RA0RF") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 24 0 0 true). Time Qed.
+
+Lemma nonhalt495: ~halts (TM_from_str "1RB0RA_1LC0RE_1RB0LD_1RA0LC_1RF---_1RD0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 24 0 0 true). Time Qed.
+
+Lemma nonhalt496: ~halts (TM_from_str "1RB0RC_1LC0RF_1RE1LD_0LB1LF_---0RA_0LA0RA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 24 0 0 true). Time Qed.
+
+Lemma nonhalt497: ~halts (TM_from_str "1RB0RE_1RC0LE_1RD0RC_1LE0RF_1RD0LB_1RA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 24 0 0 true). Time Qed.
+
+Lemma nonhalt498: ~halts (TM_from_str "1RB0LD_1RC0RB_1LD0RE_1RC0LA_1RF---_1RA0RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 24 0 0 true). Time Qed.
+
+Lemma nonhalt499: ~halts (TM_from_str "1RB0LC_1LA0RE_1LD---_1LE0LB_1LF0RB_1LA0LF") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 24 0 0 true). Time Qed.
+
+Lemma nonhalt500: ~halts (TM_from_str "1RB---_1RC0RF_1RD0LF_1RE0RD_1LF0RA_1RE0LC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 10 24 0 0 true). Time Qed.
+
+Lemma nonhalt501: ~halts (TM_from_str "1RB---_1LC0LD_1RD0LB_0LD1RE_1RF0RA_0LE0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 13 24 0 0 true). Time Qed.
+
+Lemma nonhalt502: ~halts (TM_from_str "1RB1RC_1RC0RD_1LD0RE_1RF0LC_1LC1RA_---0RA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 13 24 0 0 true). Time Qed.
+
+Lemma nonhalt503: ~halts (TM_from_str "1RB1RC_0LC0RF_1RB0RD_1RE---_1LF0LA_1RA0LE") c0.
+Proof. solve_cert (NG 0 1000000 1000000 14 24 0 0 true). Time Qed.
+
+Lemma nonhalt504: ~halts (TM_from_str "1RB0RC_0LC0RA_1RA1LD_0LE---_1LA0LF_1LE1LB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 13 20 0 0 true). Time Qed.
+
+Lemma nonhalt505: ~halts (TM_from_str "1RB0RD_1RC0LB_0LD0RE_1LB1LD_---0RF_0RA0LB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 28 0 0 true). Time Qed.
+
+Lemma nonhalt506: ~halts (TM_from_str "1RB0RA_0LC0RF_1LD1RC_1RE0LB_---1RF_1RA0RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 28 0 0 true). Time Qed.
+
+Lemma nonhalt507: ~halts (TM_from_str "1RB0LA_0LC0RD_1LA1LC_---0RE_0RF0LA_1RA0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 28 0 0 true). Time Qed.
+
+Lemma nonhalt508: ~halts (TM_from_str "1RB1LB_1RC0LB_0LD0RE_1LB1LD_---0RF_0RA0LB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 28 0 0 true). Time Qed.
+
+Lemma nonhalt509: ~halts (TM_from_str "1RB0LA_0LC0RD_1LA1LC_---0RE_0RF0LA_1RA1LA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 2 28 0 0 true). Time Qed.
+
+Lemma nonhalt510: ~halts (TM_from_str "1RB0RF_0LC0LC_1RF1LD_1RE1LB_---0LD_1RA0RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 28 0 0 true). Time Qed.
+
+Lemma nonhalt511: ~halts (TM_from_str "1RB0RF_0LC0LC_1RF1LD_1RE1LB_---0LD_1RA1RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 28 0 0 true). Time Qed.
+
+Lemma nonhalt512: ~halts (TM_from_str "1RB1LD_1RC1LE_1LA0RB_1LF1LB_0RE0LA_---1LA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 28 0 0 true). Time Qed.
+
+Lemma nonhalt513: ~halts (TM_from_str "1RB0LA_1LC1RE_0RB0LD_1LB1LA_0RD1RF_0RC---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 14 28 0 0 true). Time Qed.
+
+Lemma nonhalt514: ~halts (TM_from_str "1RB0RA_0RC1RE_1LD0RA_1LE0LF_0LA0LC_0LE---") c0.
+Proof. solve_cert (NG 0 3000000 3000000 4 16 0 0 true). Time Qed.
+
+Lemma nonhalt515: ~halts (TM_from_str "1RB0LC_1LC1RB_1RD1LA_1RE1RF_---1RC_1RF0RC") c0.
+Proof. solve_cert (NG 0 3000000 3000000 15 16 0 0 true). Time Qed.
+
+Lemma nonhalt516: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RF0LE_1LC0RB_---1RD") c0.
+Proof. solve_cert (NG 0 3000000 3000000 11 28 0 0 true). Time Qed.
+
+Lemma nonhalt517: ~halts (TM_from_str "1RB---_1RC1LB_0RD0LE_1LA0RF_1LA1LC_1RF0RB") c0.
+Proof. solve_cert (NG 0 100000 100000 7 60 0 0 true). Time Qed.
+
+Lemma nonhalt518: ~halts (TM_from_str "1RB1LA_1RC0LD_1RD0RA_1LE1LB_0RF0LA_---1RE") c0.
+Proof. solve_cert (NG 0 100000 100000 7 60 0 0 true). Time Qed.
+
+Lemma nonhalt519: ~halts (TM_from_str "1RB0LE_1RC0LA_0RD---_1LE0RE_0LB1LF_0RB0LB") c0.
+Proof. solve_cert (NG 0 100000 100000 4 60 0 0 true). Time Qed.
+
+Lemma nonhalt520: ~halts (TM_from_str "1RB1LB_1RC0LB_0LD0RF_1LE1LD_0RA0LB_---0RE") c0.
+Proof. solve_cert (NG 0 100000 100000 2 36 0 0 true). Time Qed.
+
+Lemma nonhalt521: ~halts (TM_from_str "1RB1RF_1LC0RB_1LD0LC_1LE1LB_1LF---_0RA0LA") c0.
+Proof. solve_cert (NG 0 100000 100000 4 60 0 0 true). Time Qed.
+
+Lemma nonhalt522: ~halts (TM_from_str "1RB0LA_0LC0RF_1LD1LC_0RE0LA_1RA1LA_---0RD") c0.
+Proof. solve_cert (NG 0 100000 100000 2 36 0 0 true). Time Qed.
+
+Lemma nonhalt523: ~halts (TM_from_str "1RB0RA_1LC0RF_---0LD_1LE1LF_1LA1LB_0LA1RA") c0.
+Proof. solve_cert (NG 0 300000 300000 2 48 0 0 true). Time Qed.
+
+Lemma nonhalt524: ~halts (TM_from_str "1RB1RC_1LC0LB_1RE0LD_0RB1LB_---0RF_1RA1RD") c0.
+Proof. solve_cert (NG 0 300000 300000 2 48 0 0 true). Time Qed.
+
+Lemma nonhalt525: ~halts (TM_from_str "1RB1RE_1RC1RD_1LD0LC_1RF0LE_0RC1LC_---0RA") c0.
+Proof. solve_cert (NG 0 300000 300000 2 48 0 0 true). Time Qed.
+
+Lemma nonhalt526: ~halts (TM_from_str "1RB0LF_0LB1RC_1RD0RE_0LC0RA_1RF---_1LA0LB") c0.
+Proof. solve_cert (NG 0 300000 300000 12 36 0 0 true). Time Qed.
+
+Lemma nonhalt527: ~halts (TM_from_str "1RB---_1LC0RA_1LD0LB_0RE0LC_1RF1LE_1RC0RD") c0.
+Proof. solve_cert (NG 0 300000 300000 16 60 0 0 true). Time Qed.
+
+Lemma nonhalt528: ~halts (TM_from_str "1RB0LF_1RC1RD_0LD0RA_1RC0RE_1RF---_1LA0LB") c0.
+Proof. solve_cert (NG 0 300000 300000 11 36 0 0 true). Time Qed.
+
+Lemma nonhalt529: ~halts (TM_from_str "1RB1LE_1RC0RB_1LD0RA_0LA0LC_0LD1LF_0RA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt530: ~halts (TM_from_str "1RB0RB_1LB0LC_1RD1LC_0RB0RE_0RF0LB_---0RA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt531: ~halts (TM_from_str "1RB1LE_1RC0RB_1LD0RA_0LA0LC_0RE1LF_0LD---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt532: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RE0LE_1LC0RF_---0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt533: ~halts (TM_from_str "1RB0RF_1LB0LC_1RD1LC_0RB0RE_0RA0LB_---0RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt534: ~halts (TM_from_str "1RB0LF_0LC0LE_1RC0RD_1LB1RD_0LA0RC_---0LC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt535: ~halts (TM_from_str "1RB1RE_1RC0RB_1LD0RA_0LA0LC_0LF---_0LD1LF") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt536: ~halts (TM_from_str "1RB1LE_1RC0RB_1LD0RA_0LA0LC_0LD1LF_1LA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt537: ~halts (TM_from_str "1RB0RF_0RC0RE_1LC0LD_1RB1LD_0RA0LC_---0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt538: ~halts (TM_from_str "1RB0RF_1RC1LB_0RD0RE_1LD0LB_0RA0LD_---0RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt539: ~halts (TM_from_str "1RB1LE_1RC0RB_1LD0RA_0LA0LC_0LD1LF_0LD---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt540: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0LE0LC_0RE0RF_---0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt541: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RE0LC_---0RF_---0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 48 0 0 true). Time Qed.
+
+Lemma nonhalt542: ~halts (TM_from_str "1RB0RE_1LC0RC_1RF1LD_1RE1LC_1LD1RA_---0LC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 36 0 0 true). Time Qed.
+
+Lemma nonhalt543: ~halts (TM_from_str "1RB0RE_1LC0RC_0RF1LD_1RE1LC_1LD1RA_---0LE") c0.
+Proof. solve_cert (NG 0 1000000 1000000 4 36 0 0 true). Time Qed.
+
+Lemma nonhalt544: ~halts (TM_from_str "1RB0LC_0RC0LE_1RD1RE_1LE1RF_1RA0LD_0RE---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 14 48 0 0 true). Time Qed.
+
+Lemma nonhalt545: ~halts (TM_from_str "1RB1RA_0RC0LE_1RD1RE_1LE1RF_1RA0LD_0RE---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 14 48 0 0 true). Time Qed.
+
+Lemma nonhalt546: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RE0LC_0RC0RF_---0LD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 1 60 0 0 true). Time Qed.
+
+Lemma nonhalt547: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RE0LD_0LC0RF_---0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 1 60 0 0 true). Time Qed.
+
+Lemma nonhalt548: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RE0LC_0RF0LD_---0RC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 1 60 0 0 true). Time Qed.
+
+Lemma nonhalt549: ~halts (TM_from_str "1RB1LA_0RC0RD_1LC0LA_0RE0LC_0RB0RF_---0LE") c0.
+Proof. solve_cert (NG 0 1000000 1000000 1 60 0 0 true). Time Qed.
+
+Lemma nonhalt550: ~halts (TM_from_str "1RB0LE_0RC1RF_1RD1RA_1LD1LE_1RA0LA_0RA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 3 48 0 0 true). Time Qed.
+
+Lemma nonhalt551: ~halts (TM_from_str "1RB0LB_1RC0LA_0RD1RF_1RE1RB_1LE1LA_0RB---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 3 48 0 0 true). Time Qed.
+
+Lemma nonhalt552: ~halts (TM_from_str "1RB0LB_1RC0RC_0RD0LA_0LE1LA_1LF---_1LC0LD") c0.
+Proof. solve_cert (NG 0 300000 300000 6 100 0 0 true). Time Qed.
+
+Lemma nonhalt553: ~halts (TM_from_str "1RB0RC_0LC0RD_0RF1RD_1LE0RE_1LB0LB_1RA---") c0.
+Proof. solve_cert (NG 0 300000 300000 6 100 0 0 true). Time Qed.
+
+Lemma nonhalt554: ~halts (TM_from_str "1RB---_1RC1RF_1LD0RC_0LF1LE_1LB0LA_0RB0LD") c0.
+Proof. solve_cert (NG 0 300000 300000 10 80 0 0 true). Time Qed.
+
+Lemma nonhalt555: ~halts (TM_from_str "1RB---_1RC0RD_0LD0RE_0RA1RE_1LF0RF_1LC0LC") c0.
+Proof. solve_cert (NG 0 300000 300000 6 100 0 0 true). Time Qed.
+
+Lemma nonhalt556: ~halts (TM_from_str "1RB0RB_1RC1RA_0LD0RF_1LE1LD_0RA1LC_---1LC") c0.
+Proof. solve_cert (NG 0 1000000 1000000 5 80 0 0 true). Time Qed.
+
+Lemma nonhalt557: ~halts (TM_from_str "1RB1RA_0LC1RE_1LD0LD_1LE1LC_0RA0LF_---1RE") c0.
+Proof. solve_cert (NG 0 1000000 1000000 6 80 0 0 true). Time Qed.
+
+Lemma nonhalt558: ~halts (TM_from_str "1RB1RA_0LC1RE_---0LD_1LE1LF_0RA0LB_1LD0LD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 6 80 0 0 true). Time Qed.
+
+Lemma nonhalt559: ~halts (TM_from_str "1RB0RB_1RC1RA_0LD0RE_1LE1LD_0RF1LC_---0RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 6 80 0 0 true). Time Qed.
+*)
+Lemma nonhalt560: ~halts (TM_from_str "1RB0RE_1RC---_1RD0LF_0RE0RC_1RF0RB_1LC0LA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 8 0 0 true). Time Qed.
+
+Lemma nonhalt561: ~halts (TM_from_str "1RB1LE_0RC1RD_1LD0LF_1LA0RD_1LC1RE_---0LA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 12 0 0 true). Time Qed.
+
+Lemma nonhalt562: ~halts (TM_from_str "1RB0LA_1LC1RD_0LE1LA_1RE1LD_1RA0RF_---0RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 12 0 0 true). Time Qed.
+
+Lemma nonhalt563: ~halts (TM_from_str "1RB0RD_1LC0LE_1RA0LD_1RE0LB_0RC0RF_1RC---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 12 0 0 true). Time Qed.
+
+Lemma nonhalt564: ~halts (TM_from_str "1RB1RE_1LC1LC_1RF0LD_1LE1LB_1RA0RC_---0RA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 7 8 0 0 true). Time Qed.
+
+Lemma nonhalt565: ~halts (TM_from_str "1RB---_1RC0LE_0RD0RB_1RE0RA_1LB0LF_1RA0RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 8 12 0 0 true). Time Qed.
+
+Lemma nonhalt566: ~halts (TM_from_str "1RB---_0RC0LF_0RD0RF_1LD0LE_0LA1RA_1LD0RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 15 48 0 0 true). Time Qed.
+
+Lemma nonhalt567: ~halts (TM_from_str "1RB0LC_1LA1RD_0RB0LA_0RE0RC_0LB0RF_1LE---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 15 48 0 0 true). Time Qed.
+
+Lemma nonhalt568: ~halts (TM_from_str "1RB0LE_0RC0RA_0RD0RA_1LE0RF_1LA0LD_0RE---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 60 0 0 true). Time Qed.
+
+Lemma nonhalt569: ~halts (TM_from_str "1RB---_0RC0LF_0RD0RF_1LD0LE_0LA1RA_0LC0RB") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 60 0 0 true). Time Qed.
+
+Lemma nonhalt570: ~halts (TM_from_str "1RB0RE_1LC0RA_0LD0LB_0LE0LB_1RA0LF_0LA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 60 0 0 true). Time Qed.
+
+Lemma nonhalt571: ~halts (TM_from_str "1RB0LD_1RC0RE_1LD0LE_0RC0LC_1LA1RF_0RA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 60 0 0 true). Time Qed.
+
+Lemma nonhalt572: ~halts (TM_from_str "1RB0RE_0LC0RA_1LF1RD_1LE---_1RA0LB_0LE0LD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 60 0 0 true). Time Qed.
+
+Lemma nonhalt573: ~halts (TM_from_str "1RB---_0RC0LA_1RD1LE_1LC0RF_0LB0LF_0LC0RD") c0.
+Proof. solve_cert (NG 0 1000000 1000000 16 60 0 0 true). Time Qed.
 
