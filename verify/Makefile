@@ -4,9 +4,9 @@ ALLVFILES := LibTactics.v Helper.v Pigeonhole.v TM.v Compute.v Flip.v Permute.v 
 	Cyclers.v TranslatedCyclers.v BackwardsReasoning.v Bouncers.v Individual.v \
 	Eqb.v HashTable.v DHTM.v CTL.v Inductive.v \
 	BinaryCounterFull.v BinaryCounter.v UnaryCounter.v Ternary.v \
-	BB62.v Individual62.v CTL62.v Inductive62.v TC62.v \
-	BB25.v Individual25.v \
-	RWLAcc.v RWLAcc62.v TC.v RRBA.v Enumerate62.v \
+	BB62.v Individual62.v CTL62.v Inductive62.v TC62.v RWLAcc62.v \
+	BB25.v Individual25.v CTL25.v Inductive25.v TC25.v RWLAcc25.v \
+	RWLAcc.v TC.v RRBA.v Enumerate62.v Enumerate25.v \
 	Longitudinal.v QSymMap.v TMLR.v TMAddOneSymbol.v TMLocalHistory.v SimplTape.v NatMod.v
 	#BB52.v Individual52.v FixedBin.v ShiftOverflow.v ShiftOverflowBins.v Skelet15.v Skelet26.v Skelet33.v Skelet34.v Skelet35.v \
 	Skelet10.v Skelet17.v Skelet1.v Finned.v Finned1.v Finned2.v Finned3.v Finned4.v Finned5.v Extraction.v \
