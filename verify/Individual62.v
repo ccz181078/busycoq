@@ -105,15 +105,6 @@ Ltac shift_rule :=
   end.
 
 
-Lemma halts_evstep tm c c':
-  halts tm c' ->
-  c -[ tm ]->* c' -> halts tm c.
-Proof.
-  intros H H0.
-  destruct (evstep_multistep _ _ _ H0) as [n H1].
-  eapply halts_multistep; eauto.
-Qed.
-
 Lemma lpow_shift1(a:Sym)(b:Stream Sym) n:
   [a]^^n *> a >> b = a >> [a]^^n *> b.
 Proof.

@@ -1497,3 +1497,31 @@ Proof. solve_cert (CPS_LRU 0 800000 800000 2 3200 1 2 2 0). Time Qed.
 Lemma nonhalt499: ~halts (TM_from_str "1RB3RA3LB0LA3RB_2LA3RB4RA1LA---") c0.
 Proof. solve_cert (RWL_mod 1001 1000000 1000000 4 3200 2 12 6 0). Time Qed.
 
+Lemma nonhalt500: ~halts (TM_from_str "1RB2LB2LA3LA---_1LA3RB0RB4LA1RA") c0.
+Proof. solve_cert (CPS_LRU 1001 300000 300000 5 3200 1 2 0 0). Time Qed.
+
+Lemma nonhalt501: ~halts (TM_from_str "1RB2RB3RA4RB3LB_2LA2RA3LA1LA---") c0.
+Proof. solve_cert (NG 0 1000000 1000000 6 12 0 0 true). Time Qed.
+
+Lemma nonhalt502: ~halts (TM_from_str "1RB2RA3RB3LB---_2LA1RB4RA0LA0LB") c0.
+Proof. solve_cert (RWL_mod 1001 1000000 1000000 23 3200 2 5 2 0). Time Qed.
+
+Lemma nonhalt503: ~halts (TM_from_str "1RB3LB2LA0RA0RB_2LA4LA1LB---4RA") c0.
+Proof. solve_cert (RWL_mod 1001 1000000 1000000 23 3200 2 1 2 0). Time Qed.
+
+Lemma nonhalt504: ~halts (TM_from_str "1RB3LA4LA0RB2RB_2LA---4LB3RA2RA") c0.
+Proof. solve_cert (RWL_mod 1001 1000000 1000000 1 3200 2 2 6 0). Time Qed.
+
+Lemma nonhalt505: ~halts (TM_from_str "1RB3LB3RA4LA3LA_2LA---4RB2RB2LB") c0.
+Proof. solve_cert (CPS_LRU 1001 1000000 1000000 4 3200 2 2 0 0). Time Qed.
+
+Lemma nonhalt506: ~halts (TM_from_str "1RB3LB3LA2LA2RA_2LA---4RB4LB3RB") c0.
+Proof. solve_cert (CPS_LRU 1001 1000000 1000000 4 3200 2 2 0 0). Time Qed.
+
+Lemma nonhalt507: ~halts (TM_from_str "1RB0RA3RB0LA---_1LB2LA1RB4LB3RA") c0.
+Proof. solve_cert (RWL_mod 1001 1000000 1000000 3 3200 2 2 3 0). Time Qed.
+
+Lemma nonhalt508: ~halts (TM_from_str "1RB2RA3LA4LA2RB_2LA0RB---0RA1LA") c0.
+Proof. solve_cert (NG 0 100000 100000 3 60 0 0 true). Time Qed.
+
+

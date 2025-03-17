@@ -3,9 +3,9 @@ COQMFFLAGS := -Q . BusyCoq
 ALLVFILES := LibTactics.v Helper.v Pigeonhole.v TM.v Compute.v Flip.v Permute.v DirectedCompute.v Subtape.v Enumerate.v \
 	Cyclers.v TranslatedCyclers.v BackwardsReasoning.v Bouncers.v Individual.v \
 	Eqb.v HashTable.v DHTM.v CTL.v Inductive.v \
-	BinaryCounterFull.v BinaryCounter.v UnaryCounter.v Ternary.v \
+	BinaryCounterFull.v BinaryCounter.v UnaryCounter.v Ternary.v BinaryCounter_v2.v \
 	BB62.v Individual62.v CTL62.v Inductive62.v TC62.v RWLAcc62.v \
-	BB25.v Individual25.v CTL25.v Inductive25.v TC25.v RWLAcc25.v \
+	BB25.v Individual25.v CTL25.v Inductive25.v TC25.v RWLAcc25.v BinaryCounter25.v BinaryCounter25_v2.v \
 	BB33.v Individual33.v CTL33.v Inductive33.v TC33.v RWLAcc33.v \
 	RWLAcc.v TC.v RRBA.v Enumerate62.v Enumerate25.v Enumerate33.v \
 	Longitudinal.v QSymMap.v TMLR.v TMAddOneSymbol.v TMLocalHistory.v SimplTape.v NatMod.v

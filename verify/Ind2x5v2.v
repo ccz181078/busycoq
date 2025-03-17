@@ -58,3 +58,19 @@ Proof.
   solve_hlin_nonhalt (config_BEC 400%N 1 B A [] [] [2]).
 Time Qed.
 
+Lemma tm3: ~halts (TM_from_str "1RB2LA1RA4LA1LB_1LA3LA2RB---2LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_exploop default_config).
+Time Qed.
+
+Lemma tm4: ~halts (TM_from_str "1RB2LA1RA4LA1LB_1LA3LA2RB---2RA") c0.
+Proof.
+  solve_hlin_nonhalt (config_exploop default_config).
+Time Qed.
+
+Lemma tm5: ~halts (TM_from_str "1RB2LA3LA4RA1RA_1LA4LA3RB0LA---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+

@@ -1862,3 +1862,6 @@ Proof. solve_halt. Time Qed.
 Lemma tm596: halts_at_trans (TM_from_str "1RB2LA4RA2LB2LA_0LA2RB3RB1RA---") c0 (B,4).
 Proof. solve_halt. Time Qed.
 
+Lemma tm597: halts_at_trans (TM_from_str "1RB2LB4LB3LA---_1LA3RA3LB0LB0RA") c0 (A,4).
+Proof. solve_halt'' 3%nat true. Time Qed.
+

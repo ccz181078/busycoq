@@ -750,6 +750,15 @@ Proof.
     econstructor; eauto.
 Qed.
 
+Lemma halts_evstep tm c c':
+  halts tm c' ->
+  c -[ tm ]->* c' -> halts tm c.
+Proof.
+  intros H H0.
+  destruct (evstep_multistep _ _ _ H0) as [n H1].
+  eapply halts_multistep; eauto.
+Qed.
+
 
 Definition sigma_score_sym: Sym->nat :=
   fun s =>

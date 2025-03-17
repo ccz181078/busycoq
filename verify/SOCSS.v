@@ -25,22 +25,6 @@ Ltac follow' x :=
   clear Hx).
 
 
-Ltac solve_sigma_score' f :=
-  eapply sigma_score_unbounded_nonhalt;
-  intros n;
-  eexists _,_;
-  split;
-  [ apply (f n) |];
-  split;
-  [ solve_sigma_score |];
-  lia.
-
-Ltac simpl_nat :=
-  repeat rewrite Nat.add_succ_r;
-  repeat rewrite <-Nat.mul_add_distr_l;
-  repeat rewrite <-Nat.mul_succ_r.
-
-
 Module TM1.
 
 Definition tm := Eval compute in (TM_from_str "1RB0RF_0LC0RA_1LA0RD_1RE1LE_1LC1RC_---1LB").
@@ -1577,5 +1561,202 @@ Qed.
 
 End TM21.
 
+
+Module TM22.
+
+Definition tm := Eval compute in (TM_from_str "1LB---_1RC0LB_1RF1RD_1LE0RA_1RA0LE_0RC0LF").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition P0 n :=
+  forall l r,
+  l <* <[0;1]^^n <* <[0;1] {{D}}> [0;0]^^n *> r -->*
+  l <* [1;1]^^n <* <[0;1] <* [1;1]^^n {{D}}> r.
+
+Lemma P0_n n:
+  P0 n.
+Proof.
+  unfold P0.
+  induction n.
+  1: es.
+  intros l r.
+  follow' (IHn ([1;0]*>l) ([0;0]*>r)).
+  do 3 (er; sr).
+  step1.
+  follow' (IHn ([1;1]*>l) ([1;0]*>r)).
+  es.
+Qed.
+
+Definition S0 n :=
+  0inf <* [1;1] <* <[0;1]^^n <* <[0;1] {{D}}> 0inf.
+
+Lemma BigStep n:
+  S0 (1+n) -->+ S0 (1+(1+n)*2).
+Proof.
+  unfold S0.
+  replace (0inf) with (([0;0]^^(1+n))*>0inf).
+  2: rewrite lpow_all0; solve_const0_eq.
+  follow (P0_n (1+n)).
+  simpl_lpow_all0.
+  do 4 (er; sr).
+  rewrite lpow_add'.
+  replace (n+n) with (n*2) by lia.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (1+3)).
+  1: unfold S0; cbn; solve_init.
+  eapply progress_nonhalt_simple with (C:=fun x => S0 (1+x)).
+  intros i.
+  eexists.
+  apply BigStep.
+Qed.
+
+End TM22.
+
+
+Module TM23.
+
+Definition tm := Eval compute in (TM_from_str "1LB0LF_1RC0LB_1RE0RD_0RC---_1LA0RC_0LA1RC").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Lemma P0_n n:
+  forall l r,
+  l <* [1] {{C}}> [0;0]^^n *> r -->*
+  l <* [1] <* <[1;0]^^n {{C}}> r.
+Proof.
+  induction n.
+  1: es.
+  intros.
+  follow' (IHn l ([0;0]*>r)).
+  er; sr.
+  step1.
+  follow' (IHn l ([0;1]*>r)).
+  es.
+Qed.
+
+Lemma P1_n n:
+  forall l r,
+  l <* <[0;1]^^(n) <* [0;0;0] {{C}}> [0;0]^^(1+n) *> r -->*
+  l <* [1;1]^^(n) <* <[1;0;0] {{C}}> [0;1]^^(1+n) *> r.
+Proof.
+  induction n.
+  1: es.
+  intros.
+  follow' (IHn ([1;0]*>l) ([0;0]*>r)).
+  do 3 (er; sr).
+  step1.
+  follow' (P0_n (1+n) l ([1]*>[0;0]^^(2+n)*>[1]*>r)).
+  do 2 step1.
+  follow' (IHn ([1;1]*>l) ([0;1]*>r)).
+  es.
+Qed.
+
+Definition S0 n :=
+  0inf <* [1;1] <* <[0;1]^^n <* [0;0;0] {{C}}> 0inf.
+
+Lemma P2_n n m:
+  forall l r,
+  l <* [1] <* <[1;0]^^n {{C}}> [0;1] *> [0;0]^^m *> r -->*
+  l <* [1] <* <[1;0]^^(m+n) {{C}}> [0;1] *> r.
+Proof.
+  gen n.
+  induction m; intros.
+  1: es.
+  er; sr.
+  step1.
+  follow' (P0_n (1+n) l ([0;1]*>[0;0]^^m*>r)).
+  follow (IHm (1+n)).
+  es.
+Qed.
+
+Lemma BigStep n:
+  S0 n -->+
+  S0 (3+n+n).
+Proof.
+  unfold S0.
+  replace (0inf) with ([0;0]^^(1+n)*>0inf).
+  2: rewrite lpow_all0; solve_const0_eq.
+  follow P1_n.
+  simpl_lpow_all0.
+  do 3 (er; sr).
+  step1.
+  follow' (P0_n (1+n) (0inf) ([0;1]*>[0;0]^^(2+n)*>[1]*>0inf)).
+  follow' (P2_n (1+n) (2+n) (0inf) ([1]*>0inf)).
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 1).
+  1: unfold S0; cbn; solve_init.
+  eapply progress_nonhalt_simple.
+  intros.
+  eexists.
+  apply BigStep.
+Qed.
+
+End TM23.
+
+
+Module TM24.
+
+Definition tm := Eval compute in (TM_from_str "1LB1RF_1LC0LB_1RD0LC_1RE1RE_0RD0RA_1RA---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition P0 n :=
+  forall l r,
+  l <* <[1;0]^^n <* <[1;0] {{A}}> [0;0]^^n *> r -->*
+  l <* [1;1]^^n <* <[1;0] <* [1;1]^^n {{A}}> r.
+
+Lemma P0_n n:
+  P0 n.
+Proof.
+  unfold P0.
+  induction n.
+  1: es.
+  intros l r.
+  follow' (IHn ([0;1]*>l) ([0;0]*>r)).
+  do 3 (er; sr).
+  step1.
+  follow' (IHn ([1;1]*>l) ([1;0]*>r)).
+  es.
+Qed.
+
+Definition S0 n :=
+  0inf <* [1] <* <[1;0]^^n <* <[1;0] {{A}}> 0inf.
+
+Lemma BigStep n:
+  S0 (1+n) -->+ S0 (1+(1+n)*2).
+Proof.
+  unfold S0.
+  replace (0inf) with (([0;0]^^(1+n))*>0inf).
+  2: rewrite lpow_all0; solve_const0_eq.
+  follow (P0_n (1+n)).
+  simpl_lpow_all0.
+  do 4 (er; sr).
+  rewrite lpow_add'.
+  replace (n+n) with (n*2) by lia.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (1+6)).
+  1: unfold S0; cbn; solve_init.
+  eapply progress_nonhalt_simple with (C:=fun x => S0 (1+x)).
+  intros i.
+  eexists.
+  apply BigStep.
+Qed.
+
+End TM24.
 
 

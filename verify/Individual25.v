@@ -15,6 +15,7 @@ Notation "1" := S1 : sym_scope.
 Notation "2" := S2 : sym_scope.
 Notation "3" := S3 : sym_scope.
 Notation "4" := S4 : sym_scope.
+Notation "'0inf'" := (const 0) : sym_scope.
 
 (* Make sure that [{{A}}>] still refers to the state, even if we shadowed
    [A] itself with something else. *)

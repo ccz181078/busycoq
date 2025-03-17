@@ -331,4 +331,36 @@ Proof.
     2 0 2).
 Qed.
 
+Definition tm19 := Eval compute in (TM_from_str "1RB0RA_0LC0LE_1RD1LB_1RA1LE_1RF1LF_1LC---").
+Lemma nonhalt19: ~halts tm19 c0.
+Proof.
+  solve_cert (cert1 E [0] [0] <[1;1;0;0]
+    (fun b c => [1;1;1;1]^^(b) *> [1;0] *> [1]^^c *> const 0)
+    3 1 2).
+Qed.
+
+Definition tm20 := Eval compute in (TM_from_str "1RB0RE_0LC0LF_1RD1LB_1RE1LF_---0RA_1RC1LC").
+Lemma nonhalt20: ~halts tm20 c0.
+Proof.
+  solve_cert (cert1 F [0] [0] <[1;1;0;0]
+    (fun b c => [1;1;1;1]^^(b) *> [1;0] *> [1]^^c *> const 0)
+    3 1 2).
+Qed.
+
+Definition tm21 := Eval compute in (TM_from_str "1RB0RA_1LB0LC_1LD1LE_0LE---_1RF1LF_1RA1LC").
+Lemma nonhalt21: ~halts tm21 c0.
+Proof.
+  solve_cert (cert1 C [1;1] [0] <[1;1;0;0]
+    (fun b c => [1;1;1;1]^^(b) *> [0] *> [1]^^c *> const 0)
+    3 5 2).
+Qed.
+
+Definition tm22 := Eval compute in (TM_from_str "1LB0LF_0LC---_1LD0RD_1RD0RE_0RA0RC_1LF0LB").
+Lemma nonhalt22: ~halts tm22 c0.
+Proof.
+  solve_cert (cert1 D [1;0;0;1;1] [0] <[0;1]
+    (fun b c => [1;1;1]^^(b) *> [0] *> [1]^^c *> const 0)
+    1 0 1).
+Qed.
+
 
