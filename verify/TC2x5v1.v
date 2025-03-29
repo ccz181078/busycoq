@@ -12,4 +12,9 @@ Ltac solve_TC T :=
 Lemma tm1: ~halts (TM_from_str "1RB3LA1LA4RB2RA_2LA1RA4LA2RB---") c0.
 Proof. solve_TC 1273285866%N. Time Qed.
 
+Lemma tm2: ~halts (TM_from_str "1RB3RA4LA2LA1RB_1LB2LA2RA---3RB") c0.
+Proof. solve_TC 1273131120%N. Time Qed.
+
+Lemma tm3: ~halts (TM_from_str "1RB2LB3LA4RA1RA_2LA3LB3RA---4LA") c0.
+Proof. solve_TC 1273249547%N. Time Qed.
 

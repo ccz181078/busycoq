@@ -15,7 +15,7 @@ Ltac solve_halt'' bsz use_acc :=
   match goal with
   | |- halts_at_trans (TM_from_str ?x) c0 _ =>
     idtac x;
-    solve_halt' bsz 3200 use_acc 2%N 100000000%N
+    solve_halt' bsz 3200 use_acc 2%N (10^12)%N
   end.
 
 Fixpoint get_len(ls:RWL):N :=
@@ -1864,4 +1864,7 @@ Proof. solve_halt. Time Qed.
 
 Lemma tm597: halts_at_trans (TM_from_str "1RB2LB4LB3LA---_1LA3RA3LB0LB0RA") c0 (A,4).
 Proof. solve_halt'' 3%nat true. Time Qed.
+
+Lemma tm598: halts_at_trans (TM_from_str "1RB0RA3LB1LB---_2LA3RB4RB3RA0LA") c0 (A,4).
+Proof. solve_halt'' 13%nat false. Time Qed.
 

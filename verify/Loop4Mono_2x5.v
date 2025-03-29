@@ -1026,3 +1026,130 @@ Qed.
 
 End TM4.
 
+
+Module TM5.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LB3LB4RB---_1LA2RB3RA2LB1RB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation "l <| r" := (l <{{B}} [2]*>r) (at level 30).
+Notation "l |> r" := (l<*[4] {{B}}> r) (at level 30).
+
+Fixpoint L0 l ls :=
+match ls with
+| [] => l
+| n::ls0 => L0 l ls0 <* [2] <* <[3;1]^^n <* [3]
+end.
+
+Fixpoint L1 l ls :=
+match ls with
+| [] => l
+| n::ls0 => L1 l ls0 <* [4] <* <[3;1]^^n <* [3]
+end.
+
+Lemma LInc l r n ls0 ls1:
+  L0 (L1 l (n::ls1)) ls0 <| r -->*
+  L0 (L1 l ls1) (ls0++[n]) |> r.
+Proof.
+  gen l r n ls1.
+  ind' ls0.
+Qed.
+
+Lemma LOv0 r ls:
+  L0 (0inf <* <[1;2;3]) ls <| r -->*
+  L1 (0inf <* <[2;3]) (ls++[O]) {{A}}> r.
+Proof.
+  gen r.
+  ind' ls.
+Qed.
+
+Lemma LOv1 r ls:
+  L0 (0inf <* <[2;3]) ls <| r -->*
+  L1 (0inf <* <[1;2;3]) (ls++[O]) {{A}}> r.
+Proof.
+  gen r.
+  ind' ls.
+Qed.
+
+Definition lh(x:bool) := 0inf <* (if x then <[1;2;3] else <[2;3]).
+
+Definition S0 '(l,ls1,ls0,n) :=
+  L0 (L1 (lh l) ls1) ls0 <| [3] *> [3;3]^^n *> [1] *> 0inf.
+
+Lemma LInc2 l n1 n2 ls0 ls1 n:
+  S0 (l,n1::n2::ls1,ls0,n) -->+
+  S0 (l,ls1,ls0++[n1;n2],S n).
+Proof.
+  unfold S0.
+  follow LInc.
+  es; er.
+  follow LInc.
+  rewrite <-app_assoc.
+  es; er.
+Qed.
+
+Lemma LOv l n0 ls n:
+  S0 (l,[],n0::ls,n) -->+
+  S0 (negb l,ls++[O],[O;(n+n0)],O).
+Proof.
+  unfold S0.
+  cbn[L1].
+  remember (n0::ls) as ls0.
+  destruct l.
+  - follow LOv0.
+    es; er.
+    subst ls0.
+    epose proof (LInc _ _ n0 [] (ls++[O])) as HLInc.
+    follow HLInc.
+    es.
+  - follow LOv1.
+    es; er.
+    subst ls0.
+    epose proof (LInc _ _ n0 [] (ls++[O])) as HLInc.
+    follow HLInc.
+    es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (true,[],[O;O],O)).
+  1: er.
+  eapply progress_nonhalt_cond with (P:=fun '(_,ls1,ls0,_) => Nat.Even (length ls1) /\ Nat.Even (length ls0) /\ []<>ls0).
+  2:{
+    cbn; repeat split.
+    - exists O; trivial.
+    - exists 1%nat; trivial.
+    - congruence.
+  }
+  intros [[[l ls1] ls0] n] [[l1 Hls1] [[l0 Hls0] Hls0']].
+  destruct ls1 as [|n1 [|n2 ls1]].
+  - destruct ls0 as [|n0 ls0].
+    1: congruence.
+    cbn in Hls0.
+    eexists (_,_,_,_).
+    repeat split.
+    1: apply LOv.
+    + exists (l0).
+      rewrite List.length_app; cbn; lia.
+    + exists 1%nat.
+      cbn; trivial.
+    + congruence.
+  - cbn in Hls1.
+    lia.
+  - cbn in Hls1.
+    eexists (_,_,_,_).
+    repeat split.
+    1: apply LInc2.
+    + exists (l1-1).
+      lia.
+    + exists (S l0).
+      rewrite List.length_app; cbn; lia.
+    + destruct ls0; cbn;
+      congruence.
+Qed.
+
+End TM5.
+
+

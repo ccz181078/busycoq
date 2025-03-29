@@ -1323,3 +1323,573 @@ Qed.
 End TM6.
 
 
+Module TM7.
+
+Definition tm := Eval compute in (TM_from_str "1LB2RA0RA0LA1RB_1RA4LB3LA---0RA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition LC len n := BinDec <[1;0] <[1;1] len n (0inf <* [1]).
+
+Lemma LInc len n r:
+  1+n<2^len ->
+  LC len (1+n) <{{B}} r -->+
+  LC len n {{A}}> r.
+Proof.
+  intros H.
+  apply LBinDec_spec with (qL:=[]) (qR:=[]); try assumption.
+  es.
+Qed.
+
+Fixpoint R ls :=
+match ls with
+| n::ls0 => [1]^^(S n) *> [0] *> R ls0
+| [] => 0inf
+end.
+
+Definition R0 ls := [0] *> R ls.
+
+Definition Radd n ls :=
+match ls with
+| [] => [n]
+| h::ls0 => (S n+h)::ls0
+end.
+
+Lemma Radd_spec n ls:
+  R (Radd n ls) = [1]^^(S n) *> R ls.
+Proof.
+  destruct ls; cbn;
+  simpl_tape; simpl_rotate; reflexivity.
+Qed.
+
+Lemma Rlpow1_spec n ls:
+  R ([O]^^n++ls) = [1;0]^^n *> R ls.
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn; trivial.
+Qed.
+
+Lemma RInc_1 l ls:
+  exists ls',
+  l <* <[1;1;2] {{A}}> R ls -->*
+  l <{{B}} [4;4;1] *> R0 (ls').
+Proof.
+  destruct ls as [|n ls].
+  1: exists [O]; er.
+  pose proof (Nat.Div0.div_mod n 2).
+  pose proof (Nat.mod_upper_bound n 2).
+  remember (n/2) as n0.
+  cbn[R].
+  destruct (n mod 2) as [|[|]]. 3: lia.
+  - replace (S n) with (n0*2+1) by lia.
+    exists ([O]^^(n0)++Radd O ls).
+    cbn.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+  - replace (S n) with (2+n0*2) by lia.
+    exists (Radd O ([O]^^n0++Radd O ls)).
+    cbn.
+    rewrite Radd_spec.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+Qed.
+
+Lemma RInc_2 l ls:
+  l <* <[1;0;2] {{A}}> R0 (ls) -->*
+  l <{{B}} [4;1;3] *> R (Radd O ls).
+Proof.
+  rewrite Radd_spec.
+  er.
+Qed.
+
+Lemma RInc_3 l ls:
+  exists ls',
+  l <* <[1;2;2] {{A}}> R ls -->*
+  l <{{B}} [4;1;0] *> R (ls').
+Proof.
+  destruct ls as [|n ls].
+  1: exists [O]; er.
+  pose proof (Nat.Div0.div_mod n 2).
+  pose proof (Nat.mod_upper_bound n 2).
+  remember (n/2) as n0.
+  cbn[R].
+  destruct (n mod 2) as [|[|]]. 3: lia.
+  - replace (S n) with (n0*2+1) by lia.
+    exists (Radd O ([O]^^(n0)++Radd O ls)).
+    cbn.
+    rewrite Radd_spec.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+  - replace (S n) with (2+n0*2) by lia.
+    exists (([O]^^(1+n0)++Radd O ls)).
+    cbn.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+Qed.
+
+Opaque R.
+Opaque R0.
+
+Definition S1 len n ls :=
+  LC len n <{{B}} [4;4;1] *> R0 ls.
+
+Ltac follow_LInc :=
+  epose proof (LInc _ _ _ _) as HL;
+  (follow10 HL || follow100 HL); clear HL.
+
+Lemma Inc5 len n ls:
+  5+n<2^len ->
+  exists ls',
+  S1 len (5+n) ls -->+
+  S1 len n ls'.
+Proof.
+  intros H.
+  cbn.
+  epose proof (RInc_1 _ _) as [ls2 HR2].
+  exists ls2.
+  follow_LInc.
+  do 3 step1.
+  follow RInc_2.
+  do 4 (follow_LInc; er).
+  follow HR2. clear HR2.
+  finish.
+  Unshelve.
+  all: lia.
+Qed.
+
+Lemma Incs5 len m n ls:
+  n*5+m<2^len ->
+  exists ls',
+  S1 len (n*5+m) ls -->*
+  S1 len m ls'.
+Proof.
+  gen m ls.
+  induction n; intros.
+  - exists ls.
+    finish.
+  - epose proof (Inc5 _ (n*5+m) _ _) as [ls' HI].
+    epose proof (IHn _ _ _) as [ls'0 I].
+    eexists.
+    follow100 HI.
+    follow I.
+    finish.
+  Unshelve.
+  all: lia.
+Qed.
+
+
+
+Lemma LOv_0 len ls:
+  exists ls',
+  S1 len O ls -->+
+  S1 (len+1) ((2^len-1)*2) ls'.
+Proof.
+  pose proof (Nat.pow_nonzero 2 len) as Hpow2.
+  epose proof (RInc_1 _ _) as [ls1 HR1].
+  exists ls1.
+  eapply progress_evstep_trans.
+  2: apply HR1.
+  unfold S1,LC.
+  rw_Bin.
+  2: rewrite pow2_S; lia.
+  es.
+Qed.
+
+Lemma LOv_1 len ls:
+  exists ls',
+  S1 (len+1) 1 ls -->*
+  S1 (len+1+1) (2^len*4-3) ls'.
+Proof.
+  pose proof (Nat.pow_nonzero 2 len) as Hpow2.
+  unfold S1.
+  epose proof (RInc_3 _ _) as [ls1 HR1].
+  epose proof (RInc_1 _ _) as [ls2 HR2].
+  eexists ls2.
+  follow_LInc.
+  do 3 step1.
+  follow RInc_2.
+  rewrite Radd_spec.
+  mid (LC (len+1+1) (2^(len+1+1)-1) <{{B}} [4;1;0] *> R ls1).
+  - unfold LC.
+    rw_Bin.
+    es; er.
+    follow HR1. clear HR1.
+    es.
+  - repeat rewrite pow2_S.
+    replace (2^len*2*2-1) with (2+(2^len*4-3)) by lia.
+    cbn.
+    follow_LInc; er.
+    follow_LInc; er.
+    follow HR2.
+    finish.
+    Unshelve.
+    all: repeat rewrite pow2_S; lia.
+Qed.
+
+Lemma LOv_4 len ls:
+  3<=len ->
+  exists ls',
+  S1 (len) 4 ls -->*
+  S1 (len+1) (2^(len+1)-1) ls'.
+Proof.
+  intros H.
+  pose proof (Nat.pow_le_mono_r 2 3 len) as Hpow.
+  cbn in Hpow.
+  epose proof (RInc_1 _ _) as [ls1 HR1].
+  unfold S1.
+  exists ls1.
+  follow_LInc.
+  do 3 step1.
+  follow RInc_2.
+  rewrite Radd_spec.
+  do 3 (follow_LInc; er).
+  unfold LC.
+  rw_Bin.
+  es; er.
+  follow HR1. clear HR1.
+  finish.
+  Unshelve.
+  all: lia.
+Qed.
+
+Transparent R0 R.
+
+Definition S2 '(len,n,ls) := S1 len n ls.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 (3,0,[0;0])%nat).
+  1: unfold S2,S1; cbn; er.
+  eapply progress_nonhalt_cond with (P:=fun '(len,n,ls) => len>=3 /\ n=O /\ (exists k, 2^len = k*5+3)).
+  2: repeat split; try lia.
+  2: exists 1%nat; cbn; lia.
+  intros [[len n] ls] [Hlen [Hn [k Hk]]].
+  subst n.
+  epose proof (LOv_0 _ _) as [ls1 HOv1].
+  epose proof (Incs5 _ _ _ _ _) as [ls2 HI1].
+  epose proof (LOv_4 _ _ _) as [ls3 HOv2].
+  epose proof (Incs5 _ _ _ _ _) as [ls4 HI2].
+  epose proof (LOv_1 _ _) as [ls5 HOv3].
+  epose proof (Incs5 _ _ _ _ _) as [ls6 HI3].
+  epose proof (LOv_1 _ _) as [ls7 HOv4].
+  epose proof (Incs5 _ _ _ _ _) as [ls8 HI4].
+  eexists (len+4,O,_).
+  unfold S2.
+  split.
+  - follow10 HOv1.
+    replace ((2^len-1)*2) with (k*2*5+4) by lia.
+    follow HI1.
+    follow HOv2.
+    repeat rewrite pow2_S.
+    replace (2^len*2*2-1) with ((k*4+2)*5+1) by lia.
+    follow HI2.
+    follow HOv3.
+    rewrite pow2_S.
+    replace (2^len*2*4-3) with ((k*8+4)*5+1) by lia.
+    follow HI3.
+    follow HOv4.
+    repeat rewrite pow2_S.
+    replace (2^len*2*2*4-3) with ((k*16+9)*5+0) by lia.
+    follow HI4.
+    finish.
+  - repeat split; try lia.
+    rewrite Nat.pow_add_r; cbn.
+    exists (k*16+9).
+    lia.
+  Unshelve.
+  all: repeat rewrite pow2_S; try lia.
+Qed.
+
+End TM7.
+
+
+Module TM8.
+
+Definition tm := Eval compute in (TM_from_str "1RB2LA0RB4LB---_1LA3RB1RA0RB0LB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition LC len n := BinDec <[1;0] <[1;1] len n (0inf <* [1]).
+
+Lemma LInc len n r:
+  1+n<2^len ->
+  LC len (1+n) <{{A}} r -->+
+  LC len n {{B}}> r.
+Proof.
+  intros H.
+  apply LBinDec_spec with (qL:=[]) (qR:=[]); try assumption.
+  es.
+Qed.
+
+Fixpoint R ls :=
+match ls with
+| n::ls0 => [1]^^(S n) *> [0] *> R ls0
+| [] => 0inf
+end.
+
+Definition R0 ls := [0] *> R ls.
+
+Definition Radd n ls :=
+match ls with
+| [] => [n]
+| h::ls0 => (S n+h)::ls0
+end.
+
+Lemma Radd_spec n ls:
+  R (Radd n ls) = [1]^^(S n) *> R ls.
+Proof.
+  destruct ls; cbn;
+  simpl_tape; simpl_rotate; reflexivity.
+Qed.
+
+Lemma Rlpow1_spec n ls:
+  R ([O]^^n++ls) = [1;0]^^n *> R ls.
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn; trivial.
+Qed.
+
+Lemma RInc_1 l ls:
+  exists ls',
+  l <* <[1;1;3] {{B}}> R ls -->*
+  l <{{A}} [2;2;1] *> R0 (ls').
+Proof.
+  destruct ls as [|n ls].
+  1: exists [O]; er.
+  pose proof (Nat.Div0.div_mod n 2).
+  pose proof (Nat.mod_upper_bound n 2).
+  remember (n/2) as n0.
+  cbn[R].
+  destruct (n mod 2) as [|[|]]. 3: lia.
+  - replace (S n) with (n0*2+1) by lia.
+    exists ([O]^^(n0)++Radd O ls).
+    cbn.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+  - replace (S n) with (2+n0*2) by lia.
+    exists (Radd O ([O]^^n0++Radd O ls)).
+    cbn.
+    rewrite Radd_spec.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+Qed.
+
+Lemma RInc_2 l ls:
+  l <* <[1;0;3] {{B}}> R0 (ls) -->*
+  l <{{A}} [2;1;4] *> R (Radd O ls).
+Proof.
+  rewrite Radd_spec.
+  er.
+Qed.
+
+Lemma RInc_3 l ls:
+  exists ls',
+  l <* <[1;3;3] {{B}}> R ls -->*
+  l <{{A}} [2;1;0] *> R (ls').
+Proof.
+  destruct ls as [|n ls].
+  1: exists [O]; er.
+  pose proof (Nat.Div0.div_mod n 2).
+  pose proof (Nat.mod_upper_bound n 2).
+  remember (n/2) as n0.
+  cbn[R].
+  destruct (n mod 2) as [|[|]]. 3: lia.
+  - replace (S n) with (n0*2+1) by lia.
+    exists (Radd O ([O]^^(n0)++Radd O ls)).
+    cbn.
+    rewrite Radd_spec.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+  - replace (S n) with (2+n0*2) by lia.
+    exists (([O]^^(1+n0)++Radd O ls)).
+    cbn.
+    rewrite Rlpow1_spec.
+    rewrite Radd_spec.
+    es.
+Qed.
+
+Opaque R.
+Opaque R0.
+
+Definition S1 len n ls :=
+  LC len n <{{A}} [2;2;1] *> R0 ls.
+
+Ltac follow_LInc :=
+  epose proof (LInc _ _ _ _) as HL;
+  (follow10 HL || follow100 HL); clear HL.
+
+Lemma Inc5 len n ls:
+  5+n<2^len ->
+  exists ls',
+  S1 len (5+n) ls -->+
+  S1 len n ls'.
+Proof.
+  intros H.
+  cbn.
+  epose proof (RInc_1 _ _) as [ls2 HR2].
+  exists ls2.
+  follow_LInc.
+  do 3 step1.
+  follow RInc_2.
+  do 4 (follow_LInc; er).
+  follow HR2. clear HR2.
+  finish.
+  Unshelve.
+  all: lia.
+Qed.
+
+Lemma Incs5 len m n ls:
+  n*5+m<2^len ->
+  exists ls',
+  S1 len (n*5+m) ls -->*
+  S1 len m ls'.
+Proof.
+  gen m ls.
+  induction n; intros.
+  - exists ls.
+    finish.
+  - epose proof (Inc5 _ (n*5+m) _ _) as [ls' HI].
+    epose proof (IHn _ _ _) as [ls'0 I].
+    eexists.
+    follow100 HI.
+    follow I.
+    finish.
+  Unshelve.
+  all: lia.
+Qed.
+
+
+
+Lemma LOv_0 len ls:
+  exists ls',
+  S1 len O ls -->+
+  S1 (len+1) ((2^len-1)*2) ls'.
+Proof.
+  pose proof (Nat.pow_nonzero 2 len) as Hpow2.
+  epose proof (RInc_1 _ _) as [ls1 HR1].
+  exists ls1.
+  eapply progress_evstep_trans.
+  2: apply HR1.
+  unfold S1,LC.
+  rw_Bin.
+  2: rewrite pow2_S; lia.
+  es.
+Qed.
+
+Lemma LOv_1 len ls:
+  exists ls',
+  S1 (len+1) 1 ls -->*
+  S1 (len+1+1) (2^len*4-3) ls'.
+Proof.
+  pose proof (Nat.pow_nonzero 2 len) as Hpow2.
+  unfold S1.
+  epose proof (RInc_3 _ _) as [ls1 HR1].
+  epose proof (RInc_1 _ _) as [ls2 HR2].
+  eexists ls2.
+  follow_LInc.
+  do 3 step1.
+  follow RInc_2.
+  rewrite Radd_spec.
+  mid (LC (len+1+1) (2^(len+1+1)-1) <{{A}} [2;1;0] *> R ls1).
+  - unfold LC.
+    rw_Bin.
+    es; er.
+    follow HR1. clear HR1.
+    es.
+  - repeat rewrite pow2_S.
+    replace (2^len*2*2-1) with (2+(2^len*4-3)) by lia.
+    cbn.
+    follow_LInc; er.
+    follow_LInc; er.
+    follow HR2.
+    finish.
+    Unshelve.
+    all: repeat rewrite pow2_S; lia.
+Qed.
+
+Lemma LOv_4 len ls:
+  3<=len ->
+  exists ls',
+  S1 (len) 4 ls -->*
+  S1 (len+1) (2^(len+1)-1) ls'.
+Proof.
+  intros H.
+  pose proof (Nat.pow_le_mono_r 2 3 len) as Hpow.
+  cbn in Hpow.
+  epose proof (RInc_1 _ _) as [ls1 HR1].
+  unfold S1.
+  exists ls1.
+  follow_LInc.
+  do 3 step1.
+  follow RInc_2.
+  rewrite Radd_spec.
+  do 3 (follow_LInc; er).
+  unfold LC.
+  rw_Bin.
+  es; er.
+  follow HR1. clear HR1.
+  finish.
+  Unshelve.
+  all: lia.
+Qed.
+
+Transparent R0 R.
+
+Definition S2 '(len,n,ls) := S1 len n ls.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 (3,0,[0;0])%nat).
+  1: unfold S2,S1; cbn; er.
+  eapply progress_nonhalt_cond with (P:=fun '(len,n,ls) => len>=3 /\ n=O /\ (exists k, 2^len = k*5+3)).
+  2: repeat split; try lia.
+  2: exists 1%nat; cbn; lia.
+  intros [[len n] ls] [Hlen [Hn [k Hk]]].
+  subst n.
+  epose proof (LOv_0 _ _) as [ls1 HOv1].
+  epose proof (Incs5 _ _ _ _ _) as [ls2 HI1].
+  epose proof (LOv_4 _ _ _) as [ls3 HOv2].
+  epose proof (Incs5 _ _ _ _ _) as [ls4 HI2].
+  epose proof (LOv_1 _ _) as [ls5 HOv3].
+  epose proof (Incs5 _ _ _ _ _) as [ls6 HI3].
+  epose proof (LOv_1 _ _) as [ls7 HOv4].
+  epose proof (Incs5 _ _ _ _ _) as [ls8 HI4].
+  eexists (len+4,O,_).
+  unfold S2.
+  split.
+  - follow10 HOv1.
+    replace ((2^len-1)*2) with (k*2*5+4) by lia.
+    follow HI1.
+    follow HOv2.
+    repeat rewrite pow2_S.
+    replace (2^len*2*2-1) with ((k*4+2)*5+1) by lia.
+    follow HI2.
+    follow HOv3.
+    rewrite pow2_S.
+    replace (2^len*2*4-3) with ((k*8+4)*5+1) by lia.
+    follow HI3.
+    follow HOv4.
+    repeat rewrite pow2_S.
+    replace (2^len*2*2*4-3) with ((k*16+9)*5+0) by lia.
+    follow HI4.
+    finish.
+  - repeat split; try lia.
+    rewrite Nat.pow_add_r; cbn.
+    exists (k*16+9).
+    lia.
+  Unshelve.
+  all: repeat rewrite pow2_S; try lia.
+Qed.
+
+End TM8.
+
+
