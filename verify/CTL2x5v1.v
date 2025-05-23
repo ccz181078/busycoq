@@ -1527,3 +1527,6 @@ Proof. solve_cert (NG 0 100000 100000 3 60 0 0 true). Time Qed.
 Lemma nonhalt509: ~halts (TM_from_str "1RB3LB4LA---2RB_2LA4RA4LB4LA0RB") c0.
 Proof. solve_cert (RWL_mod 1001 1000000 1000000 4 3200 2 6 5 0). Time Qed.
 
+Lemma nonhalt510: ~halts (TM_from_str "1RB2RA3LA4LA2RB_2LA0RA---0RA1LA") c0.
+Proof. solve_cert (NG 0 1000000 1000000 3 120 0 0 true). Time Qed.
+
