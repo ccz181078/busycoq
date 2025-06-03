@@ -33,41 +33,13 @@ Ltac solve_segRLs_lrcons :=
   [| solve_segLRs |];
   [solve_seg |].
 
-Ltac solve_segRLs_S :=
-  eapply segRLs_S;
-  [solve_seg |].
-
-Lemma lrcons_0 tm a b c d d0 d1:
-  segRLs tm c ((lrcons d0 [] d1)++d) a b ->
-  segRLs tm c ((d0,d1)::d) a b.
-Proof.
-  intros H.
-  apply H.
-Qed.
-
-Lemma lrcons_1 tm a b c d d0 d1 d2 d3:
-  segRLs tm c ((lrcons d0 [(d1,d2)] d3)++d) a b ->
-  segRLs tm c ((d0,d1)::(d2,d3)::d) a b.
-Proof.
-  intros H.
-  apply H.
-Qed.
-
-Lemma lrcons_2 tm a b c d d0 d1 d2 d3 d4 d5:
-  segRLs tm c ((lrcons d0 [(d1,d2);(d3,d4)] d5)++d) a b ->
-  segRLs tm c ((d0,d1)::(d2,d3)::(d4,d5)::d) a b.
-Proof.
-  intros H.
-  apply H.
-Qed.
-
 Ltac solve_segRLs :=
-  repeat (apply segRLs_O ||
-  solve_segRLs_S ||
-  (apply lrcons_0; solve_segRLs_lrcons) ||
-  (apply lrcons_1; solve_segRLs_lrcons) ||
-  (apply lrcons_2; solve_segRLs_lrcons) ||
-  fail).
+  repeat (
+  (eapply segRLs_S; [solve_seg |]) ||
+  (eapply segRLs_RR_LLs; [solve_seg |]) ||
+  (eapply segLLs_LR_LLs; [solve_seg |]) ||
+  (eapply segLLs_LL_RLs; [solve_seg |]) ||
+  eapply segRLs_O).
 
 Module TM1.
 

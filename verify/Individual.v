@@ -174,7 +174,7 @@ l {{{ (h2,L) }}} w2 *> r.
 
 Definition segLR(tm:TM)(h1 h2:DH0)(w1 w2:list Sym):Prop :=
 forall l r,
-l <* w1 {{{ (h1,L) }}} r -[ tm ]->+
+l <* w1 {{{ (h1,L) }}} r -[ tm ]->*
 l <* w2 {{{ (h2,R) }}} r.
 
 Inductive sideRLs(tm:TM): list (DH0*DH0) -> side -> side -> Prop :=
@@ -379,7 +379,7 @@ Proof.
         split; auto.
         intros.
         follow11 H10.
-        follow11 H8.
+        follow H8.
         apply X1.
       * right.
         subst ls2.
@@ -387,7 +387,7 @@ Proof.
         repeat split.
         -- intros.
            follow100 H10.
-           follow100 H8.
+           follow H8.
            apply X1.
         -- apply X2.
         -- apply X3.
@@ -405,7 +405,7 @@ Proof.
         -- intros l r.
            repeat rewrite Str_app_assoc.
            follow H6.
-           follow100 H8.
+           follow H8.
            follow100 X1.
            finish.
         -- eapply segLRs_app,H12.
@@ -425,7 +425,7 @@ Proof.
            intros l r.
            repeat rewrite Str_app_assoc.
            follow H6.
-           follow10 H8.
+           follow H8.
            apply X1.
 Qed.
 
@@ -514,7 +514,7 @@ Proof.
     inverts H0.
     eapply progress_trans.
     2: apply IHls; eauto.
-    follow11 H5.
+    follow10 H5.
     apply H7.
 Qed.
 
@@ -661,5 +661,171 @@ Proof.
   constructor.
 Qed.
 
+Definition rcons(ls:list (DH0*DH0))(r:DH0):DH0*(list (DH0*DH0)) :=
+match ls with
+| [] => (r,[])
+| (a,b)::t => (a,lrcons b t r)
+end.
+
+Inductive segLLs: TM -> DH0 -> list (DH0*DH0) -> DH0 -> list (DH0*DH0) -> list Sym -> list Sym -> Prop :=
+| segLLs_intro tm ls2 ls3 ls4 ls2' w2 w3 w4 w5 h2 h4 h4':
+  segLRs tm ls2 w3 w4 ->
+  segLL tm h4 h2 w4 w5 ->
+  segRLs tm ls3 ls4 w5 w2 ->
+  rcons ls2 h4 = (h4',ls2') ->
+  segLLs tm h2 ls3 h4' (ls2'++ls4) w3 w2.
+
+Lemma segRLs_RR_LLs tm ls3 ls4 w1 w2 w3 h1 h2 h3 h4:
+  segRR tm h1 h3 w1 w3 ->
+  segLLs tm h2 ls3 h4 ls4 w3 w2 ->
+  segRLs  tm ((h1,h2)::ls3) ((h3,h4)::ls4) w1 w2.
+Proof.
+  intros I1 I2.
+  inverts I2.
+  destruct ls2 as [|[a b] ls2].
+  - cbn in H2.
+    inverts H2.
+    cbn.
+    change ((h3,h4)::ls1) with (lrcons h3 [] h4 ++ ls1).
+    eapply segRLs_lrcons; eauto.
+  - cbn in H2.
+    inverts H2.
+    change ((h3,h4)::lrcons b ls2 h5++ls1) with (lrcons h3 ((h4,b)::ls2) h5 ++ ls1).
+    eapply segRLs_lrcons; eauto.
+Qed.
+
+Lemma segLLs_LR_LLs tm ls1 ls2 w1 w2 w3 h1 h2 h3 h4:
+  segLR tm h2 h3 w1 w3 ->
+  segLLs tm h1 ls1 h4 ls2 w3 w2 ->
+  segLLs tm h1 ls1 h2 ((h3,h4)::ls2) w1 w2.
+Proof.
+  intros I1 I2.
+  inverts I2.
+  change ((h3,h4)::ls2'++ls4) with (((h3,h4)::ls2')++ls4).
+  econstructor; eauto.
+  1: econstructor; eauto.
+  cbn.
+  destruct ls0 as [|[a b] ls0]; cbn in *; inverts H2; trivial.
+Qed.
+
+Lemma segLLs_LL_RLs tm ls1 ls2 w1 w2 w3 h1 h2:
+  segLL tm h2 h1 w1 w3 ->
+  segRLs tm ls1 ls2 w3 w2 ->
+  segLLs tm h1 ls1 h2 ls2 w1 w2.
+Proof.
+  intros I1 I2.
+  change ls2 with ([]++ls2).
+  econstructor; eauto.
+  1: constructor.
+  trivial.
+Qed.
+
+Local Ltac unfold_segXX :=
+  unfold segRR,segRL,segLL,segLR in *;
+  cbn in *;
+  intros;
+  simpl_tape.
+
+Lemma evstep_segRLs_trans tm hR hR' hL ls1 ls2 w1 w1' w2:
+  (forall l r,
+  l {{{ (hR,R) }}} w1 *> r -[ tm ]->*
+  l {{{ (hR',R) }}} w1' *> r) ->
+  segRLs tm ((hR',hL)::ls1) ls2 w1' w2 ->
+  segRLs tm ((hR,hL)::ls1) ls2 w1 w2.
+Proof.
+  intros I1 I2.
+  inverts I2.
+  - eapply segRLs_S.
+    2: eassumption.
+    unfold_segXX.
+    follow I1.
+    follow10 H6.
+    finish.
+  - eapply segRLs_lrcons.
+    2,3,4: eassumption.
+    unfold_segXX.
+    follow I1.
+    follow H2.
+    finish.
+Qed.
+
+Lemma segRLs_trans_1 tm QR qR QL qL hL m0 w0 w1 w2 w3 ls1 ls2:
+  segRLs tm [((QR,qR),(QL,qL))] ls1 w1 w2 ->
+  segRLs tm [((QL,w0),hL)] ls2 (m0::qL++w2) w3 ->
+  segRLs tm [((QR,qR++m0::w0),hL)] (ls1++ls2) w1 w3.
+Proof.
+  intros I1 I2.
+  inverts I1.
+  - inverts H7.
+    inverts I2.
+    + inverts H8.
+      eapply segRLs_S.
+      2: constructor.
+      destruct hL as [QL' qL'].
+      unfold_segXX.
+      follow11 H6.
+      specialize (H7 l r).
+      rewrite Str_app_assoc in H7.
+      apply H7.
+    + inverts H10.
+      eapply segRLs_lrcons.
+      4: constructor.
+      * unfold_segXX.
+        follow100 H6.
+        specialize (H2 l r).
+        rewrite Str_app_assoc in H2.
+        apply H2.
+      * eassumption.
+      * eassumption.
+  - inverts H9.
+    inverts I2.
+    + inverts H10.
+      rewrite app_nil_r.
+      destruct h3 as [Q3 q3].
+      destruct h4 as [Q4 q4].
+      destruct hL as [Q5 q5].
+      eapply segRLs_lrcons.
+      4: constructor.
+      1: {
+        unfold_segXX.
+        follow H2.
+        rewrite <-(Str_app_assoc w6).
+        finish.
+      }
+      2: eapply segLRs_app; eassumption.
+      1: {
+        unfold_segXX.
+        follow H4.
+        specialize (H9 l r).
+        rewrite Str_app_assoc in H9.
+        follow100 H9.
+        finish.
+      }
+    + inverts H12.
+      rewrite app_nil_r.
+      rewrite app_assoc.
+      rewrite lrcons_app.
+      destruct h0 as [Q0 q0].
+      destruct h3 as [Q3 q3].
+      destruct h4 as [Q4 q4].
+      destruct h5 as [Q5 q5].
+      destruct hL as [Q6 q6].
+      eapply segRLs_lrcons.
+      4: constructor.
+      * unfold_segXX.
+        follow H2.
+        rewrite <-(Str_app_assoc w6).
+        finish.
+      * eassumption.
+      * eapply segLRs_trans.
+        1: eapply segLRs_app; eassumption.
+        eapply segLRs_S.
+        2: eassumption.
+        unfold_segXX.
+        follow H4.
+        specialize (H3 l r).
+        rewrite Str_app_assoc in H3.
+        apply H3.
+Qed.
 
 End Individual.
