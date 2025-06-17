@@ -106,6 +106,23 @@ Proof.
   econstructor.
 Qed.
 
+Lemma IncsOvs n m:
+  segRLs tm ([(hR,hL)]^^((n+1)*2^m-1)) ([(hR,hL)]^^n) (d0^^m) (d1^^m).
+Proof.
+  gen n.
+  induction m; intros.
+  - cbn.
+    replace ((n+1)*1-1) with n by lia.
+    eapply segRLs_nil.
+  - cbn[lpow].
+    cbn[Nat.pow].
+    eapply segRLs_concat.
+    2: apply IHm.
+    epose proof (Nat.pow_nonzero 2 m).
+    replace ((n+1)*(2*2^m)-1) with (((n+1)*2^m-1)*2+1) by lia.
+    eapply Incs'.
+Qed.
+
 Lemma Mul2 n:
   segRLs tm ([(hR,hL)]^^(n*2)) ([(hR,hL)]^^n) d1 d1.
 Proof.
@@ -114,6 +131,23 @@ Proof.
   cbn.
   eapply segRLs_S'; eauto.
   eapply segRLs_S; eauto.
+Qed.
+
+Lemma Ovs n m:
+  segRLs tm ([(hR,hL)]^^(n*2^m)) ([(hR,hL)]^^n) (d1^^m) (d1^^m).
+Proof.
+  gen n.
+  induction m; intros.
+  - cbn.
+    replace (n*1) with n by lia.
+    eapply segRLs_nil.
+  - cbn[lpow].
+    cbn[Nat.pow].
+    eapply segRLs_concat.
+    2: apply IHm.
+    epose proof (Nat.pow_nonzero 2 m).
+    replace (n*(2*2^m)) with ((n*2^m)*2) by lia.
+    eapply Mul2.
 Qed.
 
 Lemma Incs n:

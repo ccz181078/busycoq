@@ -394,6 +394,15 @@ Proof.
   lia.
 Qed.
 
+Lemma cadd_ge a b c v1:
+  c-b=v1 ->
+  c>=b ->
+  a>=v1 ->
+  b+a>=c.
+Proof.
+  lia.
+Qed.
+
 Lemma subc_ge a b c v1:
   b+c=v1 ->
   a>=v1 ->

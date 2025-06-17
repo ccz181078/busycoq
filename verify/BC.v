@@ -358,3 +358,228 @@ Qed.
 
 End TM4.
 
+
+Module TM5.
+
+Definition tm := Eval compute in (TM_from_str "1RB1LE_1RC0RE_0RD0RC_1LD1LA_1RF0LA_---1RE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c r :=
+  l <* <[1;1;0;1]^^a <* [0] <* [1;1]^^b {{E}}> [1]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l a (1+b) (2+c) r -->*
+  S1 l (1+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 l a b c r:
+  S1 l a b (b*2+c) r -->*
+  S1 l (b+a) 0 c r.
+Proof.
+  gen l a c r.
+  ind b Inc1.
+Qed.
+
+Lemma LInc l a r:
+  l <* [0] <* [1;1]^^(2+a) <{{A}} [1]^^(a*2+1) *> r -->*
+  l <* <[1;1;0;1]^^(1+a) <* [1;1] {{C}}> r.
+Proof.
+  mid (S1 (l<*<[1;1;0;1]) 0 a (a*2+1) r).
+  1: es.
+  follow Incs1.
+  unfold S1.
+  es.
+Qed.
+
+Definition P a b' :=
+  forall l n,
+  l <* <[1;1;0;1]^^a <* [1;1] {{C}}> [1]^^n *> 0inf -->*
+  l <* [1]^^(a*2+1) <{{A}} [1]^^(b'+n) *> 0inf.
+
+Lemma P_S a b':
+  a*2+1<=b' ->
+  P (a+1) b' ->
+  P (a+1+1) (b'*2-(a*2+1)).
+Proof.
+  unfold P.
+  intros Hb HP l n.
+  rewrite (lpow_add _ (a+1) 1),Str_app_assoc.
+  follow HP.
+  replace b' with (a*2+1+(b'-(a*2+1))) by lia.
+  mid (l<*[1;1]<*[0]<*[1;1]^^(2+a)<{{A}} [1]^^(a*2+1)*>[1]^^(b'-(a*2+1)+n)*>0inf).
+  1: es.
+  follow LInc.
+  rewrite (Nat.add_comm 1 a).
+  follow HP.
+  replace (a*2+1+(b'-(a*2+1))) with b' by lia.
+  replace (b'+(b'-(a*2+1)+n)) with (b'*2-(a*2+1)+n) by lia.
+  es.
+Qed.
+
+Definition S0 a b :=
+  0inf <* <[1;1;0;1]^^a <* [1;1] {{C}}> [1]^^b *> 0inf.
+
+Lemma BigStep a b' n:
+  (2+a)*2+1<=b' ->
+  P (a+1) b' ->
+  S0 (a+1) n -->+
+  S0 (a+1+1) (b'-((2+a)*2+1)+n).
+Proof.
+  unfold P,S0.
+  intros Hb HP.
+  follow HP.
+  remember ((2+a)*2+1) as v1.
+  replace b' with (v1+(b'-(v1))) by lia.
+  es; er.
+  mid (S1 0inf 0 (2+a) v1 ([1]^^(b'-v1+n)*>0inf)).
+  1: es.
+  subst v1.
+  follow Incs1.
+  remember ((2+a)*2+1) as v1.
+  replace (v1+(b'-(v1))) with b' by lia.
+  unfold S1.
+  es.
+Qed.
+
+Definition S '(a,n) := S0 (a+1) n.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (1,2)%nat).
+  1: unfold S,S0; solve_init.
+  eapply progress_nonhalt_cond with (P:=fun '(a,n) => exists b', a*2+5<=b' /\ P (a+1) b').
+  2: exists 13; split; try lia.
+  2: unfold P; es.
+  intros [a n] [b' [Hb HP]].
+  eexists (a+1,_).
+  split.
+  - unfold S.
+    apply BigStep.
+    2: apply HP.
+    lia.
+  - unshelve epose proof (P_S _ _ _ HP) as HP'.
+    1: lia.
+    eexists; split.
+    2: apply HP'.
+    lia.
+Qed.
+
+End TM5.
+
+
+Module TM6.
+
+Definition tm := Eval compute in (TM_from_str "1RB0RE_0RC0RB_1LC1LD_1RA1LE_1RF0LD_---1RE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c r :=
+  l <* <[1;1;0;1]^^a <* [0] <* [1;1]^^b {{E}}> [1]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l a (1+b) (2+c) r -->*
+  S1 l (1+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 l a b c r:
+  S1 l a b (b*2+c) r -->*
+  S1 l (b+a) 0 c r.
+Proof.
+  gen l a c r.
+  ind b Inc1.
+Qed.
+
+Lemma LInc l a r:
+  l <* [0] <* [1;1]^^(2+a) <{{D}} [1]^^(a*2+1) *> r -->*
+  l <* <[1;1;0;1]^^(1+a) <* [1;1] {{B}}> r.
+Proof.
+  mid (S1 (l<*<[1;1;0;1]) 0 a (a*2+1) r).
+  1: es.
+  follow Incs1.
+  unfold S1.
+  es.
+Qed.
+
+Definition P a b' :=
+  forall l n,
+  l <* <[1;1;0;1]^^a <* [1;1] {{B}}> [1]^^n *> 0inf -->*
+  l <* [1]^^(a*2+1) <{{D}} [1]^^(b'+n) *> 0inf.
+
+Lemma P_S a b':
+  a*2+1<=b' ->
+  P (a+1) b' ->
+  P (a+1+1) (b'*2-(a*2+1)).
+Proof.
+  unfold P.
+  intros Hb HP l n.
+  rewrite (lpow_add _ (a+1) 1),Str_app_assoc.
+  follow HP.
+  replace b' with (a*2+1+(b'-(a*2+1))) by lia.
+  mid (l<*[1;1]<*[0]<*[1;1]^^(2+a)<{{D}} [1]^^(a*2+1)*>[1]^^(b'-(a*2+1)+n)*>0inf).
+  1: es.
+  follow LInc.
+  rewrite (Nat.add_comm 1 a).
+  follow HP.
+  replace (a*2+1+(b'-(a*2+1))) with b' by lia.
+  replace (b'+(b'-(a*2+1)+n)) with (b'*2-(a*2+1)+n) by lia.
+  es.
+Qed.
+
+Definition S0 a b :=
+  0inf <* <[1;1;0;1]^^a <* [1;1] {{B}}> [1]^^b *> 0inf.
+
+Lemma BigStep a b' n:
+  (2+a)*2+1<=b' ->
+  P (a+1) b' ->
+  S0 (a+1) n -->+
+  S0 (a+1+1) (b'-((2+a)*2+1)+n).
+Proof.
+  unfold P,S0.
+  intros Hb HP.
+  follow HP.
+  remember ((2+a)*2+1) as v1.
+  replace b' with (v1+(b'-(v1))) by lia.
+  es; er.
+  mid (S1 0inf 0 (2+a) v1 ([1]^^(b'-v1+n)*>0inf)).
+  1: es.
+  subst v1.
+  follow Incs1.
+  remember ((2+a)*2+1) as v1.
+  replace (v1+(b'-(v1))) with b' by lia.
+  unfold S1.
+  es.
+Qed.
+
+Definition S '(a,n) := S0 (a+1) n.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (1,7)%nat).
+  1: unfold S,S0; solve_init.
+  eapply progress_nonhalt_cond with (P:=fun '(a,n) => exists b', a*2+5<=b' /\ P (a+1) b').
+  2: exists 13; split; try lia.
+  2: unfold P; es.
+  intros [a n] [b' [Hb HP]].
+  eexists (a+1,_).
+  split.
+  - unfold S.
+    apply BigStep.
+    2: apply HP.
+    lia.
+  - unshelve epose proof (P_S _ _ _ HP) as HP'.
+    1: lia.
+    eexists; split.
+    2: apply HP'.
+    lia.
+Qed.
+
+End TM6.
+
+
