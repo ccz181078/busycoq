@@ -207,6 +207,45 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma sideRLs_concat_1 [tm hR hL n l1 l2 r1 r2]:
+  sideRLs tm ([(hR,hL)]^^n) r1 r2 ->
+  sideRLs (flip tm) ([(hL,hR)]^^n) l1 l2 ->
+  l1 {{{ (hR,R) }}} r1 -[tm]->*
+  l2 {{{ (hR,R) }}} r2.
+Proof.
+  intros HR HL.
+  destruct n.
+  - inverts HR.
+    inverts HL.
+    finish.
+  - rewrite <-lrcons_lpow1 in HR by lia.
+    replace (S n-1) with n in HR by lia.
+    replace (S n) with (n+1) in HL by lia.
+    rewrite lpow_add in HL.
+    epose proof (sideRLs_split HL) as [l3 [HL1 HL2]].
+    follow100 (sideRLs_concat HL1 HR).
+    inverts HL2.
+    inverts H5.
+    unfold sideRL in H4.
+    specialize (H4 r2).
+    apply progress_evstep.
+    destruct hR,hL.
+    apply (unflip_progress _ _ _ H4).
+Qed.
+
+Lemma sideRLs_concat_1L [tm hR hL n l1 l2 r1 r2]:
+  sideRLs tm ([(hR,hL)]^^n) r1 r2 ->
+  sideRLs (flip tm) ([(hL,hR)]^^n) l1 l2 ->
+  l1 {{{ (hL,L) }}} r1 -[tm]->*
+  l2 {{{ (hL,L) }}} r2.
+Proof.
+  intros HR HL.
+  rewrite <-(flip_involutive tm) in HR.
+  epose proof (sideRLs_concat_1 HL HR) as H.
+  destruct hR,hL.
+  apply (unflip_evstep _ _ _ H).
+Qed.
+
 
 Module UC2.
 Section UnaryCounter2.
