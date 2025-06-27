@@ -1,114 +1,158 @@
 # BusyCoq
 
-Verified implementations of [Busy Beaver deciders][decider]. The computation
-is split into two parts:
+This project contains partial proof of [BB(6)](https://wiki.bbchallenge.org/wiki/BB(6)), BB(2,5) and BB(3,3).
 
- - First, an untrusted decider, written in Rust, tries to decide whether
-   each machine halts. When it succeeds, it generates a *certificate*.
- - Then, a *verifier*, proven correct in Coq and extracted to OCaml,
-   checks each certificate and makes sure that it is correct.
-   A Coq theorem guarantees that if the verifier accepts a certificate, then
-   the corresponding machine doesn't halt.
+We focus on proving whether each TM of given size halt or not, and we don't care about the step count or sigma score for simplicity.
 
-[decider]: https://bbchallenge.org/method#deciders
+First, there are some proven correct [deciders](https://wiki.bbchallenge.org/wiki/Decider), that can decide whether a TM halts (or fail to decide). We run deciders to solve most of the TMs.
 
-## Implemented deciders
+Then, for the rest of the TMs, we can write individual proof for them. If a TM (up to equivalence) haven't been proven, it become a holdout.
 
- - Cyclers
- - Translated Cyclers
- - Backwards Reasoning
- - Bouncers
+For BB(6), there're about 3300 holdouts, while about 200 individual proofs haven't been translated to Rocq.
 
-## Individual machines
+For BB(2,5), there're about 70 holdouts, while about 10 individual proofs haven't been translated to Rocq.
 
-Apart from deciders, the repository includes manual proofs for some machines
-considered hard to decide automatically. At the moment, these include:
+For BB(3,3), see [BB(3,3) - BusyBeaverWiki](https://wiki.bbchallenge.org/wiki/BB(3,3)).
 
- - [Skelet #1](https://www.sligocki.com/2023/03/13/skelet-1-infinite.html)
-    (due to the nature of the proof, the final computation is done by an
-    extracted OCaml program)
- - [Skelet #10](https://www.sligocki.com/2023/03/14/skelet-10.html)
- - [Skelet #15](https://www.sligocki.com/2023/02/05/shift-overflow.html)
- - Skelet #26 (proof contributed by Jason Yuen; I am not aware of
-   the informal argument being outlined anywhere)
- - [Skelet #33](https://discuss.bbchallenge.org/t/skelet-33-doesnt-halt-coq-proof/180)
-   (proof contributed by Jason Yuen)
- - [Skelet #34](https://www.sligocki.com/2023/02/02/skelet-34.html)
- - [Skelet #35](https://www.sligocki.com/2023/02/05/shift-overflow.html)
- - the five "cubic-finned" machines analyzed by Justin Blanchard
-   (bbchallenge indices 7763480, 8120967, 10756090, 11017998, and 11018487).
+The correctness of equivalence and [TNF enumeration](https://wiki.bbchallenge.org/wiki/Tree_Normal_Form) haven't been proven in Rocq.
 
-## Running the deciders
+This project is based on [meithecatte/busycoq: Busy Beaver deciders backed by Coq proof](https://github.com/meithecatte/busycoq), a framework of TM definition, simulation and deciders.
 
-Place the [seed database][seed] at `seed.dat` in the root of the repository.
-Make sure you have Rust, Coq and OCaml installed. Then,
+## Deciders
 
-```bash
-cd beaver
-cargo build --release
-time target/release/beaver decide ../seed.dat ../certs.dat
-cd ../verify
-make
-time ./verify ../seed.dat ../certs.dat ../decided.dat
-```
+This part is relatively stable, and no new decider has been proposed recently.
 
-A binary file listing the database indices of all successfully decided machines
-will be generated at `decided.dat`.
+### Inductive deciders
 
-[seed]: https://bbchallenge.org/method#download
+- [translated cycler](https://discord.com/channels/960643023006490684/1028753852238925834/1329879463751847946), O(tape size) memory and near-linear time in practice
 
-## Results
+  implemented in `TC.v`
 
-```
-Cyclers:
-  11229238 Decided
-         0 OutOfSpace
-   3092791 OutOfTime
-         0 Halted
-  74342035 NotApplicable
-Translated Cyclers:
-  73860624 Decided
-         0 OutOfSpace
-    481411 OutOfTime
-         0 Halted
-   3092791 NotApplicable
-Backwards Reasoning:
-   2035576 Decided
-    979028 OutOfSpace
-    559598 OutOfTime
-Bouncers:
-   1406032 Decided
-     23433 OutOfSpace
-    109161 OutOfTime
-         0 Halted
+- Inductive (see some sections of [Inductive_Proof_System](https://wiki.bbchallenge.org/wiki/Inductive_Proof_System))
 
-    132594 Undecided
+  use "Tape Compression" method "Nested Repeater" by default
 
-real	2m11.670s
-user	25m32.012s
-sys	0m3.364s
-```
+  also support "Fixed Length Repeater" and "Others" (requires some hints from human)
 
-Here are some results from an earlier run with higher limits (50M steps,
-64k tape cells) on the Translated Cyclers decider:
+  use "Find New Rule by Specializing Known Rules" to find rules for acceleration (rules can be nested)
 
-```
-chikara:~/dev/busycoq/beaver$ \time target/release/beaver decide
-Cyclers:
-  11229238 Decided
-         0 OutOfSpace
-   3092791 OutOfTime
-         0 Halted
-  74342035 NotApplicable
-Translated Cyclers:
-  73861173 Decided
-    138452 OutOfSpace
-    342410 OutOfTime
-         0 Halted
-   3092791 NotApplicable
-10784.09user 136.66system 15:12.51elapsed 1196%CPU (0avgtext+0avgdata 10180maxresident)k
-0inputs+2794536outputs (0major+2590minor)pagefaults 0swaps
-chikara:~/dev/busycoq/verify$ \time ./verify
-79.89user 0.41system 1:20.32elapsed 99%CPU (0avgtext+0avgdata 124288maxresident)k
-0inputs+664776outputs (0major+30600minor)pagefaults 0swaps
-```
+  this method decided "Finned", "helix", some of [bell eats counters](https://wiki.bbchallenge.org/wiki/Bell_eats_counter) and some of [sync bouncer counters](https://wiki.bbchallenge.org/wiki/Sync_bouncer_counter)
+
+  implemented in `Inductive.v`
+
+- [RWLAcc](https://discord.com/channels/960643023006490684/1239205785913790465/1333106708117196941)
+
+  see also some sections of [Inductive_Proof_System](https://wiki.bbchallenge.org/wiki/Inductive_Proof_System):
+
+  use "Tape Compression" method "Macro Machine"
+
+  use "Find New Rule by Generalizing Known Rules" to find rules for acceleration (hardcoded two layers, for shift rule and bouncer rule)
+
+  it has a low overhead when no acceleration is found
+
+  implemented in `RWLAcc.v`
+
+- Recursive record-breaking analysis (RRBA)
+
+  see also section "Recursive Record-Breaking Analysis" of [Inductive_Proof_System](https://wiki.bbchallenge.org/wiki/Inductive_Proof_System):
+
+  use "Find New Rule by Generalizing Known Rules" to find rules for acceleration (hardcoded two layers)
+
+  this method decided "shift-recursive" (including "counter balanced", "counter inverting" that were decided by MITMWFAR), and [sync bi-counter](https://wiki.bbchallenge.org/wiki/Sync_bi-counter) (like Skelet10)
+
+  implemented in `RRBA.v`
+
+- UBRRBA
+
+  similar to RRBA, but work on “Macro Machine”, only track record-breaking in one direction, and doesn't use any acceleration except shift rule and memoization
+
+  only for halting
+
+  implemented in `Inductive.v`
+
+### MitMCTL deciders: 
+
+see also [CTL](https://wiki.bbchallenge.org/wiki/Closed_Tape_Language_(CTL)) section "regular CTL"
+
+- n-gram cps with fixed length or k-LRU history
+- RWL_mod
+- CPS_LRU
+- certs from FAR
+
+implemented in `CTL.v`
+
+## Individual proofs (about 2000 TMs):
+
+This part is under active development, but the basic definitions are stable.
+
+### Methods
+
+- Proof template (had been used in [BB4](https://www.ams.org/journals/mcom/1983-40-162/S0025-5718-1983-0689479-6/)):
+
+  find a proof of nonhalt with parameters (natural numbers or tape segment) and some verifiable properties of these parameters (rules involving these parameters), and then search for parameters to prove TMs
+
+- Copy and modify existing proofs (lightweight version of proof template)
+
+- Rocq tactics for acceleration:
+
+  `es` for running TM using shift rule
+
+  `ind` for proving linear rules by induction
+
+  see `Example.v` for some examples
+
+- [Rocq framework for generalized longitudinal analysis](https://discord.com/channels/960643023006490684/1344693543788347482/1344703755815485480)
+
+### Cheat Sheet
+
+| Tactic         | Usage                                    |
+| -------------- | ---------------------------------------- |
+| `es`           | run using shift rule when possible, stop after last used shift rule or solved |
+| `follow`       | use given rule to run                    |
+| `follow10`     | use given rule to run                    |
+| `finish`       | solve `a -->* a`                         |
+| `step1`        | run one step                             |
+| `er`           | run multiple steps                       |
+| `sr`           | use shift rule                           |
+| `ind`          | prove rule by induction                  |
+| `simpl_rotate` | move repeaters towards the edge of the tape |
+| `simpl_tape`   | simplify tape                            |
+| `solve_init`   | solve `c0 -->* a` in 1000000 steps       |
+| `mid`          | run to specific configuration            |
+| `mid10`        | run to specific configuration            |
+
+| Lemma                           | Usage                         |
+| ------------------------------- | ----------------------------- |
+| `progress_nonhalt_simple`       | prove nonhalt                 |
+| `progress_nonhalt_cond`         | prove nonhalt by invariant    |
+| `sigma_score_unbounded_nonhalt` | prove nonhalt by score        |
+| `multistep_nonhalt`             | run before nonhalt            |
+| `halted_halts`                  | prove halt                    |
+| `halts_evstep`                  | run before halt               |
+| `sideRLs_trans`                 | [<br />[                      |
+| `segRLs_trans`                  | □<br />□                      |
+| `segRLs_sideRLs_concat`         | □[                            |
+| `segRLs_concat`                 | □□                            |
+| `sideRLs_concat`                | ][                            |
+| `lpow_add`                      | `a^^(b+c) = a^^b ++ a^^c`     |
+| `Str_app_assoc`                 | `(a ++ b) *> c = a *> b *> c` |
+| `lpow_mul`                      | `a^^(b*c) = (a^^c)^^b`        |
+
+
+
+## Equivalence classes
+
+Two TMs are in the same equivalence class iff they (after state/direction permutation) reach the same configuration.
+
+If any TM in the equivalence class is decided, all TMs in this class are also decided.
+
+If none of TMs in the equivalence class is decided, one TM in this class is selected to be in the holdout list and other TMs in this class are ignored.
+
+## Compile
+
+**All Rocq files are in the `verify` folder.**
+
+Use `make` to compile the framework.
+
+Individual proofs, hard-coded decider parameters for some TMs, and decider pipeline running on TNF enumeration won't be compiled by `make` because they'll take about **a month** (they depend on the part compiled by `make`, so **don't refactor anything** unless you know what you're doing).
+
