@@ -28,6 +28,20 @@ Proof.
   apply RInc_0,H.
 Qed.
 
+Lemma LBinInc_spec d1 tm QL QR qL qR:
+  (forall l r n,
+  l <* (d0 d1) <* d1^^n <{{QL}} qL *> r -[ tm ]->+
+  l <* d1 <* (d0 d1)^^n <* qR {{QR}}> r) ->
+  forall n r,
+  BinInc d1 n <{{QL}} qL *> r -[ tm ]->+
+  BinInc d1 (1+n) <* qR {{QR}}> r.
+Proof.
+  unfold BinInc.
+  intros H n l.
+  replace (N.of_nat (1+n)) with (N.succ (N.of_nat n)) by lia.
+  apply LInc_0,H.
+Qed.
+
 Lemma log2_spec' n x:
   2^n <= x < 2^(n+1) ->
   log2 (Pos.of_nat x) = n.
@@ -313,6 +327,33 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma BinDec_mulpow2sub1' d0 d1 len n i r:
+  (n+1)*2^i-1 < 2^(len+i) ->
+  BinDec d0 d1 (len+i) ((n+1)*2^i-1) r =
+  d0^^i *> BinDec d0 d1 len n r.
+Proof.
+  induction i.
+  - cbn.
+    intros H.
+    rewrite Nat.add_0_r.
+    replace ((n+1)*1-1) with (n) by lia.
+    reflexivity.
+  - replace (S i) with (i+1) by lia.
+    repeat rewrite Nat.add_assoc.
+    repeat rewrite pow2_S.
+    repeat rewrite Nat.mul_assoc.
+    pose proof (Nat.pow_nonzero 2 i) as Hpow2.
+    replace ((n+1)*2^i*2-1) with (((n+1)*2^i-1)*2+1) by lia.
+    intros H.
+    rewrite BinDec_mul2add1.
+    2: repeat rewrite Nat.pow_add_r in *; cbn in *; lia.
+    rewrite IHi.
+    2: lia.
+    simpl_tape.
+    simpl_tape.
+    reflexivity.
+Qed.
+
 Lemma BinDec_app d0 d1 ls len n r:
   n<2^(len) ->
   exists k,
@@ -397,6 +438,43 @@ Proof.
   lia.
 Qed.
 
+Lemma BinDec2_mul2add1 d0 d1 dw len n r:
+  BinDec2 d0 d1 dw len (n*2+1) r =
+  d0 *> BinDec (dw++d0) (dw++d1) len n r.
+Proof.
+  unfold BinDec2.
+  rewrite (Nat.Div0.add_mul_mod_distr_r _ 1) by lia.
+  rewrite Nat.mod_1_r.
+  rewrite Nat.div_add_l by lia.
+  rewrite Nat.add_0_r.
+  reflexivity.
+Qed.
+
+Lemma BinDec2_mulpow2sub1 d0 d1 dw len n i r:
+  (n*2+1)*2^i-1<2^(len+1+i) ->
+  BinDec2 d0 d1 dw (len+i) ((n*2+1)*2^i-1) r =
+  (d0++dw)^^i *> d1 *> BinDec (dw++d0) (dw++d1) len n r.
+Proof.
+  replace (len+1+i) with (len+i+1) by lia.
+  destruct i.
+  - replace ((n*2+1)*2^0-1) with (n*2) by (cbn; lia).
+    rewrite Nat.add_0_r.
+    intros.
+    apply BinDec2_mul2.
+  - cbn[Nat.pow].
+    pose proof (Nat.pow_nonzero 2 i).
+    replace ((n*2+1)*(2*2^i)-1) with (((n*2+1)*2^i-1)*2+1) by lia.
+    rewrite BinDec2_mul2add1.
+    replace (len+S i) with (len+1+i) by lia.
+    intros.
+    rewrite pow2_S in H0.
+    rewrite BinDec_mulpow2sub1 by lia.
+    cbn.
+    repeat rewrite Str_app_assoc.
+    rewrite lpow_rotate'.
+    reflexivity.
+Qed.
+
 Lemma BinInc_O d1:
   BinInc d1 O =
   0inf.
@@ -440,6 +518,30 @@ Proof.
   cbn.
   rewrite Str_app_assoc.
   reflexivity.
+Qed.
+
+Lemma BinInc_pow2 d1 i:
+  BinInc d1 (2^i) =
+  (d0 d1)^^i *> d1 *> 0inf.
+Proof.
+  replace (2^i) with (1*2^i) by lia.
+  rewrite BinInc_mulpow2.
+  reflexivity.
+Qed.
+
+Lemma BinInc_mulpow2sub1 d1 n i:
+  BinInc d1 ((n*2+1)*2^i-1) =
+  (d1)^^i *> (d0 d1) *> BinInc d1 n.
+Proof.
+  induction i.
+  - cbn.
+    rewrite <-BinInc_mul2.
+    f_equal; lia.
+  - replace ((n*2+1)*2^S i-1) with (((n*2+1)*2^i-1)*2+1) by (pose proof (Nat.pow_nonzero 2 i); cbn; lia).
+    rewrite BinInc_mul2add1,IHi.
+    cbn.
+    rewrite Str_app_assoc.
+    reflexivity.
 Qed.
 
 Inductive lowbit: nat->Prop :=
@@ -545,9 +647,15 @@ Ltac rw_Bin :=
   rewrite BinDec_mul2add1 ||
   rewrite BinDec_mulpow2 ||
   rewrite BinDec_mulpow2sub1 ||
+  rewrite BinDec_mulpow2sub1' ||
   rewrite BinDec2_O ||
+  rewrite BinDec2_full ||
   rewrite BinDec2_mul2 ||
+  rewrite BinDec2_mul2add1 ||
+  rewrite BinDec2_mulpow2sub1 ||
+  rewrite BinInc_pow2 ||
   rewrite BinInc_mulpow2 ||
+  rewrite BinInc_mulpow2sub1 ||
   rewrite BinInc_O ||
   rewrite BinInc_1 ||
   rewrite BinInc_mul2 ||
@@ -566,4 +674,151 @@ Ltac simpl_length :=
   rewrite length_app in * ||
   rewrite lpow_length in *);
   cbn[length] in *.
+
+Inductive lowbitS: nat->Prop :=
+| lowbitS_S x i: lowbitS ((x*2+1)*2^i-1).
+
+Lemma lowbitS_cases' n:
+  lowbitS n.
+Proof.
+  lowbit_cases (S n).
+  epose proof (Nat.pow_nonzero 2 i).
+  replace n with ((x*2+1)*2^i-1) by lia.
+  constructor.
+Qed.
+
+Ltac lowbitS_cases n :=
+  pose proof (lowbitS_cases' n) as HX;
+  inverts HX.
+
+Lemma mulpos_le_r a b c:
+  c<>O ->
+  a<=b ->
+  a<=b*c.
+Proof.
+  intros.
+  etransitivity.
+  1: apply H0.
+  replace c with (1+(c-1)) by lia.
+  rewrite Nat.mul_add_distr_l.
+  remember (b*(c-1)) as v1.
+  lia.
+Qed.
+
+Lemma muladd_lt a b c d:
+  b<>O ->
+  a+c < d ->
+  a*b+c < d*b.
+Proof.
+  intros.
+  replace b with ((b-1)+1) by lia.
+  repeat rewrite Nat.mul_add_distr_l.
+  repeat rewrite Nat.mul_1_r.
+  pose proof (Nat.mul_le_mono_pos_l a d (b-1)).
+  lia.
+Qed.
+
+Lemma nz_sub1add a b:
+  a<>O ->
+  a-1+(S b) = a+b.
+Proof. lia. Qed.
+
+Lemma add_le_l [a b c]:
+  a+b<=c ->
+  a<=c.
+Proof. lia. Qed.
+
+Lemma mulpos_le_l [a b c]:
+  a*b<=c ->
+  b<>O ->
+  a<=c.
+Proof.
+  intros H0 H.
+  replace b with (1+(b-1)) in H0 by lia.
+  rewrite Nat.mul_add_distr_l in H0.
+  pose proof (add_le_l H0).
+  lia.
+Qed.
+
+Lemma pow2sub1_lt x i j:
+  (x*2+1)*2^i-1 < j ->
+  x*2 < j.
+Proof.
+  intros H.
+  pose proof (Nat.pow_nonzero 2 i).
+  assert (H1:x*2*2^i<j) by lia.
+  eapply Nat.le_lt_trans.
+  2: apply H1.
+  apply mulpos_le_r; lia.
+Qed.
+
+Lemma lt_mul2add1 a b:
+  a<b ->
+  a*2+1<b*2.
+Proof. lia. Qed.
+
+Lemma lt_mul2 a b:
+  a<b ->
+  a*2<b*2.
+Proof. lia. Qed.
+
+Lemma lt_pow2sub1 a:
+  2^a-1<2^a.
+Proof.
+  pose proof (Nat.pow_nonzero 2 a).
+  lia.
+Qed.
+
+Lemma lt_0_pow2 a:
+  0<2^a.
+Proof.
+  pose proof (Nat.pow_nonzero 2 a).
+  lia.
+Qed.
+
+Lemma lt_add1mulpow2sub1 a b c:
+  a<c ->
+  (a+1)*2^b-1 < c*2^b.
+Proof.
+  intros.
+  pose proof (Nat.pow_nonzero 2 b).
+  assert ((a+1)*2^b<=c*2^b) by (apply Nat.mul_le_mono_pos_r; lia).
+  lia.
+Qed.
+
+Ltac solve_pow2_lt :=
+  repeat (rewrite pow2_S || rewrite Nat.pow_add_r || rewrite Nat.mul_assoc ||
+  apply lt_pow2sub1 ||
+  apply lt_0_pow2 ||
+  apply Nat.mul_pos_pos ||
+  apply lt_add1mulpow2sub1 ||
+  apply lt_sub1 || apply lt_mul2add1 || apply lt_mul2 ||
+  apply Nat.mul_lt_mono_pos_r);
+  try lia.
+
+Lemma lowbit_split m i len:
+  (m*2+1)*2^i<2^len ->
+  len=len-i-1+1+i.
+Proof.
+  intro H.
+  assert (len<=i\/i+1<=len) as E by lia.
+  destruct E as [E|E].
+  2: lia.
+  pose proof (Nat.pow_le_mono_r 2 len i).
+  lia.
+Qed.
+
+Lemma lowbit_split_lt m i len:
+  (m*2+1)*2^i<2^len ->
+  m<2^(len-i-1).
+Proof.
+  intros H.
+  epose proof (lowbit_split _ _ _ H) as H0.
+  rewrite H0 in H.
+  rewrite Nat.pow_add_r in H.
+  pose proof (Nat.pow_nonzero 2 i).
+  rewrite <-Nat.mul_lt_mono_pos_r in H by lia.
+  rewrite pow2_S in H.
+  lia.
+Qed.
 

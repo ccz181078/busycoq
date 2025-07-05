@@ -317,7 +317,7 @@ Ltac use_shift_rule :=
     match goal with
     | |- (_ <* _ ^^ _ <{{ _ }} _ -[ _ ]->* _) => shift_rule_L
     | |- (_ {{ _ }}> _ ^^ _ *> _ -[ _ ]->* _) => shift_rule_R
-    | _ => idtac "fail2"; fail
+    | _ => (*idtac "fail2";*) fail
     end in
       (eapply (x []); find_shift_rule) ||
       (eapply (x [_]); find_shift_rule) ||
@@ -606,14 +606,17 @@ match goal with
   unfold_config_expr b
 end.
 
-Ltac es :=
-  intros;
-  unfold_config;
+Ltac st :=
   repeat
   (rewrite lpow_add ||
   rewrite Str_app_assoc ||
   rewrite lpow_mul);
-  simpl_tape;
+  simpl_tape.
+
+Ltac es :=
+  intros;
+  unfold_config;
+  st;
   execute_with_shift_rule.
 
 Ltac ind n H :=
@@ -624,6 +627,114 @@ Ltac ind n H :=
     follow IHn;
     finish ].
 
+Ltac solve_halt :=
+  eapply halts_evstep; [|
+    repeat (rewrite lpow_add || rewrite lpow_mul || simpl_tape || simpl_rotate);
+    repeat (step1 || sr || simpl_rotate);
+    finish
+  ];
+  eapply halted_halts;
+  constructor.
+
+Ltac solve_seg :=
+  unfold segRL,segRR,segLL,segLR; intros; cbn;
+  (eapply evstep_progress_trans || eapply evstep_trans);
+  [ repeat (rewrite Str_app_assoc || cbn[Str_app]);
+    simpl_tape;
+    finish
+  | ];
+  (repeat (er; try sr)); finish;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  cbn[app];
+  reflexivity.
+
+Ltac solve_segRLs :=
+  repeat (
+  (eapply segRLs_S; [solve_seg |]) ||
+  (eapply segRLs_RR_LLs; [solve_seg |]) ||
+  (eapply segLLs_LR_LLs; [solve_seg |]) ||
+  (eapply segLLs_LL_RLs; [solve_seg |]) ||
+  eapply segRLs_O ||
+  rewrite lpow_add ||
+  rewrite <-List.app_assoc ||
+  rewrite lpow_rotate_list ||
+  cbn[app]).
+
+Ltac solve_sideRLs :=
+  st;
+  simpl_rotate;
+  repeat (eapply sideRLseq_S;
+  [ intros ?l;
+    unfold to_DH_config; cbn;
+    (repeat (er; try sr)) | ] ||
+  eapply sideRLseq_O).
+
+Lemma lpow_unrotate_1 n (a:Sym) r:
+  a >> [a]^^n *> r =
+  [a]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma lpow_unrotate_2 n (a a0:Sym) r:
+  a >> [a0;a]^^n *> r =
+  [a;a0]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma lpow_unrotate_3 n (a a0 a1:Sym) r:
+  a >> [a0;a1;a]^^n *> r =
+  [a;a0;a1]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma lpow_unrotate_4 n (a a0 a1 a2:Sym) r:
+  a >> [a0;a1;a2;a]^^n *> r =
+  [a;a0;a1;a2]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma lpow_unrotate_5 n (a a0 a1 a2 a3:Sym) r:
+  a >> [a0;a1;a2;a3;a]^^n *> r =
+  [a;a0;a1;a2;a3]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Lemma lpow_unrotate_6 n (a a0 a1 a2 a3 a4:Sym) r:
+  a >> [a0;a1;a2;a3;a4;a]^^n *> r =
+  [a;a0;a1;a2;a3;a4]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Ltac esx :=
+  match goal with
+  | |- forall _, _ => intro
+  | |- segRLs _ _ _ _ _ => solve_segRLs
+  | |- sideRLs _ _ _ _ => solve_sideRLs
+  | |- c0 -[ _ ]->* _ => cbn; solve_init
+  | |- _ -[ _ ]->* _ => es
+  | |- _ -[ _ ]->+ _ => es
+  | |- halts _ _ => solve_halt
+  end.
+
+Ltac toX X :=
+  repeat
+  lazymatch goal with
+  | |- (X,_) -[ _ ]->* _ => fail
+  | _ => step1 || simpl_rotate || sr
+  end.
 
 Definition Sym_from_char(x:ascii):option Sym :=
 match x with

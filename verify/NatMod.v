@@ -228,9 +228,10 @@ end.
 Ltac crefl := vm_compute; reflexivity.
 
 Ltac rw_mod_1 :=
+(*
 match goal with
 | |- ?G => idtac "rw_mod_1"; idtac G
-end;
+end;*)
 match goal with
 | |- (_ = _) = _ =>
   apply feq2; rw_mod_0
@@ -247,7 +248,7 @@ match goal with
   etransitivity; [ apply Nat.Div0.mul_mod | ];
   rw_mod_rec
 | |- (?a / ?b) mod ?c = _ =>
-  idtac "div_mod_comm";
+  (*idtac "div_mod_comm";*)
   is_nat_const b;
   is_nat_const c;
   etransitivity; [ eapply div_mod_comm; [ crefl | congruence ] | ];
@@ -256,9 +257,9 @@ match goal with
   is_nat_const a;
   is_nat_const c;
   (
-  (is_nat_const b; idtac "pow_mod_1"; rw_mod_2) +
-  ( idtac "pow_mod_2";
-    idtac a; idtac b; idtac c;
+  (is_nat_const b; (*idtac "pow_mod_1";*) rw_mod_2) +
+  ( (*idtac "pow_mod_2";
+       idtac a; idtac b; idtac c;*)
     etransitivity;
     [ eapply pow_mod;
       [ crefl | | | | | | | | ];
@@ -289,15 +290,17 @@ with
 rw_mod_0 := rw_mod_1
 with
 rw_mod_rec :=
+(*
 match goal with
 | |- ?G => idtac "rw_mod_rec"; idtac G
-end;
+end;*)
 etransitivity; [ (apply feq2; rw_mod_0) + reflexivity | ]; rw_mod_2
 with
 rw_mod_2 :=
+(*
 match goal with
 | |- ?G => idtac "rw_mod_2"; idtac G
-end;
+end;*)
 etransitivity;
 [
 match goal with
@@ -321,9 +324,9 @@ match goal with
   reflexivity
 end
 | 
-  match goal with
+  (*match goal with
   | |- ?x = _ => idtac "rw_mod_2 ret"; idtac x
-  end;
+  end;*)
   reflexivity
 ].
 
@@ -525,4 +528,44 @@ Ltac simpl_N_to_nat :=
   match goal with
   | |- ?G => simpl_N_to_nat_expr G
   end.
+
+Ltac simpl_small_nat C :=
+repeat
+match goal with
+| |- context[?a+?b] =>
+  is_nat_const a;
+  is_nat_const b;
+  eassert (X:(N.of_nat a + N.of_nat b <? N.of_nat C)%N = true) by (vm_compute; reflexivity);
+  clear X;
+  eassert (X:a+b=_) by (vm_compute; reflexivity);
+  rewrite X; clear X
+| |- context[?a-?b] =>
+  is_nat_const a;
+  is_nat_const b;
+  eassert (X:(N.of_nat a <? N.of_nat C)%N = true) by (vm_compute; reflexivity);
+  clear X;
+  eassert (X:a-b=_) by (vm_compute; reflexivity);
+  rewrite X; clear X
+| |- context[?a*?b] =>
+  is_nat_const a;
+  is_nat_const b;
+  eassert (X:(N.of_nat a * N.of_nat b <? N.of_nat C)%N = true) by (vm_compute; reflexivity);
+  clear X;
+  eassert (X:a*b=_) by (vm_compute; reflexivity);
+  rewrite X; clear X
+| |- context[?a/?b] =>
+  is_nat_const a;
+  is_nat_const b;
+  eassert (X:(N.of_nat a <? N.of_nat C)%N = true) by (vm_compute; reflexivity);
+  clear X;
+  eassert (X:a/b=_) by (vm_compute; reflexivity);
+  rewrite X; clear X
+| |- context[?a^?b] =>
+  is_nat_const a;
+  is_nat_const b;
+  eassert (X:(N.of_nat a ^ N.of_nat b <? N.of_nat C)%N = true) by (vm_compute; reflexivity);
+  clear X;
+  eassert (X:a^b=_) by (vm_compute; reflexivity);
+  rewrite X; clear X
+end.
 

@@ -2,6 +2,7 @@
 
 From Coq Require Export Lists.Streams.
 From Coq Require Import Lia.
+From Coq Require Import PeanoNat.
 From BusyCoq Require Export Permute.
 From BusyCoq Require Export Enumerate.
 Set Default Goal Selector "!".
@@ -635,6 +636,16 @@ Proof.
   constructor.
 Qed.
 
+Lemma segRLs_wall'' {tm h1 h2 w n}:
+  segRLs tm h1 h2 w w ->
+  segRLs tm (h1^^n) (h2^^n) w w.
+Proof.
+  induction n; intros.
+  1: constructor.
+  cbn.
+  eapply segRLs_trans; eauto.
+Qed.
+
 Lemma segRLs_S' {tm h1 h2 h3 h4 ls1 ls2 w1 w2 w3 w4}:
   segRR tm h1 h3 w1 w2 ->
   segLL tm h4 h2 w2 w3 ->
@@ -826,6 +837,58 @@ Proof.
         specialize (H3 l r).
         rewrite Str_app_assoc in H3.
         apply H3.
+Qed.
+
+Lemma lpow_rotate_list {A} (a0:list A) a1 b n:
+  (a1::a0)^^n ++ a1::b = a1::(a0++[a1])^^n++b.
+Proof.
+  induction n; cbn.
+  - trivial.
+  - repeat rewrite <-List.app_assoc.
+    rewrite IHn.
+    trivial.
+Qed.
+
+Lemma segRLs_addmul tm a x b c h w1 w2:
+  segRLs tm (h^^b) (h^^c) w1 w2 ->
+  segRLs tm (h^^a) h w2 w2 ->
+  segRLs tm (h^^(x*a+b)) (h^^(x+c)) w1 w2.
+Proof.
+  intros.
+  rewrite (Nat.add_comm _ b).
+  rewrite (Nat.add_comm _ c).
+  do 2 rewrite lpow_add.
+  eapply segRLs_trans.
+  1: apply H.
+  induction x; cbn[Nat.mul].
+  - cbn.
+    constructor.
+  - cbn[lpow].
+    rewrite lpow_add.
+    eapply segRLs_trans.
+    2: apply IHx.
+    apply H0.
+Qed.
+
+Lemma segRLs_addmul' tm a x b c h w1 w2:
+  x>=c ->
+  segRLs tm (h^^b) (h^^c) w1 w2 ->
+  segRLs tm (h^^a) h w2 w2 ->
+  segRLs tm (h^^((x-c)*a+b)) (h^^x) w1 w2.
+Proof.
+  intros H.
+  replace (h^^x) with (h^^(x-c+c)) by (f_equal; lia).
+  apply segRLs_addmul.
+Qed.
+
+Lemma segRLs_addmul'' tm a x b h w1 w2:
+  segRLs tm (h^^b) [] w1 w2 ->
+  segRLs tm (h^^a) h w2 w2 ->
+  segRLs tm (h^^(x*a+b)) (h^^x) w1 w2.
+Proof.
+  epose proof (segRLs_addmul tm a x b O _ _ _) as H.
+  rewrite Nat.add_0_r in H.
+  apply H.
 Qed.
 
 End Individual.
