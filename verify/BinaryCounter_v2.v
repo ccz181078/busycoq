@@ -600,6 +600,40 @@ Proof.
   lia.
 Qed.
 
+Lemma split_bound_v3 x i len:
+  (x*2+1)*2^i < 2^len*2 ->
+  (x*2+1)*2^i <> 2^len ->
+  2^i*2+x <= 2^len+1.
+Proof.
+  assert (i=O\/i=len\/len+1<=i\/O<i<len) as E by lia.
+  destruct E as [E|[E|[E|E]]].
+  - subst.
+    cbn; lia.
+  - subst.
+    destruct x; lia.
+  - epose proof (Nat.pow_le_mono_r 2 (len+1) i).
+    rewrite pow2_S in *.
+    lia.
+  - replace len with (len-i+i) by lia.
+    remember (len-i) as j.
+    repeat rewrite Nat.pow_add_r.
+    destruct i as [|i]. 1: lia.
+    destruct j as [|j]. 1: lia.
+    repeat rewrite Nat.pow_succ_r by lia.
+    intros.
+    remember (2^i) as a.
+    remember (2^j) as b.
+    assert ((x*4+2)*a<=b*8*a) as E1 by lia.
+    rewrite <-Nat.mul_le_mono_pos_r in E1 by lia.
+    assert (a*2+b<=a*b*2+1). {
+      destruct b.
+      1: lia.
+      pose proof (Nat.le_mul_r b a).
+      lia.
+    }
+    lia.
+Qed.
+
 Lemma le_pow2_v1 a b c:
   a <= b ->
   a <= b*(2^c).
@@ -821,4 +855,126 @@ Proof.
   rewrite pow2_S in H.
   lia.
 Qed.
+
+Module BinDigits.
+Inductive BinDigit := D0 | D1.
+Section BinDigit_spec.
+Hypothesis d0 d1: list Sym.
+Definition mp(x:BinDigit) :=
+match x with
+| D0 => d0
+| D1 => d1
+end.
+Fixpoint val1(ls:list BinDigit) :=
+match ls with
+| [] => O
+| D0::t => val1 t * 2
+| D1::t => val1 t * 2 + 1
+end.
+Fixpoint val0(ls:list BinDigit) :=
+match ls with
+| [] => O
+| D1::t => val0 t * 2
+| D0::t => val0 t * 2 + 1
+end.
+
+Lemma val_spec ls:
+  val0 ls + val1 ls + 1 = 2^length ls.
+Proof.
+  induction ls; cbn.
+  1: trivial.
+  destruct a; lia.
+Qed.
+
+Lemma val0_app_ge a b c:
+  val0 b >= c ->
+  val0 (a++b) >= c.
+Proof.
+  intros H.
+  induction a as [|[|] a]; cbn; lia.
+Qed.
+
+Lemma val1_app_ge a b c:
+  val1 b >= c ->
+  val1 (a++b) >= c.
+Proof.
+  intros H.
+  induction a as [|[|] a]; cbn; lia.
+Qed.
+
+Lemma BinDec_app len n r ls:
+  n<2^len ->
+  BinDec d0 d1 (len+length ls) (n*2^(length ls)+val0 ls) r =
+  BinDec d0 d1 len n r <* flat_map mp ls.
+Proof.
+  intros.
+  induction ls.
+  - cbn.
+    f_equal; lia.
+  - cbn[length].
+    pose proof (val_spec ls).
+    remember (length ls) as v1.
+    cbn[flat_map].
+    rewrite Str_app_assoc.
+    rewrite <-IHls.
+    cbn[Nat.pow].
+    cbn[val0].
+    replace (len+S v1) with (len+v1+1) by lia.
+    pose proof (Nat.mul_le_mono_pos_r (n+1) (2^len) (2^v1)).
+    destruct a.
+    + replace (n*(2*2^v1)+(val0 ls*2+1)) with ((n*2^v1+val0 ls)*2+1) by lia.
+      rewrite BinDec_mul2add1.
+      2: solve_pow2_lt.
+      reflexivity.
+    + replace (n*(2*2^v1)+(val0 ls*2)) with ((n*2^v1+val0 ls)*2) by lia.
+      rewrite BinDec_mul2.
+      2: solve_pow2_lt.
+      reflexivity.
+Qed.
+End BinDigit_spec.
+End BinDigits.
+
+Lemma muladd_mul_lt a0 a b c:
+  a0<a ->
+  c<b ->
+  a0*b+c < a*b.
+Proof.
+  intros.
+  replace a with (a0+(a-a0-1)+1) by lia.
+  do 2 rewrite Nat.mul_add_distr_r.
+  remember (a0*b) as v1.
+  remember ((a-a0-1)*b) as v2.
+  lia.
+Qed.
+
+Ltac pp_le_mul_r a b :=
+  tryif
+  match goal with
+  | [ H1: b<>O -> a <= a*b |- _] => idtac
+  end then fail else
+  pose proof (Nat.le_mul_r a b).
+
+Ltac zify_le_mul_r :=
+  repeat
+  multimatch goal with
+  | [ H: context[?a*?b] |- _ ] =>
+    pp_le_mul_r a b
+  | |- context[?a*?b] => 
+    pp_le_mul_r a b
+  end.
+
+Ltac rp_pow2sub1 a :=
+  is_var a;
+  let x := fresh "p" in
+  remember (2^a-1) as x;
+  replace (2^a) with (x+1) in * by lia.
+
+Ltac zify_pow2sub1 :=
+  repeat
+  multimatch goal with
+  | [ H: context[2^?a] |- _ ] =>
+    rp_pow2sub1 a
+  | |- context[2^?a] => 
+    rp_pow2sub1 a
+  end.
 

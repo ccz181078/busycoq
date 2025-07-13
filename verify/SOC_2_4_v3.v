@@ -1,4 +1,4 @@
-From BusyCoq Require Import Individual62 BinaryCounter_v2 SimplTape.
+From BusyCoq Require Import Individual62 BinaryCounter_v2 SimplTape ES_v2.
 Require Import ZifyNat.
 Require Import Lia PeanoNat String.
 
@@ -14,56 +14,6 @@ Definition LC len n := BinDec ld0 ld1 len n ldh.
 Definition RC n := BinInc rd1 n.
 Definition RC1 len n m := BinDec2 [0] [1] [0;0;0] len n (rd1 *> BinInc rd1 m). 
 Definition RC2 len n m := BinDec2 [0] [1] [0;0;0] len n ([0;0] *> rd1 *> BinInc rd1 m). 
-
-Ltac rw_unrotate_0 :=
-  (rewrite lpow_unrotate_1 ||
-  rewrite lpow_unrotate_2 ||
-  rewrite lpow_unrotate_3 ||
-  rewrite lpow_unrotate_4 ||
-  rewrite lpow_unrotate_5 ||
-  rewrite lpow_unrotate_6).
-
-Ltac rw_unrotate :=
-  cbn;
-  repeat rw_unrotate_0.
-
-Ltac es1 :=
-  (apply evstep_refl ||
-  use_shift_rule ||
-  (step1) ||
-  (simpl_rotate; step1)).
-
-Ltac urstep :=
-  rw_unrotate; es1.
-
-Lemma DH_R_def (q:Q) (l r:side) (m:Sym):
-  l {{q}}> (m>>r) = (q,(l,m,r)).
-Proof.
-  reflexivity.
-Qed.
-
-Ltac fold_DH_R :=
-  (
-  match goal with
-  | |- context[(?q,(?l,?m,?r))] =>
-    lazymatch m with
-    | hd _ => fail
-    | _ => rewrite <-(DH_R_def q l r m)
-    end
-  end).
-
-Ltac rw_unrotate_r :=
-  cbn;
-  repeat (
-  fold_DH_R ||
-  rw_unrotate_0).
-
-Ltac urstep_r :=
-  rw_unrotate_r;
-  es1.
-
-Ltac es := intros; st; repeat urstep.
-Ltac es_r := intros; st; repeat urstep_r.
 
 Ltac follow' H :=
   intros;
@@ -3973,4 +3923,2582 @@ Proof.
 Qed.
 End TM18.
 
+
+Module V4.
+Section V4.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n m,
+  ldh <* ld1^^n <| rd0^^m *> rd1 *> r -->+
+  ldh <* ld0^^n <* ld1^^(m*2) <* ld1 <* ld1 |> [1] *> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) <* ld1 |> [1] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2+1) (((k*2+1)*2^(lenR*2)-1)*2) |> RC1 i ((2^i-1)*2) m.
+Proof.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2+1) (((k*2+1)*2^(lenR*2)-1)*2) |> RC 1.
+Proof.
+  solve_rule ROv1.
+Qed.
+
+Lemma LC_Ov lenL n i i0:
+  LC lenL O <| RC ((((n*2+1)*2^i0)*2+1)*2^i) -->+
+  LC (lenL+i*2+1+1) ((((2^lenL-1)*2^(i*2))*2)*2) |> RC1 i0 ((2^i0-1)*2) n.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma LC_Ov_0 lenL i:
+  LC lenL O <| RC ((0*2+1)*2^i) -->+
+  LC (lenL+i*2+1+1) ((((2^lenL-1)*2^(i*2))*2)*2) |> RC 1.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => 1 <= k+n < 2^lenL
+| cfgR lenL k n => 1 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => n+m <= k < 2^lenL /\ n<2^(lenR+1)
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      lowbit_cases x.
+      * eexists (cfgR _ _ _). split.
+        1: apply LC_Ov_0.
+        repeat split; try lia.
+        2: solve_pow2_lt.
+        apply Nat.le_add_l.
+      * eexists (cfgR1 _ _ _ _ _). split.
+        1: apply LC_Ov.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v1 x0 i0 lenL).
+        pose proof (Nat.le_mul_r (2^lenL-1) (2^(i*2))).
+        pose proof (Nat.le_mul_r ((x0*2+1)*2^i0*2+1) (2^(i))).
+        lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR1 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V4.
+End V4.
+
+Module TM184.
+Definition tm := Eval compute in (TM_from_str "1LB0LA_1RC1LB_1RE1RD_1RA0RC_1RF---_1LA1RB").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4.nonhalt _ B F [1;1;0;0] [1;1;0;1] 5 17 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM184.
+
+Module TM185.
+Definition tm := Eval compute in (TM_from_str "1RB0RD_1LC0LB_1RD1LC_1RE1RA_1RF---_1LB1RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4.nonhalt _ C F [1;1;0;0] [1;1;0;1] 2 1 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM185.
+
+Module TM186.
+Definition tm := Eval compute in (TM_from_str "1LB1RC_1LC0LB_1RD1LC_1RF1RE_0RA0RD_1RA---").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4.nonhalt _ C A [1;1;0;0] [1;1;0;1] 2 1 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM186.
+
+Module TM187.
+Definition tm := Eval compute in (TM_from_str "1RB---_1LC1RD_1LD0LC_1RE1LD_1RA1RF_0RB0RE").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4.nonhalt _ D B [1;1;0;0] [1;1;0;1] 3 1 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM187.
+
+Module TM188.
+Definition tm := Eval compute in (TM_from_str "1LB0LA_1RC1LB_1RF1RD_0RE0RC_1LA1RB_1RE---").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4.nonhalt _ B E [1;1;0;0] [1;1;0;1] 5 15 3).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM188.
+
+Module TM195.
+Definition tm := Eval compute in (TM_from_str "1RB0RE_1LC0LB_1LB1RD_1RE1LD_1RF1RA_1RC---").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4.nonhalt _ D C [1;1;0;0] [1;1;0;1] 6 49 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM195.
+
+
+Module V4a.
+Section V4a.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n m,
+  ldh <* ld1^^n <| rd0^^m *> rd1 *> r -->+
+  ldh <* ld0^^n <* ld1 <* ld0^^(m*2) <* ld0 |> [1] *> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) <* ld1 |> [1] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2+1) (((k*2+1)*2^(lenR*2)-1)*2) |> RC1 i ((2^i-1)*2) m.
+Proof.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2+1) (((k*2+1)*2^(lenR*2)-1)*2) |> RC 1.
+Proof.
+  solve_rule ROv1.
+Qed.
+
+Lemma LC_Ov lenL n i i0:
+  LC lenL O <| RC ((((n*2+1)*2^i0)*2+1)*2^i) -->+
+  LC (lenL+1+i*2+1) (((((2^lenL-1)*2+1)*2^(i*2)-1)*2+1)) |> RC1 i0 ((2^i0-1)*2) n.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma LC_Ov_0 lenL i:
+  LC lenL O <| RC ((0*2+1)*2^i) -->+
+  LC (lenL+1+i*2+1) (((((2^lenL-1)*2+1)*2^(i*2)-1)*2+1)) |> RC 1.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => 1 <= k+n < 2^lenL
+| cfgR lenL k n => 1 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => n+m <= k < 2^lenL /\ n<2^(lenR+1)
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      lowbit_cases x.
+      * eexists (cfgR _ _ _). split.
+        1: apply LC_Ov_0.
+        repeat split; try lia.
+        1: solve_pow2_lt.
+      * eexists (cfgR1 _ _ _ _ _). split.
+        1: apply LC_Ov.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v1 x0 i0 lenL).
+        pose proof (Nat.le_mul_r (2^lenL-1) (2^(i*2))).
+        pose proof (Nat.le_mul_r ((x0*2+1)*2^i0*2+1) (2^(i))).
+        lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR1 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V4a.
+End V4a.
+
+Module TM189.
+Definition tm := Eval compute in (TM_from_str "1LB1RC_1LC0LB_1RD1LC_1RF1RE_0RB0RD_1RA---").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4a.nonhalt _ C A [1;1;0;0] [1;1;0;1] 6 53 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM189.
+
+Module TM190.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_1RC---_1LD1RE_1LE0LD_1RA1LE_0RD0RA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4a.nonhalt _ E C [1;1;0;0] [1;1;0;1] 3 6 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM190.
+
+Module TM191.
+Definition tm := Eval compute in (TM_from_str "1RB---_1LC1RD_1LD0LC_1RE1LD_1RA1RF_1RF0RE").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4a.nonhalt _ D B [1;1;0;0] [1;1;0;1] 5 22 0).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM191.
+
+Module TM192.
+Definition tm := Eval compute in (TM_from_str "1LB1RC_1LC0LB_1RD1LC_1RF1RE_1RE0RD_1RA---").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4a.nonhalt _ C A [1;1;0;0] [1;1;0;1] 6 53 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM192.
+
+Module TM193.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_1RC---_1LD1RE_1LE0LD_1RA1LE_1RF0RA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4a.nonhalt _ E C [1;1;0;0] [1;1;0;1] 3 6 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM193.
+
+Module TM194.
+Definition tm := Eval compute in (TM_from_str "1RB1LA_1RC1RF_1RD---_1LE1RA_1LA0LE_1RF0RB").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V4a.nonhalt _ A D [1;1;0;0] [1;1;0;1] 8 183 1).
+  1-4: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM194.
+
+
+Module V2ca.
+Section V2ca.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Definition LC0 len n := BinDec ld0 ld1 len n 0inf.
+Definition LC1 len n := BinDec ld0 ld1 len n ldh.
+Definition LC len n :=
+  match len with
+  | O => 0inf
+  | S len =>
+    if n <? 2^len then
+      LC1 len n
+    else
+      LC0 len (n-2^len)
+  end.
+
+Lemma LC_mul2 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2) = LC len n <* ld1.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2-2^len*2^1) with ((n-2^len)*2) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_mul2add1 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2+1) = LC len n <* ld0.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2+1) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2+1-2^len*2^1) with ((n-2^len)*2+1) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_0 len:
+  len<>O ->
+  LC len 0 = ldh <* ld1^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  destruct (Nat.ltb_spec 0 (2^len)). 2: lia.
+  replace (S len-1) with len by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_full len:
+  len<>O ->
+  LC len (2^len-1) = 0inf <* ld0^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow].
+  destruct (Nat.ltb_spec (2*2^len-1) (2^len)). 1: lia.
+  replace (S len-1) with len by lia.
+  replace (2*2^len-1-2^len) with (2^len-1) by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_mulpow2sub1 len k i:
+  len<>O ->
+  k<2^len ->
+  LC (len+i) ((k+1)*2^i-1) =
+  LC len k <* ld0^^i.
+Proof.
+  intros.
+  induction i.
+  - cbn; f_equal; lia.
+  - replace (len+S i) with (len+i+1) by lia.
+    replace ((k+1)*2^S i-1) with (((k+1)*2^i-1)*2+1) by (cbn; lia).
+    rewrite LC_mul2add1 by solve_pow2_lt.
+    rewrite IHi.
+    reflexivity.
+Qed.
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n,
+  ldh <* ld1^^n <| r -->+
+  0inf <* ld0^^n |> [1] *> r.
+
+Hypothesis LInc':
+  forall r n,
+  0inf <* ld1^^n <| r -->+
+  ldh <* ld0^^n |> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) |> [1;0;0] *> r.
+
+Hypothesis ROv2:
+  forall l r n,
+  l |> rd1^^n *> rm3 *> r -->+
+  l <* ld1 <* ld0^^(n*2) <* ld1 |> [1;0;0] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  len<>O ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros.
+  destruct len as [|len].
+  1: lia.
+  unfold LC.
+  cbn[Nat.pow] in *.
+  destruct (Nat.ltb_spec (1+n) (2^len));
+  destruct (Nat.ltb_spec n (2^len)).
+  - apply LBinDec_spec; try lia.
+    follow' LInc.
+  - lia.
+  - replace (1+n-2^len) with O by lia.
+    replace n with (2^len-1) by lia.
+    unfold LC0,LC1.
+    rw_Bin.
+    follow' LInc'.
+  - remember (n-2^len) as v1.
+    replace (1+n-2^len) with (1+v1) by lia.
+    apply LBinDec_spec; try lia.
+    follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC2_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC2 len (1+n) m -->+
+  l <| RC2 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC2_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mul2 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma RC2_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 0 -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mul2 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma LC_Ov lenL n i:
+  lenL<>O ->
+  LC lenL O <| RC ((n*2+1)*2^i) -->+
+  LC (lenL) ((2^lenL-1)) |> RC1 i ((2^i-1)*2) n.
+Proof.
+  intros.
+  rewrite LC_0 by lia.
+  rewrite LC_full by lia.
+  destruct lenL as [|lenL]. 1: lia.
+  replace (S lenL-1) with lenL by lia.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+| cfgL2(lenL k lenR n m:nat)
+| cfgR2(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+| cfgL2 lenL k lenR n m => LC lenL k <| RC2 lenR n m
+| cfgR2 lenL k lenR n m => LC lenL k |> RC2 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => lenL<>O /\ 2 <= k+n < 2^lenL
+| cfgR lenL k n => lenL<>O /\ 2 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) /\
+  (lenR=0 -> n=0 -> m=0 -> k+1 < 2^lenL)
+| cfgL2 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR2 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) 
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      eexists (cfgR1 _ _ _ _ _). split.
+      1: apply LC_Ov; lia.
+      repeat split; try lia.
+      2: solve_pow2_lt.
+      pose proof (split_bound_v1 x i lenL).
+      lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        destruct lenR as [|lenR].
+        1: solve_pow2_lt.
+        replace (S lenR*2) with (lenR*2+2) by lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR2 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC2_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC2_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL2 _ _ _ _ _). split.
+      1: apply RC2_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V2ca.
+End V2ca.
+
+
+Module V2cb.
+Section V2cb.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Definition LC0 len n := BinDec ld0 ld1 len n 0inf.
+Definition LC1 len n := BinDec ld0 ld1 len n ldh.
+Definition LC len n :=
+  match len with
+  | O => 0inf
+  | S len =>
+    if n <? 2^len then
+      LC1 len n
+    else
+      LC0 len (n-2^len)
+  end.
+
+Lemma LC_mul2 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2) = LC len n <* ld1.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2-2^len*2^1) with ((n-2^len)*2) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_mul2add1 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2+1) = LC len n <* ld0.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2+1) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2+1-2^len*2^1) with ((n-2^len)*2+1) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_0 len:
+  len<>O ->
+  LC len 0 = ldh <* ld1^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  destruct (Nat.ltb_spec 0 (2^len)). 2: lia.
+  replace (S len-1) with len by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_full len:
+  len<>O ->
+  LC len (2^len-1) = 0inf <* ld0^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow].
+  destruct (Nat.ltb_spec (2*2^len-1) (2^len)). 1: lia.
+  replace (S len-1) with len by lia.
+  replace (2*2^len-1-2^len) with (2^len-1) by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_1:
+  LC 2 2 = 0inf <* ld1.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma LC_mulpow2sub1 len k i:
+  len<>O ->
+  k<2^len ->
+  LC (len+i) ((k+1)*2^i-1) =
+  LC len k <* ld0^^i.
+Proof.
+  intros.
+  induction i.
+  - cbn; f_equal; lia.
+  - replace (len+S i) with (len+i+1) by lia.
+    replace ((k+1)*2^S i-1) with (((k+1)*2^i-1)*2+1) by (cbn; lia).
+    rewrite LC_mul2add1 by solve_pow2_lt.
+    rewrite IHi.
+    reflexivity.
+Qed.
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n,
+  ldh <* ld1^^n <| r -->+
+  0inf <* ld1 <* ld0^^n |> [1] *> r.
+
+Hypothesis LInc':
+  forall r n,
+  0inf <* ld1^^n <| r -->+
+  ldh <* ld0^^n |> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) |> [1;0;0] *> r.
+
+Hypothesis ROv2:
+  forall l r n,
+  l |> rd1^^n *> rm3 *> r -->+
+  l <* ld1 <* ld0^^(n*2) <* ld1 |> [1;0;0] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  len<>O ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros.
+  destruct len as [|len].
+  1: lia.
+  unfold LC.
+  cbn[Nat.pow] in *.
+  destruct (Nat.ltb_spec (1+n) (2^len));
+  destruct (Nat.ltb_spec n (2^len)).
+  - apply LBinDec_spec; try lia.
+    follow' LInc.
+  - lia.
+  - replace (1+n-2^len) with O by lia.
+    replace n with (2^len-1) by lia.
+    unfold LC0,LC1.
+    rw_Bin.
+    follow' LInc'.
+  - remember (n-2^len) as v1.
+    replace (1+n-2^len) with (1+v1) by lia.
+    apply LBinDec_spec; try lia.
+    follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC2_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC2 len (1+n) m -->+
+  l <| RC2 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC2_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mul2 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma RC2_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 0 -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mul2 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma LC_Ov lenL n i:
+  lenL<>O ->
+  LC lenL O <| RC ((n*2+1)*2^i) -->+
+  LC (2+(lenL-1)) ((2+1)*2^(lenL-1)-1) |> RC1 i ((2^i-1)*2) n.
+Proof.
+  intros.
+  rewrite LC_0 by lia.
+  rewrite LC_mulpow2sub1 by lia.
+  rewrite LC_1.
+  destruct lenL as [|lenL]. 1: lia.
+  replace (S lenL-1) with lenL by lia.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+| cfgL2(lenL k lenR n m:nat)
+| cfgR2(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+| cfgL2 lenL k lenR n m => LC lenL k <| RC2 lenR n m
+| cfgR2 lenL k lenR n m => LC lenL k |> RC2 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => lenL<>O /\ 2 <= k+n < 2^lenL
+| cfgR lenL k n => lenL<>O /\ 2 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) /\
+  (lenR=0 -> n=0 -> m=0 -> k+1 < 2^lenL)
+| cfgL2 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR2 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) 
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      eexists (cfgR1 _ _ _ _ _). split.
+      1: apply LC_Ov; lia.
+      repeat split; try lia.
+      2,3: solve_pow2_lt.
+      pose proof (split_bound_v1 x i lenL).
+      destruct lenL as [|lenL]. 1: lia.
+      replace (S lenL-1) with lenL in * by lia.
+      cbn[Nat.pow] in *.
+      lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        destruct lenR as [|lenR].
+        1: solve_pow2_lt.
+        replace (S lenR*2) with (lenR*2+2) by lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR2 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC2_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC2_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL2 _ _ _ _ _). split.
+      1: apply RC2_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V2cb.
+End V2cb.
+
+
+Module V2cc.
+Section V2cc.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Definition LC0 len n := BinDec ld0 ld1 len n 0inf.
+Definition LC1 len n := BinDec ld0 ld1 len n ldh.
+Definition LC len n :=
+  match len with
+  | O => 0inf
+  | S len =>
+    if n <? 2^len then
+      LC1 len n
+    else
+      LC0 len (n-2^len)
+  end.
+
+Lemma LC_mul2 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2) = LC len n <* ld1.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2-2^len*2^1) with ((n-2^len)*2) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_mul2add1 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2+1) = LC len n <* ld0.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2+1) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2+1-2^len*2^1) with ((n-2^len)*2+1) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_0 len:
+  len<>O ->
+  LC len 0 = ldh <* ld1^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  destruct (Nat.ltb_spec 0 (2^len)). 2: lia.
+  replace (S len-1) with len by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_full len:
+  len<>O ->
+  LC len (2^len-1) = 0inf <* ld0^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow].
+  destruct (Nat.ltb_spec (2*2^len-1) (2^len)). 1: lia.
+  replace (S len-1) with len by lia.
+  replace (2*2^len-1-2^len) with (2^len-1) by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_mulpow2sub1 len k i:
+  len<>O ->
+  k<2^len ->
+  LC (len+i) ((k+1)*2^i-1) =
+  LC len k <* ld0^^i.
+Proof.
+  intros.
+  induction i.
+  - cbn; f_equal; lia.
+  - replace (len+S i) with (len+i+1) by lia.
+    replace ((k+1)*2^S i-1) with (((k+1)*2^i-1)*2+1) by (cbn; lia).
+    rewrite LC_mul2add1 by solve_pow2_lt.
+    rewrite IHi.
+    reflexivity.
+Qed.
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n,
+  ldh <* ld1^^n <| r -->+
+  0inf <* ld0^^n |> [1] *> r.
+
+Hypothesis LInc':
+  forall r n,
+  0inf <* ld1^^n <| r -->+
+  ldh <* ld0^^n |> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) |> [1;0;0] *> r.
+
+Hypothesis ROv2:
+  forall l r n,
+  l |> rd1^^n *> rm3 *> r -->+
+  l <* ld1 <* ld0^^(n*2) <* ld0 |> [1;0;0] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  len<>O ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros.
+  destruct len as [|len].
+  1: lia.
+  unfold LC.
+  cbn[Nat.pow] in *.
+  destruct (Nat.ltb_spec (1+n) (2^len));
+  destruct (Nat.ltb_spec n (2^len)).
+  - apply LBinDec_spec; try lia.
+    follow' LInc.
+  - lia.
+  - replace (1+n-2^len) with O by lia.
+    replace n with (2^len-1) by lia.
+    unfold LC0,LC1.
+    rw_Bin.
+    follow' LInc'.
+  - remember (n-2^len) as v1.
+    replace (1+n-2^len) with (1+v1) by lia.
+    apply LBinDec_spec; try lia.
+    follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC2_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC2 len (1+n) m -->+
+  l <| RC2 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC2_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2+1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mul2add1 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma RC2_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 0 -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2+1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mul2add1 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma LC_Ov lenL n i:
+  lenL<>O ->
+  LC lenL O <| RC ((n*2+1)*2^i) -->+
+  LC (lenL) ((2^lenL-1)) |> RC1 i ((2^i-1)*2) n.
+Proof.
+  intros.
+  rewrite LC_0 by lia.
+  rewrite LC_full by lia.
+  destruct lenL as [|lenL]. 1: lia.
+  replace (S lenL-1) with lenL by lia.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+| cfgL2(lenL k lenR n m:nat)
+| cfgR2(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+| cfgL2 lenL k lenR n m => LC lenL k <| RC2 lenR n m
+| cfgR2 lenL k lenR n m => LC lenL k |> RC2 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => lenL<>O /\ 2 <= k+n < 2^lenL
+| cfgR lenL k n => lenL<>O /\ 2 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) /\
+  (lenR=0 -> n=0 -> m=0 -> k+1 < 2^lenL)
+| cfgL2 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR2 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) 
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      eexists (cfgR1 _ _ _ _ _). split.
+      1: apply LC_Ov; lia.
+      repeat split; try lia.
+      2: solve_pow2_lt.
+      pose proof (split_bound_v1 x i lenL).
+      lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        destruct lenR as [|lenR].
+        1: solve_pow2_lt.
+        replace (S lenR*2) with (lenR*2+2) by lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR2 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC2_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC2_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL2 _ _ _ _ _). split.
+      1: apply RC2_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V2cc.
+End V2cc.
+
+
+Module V2cd.
+Section V2cd.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Definition LC0 len n := BinDec ld0 ld1 len n 0inf.
+Definition LC1 len n := BinDec ld0 ld1 len n ldh.
+Definition LC len n :=
+  match len with
+  | O => 0inf
+  | S len =>
+    if n <? 2^len then
+      LC1 len n
+    else
+      LC0 len (n-2^len)
+  end.
+
+Lemma LC_mul2 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2) = LC len n <* ld1.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2-2^len*2^1) with ((n-2^len)*2) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_mul2add1 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2+1) = LC len n <* ld0.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2+1) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2+1-2^len*2^1) with ((n-2^len)*2+1) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_0 len:
+  len<>O ->
+  LC len 0 = ldh <* ld1^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  destruct (Nat.ltb_spec 0 (2^len)). 2: lia.
+  replace (S len-1) with len by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_full len:
+  len<>O ->
+  LC len (2^len-1) = 0inf <* ld0^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow].
+  destruct (Nat.ltb_spec (2*2^len-1) (2^len)). 1: lia.
+  replace (S len-1) with len by lia.
+  replace (2*2^len-1-2^len) with (2^len-1) by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_1:
+  LC 2 2 = 0inf <* ld1.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma LC_mulpow2sub1 len k i:
+  len<>O ->
+  k<2^len ->
+  LC (len+i) ((k+1)*2^i-1) =
+  LC len k <* ld0^^i.
+Proof.
+  intros.
+  induction i.
+  - cbn; f_equal; lia.
+  - replace (len+S i) with (len+i+1) by lia.
+    replace ((k+1)*2^S i-1) with (((k+1)*2^i-1)*2+1) by (cbn; lia).
+    rewrite LC_mul2add1 by solve_pow2_lt.
+    rewrite IHi.
+    reflexivity.
+Qed.
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n,
+  ldh <* ld1^^n <| r -->+
+  0inf <* ld1 <* ld0^^n |> [1] *> r.
+
+Hypothesis LInc':
+  forall r n,
+  0inf <* ld1^^n <| r -->+
+  ldh <* ld0^^n |> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) |> [1;0;0] *> r.
+
+Hypothesis ROv2:
+  forall l r n,
+  l |> rd1^^n *> rm3 *> r -->+
+  l <* ld1 <* ld0^^(n*2) <* ld0 |> [1;0;0] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  len<>O ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros.
+  destruct len as [|len].
+  1: lia.
+  unfold LC.
+  cbn[Nat.pow] in *.
+  destruct (Nat.ltb_spec (1+n) (2^len));
+  destruct (Nat.ltb_spec n (2^len)).
+  - apply LBinDec_spec; try lia.
+    follow' LInc.
+  - lia.
+  - replace (1+n-2^len) with O by lia.
+    replace n with (2^len-1) by lia.
+    unfold LC0,LC1.
+    rw_Bin.
+    follow' LInc'.
+  - remember (n-2^len) as v1.
+    replace (1+n-2^len) with (1+v1) by lia.
+    apply LBinDec_spec; try lia.
+    follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC2_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC2 len (1+n) m -->+
+  l <| RC2 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC2_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2+1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mul2add1 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma RC2_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 0 -->+
+  LC (lenL+1+lenR*2+1) ((((k*2+1)*2^(lenR*2)-1))*2+1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mul2add1 by solve_pow2_lt.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma LC_Ov lenL n i:
+  lenL<>O ->
+  LC lenL O <| RC ((n*2+1)*2^i) -->+
+  LC (2+(lenL-1)) ((2+1)*2^(lenL-1)-1) |> RC1 i ((2^i-1)*2) n.
+Proof.
+  intros.
+  rewrite LC_0 by lia.
+  rewrite LC_mulpow2sub1 by lia.
+  rewrite LC_1.
+  destruct lenL as [|lenL]. 1: lia.
+  replace (S lenL-1) with lenL by lia.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+| cfgL2(lenL k lenR n m:nat)
+| cfgR2(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+| cfgL2 lenL k lenR n m => LC lenL k <| RC2 lenR n m
+| cfgR2 lenL k lenR n m => LC lenL k |> RC2 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => lenL<>O /\ 2 <= k+n < 2^lenL
+| cfgR lenL k n => lenL<>O /\ 2 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) /\
+  (lenR=0 -> n=0 -> m=0 -> k+1 < 2^lenL)
+| cfgL2 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR2 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) 
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      eexists (cfgR1 _ _ _ _ _). split.
+      1: apply LC_Ov; lia.
+      repeat split; try lia.
+      2,3: solve_pow2_lt.
+      pose proof (split_bound_v1 x i lenL).
+      destruct lenL as [|lenL]. 1: lia.
+      replace (S lenL-1) with lenL in * by lia.
+      cbn[Nat.pow] in *.
+      lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        destruct lenR as [|lenR].
+        1: solve_pow2_lt.
+        replace (S lenR*2) with (lenR*2+2) by lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR2 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC2_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC2_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL2 _ _ _ _ _). split.
+      1: apply RC2_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V2cd.
+End V2cd.
+
+Module TM148.
+Definition tm := Eval compute in (TM_from_str "1LB1RF_1LC0LB_0LD0LF_1RE---_1RA1LA_1RD0RA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cd.nonhalt _ F A [0;1] [0;1] 6 42 1).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM148.
+
+Module TM149.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC1LC_1LD1RF_1LE0LD_0LA0LF_1RA0RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cd.nonhalt _ F C [0;1] [0;1] 3 3 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM149.
+
+Module TM150.
+Definition tm := Eval compute in (TM_from_str "1LB1RD_1LC0LB_0RA0LD_1RE0RA_1RF---_1RA1LA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cc.nonhalt _ D A [0;1] [0;1] 4 10 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM150.
+
+Module TM151.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC1LC_1LD1RF_1LE0LD_0RC0LF_1RA0RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cc.nonhalt _ F C [0;1] [0;1] 5 25 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM151.
+
+Module TM152.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC0RC_1LD1RF_1LE0LD_0LA0LF_1RA0RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cd.nonhalt _ F C [0;1] [0;1] 3 3 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM152.
+
+Module TM153.
+Definition tm := Eval compute in (TM_from_str "1LB1RF_1LC0LB_0LD0LF_1RE---_1RA0RA_1RD0RA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cd.nonhalt _ F A [0;1] [0;1] 6 42 1).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM153.
+
+Module TM154.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC0RC_1LD1RF_1LE0LD_0RC0LF_1RA0RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cc.nonhalt _ F C [0;1] [0;1] 5 25 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM154.
+
+Module TM155.
+Definition tm := Eval compute in (TM_from_str "1LB1RD_1LC0LB_0RA0LD_1RE0RA_1RF---_1RA0RA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cc.nonhalt _ D A [0;1] [0;1] 4 10 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM155.
+
+Module TM156.
+Definition tm := Eval compute in (TM_from_str "1LB1RF_1LC0LB_0LD1LE_1RE---_1RA1LC_1RD0RA").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cb.nonhalt _ E A [1;1] [0;1] 6 42 0).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM156.
+
+Module TM157.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC1LE_1LD1RF_1LE0LD_0LA1LB_1RA0RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cb.nonhalt _ B C [1;1] [0;1] 3 2 2).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM157.
+
+Module TM158.
+Definition tm := Eval compute in (TM_from_str "1LB1RD_1LC0LB_0RA1LE_1RF0RA_1RA1LC_1RE---").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2ca.nonhalt _ E A [1;1] [0;1] 4 10 1).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM158.
+
+Module TM159.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC1LE_1LD1RF_1LE0LD_0RC1LB_1RA0RC").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2ca.nonhalt _ B C [1;1] [0;1] 5 12 1).
+  1-6: es_r.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM159.
+
+Module V2cda.
+Section V2cda.
+Hypothesis tm:TM.
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Hypothesis QL QR:Q.
+Hypothesis qL qR:list Sym.
+Hypothesis lenL0 k0 n0:nat.
+
+Notation "l <| r" := (l <{{QL}} qL *> r) (at level 30).
+Notation "l |> r" := (l <* qR {{QR}}> r) (at level 30).
+
+Definition LC0 len n := BinDec ld0 ld1 len n 0inf.
+Definition LC1 len n := BinDec ld0 ld1 len n ldh.
+Definition LC len n :=
+  match len with
+  | O => 0inf
+  | S len =>
+    if n <? 2^len then
+      LC1 len n
+    else
+      LC0 len (n-2^len)
+  end.
+
+Lemma LC_mul2 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2) = LC len n <* ld1.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2-2^len*2^1) with ((n-2^len)*2) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_mul2add1 len n:
+  len<>O ->
+  n<2^len ->
+  LC (len+1) (n*2+1) = LC len n <* ld0.
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow] in *.
+  cbn[Nat.add].
+  destruct (Nat.ltb_spec n (2^len));
+  destruct (Nat.ltb_spec (n*2+1) (2^(len+1)));
+  rewrite Nat.pow_add_r in *; try lia.
+  - rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+  - replace (n*2+1-2^len*2^1) with ((n-2^len)*2+1) by lia.
+    rw_Bin.
+    1: reflexivity.
+    solve_pow2_lt.
+Qed.
+
+Lemma LC_0 len:
+  len<>O ->
+  LC len 0 = ldh <* ld1^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  destruct (Nat.ltb_spec 0 (2^len)). 2: lia.
+  replace (S len-1) with len by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_full len:
+  len<>O ->
+  LC len (2^len-1) = 0inf <* ld0^^(len-1).
+Proof.
+  intros.
+  destruct len. 1: lia.
+  unfold LC,LC0,LC1.
+  cbn[Nat.pow].
+  destruct (Nat.ltb_spec (2*2^len-1) (2^len)). 1: lia.
+  replace (S len-1) with len by lia.
+  replace (2*2^len-1-2^len) with (2^len-1) by lia.
+  rw_Bin; reflexivity.
+Qed.
+
+Lemma LC_1:
+  LC 2 2 = 0inf <* ld1.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma LC_mulpow2sub1 len k i:
+  len<>O ->
+  k<2^len ->
+  LC (len+i) ((k+1)*2^i-1) =
+  LC len k <* ld0^^i.
+Proof.
+  intros.
+  induction i.
+  - cbn; f_equal; lia.
+  - replace (len+S i) with (len+i+1) by lia.
+    replace ((k+1)*2^S i-1) with (((k+1)*2^i-1)*2+1) by (cbn; lia).
+    rewrite LC_mul2add1 by solve_pow2_lt.
+    rewrite IHi.
+    reflexivity.
+Qed.
+
+Hypothesis LInc:
+  forall l r n,
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+
+Hypothesis RInc:
+  forall l r n,
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+
+Hypothesis LOv:
+  forall r n,
+  ldh <* ld1^^n <| r -->+
+  0inf <* ld1 <* ld0^^n |> [1] *> r.
+
+Hypothesis LInc':
+  forall r n,
+  0inf <* ld1^^n <| r -->+
+  ldh <* ld0^^n |> r.
+
+Hypothesis ROv1:
+  forall l r n,
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) |> [1;0;0] *> r.
+
+Hypothesis ROv2:
+  forall l r n,
+  l |> rd1^^n *> rm3 *> r -->+
+  l <* ld0 <* ld1 <* ld0^^(n*2) |> [0;0;0] *> r.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  len<>O ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros.
+  destruct len as [|len].
+  1: lia.
+  unfold LC.
+  cbn[Nat.pow] in *.
+  destruct (Nat.ltb_spec (1+n) (2^len));
+  destruct (Nat.ltb_spec n (2^len)).
+  - apply LBinDec_spec; try lia.
+    follow' LInc.
+  - lia.
+  - replace (1+n-2^len) with O by lia.
+    replace n with (2^len-1) by lia.
+    unfold LC0,LC1.
+    rw_Bin.
+    follow' LInc'.
+  - remember (n-2^len) as v1.
+    replace (1+n-2^len) with (1+v1) by lia.
+    apply LBinDec_spec; try lia.
+    follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC1 len (1+n) m -->+
+  l <| RC1 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC2_Inc len n m l:
+  1+n<2^(len+1) ->
+  l |> RC2 len (1+n) m -->+
+  l <| RC2 len n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC 1.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC2_Ov lenL lenR k i m:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+1+lenR*2) (((((k*2+1)*2+1)*2^(lenR*2)-1))) |> RC2 i ((2^i-1)*2+1) m.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  rewrite LC_mul2add1 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma RC2_Ov_0 lenL lenR k:
+  lenL<>O ->
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 0 -->+
+  LC (lenL+1+1+lenR*2) (((((k*2+1)*2+1)*2^(lenR*2)-1))) |> RC 0.
+Proof.
+  intros.
+  rewrite LC_mulpow2sub1 by solve_pow2_lt.
+  rewrite LC_mul2 by solve_pow2_lt.
+  rewrite LC_mul2add1 by solve_pow2_lt.
+  solve_rule ROv2.
+Qed.
+
+Lemma LC_Ov lenL n i:
+  lenL<>O ->
+  LC lenL O <| RC ((n*2+1)*2^i) -->+
+  LC (2+(lenL-1)) ((2+1)*2^(lenL-1)-1) |> RC1 i ((2^i-1)*2) n.
+Proof.
+  intros.
+  rewrite LC_0 by lia.
+  rewrite LC_mulpow2sub1 by lia.
+  rewrite LC_1.
+  destruct lenL as [|lenL]. 1: lia.
+  replace (S lenL-1) with lenL by lia.
+  solve_rule LOv.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+| cfgL2(lenL k lenR n m:nat)
+| cfgR2(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+| cfgL2 lenL k lenR n m => LC lenL k <| RC2 lenR n m
+| cfgR2 lenL k lenR n m => LC lenL k |> RC2 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => lenL<>O /\ 2 <= k+n < 2^lenL
+| cfgR lenL k n => lenL<>O /\ 2 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) /\
+  (lenR=0 -> n=0 -> m=0 -> k+1 < 2^lenL)
+| cfgL2 lenL k lenR n m => lenL<>O /\ n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR2 lenL k lenR n m => lenL<>O /\ n+m <= k < 2^lenL /\ n<2^(lenR+1) 
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      eexists (cfgR1 _ _ _ _ _). split.
+      1: apply LC_Ov; lia.
+      repeat split; try lia.
+      2,3: solve_pow2_lt.
+      pose proof (split_bound_v1 x i lenL).
+      destruct lenL as [|lenL]. 1: lia.
+      replace (S lenL-1) with lenL in * by lia.
+      cbn[Nat.pow] in *.
+      lia.
+    + eexists (cfgR _ _ _). split.
+      1: apply LC_Inc; lia.
+      lia.
+  - eexists (cfgL _ _ _). split.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR1 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC1_Ov_0; lia.
+        repeat split; try lia.
+        destruct lenR as [|lenR].
+        1: solve_pow2_lt.
+        replace (S lenR*2) with (lenR*2+2) by lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC1_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL1 _ _ _ _ _). split.
+      1: apply RC1_Inc; lia.
+      lia.
+  - destruct k as [|k].
+    1: lia.
+    eexists (cfgR2 _ _ _ _ _). split.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eexists (cfgR _ _ _). split.
+        1: apply RC2_Ov_0; lia.
+        repeat split; try lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eexists (cfgR2 _ _ _ _ _). split.
+        1: apply RC2_Ov; lia.
+        repeat split; try lia.
+        2,3: solve_pow2_lt.
+        pose proof (split_bound_v2 x i).
+        pose proof (Nat.le_mul_r (k*2+1) (2^(lenR*2))).
+        lia.
+    + eexists (cfgL2 _ _ _ _ _). split.
+      1: apply RC2_Inc; lia.
+      lia.
+Qed.
+
+Notation x0 := (cfgL lenL0 k0 n0).
+Hypothesis init: c0 -->* to_config x0.
+Hypothesis Pinit: P x0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: apply Pinit.
+  apply closed.
+Qed.
+
+End V2cda.
+End V2cda.
+
+Module TM160.
+Definition tm := Eval compute in (TM_from_str "1LB1RC_0LC0LB_1RD0RA_1RE---_1RA1LF_0LD1LE").
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply (V2cda.nonhalt _ E A [1;1;1;1] [0;1;0;1] 5 1 4).
+  1-6: es.
+  1: esx.
+  1: cbn; lia.
+Qed.
+End TM160.
 

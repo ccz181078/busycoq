@@ -4657,40 +4657,6 @@ match x with
     (lenR=1 -> n=O -> m=O -> k+1<>2^lenL)
 end.
 
-Lemma split_bound x i len:
-  (x*2+1)*2^i+1 < 2^len*2 ->
-  (x*2+1)*2^i <> 2^len ->
-  2^i*2+x <= 2^len+1.
-Proof.
-  assert (i=O\/i=len\/len+1<=i\/O<i<len) as E by lia.
-  destruct E as [E|[E|[E|E]]].
-  - subst.
-    cbn; lia.
-  - subst.
-    destruct x; lia.
-  - epose proof (Nat.pow_le_mono_r 2 (len+1) i).
-    rewrite pow2_S in *.
-    lia.
-  - replace len with (len-i+i) by lia.
-    remember (len-i) as j.
-    repeat rewrite Nat.pow_add_r.
-    destruct i as [|i]. 1: lia.
-    destruct j as [|j]. 1: lia.
-    repeat rewrite Nat.pow_succ_r by lia.
-    intros.
-    remember (2^i) as a.
-    remember (2^j) as b.
-    assert ((x*4+2)*a<=b*8*a) as E1 by lia.
-    rewrite <-Nat.mul_le_mono_pos_r in E1 by lia.
-    assert (a*2+b<=a*b*2+1). {
-      destruct b.
-      1: lia.
-      pose proof (Nat.le_mul_r b a).
-      lia.
-    }
-    lia.
-Qed.
-
 Lemma closed x:
   P x ->
   exists x', to_config x -->+ to_config x' /\ P x'.
@@ -4705,7 +4671,7 @@ Proof.
       1: apply LC_Ov.
       rewrite pow2_S in *.
       repeat split; try lia.
-      * pose proof (split_bound x i lenL).
+      * pose proof (split_bound_v3 x i lenL).
         lia.
       * intros.
         subst.
@@ -4877,40 +4843,6 @@ match x with
     (lenR=1 -> n=O -> m=O -> k+1<>2^lenL)
 end.
 
-Lemma split_bound x i len:
-  (x*2+1)*2^i+1 < 2^len*2 ->
-  (x*2+1)*2^i <> 2^len ->
-  2^i*2+x <= 2^len+1.
-Proof.
-  assert (i=O\/i=len\/len+1<=i\/O<i<len) as E by lia.
-  destruct E as [E|[E|[E|E]]].
-  - subst.
-    cbn; lia.
-  - subst.
-    destruct x; lia.
-  - epose proof (Nat.pow_le_mono_r 2 (len+1) i).
-    rewrite pow2_S in *.
-    lia.
-  - replace len with (len-i+i) by lia.
-    remember (len-i) as j.
-    repeat rewrite Nat.pow_add_r.
-    destruct i as [|i]. 1: lia.
-    destruct j as [|j]. 1: lia.
-    repeat rewrite Nat.pow_succ_r by lia.
-    intros.
-    remember (2^i) as a.
-    remember (2^j) as b.
-    assert ((x*4+2)*a<=b*8*a) as E1 by lia.
-    rewrite <-Nat.mul_le_mono_pos_r in E1 by lia.
-    assert (a*2+b<=a*b*2+1). {
-      destruct b.
-      1: lia.
-      pose proof (Nat.le_mul_r b a).
-      lia.
-    }
-    lia.
-Qed.
-
 Lemma closed x:
   P x ->
   exists x', to_config x -->+ to_config x' /\ P x'.
@@ -4925,7 +4857,7 @@ Proof.
       1: apply LC_Ov.
       rewrite pow2_S in *.
       repeat split; try lia.
-      * pose proof (split_bound x i lenL).
+      * pose proof (split_bound_v3 x i lenL).
         lia.
       * intros.
         subst.
@@ -5107,40 +5039,6 @@ match x with
     (lenR=1 -> n=O -> m=O -> k+1<>2^lenL)
 end.
 
-Lemma split_bound x i len:
-  (x*2+1)*2^i+1 < 2^len*2 ->
-  (x*2+1)*2^i <> 2^len ->
-  2^i*2+x <= 2^len+1.
-Proof.
-  assert (i=O\/i=len\/len+1<=i\/O<i<len) as E by lia.
-  destruct E as [E|[E|[E|E]]].
-  - subst.
-    cbn; lia.
-  - subst.
-    destruct x; lia.
-  - epose proof (Nat.pow_le_mono_r 2 (len+1) i).
-    rewrite pow2_S in *.
-    lia.
-  - replace len with (len-i+i) by lia.
-    remember (len-i) as j.
-    repeat rewrite Nat.pow_add_r.
-    destruct i as [|i]. 1: lia.
-    destruct j as [|j]. 1: lia.
-    repeat rewrite Nat.pow_succ_r by lia.
-    intros.
-    remember (2^i) as a.
-    remember (2^j) as b.
-    assert ((x*4+2)*a<=b*8*a) as E1 by lia.
-    rewrite <-Nat.mul_le_mono_pos_r in E1 by lia.
-    assert (a*2+b<=a*b*2+1). {
-      destruct b.
-      1: lia.
-      pose proof (Nat.le_mul_r b a).
-      lia.
-    }
-    lia.
-Qed.
-
 Lemma closed x:
   P x ->
   exists x', to_config x -->+ to_config x' /\ P x'.
@@ -5155,7 +5053,7 @@ Proof.
       1: apply LC_Ov.
       rewrite pow2_S in *.
       repeat split; try lia.
-      * pose proof (split_bound x i lenL).
+      * pose proof (split_bound_v3 x i lenL).
         lia.
       * intros.
         subst.
@@ -5337,40 +5235,6 @@ match x with
     (lenR=1 -> n=O -> m=O -> k+1<>2^lenL)
 end.
 
-Lemma split_bound x i len:
-  (x*2+1)*2^i+1 < 2^len*2 ->
-  (x*2+1)*2^i <> 2^len ->
-  2^i*2+x <= 2^len+1.
-Proof.
-  assert (i=O\/i=len\/len+1<=i\/O<i<len) as E by lia.
-  destruct E as [E|[E|[E|E]]].
-  - subst.
-    cbn; lia.
-  - subst.
-    destruct x; lia.
-  - epose proof (Nat.pow_le_mono_r 2 (len+1) i).
-    rewrite pow2_S in *.
-    lia.
-  - replace len with (len-i+i) by lia.
-    remember (len-i) as j.
-    repeat rewrite Nat.pow_add_r.
-    destruct i as [|i]. 1: lia.
-    destruct j as [|j]. 1: lia.
-    repeat rewrite Nat.pow_succ_r by lia.
-    intros.
-    remember (2^i) as a.
-    remember (2^j) as b.
-    assert ((x*4+2)*a<=b*8*a) as E1 by lia.
-    rewrite <-Nat.mul_le_mono_pos_r in E1 by lia.
-    assert (a*2+b<=a*b*2+1). {
-      destruct b.
-      1: lia.
-      pose proof (Nat.le_mul_r b a).
-      lia.
-    }
-    lia.
-Qed.
-
 Lemma closed x:
   P x ->
   exists x', to_config x -->+ to_config x' /\ P x'.
@@ -5385,7 +5249,7 @@ Proof.
       1: apply LC_Ov.
       rewrite pow2_S in *.
       repeat split; try lia.
-      * pose proof (split_bound x i lenL).
+      * pose proof (split_bound_v3 x i lenL).
         lia.
       * intros.
         subst.
@@ -5567,40 +5431,6 @@ match x with
     (lenR=1 -> n=O -> m=O -> k+1<>2^lenL)
 end.
 
-Lemma split_bound x i len:
-  (x*2+1)*2^i+1 < 2^len*2 ->
-  (x*2+1)*2^i <> 2^len ->
-  2^i*2+x <= 2^len+1.
-Proof.
-  assert (i=O\/i=len\/len+1<=i\/O<i<len) as E by lia.
-  destruct E as [E|[E|[E|E]]].
-  - subst.
-    cbn; lia.
-  - subst.
-    destruct x; lia.
-  - epose proof (Nat.pow_le_mono_r 2 (len+1) i).
-    rewrite pow2_S in *.
-    lia.
-  - replace len with (len-i+i) by lia.
-    remember (len-i) as j.
-    repeat rewrite Nat.pow_add_r.
-    destruct i as [|i]. 1: lia.
-    destruct j as [|j]. 1: lia.
-    repeat rewrite Nat.pow_succ_r by lia.
-    intros.
-    remember (2^i) as a.
-    remember (2^j) as b.
-    assert ((x*4+2)*a<=b*8*a) as E1 by lia.
-    rewrite <-Nat.mul_le_mono_pos_r in E1 by lia.
-    assert (a*2+b<=a*b*2+1). {
-      destruct b.
-      1: lia.
-      pose proof (Nat.le_mul_r b a).
-      lia.
-    }
-    lia.
-Qed.
-
 Lemma closed x:
   P x ->
   exists x', to_config x -->+ to_config x' /\ P x'.
@@ -5615,7 +5445,7 @@ Proof.
       1: apply LC_Ov.
       rewrite pow2_S in *.
       repeat split; try lia.
-      * pose proof (split_bound x i lenL).
+      * pose proof (split_bound_v3 x i lenL).
         lia.
       * intros.
         subst.
