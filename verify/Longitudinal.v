@@ -207,6 +207,19 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma sideRLs_concat_L {tm h1 h2 ls l1 l2 r1 r2}:
+  sideRLs (flip tm) (lrcons h1 ls h2) l1 l2 ->
+  sideRLs (tm) (ls) r1 r2 ->
+  l1 {{{ (h1,L) }}} r1 -[tm]->+
+  l2 {{{ (h2,R) }}} r2.
+Proof.
+  intros HL HR.
+  rewrite <-(flip_involutive tm) in HR.
+  epose proof (sideRLs_concat HR HL) as H.
+  destruct h1,h2.
+  apply (unflip_progress _ _ _ H).
+Qed.
+
 Lemma sideRLs_concat_1 [tm hR hL n l1 l2 r1 r2]:
   sideRLs tm ([(hR,hL)]^^n) r1 r2 ->
   sideRLs (flip tm) ([(hL,hR)]^^n) l1 l2 ->

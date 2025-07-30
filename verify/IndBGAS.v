@@ -47,6 +47,196 @@ Ltac solve_hlin_nonhalt cfg :=
     (solve_hlin_nonhalt_T (config_exploop cfg) 1000000%N)
   end.
 
+Lemma nonhalt130: ~halts (TM_from_str "1RB1LD_1LC0RF_1RF0RD_1LA1LE_0LB---_0LD0RC") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt129: ~halts (TM_from_str "1RB1RD_1LC0RA_1LA0LB_1RE0LC_1RF0RC_1LD---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt128: ~halts (TM_from_str "1RB1RD_1LC0RA_1LA0LB_1RE0LC_0RF0RC_1LC---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt127: ~halts (TM_from_str "1RB0LD_1RC1RF_1RD0RD_1LE0RB_1LA0LA_---0RA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt126: ~halts (TM_from_str "1RB0LD_1RC0RC_1LD0RA_1LF1LE_---0LC_1LA0LA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt125: ~halts (TM_from_str "1RB1RF_0RC1RC_1LD0RA_0LE1LE_1RA0LC_---1RE") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt124: ~halts (TM_from_str "1RB0RF_1RC---_1LD0RA_1RA0LE_1LC0LC_1RC1RD") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt123: ~halts (TM_from_str "1RB1RC_1LC0RF_1RF0LD_0LE1LB_1LC---_0RA1RA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt122: ~halts (TM_from_str "1RB1RC_1LC0RF_1RE0LD_0LB1LB_---1RA_0RA1RA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt121: ~halts (TM_from_str "1RB0RB_1RC1RD_1LD0RA_1RF0LE_1LC0LC_---0RB") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt120: ~halts (TM_from_str "1RB0RB_1RC1RD_1LD0RA_1RA0LE_1LC0LF_1LD---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt119: ~halts (TM_from_str "1RB---_1LC0RE_1RE0LD_0LB1LB_0RA1RF_1RB1RC") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt118: ~halts (TM_from_str "1RB1RF_1RC0RC_1LD0RA_1LE0LE_1RA0LC_---0RE") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt117: ~halts (TM_from_str "1RB0LD_0RC1RC_1LD0RA_1LE1LF_0LA1LA_---1LC") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt116: ~halts (TM_from_str "1RB0RB_1LC0RE_1LD0LD_1RE0LB_1RA1RF_---0RD") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt115: ~halts (TM_from_str "1RB0LF_1LC0RE_---1LD_1LA1LB_0RA1RA_0LD1LD") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt114: ~halts (TM_from_str "1RB0LF_1LC0RE_---0LD_1LA1LB_1RA0RA_1LD0LD") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt113: ~halts (TM_from_str "1RB0LC_1LC0RE_1LF0LD_1LA1LB_1RA0RA_1LA---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt112: ~halts (TM_from_str "1RB0LC_1LC0RE_0LF1LD_1LA1LB_0RA1RA_1LA---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt111: ~halts (TM_from_str "1RB0LC_1LC0RE_1LD0LD_1LA1LB_1RA0RF_1RB---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt110: ~halts (TM_from_str "1RB---_1LC0RF_0LD1LD_1LE1LB_1RB0LC_0RA1RE") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt109: ~halts (TM_from_str "1RB1RC_1LC0RF_1RE0LD_1LB0LB_---0RA_1RA0RA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt108: ~halts (TM_from_str "1RB1RC_1LC0RE_1RE0LD_1LB0LF_1RA0RA_1LC---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt107: ~halts (TM_from_str "1RB1RC_1LC0RE_1RE0LD_1LB0LB_1RF0RA_1RB---") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt106: ~halts (TM_from_str "1RB0RD_0LC0RC_---1LD_1RE0LF_1LF1RA_0LA0RE") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt105: ~halts (TM_from_str "1RB0RD_0LC0RC_---1LD_0RE0LF_1LF1RA_1RE0LA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt104: ~halts (TM_from_str "1RB0LF_1RC0RE_0LD0RD_---1LE_1RA1LF_0LB0RA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt103: ~halts (TM_from_str "1RB0RD_0LC0RC_---1LD_0RE1LF_1RA0LF_1RE0LA") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt102: ~halts (TM_from_str "1RB1RD_0LC1LE_1LD1LB_1RA1LF_---0RC_0LD0RE") c0.
+Proof.
+  solve_hlin_nonhalt default_config.
+Time Qed.
+
+Lemma nonhalt101: ~halts (TM_from_str "1RB0RE_0LB0RC_1LD---_1LE0LA_1RA0RF_1RE0LC") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 2).
+Time Qed.
+
+Lemma nonhalt100: ~halts (TM_from_str "1RB0LF_1RC0RD_1LD0LE_0LA0LC_1LC0RA_1LA---") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 2).
+Time Qed.
+
+Lemma nonhalt99: ~halts (TM_from_str "1RB1LF_1RC0RD_1LD0LE_0LA0LC_1LC0RA_1RE---") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 2).
+Time Qed.
+
+Lemma nonhalt98: ~halts (TM_from_str "1RB0LF_1RC0RD_1LD0LE_0LA0LC_1LC0RA_0LC---") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 2).
+Time Qed.
+
+Lemma nonhalt97: ~halts (TM_from_str "1RB0LF_1RC0RD_1LD0LE_0LA0LC_1LC0RA_1LD---") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 2).
+Time Qed.
+
+Lemma nonhalt96: ~halts (TM_from_str "1RB1LF_1RC0RD_1LD0LE_0LA0LC_1LC0RA_0RD---") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 2).
+Time Qed.
+
+Lemma nonhalt95: ~halts (TM_from_str "1RB0LE_0RC1RF_1RD---_1LA0RB_0LD1LD_1RD1RA") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 3).
+Time Qed.
+
+Lemma nonhalt94: ~halts (TM_from_str "1RB0LE_1RC0RF_1RD---_1LA0RB_1LD0LD_1RD1RA") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 3).
+Time Qed.
+
+Lemma nonhalt93: ~halts (TM_from_str "1RB0RB_1RC0LD_1LD0RA_1LF0LE_1LB1LC_1LB---") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 3).
+Time Qed.
+
 Lemma nonhalt92: ~halts (TM_from_str "1RB0RE_0LC0RD_1LF0LD_1LE1LB_1RA1RE_---0LA") c0.
 Proof.
   solve_hlin_nonhalt default_config.

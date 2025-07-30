@@ -191,7 +191,7 @@ Qed.
 Lemma nonhalt: ~halts tm c0.
 Proof.
   eapply multistep_nonhalt with (c':=S0 1).
-  1: esx.
+  1: unfold S0; esx.
   eapply progress_nonhalt_cond with (P:=fun x => exists i, 2^i<=x<2^i*2).
   2: exists 0; lia.
   intros a [i Hi].

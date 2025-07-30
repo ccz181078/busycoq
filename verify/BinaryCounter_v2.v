@@ -138,6 +138,51 @@ Proof.
   lia.
 Qed.
 
+Lemma LBinDec2_spec d0 d1 dw tm QL QR qL qR:
+  (forall l r n,
+  (d1++dw)^^n *> d0 *> r <{{QL}} qL *> l -[ tm ]->+
+  qR *> (d0++dw)^^n *> d1 *> r {{QR}}> l) ->
+  forall len n l r,
+  1+n<2^(len+1) ->
+  BinDec2 d0 d1 dw len (1+n) r <{{QL}} qL *> l -[ tm ]->+
+  qR *> BinDec2 d0 d1 dw len n r {{QR}}> l.
+Proof.
+  unfold BinDec2.
+  intros.
+  pose proof (Nat.Div0.div_mod (1+n) 2).
+  pose proof (Nat.Div0.div_mod (n) 2).
+  pose proof (Nat.mod_upper_bound (1+n) 2).
+  pose proof (Nat.mod_upper_bound n 2).
+  destruct ((1+n) mod 2) as [|[|]] eqn:E.
+  3: lia.
+  - destruct (n mod 2) as [|[|]] eqn:E0.
+    1,3: lia.
+    replace ((1+n)/2) with (1+n/2) by lia.
+    unfold BinDec.
+    pose proof (pow2_S len).
+    replace (Pos.of_nat (2^(len+1)-1-n/2)) with (Pos.succ (Pos.of_nat (2^(len+1)-1-(1+n/2)))) by lia.
+    epose proof (not_full_Inc (dw++d0) (dw++d1) r _) as [s [i [HA HB]]].
+    rewrite HA,HB.
+    epose proof (H _ _ (S i)) as H'.
+    cbn in H'.
+    gen H'.
+    repeat rewrite Str_app_assoc.
+    repeat rewrite lpow_rotate'.
+    apply (fun x=>x).
+    Unshelve.
+    rewrite not_full_iff_pow2'.
+    erewrite (log2_spec' len).
+    2: lia.
+    rewrite pow2'_spec'.
+    lia.
+  - destruct (n mod 2) as [|[|]] eqn:E0.
+    2,3: lia.
+    replace ((1+n)/2) with (n/2) by lia.
+    epose proof (H _ _ O) as H'.
+    cbn in H'.
+    apply H'.
+Qed.
+
 Lemma RBinDec2_spec d0 d1 dw tm QL QR qL qR:
   (forall l r n,
   l <* qR {{QR}}> (d1++dw)^^n *> d0 *> r -[ tm ]->+
@@ -977,4 +1022,24 @@ Ltac zify_pow2sub1 :=
   | |- context[2^?a] => 
     rp_pow2sub1 a
   end.
+
+Inductive DivMod2: nat->Prop :=
+| mod2eq0(n n':nat)(Hn':n=n'*2):DivMod2 n
+| mod2eq1(n n':nat)(Hn':n=n'*2+1):DivMod2 n
+.
+
+Lemma divmod2 n: DivMod2 n.
+Proof.
+  pose proof (Nat.Div0.div_mod n 2).
+  pose proof (Nat.mod_upper_bound n 2).
+  destruct (n mod 2) as [|[|]]. 3: lia.
+  - eapply (mod2eq0 n (n/2)).
+    lia.
+  - eapply (mod2eq1 n (n/2)).
+    lia.
+Qed.
+
+Ltac divmod2_cases n :=
+  epose proof (divmod2 n) as Hdm2;
+  inverts Hdm2.
 

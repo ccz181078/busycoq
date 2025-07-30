@@ -6,8 +6,9 @@ From BusyCoq Require Import CubicCap.
 From BusyCoq Require Import CubicCup.
 
 Ltac solve_halt :=
-  time vm_compute;
-  reflexivity.
+  match goal with
+  | |- _ = ?x => native_cast_no_check (eq_refl x)
+  end.
 
 
 

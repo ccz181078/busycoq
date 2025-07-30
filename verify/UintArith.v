@@ -144,7 +144,7 @@ Proof.
 Qed.
 
 Lemma N'minN_inj a b:
-  N'to_nat (N'minN a b) = (min (N'to_nat a) (N'to_nat b)).
+  N'to_nat (N'minN a b) = (Nat.min (N'to_nat a) (N'to_nat b)).
 Proof.
   unfold N'minN.
   destruct a as [a|a];
@@ -223,7 +223,7 @@ Proof.
 Qed.
 
 Lemma N'min_inj a b:
-  N'to_nat (N'min a b) = (min (N'to_nat a) (N'to_nat b)).
+  N'to_nat (N'min a b) = (Nat.min (N'to_nat a) (N'to_nat b)).
 Proof.
   destruct a as [a|a];
   destruct b as [b|b];

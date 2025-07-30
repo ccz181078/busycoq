@@ -759,6 +759,23 @@ Proof.
   eapply halts_multistep; eauto.
 Qed.
 
+Lemma halts_at_trans_evstep tm c1 c2 tr:
+  c1 -[ tm ]->* c2 ->
+  halts_at_trans tm c2 tr ->
+  halts_at_trans tm c1 tr.
+Proof.
+  intros.
+  inverts H0.
+  inverts H1.
+  destruct (with_counter H) as [n I1].
+  econstructor.
+  econstructor.
+  2: eassumption.
+  eapply multistep_trans.
+  2: eassumption.
+  apply I1.
+Qed.
+
 
 Definition sigma_score_sym: Sym->nat :=
   fun s =>

@@ -102,3 +102,6 @@ Proof. solve_nonhalt 4. Time Qed.
 Lemma nonhalt32: ~halts (TM_from_str "1RB0RD_1LC0LD_1RA0LB_0LE0RF_1RC1LB_1RA---") c0.
 Proof. solve_nonhalt 2. Time Qed.
 
+Lemma nonhalt33: ~halts (TM_from_str "1RB1RC_1LB0RA_1RD0LD_1LE1LA_---1LF_1LC0LC") c0.
+Proof. solve_nonhalt 30. Time Qed.
+

@@ -636,6 +636,14 @@ Ltac solve_halt :=
   eapply halted_halts;
   constructor.
 
+Ltac solve_halts_at_trans :=
+  eapply halts_at_trans_evstep; [
+    repeat (rewrite lpow_add || rewrite lpow_mul || simpl_tape || simpl_rotate);
+    repeat (step1 || sr || simpl_rotate);
+    finish
+ |];
+  do 4 econstructor.
+
 Ltac solve_seg :=
   unfold segRL,segRR,segLL,segLR; intros; cbn;
   (eapply evstep_progress_trans || eapply evstep_trans);
@@ -657,9 +665,11 @@ Ltac solve_segRLs :=
   (eapply segLLs_LL_RLs; [solve_seg |]) ||
   eapply segRLs_O ||
   rewrite lpow_add ||
+  rewrite lpow_mul ||
   rewrite <-List.app_assoc ||
   rewrite lpow_rotate_list ||
-  cbn[app]).
+  rewrite List.app_nil_r ||
+  cbn[app] || cbn[lpow]).
 
 Ltac solve_sideRLs :=
   st;
@@ -719,14 +729,15 @@ Proof.
 Qed.
 
 Ltac esx :=
-  match goal with
-  | |- forall _, _ => intro
+  lazymatch goal with
+  | |- forall _, _ => intro; esx
   | |- segRLs _ _ _ _ _ => solve_segRLs
   | |- sideRLs _ _ _ _ => solve_sideRLs
   | |- c0 -[ _ ]->* _ => cbn; solve_init
   | |- _ -[ _ ]->* _ => es
   | |- _ -[ _ ]->+ _ => es
   | |- halts _ _ => solve_halt
+  | |- halts_at_trans _ _ _ => solve_halts_at_trans
   end.
 
 Ltac toX X :=

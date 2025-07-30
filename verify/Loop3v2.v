@@ -2,6 +2,7 @@ From BusyCoq Require Import Individual62.
 Require Import Lia.
 Require Import ZArith.
 Require Import String.
+Require Import ZifyNat.
 
 Open Scope list.
 
@@ -680,197 +681,6 @@ Qed.
 
 End TM6.
 
-Module TM7.
-Definition tm := Eval compute in (TM_from_str "1RB0RB_1RC0LD_1LD0RA_1LF0LE_1LB1LC_1LB---").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
-
-Definition S0 a b c :=
-  const 0 <* [0;0;1]^^a <* [1;0;1]^^b <* [1] <{{B}} [1;0;0]^^2 *> [1;0;1]^^c *> const 0.
-
-Lemma Inc0 a b c:
-  S0 a b (1+c) -->*
-  S0 (1+a) (1+b) c.
-Proof.
-  es.
-Qed.
-
-Definition S1 a b c :=
-  const 0 <* [0;0;1]^^a <* [0;1;1]^^2 {{A}}> [0;0] *> [1;0;0]^^(b*2) *> [1;0;1]^^c *> const 0.
-
-Lemma Inc1 a b c:
-  S1 (1+a) b (1+c) -->*
-  S1 a (1+b) c.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c:
-  S0 a b c -->*
-  S0 (c+a) (c+b) 0.
-Proof.
-  gen a b.
-  ind c Inc0.
-Qed.
-
-Lemma Inc1s a b c n:
-  S1 (n+a) b (n+c) -->*
-  S1 a (n+b) c.
-Proof.
-  gen a b c.
-  ind n Inc1.
-Qed.
-
-Definition config a := S0 (3+a) a 0.
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config 3).
-  1: unfold config,S0; solve_init.
-  apply progress_nonhalt_simple.
-  intros a.
-  exists (5+a*2).
-  unfold config.
-  mid10 (S1 (2+a) 0 (2+a)).
-  1: unfold S0,S1; es.
-  follow (Inc1s 0 0 0 (2+a)).
-  mid (S0 3 0 (5+a*2)).
-  1: unfold S0,S1; es.
-  follow Inc0s.
-  finish.
-Qed.
-
-End TM7.
-
-Module TM8.
-Definition tm := Eval compute in (TM_from_str "1LB0RE_1LC0LF_1LD---_1RA0LB_1RD0RD_1LD1LA").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
-Definition S0 a b c :=
-  const 0 <* [0;0;1]^^a <* [1;0;1]^^b <{{B}} [0] *> [1;0;0]^^2 *> [1;0;1]^^c *> const 0.
-
-Lemma Inc0 a b c:
-  S0 a b (1+c) -->*
-  S0 (1+a) (1+b) c.
-Proof.
-  es.
-Qed.
-
-Definition S1 a b c :=
-  const 0 <* [0;0;1]^^a <* [0;1;1]^^2 <* [1;1] {{A}}> [1;0;0]^^(b*2) *> [1;0;1]^^c *> const 0.
-
-Lemma Inc1 a b c:
-  S1 (1+a) b (1+c) -->*
-  S1 a (1+b) c.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c:
-  S0 a b c -->*
-  S0 (c+a) (c+b) 0.
-Proof.
-  gen a b.
-  ind c Inc0.
-Qed.
-
-Lemma Inc1s a b c n:
-  S1 (n+a) b (n+c) -->*
-  S1 a (n+b) c.
-Proof.
-  gen a b c.
-  ind n Inc1.
-Qed.
-
-Definition config a := S0 (3+a) a 0.
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config 1).
-  1: unfold config,S0; solve_init.
-  apply progress_nonhalt_simple.
-  intros a.
-  exists (5+a*2).
-  unfold config.
-  mid10 (S1 (2+a) 0 (2+a)).
-  1: unfold S0,S1; es.
-  follow (Inc1s 0 0 0 (2+a)).
-  mid (S0 3 0 (5+a*2)).
-  1: unfold S0,S1; es.
-  follow Inc0s.
-  finish.
-Qed.
-
-End TM8.
-
-
-Module TM9.
-Definition tm := Eval compute in (TM_from_str "1LB0RE_0LC1LF_1LD---_1RA0LB_0RD1RD_1LD1LA").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
-Definition S0 a b c :=
-  const 0 <* [0;0;1]^^a <* [1;0;1]^^b <{{B}} [0] *> [1;1;0]^^2 *> [1;1;1]^^c *> const 0.
-
-Lemma Inc0 a b c:
-  S0 a b (1+c) -->*
-  S0 (1+a) (1+b) c.
-Proof.
-  es.
-Qed.
-
-Definition S1 a b c :=
-  const 0 <* [0;0;1]^^a <* [0;1;1]^^2 <* [1;1] {{A}}> [1;1;0]^^(b*2) *> [1;1;1]^^c *> const 0.
-
-Lemma Inc1 a b c:
-  S1 (1+a) b (1+c) -->*
-  S1 a (1+b) c.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c:
-  S0 a b c -->*
-  S0 (c+a) (c+b) 0.
-Proof.
-  gen a b.
-  ind c Inc0.
-Qed.
-
-Lemma Inc1s a b c n:
-  S1 (n+a) b (n+c) -->*
-  S1 a (n+b) c.
-Proof.
-  gen a b c.
-  ind n Inc1.
-Qed.
-
-Definition config a := S0 (3+a) a 0.
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config 1).
-  1: unfold config,S0; solve_init.
-  apply progress_nonhalt_simple.
-  intros a.
-  exists (5+a*2).
-  unfold config.
-  mid10 (S1 (2+a) 0 (2+a)).
-  1: unfold S0,S1; es.
-  follow (Inc1s 0 0 0 (2+a)).
-  mid (S0 3 0 (5+a*2)).
-  1: unfold S0,S1; es.
-  follow Inc0s.
-  finish.
-Qed.
-
-End TM9.
-
 
 Module TM10.
 Definition tm := Eval compute in (TM_from_str "1LB1LC_1LC0LC_1LD0LE_0RE1LF_0LA0RD_1RE---").
@@ -1470,1560 +1280,1106 @@ Qed.
 
 End TM13.
 
-Module TM14.
-Definition tm := Eval compute in (TM_from_str "1RB1RD_0LC1LE_1LD1LB_1RA1LF_---0RC_0LD0RE").
+
+Module TM21.
+Definition tm := Eval compute in (TM_from_str "1RB1RC_1LC---_0RA1LD_1LE0LF_1LC0LD_1RF0RE").
 
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
+Definition S1 a b c d :=
+  0inf <* <[1]^^a <* <[1;0;1;0;1;1;1]^^b <{{D}} [0] *> [1;0]^^c *> [1;0;1;0;1;1;1]^^d *> 0inf.
 
-Definition S0 a b c d e :=
-  const 0 <* [1;1]^^a <{{F}} [1] *> [0;1]^^b *> [1;0]^^c *> [1;1;0]^^d *> [1;0]^^e *> [1;1] *> const 0.
-
-Lemma Inc0 a b c d e:
-  S0 (1+a) b c d e -->*
-  S0 a b (1+c) d e.
+Lemma Inc1 a b c d:
+  S1 a (1+b) c d -->*
+  S1 a b (1+c) (1+d).
 Proof.
   es.
 Qed.
 
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 0 b (a+c) d e.
+Lemma Incs1 a b c d:
+  S1 a b c d -->*
+  S1 a 0 (b+c) (b+d).
 Proof.
-  gen b c.
-  ind a Inc0.
+  gen c d.
+  ind b Inc1.
 Qed.
 
-Lemma Ov0 b c d e:
-  S0 0 b c (1+d) e -->*
-  S0 (2+b) c 2 d e.
+Lemma Inc2 a c d:
+  S1 (3+a) 0 (1+c) d -->*
+  S1 a 0 c (1+d).
 Proof.
-  unfold S0.
   es.
 Qed.
 
-Lemma IncOv0 b c d e:
-  S0 0 b c (2+d) e -->*
-  S0 0 (4+b) (4+c) d e.
+Lemma Incs2 n a c d:
+  S1 (n*3+a) 0 (n+c) d -->*
+  S1 a 0 c (n+d).
 Proof.
-  follow Ov0.
-  follow Inc0s.
-  follow Ov0.
-  follow Inc0s.
+  gen a c d.
+  ind n Inc2.
+Qed.
+
+Lemma Rst0 c d:
+  S1 0 0 c (1+d) -->+
+  S1 (c*2+4) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Rst1 c d:
+  S1 1 0 c (1+d) -->+
+  S1 (c*2+3) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Rst2 c d:
+  S1 2 0 c d -->+
+  S1 (c*2) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Incs12 n a b:
+  S1 (n*3+a) (n+b) 1 1 -->*
+  S1 a 0 (b+1) (1+(n*2+b)).
+Proof.
+  follow Incs1.
+  rewrite <-Nat.add_assoc.
+  follow Incs2.
   finish.
 Qed.
 
-Lemma IncOv0s b c d e n:
-  S0 0 b c (n*2+d) e -->*
-  S0 0 (n*4+b) (n*4+c) d e.
+Definition S '(a,b) := S1 a b 1 1.
+
+Close Scope sym.
+
+Lemma BigStep a b:
+  a/3<=b ->
+  exists c1 c2,
+  S (a,b) -->+
+  S ((b-a/3)*2+2+c1,b+a/3+c2) /\
+  c1<=4 /\ c2<=1.
 Proof.
-  gen b c d e.
-  ind n IncOv0.
+  unfold S.
+  remember (a/3) as a1.
+  remember (a mod 3) as a2.
+  replace a with (a1*3+a2) by lia.
+  intros Hb.
+  remember (b-a1) as b1.
+  replace b with (a1+b1) by lia.
+  destruct a2 as [|[|[|]]]. 4: lia.
+  - exists 4,0.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst0.
+    finish.
+  - exists 3,0.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst1.
+    finish.
+  - exists 0,1.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst2.
+    finish.
 Qed.
 
-Definition S1 a b c :=
-  const 0 <* [1;1]^^a <{{F}} [1] *> [0;1]^^b *> [1;0]^^(1+c) *> const 0.
-
-Lemma Ov0' b c e:
-  S0 0 b c 0 e -->*
-  S1 (2+b) (c+e) 1.
+Lemma nonhalt: ~halts tm c0.
 Proof.
-  es.
+  eapply multistep_nonhalt with (c':=S (54,50)).
+  1: unfold S,S1; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b) => a<=b+b/3 /\ b<=a+a/3 /\ 50<=a /\ 50<=b).
+  2: lia.
+  intros [a b] HP.
+  unshelve epose proof (BigStep a b _) as [c1 [c2 [I1 I2]]].
+  1: lia.
+  eexists (_,_).
+  split.
+  1: apply I1.
+  lia.
 Qed.
 
-Lemma Inc1 a b c:
-  S1 (1+a) b c -->*
-  S1 a b (1+c).
-Proof.
-  es.
-Qed.
-
-Lemma Inc1s a b c:
-  S1 a b c -->*
-  S1 0 b (a+c).
-Proof.
-  gen b c.
-  ind a Inc1.
-Qed.
-
-Lemma Ov1_2 b c:
-  S1 0 (2+b*3) c -->+
-  S0 2 1 1 (b*2+1) (1+c).
-Proof.
-  es.
-Qed.
-
-Lemma BigStep b c:
-  S1 0 (2+b*3) c -->+
-  S1 0 (6+b*4+c) (6+b*4).
-Proof.
-  follow10 Ov1_2.
-  follow Inc0s.
-  follow IncOv0s.
-  follow Ov0.
-  follow Inc0s.
-  follow Ov0'.
-  follow Inc1s.
-  finish.
-Qed.
-
-Definition config n := S1 0 (2+(7*2^n-2)*3) (14*2^n-2).
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S1; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  exists (S n).
-  unfold config.
-  follow10 BigStep.
-  cbn[Nat.pow].
-  pose proof (Nat.pow_nonzero 2 n).
-  finish.
-Qed.
-
-End TM14.
+End TM21.
 
 
-Module TM15.
-Definition tm := Eval compute in (TM_from_str "1RB0RE_0LB0RC_1LD---_1LE0LA_1RA0RF_1RE0LC").
+Module TM22.
+Definition tm := Eval compute in (TM_from_str "1LB---_0RC1LD_1RA1RB_1LE0LF_1LB0LD_1RF0RE").
 
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
+Definition S1 a b c d :=
+  0inf <* <[1]^^a <* <[1;0;1;0;1;1;1]^^b <{{D}} [0] *> [1;0]^^c *> [1;0;1;0;1;1;1]^^d *> 0inf.
 
-Definition S0 a b c d e :=
-  const 0 <* [1]^^a <* [0] <{{E}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> [1;0]^^e *> const 0.
-
-Lemma Inc0 a b c d e:
-  S0 a (1+b) c d e -->*
-  S0 (1+a) b (1+c) d e.
+Lemma Inc1 a b c d:
+  S1 a (1+b) c d -->*
+  S1 a b (1+c) (1+d).
 Proof.
   es.
 Qed.
+
+Lemma Incs1 a b c d:
+  S1 a b c d -->*
+  S1 a 0 (b+c) (b+d).
+Proof.
+  gen c d.
+  ind b Inc1.
+Qed.
+
+Lemma Inc2 a c d:
+  S1 (3+a) 0 (1+c) d -->*
+  S1 a 0 c (1+d).
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 n a c d:
+  S1 (n*3+a) 0 (n+c) d -->*
+  S1 a 0 c (n+d).
+Proof.
+  gen a c d.
+  ind n Inc2.
+Qed.
+
+Lemma Rst0 c d:
+  S1 0 0 c (1+d) -->+
+  S1 (c*2+4) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Rst1 c d:
+  S1 1 0 c (1+d) -->+
+  S1 (c*2+3) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Rst2 c d:
+  S1 2 0 c d -->+
+  S1 (c*2) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Incs12 n a b:
+  S1 (n*3+a) (n+b) 1 1 -->*
+  S1 a 0 (b+1) (1+(n*2+b)).
+Proof.
+  follow Incs1.
+  rewrite <-Nat.add_assoc.
+  follow Incs2.
+  finish.
+Qed.
+
+Definition S '(a,b) := S1 a b 1 1.
+
+Close Scope sym.
+
+Lemma BigStep a b:
+  a/3<=b ->
+  exists c1 c2,
+  S (a,b) -->+
+  S ((b-a/3)*2+2+c1,b+a/3+c2) /\
+  c1<=4 /\ c2<=1.
+Proof.
+  unfold S.
+  remember (a/3) as a1.
+  remember (a mod 3) as a2.
+  replace a with (a1*3+a2) by lia.
+  intros Hb.
+  remember (b-a1) as b1.
+  replace b with (a1+b1) by lia.
+  destruct a2 as [|[|[|]]]. 4: lia.
+  - exists 4,0.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst0.
+    finish.
+  - exists 3,0.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst1.
+    finish.
+  - exists 0,1.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst2.
+    finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (55,55)).
+  1: unfold S,S1; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b) => a<=b+b/3 /\ b<=a+a/3 /\ 50<=a /\ 50<=b).
+  2: lia.
+  intros [a b] HP.
+  unshelve epose proof (BigStep a b _) as [c1 [c2 [I1 I2]]].
+  1: lia.
+  eexists (_,_).
+  split.
+  1: apply I1.
+  lia.
+Qed.
+
+End TM22.
+
+
+Module TM23.
+Definition tm := Eval compute in (TM_from_str "1LB0LE_1LC0LA_0RD1LA_1RF1RC_1RE0RB_1LC---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c d :=
+  0inf <* <[1]^^a <* <[1;0;1;0;1;1;1]^^b <{{A}} [0] *> [1;0]^^c *> [1;0;1;0;1;1;1]^^d *> 0inf.
+
+Lemma Inc1 a b c d:
+  S1 a (1+b) c d -->*
+  S1 a b (1+c) (1+d).
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c d:
+  S1 a b c d -->*
+  S1 a 0 (b+c) (b+d).
+Proof.
+  gen c d.
+  ind b Inc1.
+Qed.
+
+Lemma Inc2 a c d:
+  S1 (3+a) 0 (1+c) d -->*
+  S1 a 0 c (1+d).
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 n a c d:
+  S1 (n*3+a) 0 (n+c) d -->*
+  S1 a 0 c (n+d).
+Proof.
+  gen a c d.
+  ind n Inc2.
+Qed.
+
+Lemma Rst0 c d:
+  S1 0 0 c (1+d) -->+
+  S1 (c*2+4) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Rst1 c d:
+  S1 1 0 c (1+d) -->+
+  S1 (c*2+3) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Rst2 c d:
+  S1 2 0 c d -->+
+  S1 (c*2) d 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Incs12 n a b:
+  S1 (n*3+a) (n+b) 1 1 -->*
+  S1 a 0 (b+1) (1+(n*2+b)).
+Proof.
+  follow Incs1.
+  rewrite <-Nat.add_assoc.
+  follow Incs2.
+  finish.
+Qed.
+
+Definition S '(a,b) := S1 a b 1 1.
+
+Close Scope sym.
+
+Lemma BigStep a b:
+  a/3<=b ->
+  exists c1 c2,
+  S (a,b) -->+
+  S ((b-a/3)*2+2+c1,b+a/3+c2) /\
+  c1<=4 /\ c2<=1.
+Proof.
+  unfold S.
+  remember (a/3) as a1.
+  remember (a mod 3) as a2.
+  replace a with (a1*3+a2) by lia.
+  intros Hb.
+  remember (b-a1) as b1.
+  replace b with (a1+b1) by lia.
+  destruct a2 as [|[|[|]]]. 4: lia.
+  - exists 4,0.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst0.
+    finish.
+  - exists 3,0.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst1.
+    finish.
+  - exists 0,1.
+    split. 2: lia.
+    follow Incs12.
+    follow10 Rst2.
+    finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (64,69)).
+  1: unfold S,S1; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b) => a<=b+b/3 /\ b<=a+a/3 /\ 50<=a /\ 50<=b).
+  2: lia.
+  intros [a b] HP.
+  unshelve epose proof (BigStep a b _) as [c1 [c2 [I1 I2]]].
+  1: lia.
+  eexists (_,_).
+  split.
+  1: apply I1.
+  lia.
+Qed.
+
+End TM23.
+
+
+Module TM24.
+Definition tm := Eval compute in (TM_from_str "1RB1LF_1LC0RD_1LA0LD_1LB1RE_0RB0RC_1LB---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
 Definition S1 a b c d e :=
-  const 0 <* [1]^^(a) <{{D}} [1;0]^^b *> [0]^^(c) *> [0;1]^^d *> [1;0]^^e *> const 0.
+  0inf <* <[1;0;1]^^a <* <[1;0;0;1;0;0;1]^^b <{{D}} [0;1;1]^^c *> [0;1;1;1;1;1;1]^^d *> [0;1;1] *> ([0] ++ [1]^^10)^^e *> 0inf.
 
 Lemma Inc1 a b c d e:
-  S1 (3+a) b (3+c) d e -->*
-  S1 a (3+b) c d e.
+  S1 a (2+b) c d e -->*
+  S1 a b (2+c) d (1+e).
 Proof.
   es.
 Qed.
 
-Definition S2 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{E}} [1] *> [1;0]^^d *> [1;1] *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc2 a b c d e f:
-  S2 a b c (1+d) e f -->*
-  S2 a b (1+c) d (1+e) f.
+Lemma Incs1 n a b c d e:
+  S1 a (n*2+b) c d e -->*
+  S1 a b (n*2+c) d (n+e).
 Proof.
-  es.
-Qed.
-
-Definition S3 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{D}} [1] *> [0;1]^^(d) *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc3 a b c d e f:
-  S3 a b (3+c) d (3+e) f -->*
-  S3 a b c (3+d) e f.
-Proof.
-  es.
-Qed.
-
-Definition S2' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{E}} [1] *> [1;0]^^d *> [1;1] *> const 0.
-
-Lemma Inc2' a b c d:
-  S2' a b c (1+d) -->*
-  S2' a b (1+c) d.
-Proof.
-  es.
-Qed.
-
-Definition S3' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{D}} [1] *> [0;1]^^(d) *> const 0.
-
-Lemma Inc3' a b c d:
-  S3' a b (3+c) d -->*
-  S3' a b c (3+d).
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 (b+a) 0 (b+c) d e.
-Proof.
-  gen a c.
-  ind b Inc0.
-Qed.
-
-Lemma Inc1s a b c d e n:
-  S1 (n*3+a) b (n*3+c) d e -->*
-  S1 a (n*3+b) c d e.
-Proof.
-  gen a b c.
+  gen a b c d e.
   ind n Inc1.
 Qed.
 
-Lemma Inc2s a b c d e f:
-  S2 a b c d e f -->*
-  S2 a b (d+c) 0 (d+e) f.
-Proof.
-  gen c e.
-  ind d Inc2.
-Qed.
-
-Lemma Inc3s a b c d e f n:
-  S3 a b (n*3+c) d (n*3+e) f -->*
-  S3 a b c (n*3+d) e f.
-Proof.
-  gen c d e.
-  ind n Inc3.
-Qed.
-
-Lemma Inc2s' a b c d:
-  S2' a b c d -->*
-  S2' a b (d+c) 0.
-Proof.
-  gen c.
-  ind d Inc2'.
-Qed.
-
-Lemma Inc3s' a b c d n:
-  S3' a b (n*3+c) d -->*
-  S3' a b c (n*3+d).
-Proof.
-  gen c d.
-  ind n Inc3'.
-Qed.
-
-
-Lemma Incs2323 a b d:
-  S2 a (1+b) 0 (1+d*3) 1 1 -->*
-  S3' a b 0 (4+d*3).
-Proof.
-  follow Inc2s.
-  mid (S3 a (1+b) (1+d*3) 1 (3+d*3) 1); [es|].
-  follow (Inc3s a (1+b) 1 1 3 1 d).
-  mid (S2' a b 0 (3+d*3)); [es|].
-  follow Inc2s'.
-  mid (S3' a b (3+d*3) 1); [es|].
-  follow (Inc3s' a b 0 1 (1+d)).
-  finish.
-Qed.
-
-Lemma Incs0101 b d e:
-  S0 1 (1+b*3) 0 (1+d) e -->*
-  S1 3 (2+b*3) 3 d e.
-Proof.
-  follow Inc0s.
-  mid (S1 (2+b*3) 2 (1+b*3) (1+d) e); [es|].
-  follow (Inc1s 2 2 1 (1+d) e b).
-  mid (S0 0 (3+b*3) 0 d e); [es|].
-  follow Inc0s.
-  mid (S1 (3+b*3) 2 (3+b*3) d e); [es|].
-  follow (Inc1s 3 2 3 d e b).
-  finish.
-Qed.
-
-Definition S4 b d e :=
-  S0 1 (1+b*3) 0 (1+d*3) (2+e*3).
-
-Lemma Inc4 b d e:
-  S4 b (1+d) e -->*
-  S4 (1+b) d (1+e).
-Proof.
-  unfold S4.
-  follow Incs0101.
-  mid (S2 (4+b*3) (1+(1+d*3)) 0 (1+e*3) 1 1); [es|].
-  follow Incs2323.
-  es.
-Qed.
-
-Lemma Inc4s b d e:
-  S4 b d e -->*
-  S4 (d+b) 0 (d+e).
-Proof.
-  gen b e.
-  ind d Inc4.
-Qed.
-
-Definition S5 a b c :=
-  const 0 <* [1]^^a <* [0] <{{E}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [1] *> const 0.
-
-Lemma Inc5 a b c:
-  S5 a (1+b) c -->*
-  S5 (1+a) b (1+c).
+Lemma Inc2 a c d e:
+  S1 (4+a) 0 (4+c) d e -->*
+  S1 a 0 c d (3+e).
 Proof.
   es.
 Qed.
 
-Lemma Inc5s a b c:
-  S5 a b c -->*
-  S5 (b+a) 0 (b+c).
+Lemma Incs2 n a c d e:
+  S1 (n*4+a) 0 (n*4+c) d e -->*
+  S1 a 0 c d (n*3+e).
 Proof.
-  gen a c.
-  ind b Inc5.
+  gen a c d e.
+  ind n Inc2.
 Qed.
 
-Definition S6 a b c :=
-  const 0 <* [1]^^(a) <{{D}} [1;0]^^b *> [0]^^(c) *> [1] *> const 0.
+Definition S0 a b c d e :=
+  0inf <* <[1;0;1]^^a <* <[1;0;0;1;0;0;1]^^b <* <[1;0;1] <* <[1;0;0;1;0;0;0;1;0;0;1]^^c <{{D}} [0;1;1;1;1;1;1]^^d *> [0;1;1] *> ([0] ++ [1]^^10)^^e *> 0inf.
 
-Lemma Inc6 a b c:
-  S6 (3+a) b (3+c) -->*
-  S6 a (3+b) c.
+Lemma Inc0 a b c d e:
+  S0 a b (2+c) d e -->*
+  S0 a b c (2+d) (1+e).
 Proof.
   es.
 Qed.
 
-Lemma Inc6s a b c n:
-  S6 (n*3+a) b (n*3+c) -->*
-  S6 a (n*3+b) c.
+Lemma Incs0 n a b c d e:
+  S0 a b (n*2+c) d e -->*
+  S0 a b c (n*2+d) (n+e).
 Proof.
-  gen a b c.
-  ind n Inc6.
+  gen a b c d e.
+  ind n Inc0.
 Qed.
 
-Definition config n :=
-  S6 1 (2+n*3) 1.
-
-Lemma BigStep n:
-  config n -->+
-  config (2+n*2).
+Lemma Ov0_0 a b d e:
+  S0 a (1+b) 0 (1+d) e -->*
+  S1 a b 3 d (1+e).
 Proof.
-  unfold config.
-  mid10 (S4 0 (n) 0); [unfold S4; es|].
-  follow Inc4s.
-  unfold S4.
-  follow Incs0101.
-  mid (S5 1 (6+n*3+n*3) 1); [es|].
-  mid (S5 1 ((2+n*2)*3) 1); [finish|].
-  remember (2+n*2) as n0.
-  follow Inc5s.
-  mid (S6 (1+n0*3) 2 (1+n0*3)); [es|].
-  follow (Inc6s 1 2 1 n0).
-  finish.
+  es.
 Qed.
 
-Lemma nonhalt:~halts tm c0.
+Lemma Ov0_1 a b d e:
+  S0 a (2+b) 1 d e -->*
+  S1 a b 4 d (2+e).
 Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S6; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  eexists.
+  es.
+Qed.
+
+Lemma Ov1_1 a c d e:
+  S1 (2+a) 1 (1+c) d e -->*
+  S1 a 0 c d (2+e).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_0 c d e:
+  S1 0 0 c d (2+e) -->+
+  S0 (1+c) d e 2 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_1 c d e:
+  S1 1 0 (1+c) d (1+e) -->+
+  S0 c d e 2 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_2 c d e:
+  S1 2 0 (1+c) d e -->+
+  S0 c d e 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_3 c d e:
+  S1 3 0 (3+c) d e -->+
+  S0 c d (1+e) 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma BigStep0 a b c d:
+  2<=b ->
+  S0 a b c (1+d) 1 -->*
+  S1 a (b-1-(c mod 2)) (3+(c mod 2)) (c+d) (c/2+2+(c mod 2)).
+Proof.
+  intros.
+  remember (c/2) as c1.
+  remember (c mod 2) as c2.
+  replace c with (c1*2+c2) by lia.
+  destruct c2 as [|[|]]. 3: lia.
+  - follow Incs0.
+    replace b with (1+(b-1)) by lia.
+    replace (c1*2+(1+d)) with (1+(c1*2+d)) by lia.
+    follow Ov0_0.
+    finish.
+  - follow Incs0.
+    replace b with (2+(b-2)) by lia.
+    follow Ov0_1.
+    finish.
+Qed.
+
+Lemma BigStep1 a b c d e:
+  2<=a ->
+  S1 a b (3+c) d e -->*
+  S1 (a-(b mod 2)*2) 0 (b+c+(3-(b mod 2)*2)) d (e+b/2+(b mod 2)*2).
+Proof.
+  intros.
+  remember (b/2) as b1.
+  remember (b mod 2) as b2.
+  replace b with (b1*2+b2) by lia.
+  destruct b2 as [|[|]]. 3: lia.
+  - follow Incs1.
+    finish.
+  - follow Incs1.
+    replace a with (2+(a-2)) by lia.
+    replace (b1*2+(3+c)) with (1+(b1*2+c+2)) by lia.
+    follow Ov1_1.
+    finish.
+Qed.
+
+Lemma BigStep2 a c d e:
+  2<=e ->
+  a+3<=c ->
+  S1 a 0 c d e -->+
+  S0 (c+(1-((a mod 4) mod 2))-a) d (a/4*3+e+(a mod 4)-2) (1+(1-(a mod 4)/2)) 1.
+Proof.
+  intros.
+  remember (a/4) as a1.
+  remember (a mod 4) as a2.
+  replace a with (a1*4+a2) in * by lia.
+  replace c with (a1*4+(c-a1*4)) by lia.
+  destruct a2 as [|[|[|[|]]]]; cbn. 5: lia.
+  - follow Incs2.
+    replace (a1*3+e) with (2+(a1*3+e-2)) by lia.
+    follow10 Ov2_0.
+    finish.
+  - follow Incs2.
+    mid01 (S1 1 0 (1+(c-a1*4-1)) d (1+(a1*3+e-1))).
+    1: finish.
+    follow10 Ov2_1.
+    finish.
+  - follow Incs2.
+    mid01 (S1 2 0 (1+(c-a1*4-1)) d (a1*3+e)).
+    1: finish.
+    follow10 Ov2_2.
+    finish.
+  - follow Incs2.
+    mid01 (S1 3 0 (3+(c-a1*4-3)) d (a1*3+e)).
+    1: finish.
+    follow10 Ov2_3.
+    finish.
+Qed.
+
+Lemma BigStep2' a c d e:
+  2<=e ->
+  a+3<=c ->
+  S1 a 0 c d e -->*
+  S0 (c+(1-((a mod 4) mod 2))-a) d (a/4*3+e+(a mod 4)-2) (1+(1-(a mod 4)/2)) 1.
+Proof.
+  intros.
+  apply progress_evstep.
+  apply BigStep2; auto.
+Qed.
+
+Definition P '(a,b,c,d) :=
+  2<=a /\
+  2<=b /\
+  2<=c /\
+  d<=1 /\
+  a+1<=b /\
+  b+5<=a+c /\
+  a+c*2+14<=b*6 /\
+  a+b*4+33<=c*10.
+
+Definition S '(a,b,c,d) := S0 a b c (1+d) 1.
+
+Lemma BigStep x:
+  P x ->
+  exists x',
+  S x -->+ S x' /\ P x'.
+Proof.
+  unfold P,S.
+  destruct x as [[[a b] c] d].
+  intros HP.
+  eexists (_,_,_,_).
+  split.
+  - follow BigStep0.
+    1: lia.
+    follow BigStep1.
+    1: lia.
+    apply BigStep2.
+    1: lia.
+    lia.
+  - repeat split.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (7,9,9,O)).
+  1: unfold S,S0; esx.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: unfold P; lia.
+  intros [[[a b] c] d].
   apply BigStep.
 Qed.
 
-End TM15.
+End TM24.
 
 
-Module TM16.
-Definition tm := Eval compute in (TM_from_str "1LB0RF_1LC0LD_1RD0RE_0RA0RC_1RC0LA_1RA---").
+Module TM25.
+Definition tm := Eval compute in (TM_from_str "1LB0LD_1RC1LF_1LA0RD_1LC1RE_0RC0RA_1LC---").
 
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
-
-Definition S0 a b c d e :=
-  const 0 <* [1]^^a <* [0] <{{C}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> [1;0]^^e *> const 0.
-
-Lemma Inc0 a b c d e:
-  S0 a (1+b) c d e -->*
-  S0 (1+a) b (1+c) d e.
-Proof.
-  es.
-Qed.
-
 Definition S1 a b c d e :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [0;1]^^d *> [1;0]^^e *> const 0.
+  0inf <* <[1;0;1]^^a <* <[1;0;0;1;0;0;1]^^b <{{D}} [0;1;1]^^c *> [0;1;1;1;1;1;1]^^d *> [0;1;1] *> ([0] ++ [1]^^10)^^e *> 0inf.
 
 Lemma Inc1 a b c d e:
-  S1 (3+a) b (3+c) d e -->*
-  S1 a (3+b) c d e.
+  S1 a (2+b) c d e -->*
+  S1 a b (2+c) d (1+e).
 Proof.
   es.
 Qed.
 
-Definition S2 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc2 a b c d e f:
-  S2 a b c (1+d) e f -->*
-  S2 a b (1+c) d (1+e) f.
+Lemma Incs1 n a b c d e:
+  S1 a (n*2+b) c d e -->*
+  S1 a b (n*2+c) d (n+e).
 Proof.
-  es.
-Qed.
-
-Definition S3 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc3 a b c d e f:
-  S3 a b (3+c) d (3+e) f -->*
-  S3 a b c (3+d) e f.
-Proof.
-  es.
-Qed.
-
-Definition S2' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> const 0.
-
-Lemma Inc2' a b c d:
-  S2' a b c (1+d) -->*
-  S2' a b (1+c) d.
-Proof.
-  es.
-Qed.
-
-Definition S3' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> const 0.
-
-Lemma Inc3' a b c d:
-  S3' a b (3+c) d -->*
-  S3' a b c (3+d).
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 (b+a) 0 (b+c) d e.
-Proof.
-  gen a c.
-  ind b Inc0.
-Qed.
-
-Lemma Inc1s a b c d e n:
-  S1 (n*3+a) b (n*3+c) d e -->*
-  S1 a (n*3+b) c d e.
-Proof.
-  gen a b c.
+  gen a b c d e.
   ind n Inc1.
 Qed.
 
-Lemma Inc2s a b c d e f:
-  S2 a b c d e f -->*
-  S2 a b (d+c) 0 (d+e) f.
-Proof.
-  gen c e.
-  ind d Inc2.
-Qed.
-
-Lemma Inc3s a b c d e f n:
-  S3 a b (n*3+c) d (n*3+e) f -->*
-  S3 a b c (n*3+d) e f.
-Proof.
-  gen c d e.
-  ind n Inc3.
-Qed.
-
-Lemma Inc2s' a b c d:
-  S2' a b c d -->*
-  S2' a b (d+c) 0.
-Proof.
-  gen c.
-  ind d Inc2'.
-Qed.
-
-Lemma Inc3s' a b c d n:
-  S3' a b (n*3+c) d -->*
-  S3' a b c (n*3+d).
-Proof.
-  gen c d.
-  ind n Inc3'.
-Qed.
-
-
-Lemma Incs2323 a b d:
-  S2 a (1+b) 0 (1+d*3) 1 1 -->*
-  S3' a b 0 (4+d*3).
-Proof.
-  follow Inc2s.
-  mid (S3 a (1+b) (1+d*3) 1 (3+d*3) 1); [es|].
-  follow (Inc3s a (1+b) 1 1 3 1 d).
-  mid (S2' a b 0 (3+d*3)); [es|].
-  follow Inc2s'.
-  mid (S3' a b (3+d*3) 1); [es|].
-  follow (Inc3s' a b 0 1 (1+d)).
-  finish.
-Qed.
-
-Lemma Incs0101 b d e:
-  S0 1 (1+b*3) 0 (1+d) e -->*
-  S1 3 (2+b*3) 3 d e.
-Proof.
-  follow Inc0s.
-  mid (S1 (2+b*3) 2 (1+b*3) (1+d) e); [es|].
-  follow (Inc1s 2 2 1 (1+d) e b).
-  mid (S0 0 (3+b*3) 0 d e); [es|].
-  follow Inc0s.
-  mid (S1 (3+b*3) 2 (3+b*3) d e); [es|].
-  follow (Inc1s 3 2 3 d e b).
-  finish.
-Qed.
-
-Definition S4 b d e :=
-  S0 1 (1+b*3) 0 (1+d*3) (2+e*3).
-
-Lemma Inc4 b d e:
-  S4 b (1+d) e -->*
-  S4 (1+b) d (1+e).
-Proof.
-  unfold S4.
-  follow Incs0101.
-  mid (S2 (4+b*3) (1+(1+d*3)) 0 (1+e*3) 1 1); [es|].
-  follow Incs2323.
-  es.
-Qed.
-
-Lemma Inc4s b d e:
-  S4 b d e -->*
-  S4 (d+b) 0 (d+e).
-Proof.
-  gen b e.
-  ind d Inc4.
-Qed.
-
-Definition S5 a b c :=
-  const 0 <* [1]^^a <* [0] <{{C}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [1] *> const 0.
-
-Lemma Inc5 a b c:
-  S5 a (1+b) c -->*
-  S5 (1+a) b (1+c).
+Lemma Inc2 a c d e:
+  S1 (4+a) 0 (4+c) d e -->*
+  S1 a 0 c d (3+e).
 Proof.
   es.
 Qed.
 
-Lemma Inc5s a b c:
-  S5 a b c -->*
-  S5 (b+a) 0 (b+c).
+Lemma Incs2 n a c d e:
+  S1 (n*4+a) 0 (n*4+c) d e -->*
+  S1 a 0 c d (n*3+e).
 Proof.
-  gen a c.
-  ind b Inc5.
+  gen a c d e.
+  ind n Inc2.
 Qed.
 
-Definition S6 a b c :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [1] *> const 0.
+Definition S0 a b c d e :=
+  0inf <* <[1;0;1]^^a <* <[1;0;0;1;0;0;1]^^b <* <[1;0;1] <* <[1;0;0;1;0;0;0;1;0;0;1]^^c <{{D}} [0;1;1;1;1;1;1]^^d *> [0;1;1] *> ([0] ++ [1]^^10)^^e *> 0inf.
 
-Lemma Inc6 a b c:
-  S6 (3+a) b (3+c) -->*
-  S6 a (3+b) c.
+Lemma Inc0 a b c d e:
+  S0 a b (2+c) d e -->*
+  S0 a b c (2+d) (1+e).
 Proof.
   es.
 Qed.
 
-Lemma Inc6s a b c n:
-  S6 (n*3+a) b (n*3+c) -->*
-  S6 a (n*3+b) c.
+Lemma Incs0 n a b c d e:
+  S0 a b (n*2+c) d e -->*
+  S0 a b c (n*2+d) (n+e).
 Proof.
-  gen a b c.
-  ind n Inc6.
+  gen a b c d e.
+  ind n Inc0.
 Qed.
 
-Definition config n :=
-  S6 1 (2+n*3) 1.
-
-Lemma BigStep n:
-  config n -->+
-  config (2+n*2).
+Lemma Ov0_0 a b d e:
+  S0 a (1+b) 0 (1+d) e -->*
+  S1 a b 3 d (1+e).
 Proof.
-  unfold config.
-  mid10 (S4 0 (n) 0); [unfold S4; es|].
-  follow Inc4s.
-  unfold S4.
-  follow Incs0101.
-  mid (S5 1 (6+n*3+n*3) 1); [es|].
-  mid (S5 1 ((2+n*2)*3) 1); [finish|].
-  remember (2+n*2) as n0.
-  follow Inc5s.
-  mid (S6 (1+n0*3) 2 (1+n0*3)); [es|].
-  follow (Inc6s 1 2 1 n0).
-  finish.
+  es.
 Qed.
 
-Lemma nonhalt:~halts tm c0.
+Lemma Ov0_1 a b d e:
+  S0 a (2+b) 1 d e -->*
+  S1 a b 4 d (2+e).
 Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S6; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  eexists.
+  es.
+Qed.
+
+Lemma Ov1_1 a c d e:
+  S1 (2+a) 1 (1+c) d e -->*
+  S1 a 0 c d (2+e).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_0 c d e:
+  S1 0 0 c d (2+e) -->+
+  S0 (1+c) d e 2 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_1 c d e:
+  S1 1 0 (1+c) d (1+e) -->+
+  S0 c d e 2 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_2 c d e:
+  S1 2 0 (1+c) d e -->+
+  S0 c d e 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2_3 c d e:
+  S1 3 0 (3+c) d e -->+
+  S0 c d (1+e) 1 1.
+Proof.
+  es.
+Qed.
+
+Lemma BigStep0 a b c d:
+  2<=b ->
+  S0 a b c (1+d) 1 -->*
+  S1 a (b-1-(c mod 2)) (3+(c mod 2)) (c+d) (c/2+2+(c mod 2)).
+Proof.
+  intros.
+  remember (c/2) as c1.
+  remember (c mod 2) as c2.
+  replace c with (c1*2+c2) by lia.
+  destruct c2 as [|[|]]. 3: lia.
+  - follow Incs0.
+    replace b with (1+(b-1)) by lia.
+    replace (c1*2+(1+d)) with (1+(c1*2+d)) by lia.
+    follow Ov0_0.
+    finish.
+  - follow Incs0.
+    replace b with (2+(b-2)) by lia.
+    follow Ov0_1.
+    finish.
+Qed.
+
+Lemma BigStep1 a b c d e:
+  2<=a ->
+  S1 a b (3+c) d e -->*
+  S1 (a-(b mod 2)*2) 0 (b+c+(3-(b mod 2)*2)) d (e+b/2+(b mod 2)*2).
+Proof.
+  intros.
+  remember (b/2) as b1.
+  remember (b mod 2) as b2.
+  replace b with (b1*2+b2) by lia.
+  destruct b2 as [|[|]]. 3: lia.
+  - follow Incs1.
+    finish.
+  - follow Incs1.
+    replace a with (2+(a-2)) by lia.
+    replace (b1*2+(3+c)) with (1+(b1*2+c+2)) by lia.
+    follow Ov1_1.
+    finish.
+Qed.
+
+Lemma BigStep2 a c d e:
+  2<=e ->
+  a+3<=c ->
+  S1 a 0 c d e -->+
+  S0 (c+(1-((a mod 4) mod 2))-a) d (a/4*3+e+(a mod 4)-2) (1+(1-(a mod 4)/2)) 1.
+Proof.
+  intros.
+  remember (a/4) as a1.
+  remember (a mod 4) as a2.
+  replace a with (a1*4+a2) in * by lia.
+  replace c with (a1*4+(c-a1*4)) by lia.
+  destruct a2 as [|[|[|[|]]]]; cbn. 5: lia.
+  - follow Incs2.
+    replace (a1*3+e) with (2+(a1*3+e-2)) by lia.
+    follow10 Ov2_0.
+    finish.
+  - follow Incs2.
+    mid01 (S1 1 0 (1+(c-a1*4-1)) d (1+(a1*3+e-1))).
+    1: finish.
+    follow10 Ov2_1.
+    finish.
+  - follow Incs2.
+    mid01 (S1 2 0 (1+(c-a1*4-1)) d (a1*3+e)).
+    1: finish.
+    follow10 Ov2_2.
+    finish.
+  - follow Incs2.
+    mid01 (S1 3 0 (3+(c-a1*4-3)) d (a1*3+e)).
+    1: finish.
+    follow10 Ov2_3.
+    finish.
+Qed.
+
+Lemma BigStep2' a c d e:
+  2<=e ->
+  a+3<=c ->
+  S1 a 0 c d e -->*
+  S0 (c+(1-((a mod 4) mod 2))-a) d (a/4*3+e+(a mod 4)-2) (1+(1-(a mod 4)/2)) 1.
+Proof.
+  intros.
+  apply progress_evstep.
+  apply BigStep2; auto.
+Qed.
+
+Definition P '(a,b,c,d) :=
+  2<=a /\
+  2<=b /\
+  2<=c /\
+  d<=1 /\
+  a+1<=b /\
+  b+5<=a+c /\
+  a+c*2+14<=b*6 /\
+  a+b*4+33<=c*10.
+
+Definition S '(a,b,c,d) := S0 a b c (1+d) 1.
+
+Lemma BigStep x:
+  P x ->
+  exists x',
+  S x -->+ S x' /\ P x'.
+Proof.
+  unfold P,S.
+  destruct x as [[[a b] c] d].
+  intros HP.
+  eexists (_,_,_,_).
+  split.
+  - follow BigStep0.
+    1: lia.
+    follow BigStep1.
+    1: lia.
+    apply BigStep2.
+    1: lia.
+    lia.
+  - repeat split.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+Qed.
+
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (5,10,10,1%nat)).
+  1: unfold S,S0; esx.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: unfold P; lia.
+  intros [[[a b] c] d].
   apply BigStep.
 Qed.
 
-End TM16.
+End TM25.
 
-Module TM17.
-Definition tm := Eval compute in (TM_from_str "1LB1RF_1LC0LD_1RD0RE_0RA0RC_1RC0LA_1LE---").
+
+Module TM26.
+Definition tm := Eval compute in (TM_from_str "1LB1RE_1LC0RA_1LD0LA_1RB1LF_0RB0RC_1LB---").
 
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
-
-Definition S0 a b c d e :=
-  const 0 <* [1]^^a <* [0] <{{C}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> [1;0]^^e *> const 0.
-
-Lemma Inc0 a b c d e:
-  S0 a (1+b) c d e -->*
-  S0 (1+a) b (1+c) d e.
-Proof.
-  es.
-Qed.
-
 Definition S1 a b c d e :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [0;1]^^d *> [1;0]^^e *> const 0.
+  0inf <* <[1;0;1]^^a <* <[1;0;0;1;0;0;1]^^b <{{A}} [0;1;1]^^c *> [0;1;1;1;1;1;1]^^d *> [0;1;1] *> ([0] ++ [1]^^10)^^e *> 0inf.
 
 Lemma Inc1 a b c d e:
-  S1 (3+a) b (3+c) d e -->*
-  S1 a (3+b) c d e.
+  S1 a (2+b) c d e -->*
+  S1 a b (2+c) d (1+e).
 Proof.
   es.
 Qed.
 
-Definition S2 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc2 a b c d e f:
-  S2 a b c (1+d) e f -->*
-  S2 a b (1+c) d (1+e) f.
+Lemma Incs1 n a b c d e:
+  S1 a (n*2+b) c d e -->*
+  S1 a b (n*2+c) d (n+e).
 Proof.
-  es.
-Qed.
-
-Definition S3 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc3 a b c d e f:
-  S3 a b (3+c) d (3+e) f -->*
-  S3 a b c (3+d) e f.
-Proof.
-  es.
-Qed.
-
-Definition S2' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> const 0.
-
-Lemma Inc2' a b c d:
-  S2' a b c (1+d) -->*
-  S2' a b (1+c) d.
-Proof.
-  es.
-Qed.
-
-Definition S3' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> const 0.
-
-Lemma Inc3' a b c d:
-  S3' a b (3+c) d -->*
-  S3' a b c (3+d).
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 (b+a) 0 (b+c) d e.
-Proof.
-  gen a c.
-  ind b Inc0.
-Qed.
-
-Lemma Inc1s a b c d e n:
-  S1 (n*3+a) b (n*3+c) d e -->*
-  S1 a (n*3+b) c d e.
-Proof.
-  gen a b c.
+  gen a b c d e.
   ind n Inc1.
 Qed.
 
-Lemma Inc2s a b c d e f:
-  S2 a b c d e f -->*
-  S2 a b (d+c) 0 (d+e) f.
-Proof.
-  gen c e.
-  ind d Inc2.
-Qed.
-
-Lemma Inc3s a b c d e f n:
-  S3 a b (n*3+c) d (n*3+e) f -->*
-  S3 a b c (n*3+d) e f.
-Proof.
-  gen c d e.
-  ind n Inc3.
-Qed.
-
-Lemma Inc2s' a b c d:
-  S2' a b c d -->*
-  S2' a b (d+c) 0.
-Proof.
-  gen c.
-  ind d Inc2'.
-Qed.
-
-Lemma Inc3s' a b c d n:
-  S3' a b (n*3+c) d -->*
-  S3' a b c (n*3+d).
-Proof.
-  gen c d.
-  ind n Inc3'.
-Qed.
-
-
-Lemma Incs2323 a b d:
-  S2 a (1+b) 0 (1+d*3) 1 1 -->*
-  S3' a b 0 (4+d*3).
-Proof.
-  follow Inc2s.
-  mid (S3 a (1+b) (1+d*3) 1 (3+d*3) 1); [es|].
-  follow (Inc3s a (1+b) 1 1 3 1 d).
-  mid (S2' a b 0 (3+d*3)); [es|].
-  follow Inc2s'.
-  mid (S3' a b (3+d*3) 1); [es|].
-  follow (Inc3s' a b 0 1 (1+d)).
-  finish.
-Qed.
-
-Lemma Incs0101 b d e:
-  S0 1 (1+b*3) 0 (1+d) e -->*
-  S1 3 (2+b*3) 3 d e.
-Proof.
-  follow Inc0s.
-  mid (S1 (2+b*3) 2 (1+b*3) (1+d) e); [es|].
-  follow (Inc1s 2 2 1 (1+d) e b).
-  mid (S0 0 (3+b*3) 0 d e); [es|].
-  follow Inc0s.
-  mid (S1 (3+b*3) 2 (3+b*3) d e); [es|].
-  follow (Inc1s 3 2 3 d e b).
-  finish.
-Qed.
-
-Definition S4 b d e :=
-  S0 1 (1+b*3) 0 (1+d*3) (2+e*3).
-
-Lemma Inc4 b d e:
-  S4 b (1+d) e -->*
-  S4 (1+b) d (1+e).
-Proof.
-  unfold S4.
-  follow Incs0101.
-  mid (S2 (4+b*3) (1+(1+d*3)) 0 (1+e*3) 1 1); [es|].
-  follow Incs2323.
-  es.
-Qed.
-
-Lemma Inc4s b d e:
-  S4 b d e -->*
-  S4 (d+b) 0 (d+e).
-Proof.
-  gen b e.
-  ind d Inc4.
-Qed.
-
-Definition S5 a b c :=
-  const 0 <* [1]^^a <* [0] <{{C}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [1] *> const 0.
-
-Lemma Inc5 a b c:
-  S5 a (1+b) c -->*
-  S5 (1+a) b (1+c).
+Lemma Inc2 a c d e:
+  S1 (4+a) 0 (4+c) d e -->*
+  S1 a 0 c d (3+e).
 Proof.
   es.
 Qed.
 
-Lemma Inc5s a b c:
-  S5 a b c -->*
-  S5 (b+a) 0 (b+c).
+Lemma Incs2 n a c d e:
+  S1 (n*4+a) 0 (n*4+c) d e -->*
+  S1 a 0 c d (n*3+e).
 Proof.
-  gen a c.
-  ind b Inc5.
+  gen a c d e.
+  ind n Inc2.
 Qed.
-
-Definition S6 a b c :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [1] *> const 0.
-
-Lemma Inc6 a b c:
-  S6 (3+a) b (3+c) -->*
-  S6 a (3+b) c.
-Proof.
-  es.
-Qed.
-
-Lemma Inc6s a b c n:
-  S6 (n*3+a) b (n*3+c) -->*
-  S6 a (n*3+b) c.
-Proof.
-  gen a b c.
-  ind n Inc6.
-Qed.
-
-Definition config n :=
-  S6 1 (2+n*3) 1.
-
-Lemma BigStep n:
-  config n -->+
-  config (2+n*2).
-Proof.
-  unfold config.
-  mid10 (S4 0 (n) 0); [unfold S4; es|].
-  follow Inc4s.
-  unfold S4.
-  follow Incs0101.
-  mid (S5 1 (6+n*3+n*3) 1); [es|].
-  mid (S5 1 ((2+n*2)*3) 1); [finish|].
-  remember (2+n*2) as n0.
-  follow Inc5s.
-  mid (S6 (1+n0*3) 2 (1+n0*3)); [es|].
-  follow (Inc6s 1 2 1 n0).
-  finish.
-Qed.
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S6; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  eexists.
-  apply BigStep.
-Qed.
-
-End TM17.
-
-Module TM18.
-Definition tm := Eval compute in (TM_from_str "1LB0RF_1LC0LD_1RD0RE_0RA0RC_1RC0LA_0RC---").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
 
 Definition S0 a b c d e :=
-  const 0 <* [1]^^a <* [0] <{{C}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> [1;0]^^e *> const 0.
+  0inf <* <[1;0;1]^^a <* <[1;0;0;1;0;0;1]^^b <* <[1;0;1] <* <[1;0;0;1;0;0;0;1;0;0;1]^^c <{{A}} [0;1;1;1;1;1;1]^^d *> [0;1;1] *> ([0] ++ [1]^^10)^^e *> 0inf.
 
 Lemma Inc0 a b c d e:
-  S0 a (1+b) c d e -->*
-  S0 (1+a) b (1+c) d e.
+  S0 a b (2+c) d e -->*
+  S0 a b c (2+d) (1+e).
 Proof.
   es.
 Qed.
 
-Definition S1 a b c d e :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [0;1]^^d *> [1;0]^^e *> const 0.
+Lemma Incs0 n a b c d e:
+  S0 a b (n*2+c) d e -->*
+  S0 a b c (n*2+d) (n+e).
+Proof.
+  gen a b c d e.
+  ind n Inc0.
+Qed.
 
-Lemma Inc1 a b c d e:
-  S1 (3+a) b (3+c) d e -->*
-  S1 a (3+b) c d e.
+Lemma Ov0_0 a b d e:
+  S0 a (1+b) 0 (1+d) e -->*
+  S1 a b 3 d (1+e).
 Proof.
   es.
 Qed.
 
-Definition S2 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc2 a b c d e f:
-  S2 a b c (1+d) e f -->*
-  S2 a b (1+c) d (1+e) f.
+Lemma Ov0_1 a b d e:
+  S0 a (2+b) 1 d e -->*
+  S1 a b 4 d (2+e).
 Proof.
   es.
 Qed.
 
-Definition S3 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> [0]^^e *> [1]^^f *> const 0.
-
-Lemma Inc3 a b c d e f:
-  S3 a b (3+c) d (3+e) f -->*
-  S3 a b c (3+d) e f.
+Lemma Ov1_1 a c d e:
+  S1 (2+a) 1 (1+c) d e -->*
+  S1 a 0 c d (2+e).
 Proof.
   es.
 Qed.
 
-Definition S2' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> const 0.
-
-Lemma Inc2' a b c d:
-  S2' a b c (1+d) -->*
-  S2' a b (1+c) d.
+Lemma Ov2_0 c d e:
+  S1 0 0 c d (2+e) -->+
+  S0 (1+c) d e 2 1.
 Proof.
   es.
 Qed.
 
-Definition S3' a b c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> const 0.
-
-Lemma Inc3' a b c d:
-  S3' a b (3+c) d -->*
-  S3' a b c (3+d).
+Lemma Ov2_1 c d e:
+  S1 1 0 (1+c) d (1+e) -->+
+  S0 c d e 2 1.
 Proof.
   es.
 Qed.
 
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 (b+a) 0 (b+c) d e.
-Proof.
-  gen a c.
-  ind b Inc0.
-Qed.
-
-Lemma Inc1s a b c d e n:
-  S1 (n*3+a) b (n*3+c) d e -->*
-  S1 a (n*3+b) c d e.
-Proof.
-  gen a b c.
-  ind n Inc1.
-Qed.
-
-Lemma Inc2s a b c d e f:
-  S2 a b c d e f -->*
-  S2 a b (d+c) 0 (d+e) f.
-Proof.
-  gen c e.
-  ind d Inc2.
-Qed.
-
-Lemma Inc3s a b c d e f n:
-  S3 a b (n*3+c) d (n*3+e) f -->*
-  S3 a b c (n*3+d) e f.
-Proof.
-  gen c d e.
-  ind n Inc3.
-Qed.
-
-Lemma Inc2s' a b c d:
-  S2' a b c d -->*
-  S2' a b (d+c) 0.
-Proof.
-  gen c.
-  ind d Inc2'.
-Qed.
-
-Lemma Inc3s' a b c d n:
-  S3' a b (n*3+c) d -->*
-  S3' a b c (n*3+d).
-Proof.
-  gen c d.
-  ind n Inc3'.
-Qed.
-
-
-Lemma Incs2323 a b d:
-  S2 a (1+b) 0 (1+d*3) 1 1 -->*
-  S3' a b 0 (4+d*3).
-Proof.
-  follow Inc2s.
-  mid (S3 a (1+b) (1+d*3) 1 (3+d*3) 1); [es|].
-  follow (Inc3s a (1+b) 1 1 3 1 d).
-  mid (S2' a b 0 (3+d*3)); [es|].
-  follow Inc2s'.
-  mid (S3' a b (3+d*3) 1); [es|].
-  follow (Inc3s' a b 0 1 (1+d)).
-  finish.
-Qed.
-
-Lemma Incs0101 b d e:
-  S0 1 (1+b*3) 0 (1+d) e -->*
-  S1 3 (2+b*3) 3 d e.
-Proof.
-  follow Inc0s.
-  mid (S1 (2+b*3) 2 (1+b*3) (1+d) e); [es|].
-  follow (Inc1s 2 2 1 (1+d) e b).
-  mid (S0 0 (3+b*3) 0 d e); [es|].
-  follow Inc0s.
-  mid (S1 (3+b*3) 2 (3+b*3) d e); [es|].
-  follow (Inc1s 3 2 3 d e b).
-  finish.
-Qed.
-
-Definition S4 b d e :=
-  S0 1 (1+b*3) 0 (1+d*3) (2+e*3).
-
-Lemma Inc4 b d e:
-  S4 b (1+d) e -->*
-  S4 (1+b) d (1+e).
-Proof.
-  unfold S4.
-  follow Incs0101.
-  mid (S2 (4+b*3) (1+(1+d*3)) 0 (1+e*3) 1 1); [es|].
-  follow Incs2323.
-  es.
-Qed.
-
-Lemma Inc4s b d e:
-  S4 b d e -->*
-  S4 (d+b) 0 (d+e).
-Proof.
-  gen b e.
-  ind d Inc4.
-Qed.
-
-Definition S5 a b c :=
-  const 0 <* [1]^^a <* [0] <{{C}} [1] *> [1;0]^^b *> [1;1] *> [0]^^c *> [1] *> const 0.
-
-Lemma Inc5 a b c:
-  S5 a (1+b) c -->*
-  S5 (1+a) b (1+c).
+Lemma Ov2_2 c d e:
+  S1 2 0 (1+c) d e -->+
+  S0 c d e 1 1.
 Proof.
   es.
 Qed.
 
-Lemma Inc5s a b c:
-  S5 a b c -->*
-  S5 (b+a) 0 (b+c).
-Proof.
-  gen a c.
-  ind b Inc5.
-Qed.
-
-Definition S6 a b c :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [1] *> const 0.
-
-Lemma Inc6 a b c:
-  S6 (3+a) b (3+c) -->*
-  S6 a (3+b) c.
+Lemma Ov2_3 c d e:
+  S1 3 0 (3+c) d e -->+
+  S0 c d (1+e) 1 1.
 Proof.
   es.
 Qed.
 
-Lemma Inc6s a b c n:
-  S6 (n*3+a) b (n*3+c) -->*
-  S6 a (n*3+b) c.
+Lemma BigStep0 a b c d:
+  2<=b ->
+  S0 a b c (1+d) 1 -->*
+  S1 a (b-1-(c mod 2)) (3+(c mod 2)) (c+d) (c/2+2+(c mod 2)).
 Proof.
-  gen a b c.
-  ind n Inc6.
+  intros.
+  remember (c/2) as c1.
+  remember (c mod 2) as c2.
+  replace c with (c1*2+c2) by lia.
+  destruct c2 as [|[|]]. 3: lia.
+  - follow Incs0.
+    replace b with (1+(b-1)) by lia.
+    replace (c1*2+(1+d)) with (1+(c1*2+d)) by lia.
+    follow Ov0_0.
+    finish.
+  - follow Incs0.
+    replace b with (2+(b-2)) by lia.
+    follow Ov0_1.
+    finish.
 Qed.
 
-Definition config n :=
-  S5 1 (n*3) 1.
-
-Lemma BigStep n:
-  config n -->+
-  config (3+n*2).
+Lemma BigStep1 a b c d e:
+  2<=a ->
+  S1 a b (3+c) d e -->*
+  S1 (a-(b mod 2)*2) 0 (b+c+(3-(b mod 2)*2)) d (e+b/2+(b mod 2)*2).
 Proof.
-  unfold config.
-  follow Inc5s.
-  mid10 (S6 (1+n*3) 2 (1+n*3)); [es|].
-  follow (Inc6s 1 2 1 n).
-  mid (S4 0 n 1); [unfold S4; es|].
-  follow Inc4s.
-  unfold S4.
-  follow Incs0101.
-  mid (S5 1 (9+n*3+n*3) 1); [es|].
-  finish.
+  intros.
+  remember (b/2) as b1.
+  remember (b mod 2) as b2.
+  replace b with (b1*2+b2) by lia.
+  destruct b2 as [|[|]]. 3: lia.
+  - follow Incs1.
+    finish.
+  - follow Incs1.
+    replace a with (2+(a-2)) by lia.
+    replace (b1*2+(3+c)) with (1+(b1*2+c+2)) by lia.
+    follow Ov1_1.
+    finish.
 Qed.
 
-Lemma nonhalt:~halts tm c0.
+Lemma BigStep2 a c d e:
+  2<=e ->
+  a+3<=c ->
+  S1 a 0 c d e -->+
+  S0 (c+(1-((a mod 4) mod 2))-a) d (a/4*3+e+(a mod 4)-2) (1+(1-(a mod 4)/2)) 1.
 Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S5; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  eexists.
+  intros.
+  remember (a/4) as a1.
+  remember (a mod 4) as a2.
+  replace a with (a1*4+a2) in * by lia.
+  replace c with (a1*4+(c-a1*4)) by lia.
+  destruct a2 as [|[|[|[|]]]]; cbn. 5: lia.
+  - follow Incs2.
+    replace (a1*3+e) with (2+(a1*3+e-2)) by lia.
+    follow10 Ov2_0.
+    finish.
+  - follow Incs2.
+    mid01 (S1 1 0 (1+(c-a1*4-1)) d (1+(a1*3+e-1))).
+    1: finish.
+    follow10 Ov2_1.
+    finish.
+  - follow Incs2.
+    mid01 (S1 2 0 (1+(c-a1*4-1)) d (a1*3+e)).
+    1: finish.
+    follow10 Ov2_2.
+    finish.
+  - follow Incs2.
+    mid01 (S1 3 0 (3+(c-a1*4-3)) d (a1*3+e)).
+    1: finish.
+    follow10 Ov2_3.
+    finish.
+Qed.
+
+Lemma BigStep2' a c d e:
+  2<=e ->
+  a+3<=c ->
+  S1 a 0 c d e -->*
+  S0 (c+(1-((a mod 4) mod 2))-a) d (a/4*3+e+(a mod 4)-2) (1+(1-(a mod 4)/2)) 1.
+Proof.
+  intros.
+  apply progress_evstep.
+  apply BigStep2; auto.
+Qed.
+
+Definition P '(a,b,c,d) :=
+  2<=a /\
+  2<=b /\
+  2<=c /\
+  d<=1 /\
+  a+1<=b /\
+  b+5<=a+c /\
+  a+c*2+14<=b*6 /\
+  a+b*4+33<=c*10.
+
+Definition S '(a,b,c,d) := S0 a b c (1+d) 1.
+
+Lemma BigStep x:
+  P x ->
+  exists x',
+  S x -->+ S x' /\ P x'.
+Proof.
+  unfold P,S.
+  destruct x as [[[a b] c] d].
+  intros HP.
+  eexists (_,_,_,_).
+  split.
+  - follow BigStep0.
+    1: lia.
+    follow BigStep1.
+    1: lia.
+    apply BigStep2.
+    1: lia.
+    lia.
+  - repeat split.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+    + lia.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (2,8,13,0%nat)).
+  1: unfold S,S0; esx.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: unfold P; lia.
+  intros [[[a b] c] d].
   apply BigStep.
 Qed.
 
-End TM18.
+End TM26.
 
 
-Module TM19.
-Definition tm := Eval compute in (TM_from_str "1LB0RF_1LC0LD_1RD0RE_0RA0RC_1RC0LA_1RD---").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
-
-Definition S0 a b c d e :=
-  const 0 <* [1]^^a <* [0;1] {{C}}> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> [1;0]^^e *> [0;1] *> const 0.
-
-Lemma Inc0 a b c d e:
-  S0 a (1+b) c d e -->*
-  S0 (1+a) b (1+c) d e.
-Proof.
-  es.
-Qed.
-
-Definition S1 a b c d e :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [0;1]^^d *> [1;0]^^e *> [0;1] *> const 0.
-
-Lemma Inc1 a b c d e:
-  S1 (3+a) b (3+c) d e -->*
-  S1 a (3+b) c d e.
-Proof.
-  es.
-Qed.
-
-Definition S2 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> [0]^^e *> [1]^^f *> [0;1] *> const 0.
-
-Lemma Inc2 a b c d e f:
-  S2 a b c (1+d) e f -->*
-  S2 a b (1+c) d (1+e) f.
-Proof.
-  es.
-Qed.
-
-Definition S3 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> [0]^^e *> [1]^^f *> [0;1] *> const 0.
-
-Lemma Inc3 a b c d e f:
-  S3 a b (3+c) d (3+e) f -->*
-  S3 a b c (3+d) e f.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 (b+a) 0 (b+c) d e.
-Proof.
-  gen a c.
-  ind b Inc0.
-Qed.
-
-Lemma Inc1s a b c d e n:
-  S1 (n*3+a) b (n*3+c) d e -->*
-  S1 a (n*3+b) c d e.
-Proof.
-  gen a b c.
-  ind n Inc1.
-Qed.
-
-Lemma Inc2s a b c d e f:
-  S2 a b c d e f -->*
-  S2 a b (d+c) 0 (d+e) f.
-Proof.
-  gen c e.
-  ind d Inc2.
-Qed.
-
-Lemma Inc3s a b c d e f n:
-  S3 a b (n*3+c) d (n*3+e) f -->*
-  S3 a b c (n*3+d) e f.
-Proof.
-  gen c d e.
-  ind n Inc3.
-Qed.
-
-Lemma Incs2323 a b d:
-  S2 a (1+b) 0 (1+d*3) 1 1-->*
-  S3 a b 0 (4+d*3) 1 0.
-Proof.
-  follow Inc2s.
-  mid (S3 a (1+b) (1+d*3) 1 (3+d*3) 1); [es|].
-  follow (Inc3s a (1+b) 1 1 3 1 d).
-  mid (S2 a b 0 (3+d*3) 0 0); [es|].
-  follow Inc2s.
-  mid (S3 a b (3+d*3) 1 (4+d*3) 0); [es|].
-  follow (Inc3s a b 0 1 1 0 (1+d)).
-  finish.
-Qed.
-
-Lemma Incs0101 b d e:
-  S0 1 (1+b*3) 0 (1+d) e -->*
-  S1 3 (2+b*3) 3 d e.
-Proof.
-  follow Inc0s.
-  mid (S1 (2+b*3) 2 (1+b*3) (1+d) e); [es|].
-  follow (Inc1s 2 2 1 (1+d) e b).
-  mid (S0 0 (3+b*3) 0 d e); [es|].
-  follow Inc0s.
-  mid (S1 (3+b*3) 2 (3+b*3) d e); [es|].
-  follow (Inc1s 3 2 3 d e b).
-  finish.
-Qed.
-
-
-
-Definition S4 b d e :=
-  S0 1 (1+b*3) 0 (3+d*3) (2+e*3).
-
-Lemma Inc4 b d e:
-  S4 b (1+d) e -->*
-  S4 (1+b) d (1+e).
-Proof.
-  unfold S4.
-  replace (3+(1+d)*3) with (1+(2+(1+d)*3)) by lia.
-  follow Incs0101.
-  mid (S2 (4+b*3) (1+((1+d)*3)) 0 (1+e*3) 1 1); [es|].
-  follow Incs2323.
-  es.
-Qed.
-
-Lemma Inc4s b d e:
-  S4 b d e -->*
-  S4 (d+b) 0 (d+e).
-Proof.
-  gen b e.
-  ind d Inc4.
-Qed.
-
-Definition S2' a c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> const 0.
-
-Lemma Inc2' a c d:
-  S2' a c (1+d) -->*
-  S2' a (1+c) d.
-Proof.
-  es.
-Qed.
-
-Lemma Inc2s' a c d:
-  S2' a c d -->*
-  S2' a (d+c) 0.
-Proof.
-  gen c.
-  ind d Inc2'.
-Qed.
-
-Definition S3' a c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> const 0.
-
-Lemma Inc3' a c d:
-  S3' a (3+c) d -->*
-  S3' a c (3+d).
-Proof.
-  es.
-Qed.
-
-Lemma Inc3s' a c d n:
-  S3' a (n*3+c) d -->*
-  S3' a c (n*3+d).
-Proof.
-  gen c d.
-  ind n Inc3'.
-Qed.
-
-
-Definition S0' a b c d :=
-  const 0 <* [1]^^a <* [0;1] {{C}}> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> const 0.
-
-Lemma Inc0' a b c d:
-  S0' a (1+b) c d -->*
-  S0' (1+a) b (1+c) d.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s' a b c d:
-  S0' a b c d -->*
-  S0' (b+a) 0 (b+c) d.
-Proof.
-  gen a c.
-  ind b Inc0'.
-Qed.
-
-
-Definition S1' a b c d :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [1;0]^^d *> const 0.
-
-Lemma Inc1' a b c d:
-  S1' (3+a) b (3+c) d -->*
-  S1' a (3+b) c d.
-Proof.
-  es.
-Qed.
-
-Lemma Inc1s' a b c d n:
-  S1' (n*3+a) b (n*3+c) d -->*
-  S1' a (n*3+b) c d.
-Proof.
-  gen a b c.
-  ind n Inc1'.
-Qed.
-
-Definition config n :=
-  S4 1 n 0.
-
-Lemma BigStep n:
-  config n -->+
-  config (5+n*2).
-Proof.
-  unfold config.
-  follow Inc4s.
-  unfold S4.
-  change (3+0*3) with 3.
-  follow Incs0101.
-  mid10 (S2 (4+(n+1)*3) 1 0 (1+n*3) 1 1); [es|].
-  follow Incs2323.
-  mid (S2' (6+n*3) 1 (9+n*3)); [es|].
-  follow Inc2s'.
-  mid (S3' (6+n*3) (10+n*3) 1); [es|].
-  follow (Inc3s' (6+n*3) 1 1 (3+n)).
-  mid (S0' 1 (6+n*3) 0 (10+n*3)); [es|].
-  follow Inc0s'.
-  mid (S1' (7+n*3) 2 (7+n*3) (10+n*3)); [es|].
-  follow (Inc1s' 1 2 1 (10+n*3) (2+n)).
-  mid (S2 1 (7+n*3) 1 (10+n*3) 0 0); [es|].
-  follow Inc2s.
-  mid (S3 1 (7+n*3) (11+n*3) 1 (11+n*3) 0); [es|].
-  follow (Inc3s 1 (7+n*3) 2 1 2 0 (3+n)).
-  mid (S0 1 4 0 (18+n*3+n*3) 2).
-  2: finish.
-  es.
-Qed.
-
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S4,S0; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  eexists.
-  apply BigStep.
-Qed.
-
-End TM19.
-
-
-Module TM20.
-Definition tm := Eval compute in (TM_from_str "1LB1RF_1LC0LD_1RD0RE_0RA0RC_1RC0LA_0LD---").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
-
-Definition S0 a b c d e :=
-  const 0 <* [1]^^a <* [0;1] {{C}}> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> [1;0]^^e *> [0;1] *> const 0.
-
-Lemma Inc0 a b c d e:
-  S0 a (1+b) c d e -->*
-  S0 (1+a) b (1+c) d e.
-Proof.
-  es.
-Qed.
-
-Definition S1 a b c d e :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [0;1]^^d *> [1;0]^^e *> [0;1] *> const 0.
-
-Lemma Inc1 a b c d e:
-  S1 (3+a) b (3+c) d e -->*
-  S1 a (3+b) c d e.
-Proof.
-  es.
-Qed.
-
-Definition S2 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> [0]^^e *> [1]^^f *> [0;1] *> const 0.
-
-Lemma Inc2 a b c d e f:
-  S2 a b c (1+d) e f -->*
-  S2 a b (1+c) d (1+e) f.
-Proof.
-  es.
-Qed.
-
-Definition S3 a b c d e f :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1;1] <* [1;0]^^b <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> [0]^^e *> [1]^^f *> [0;1] *> const 0.
-
-Lemma Inc3 a b c d e f:
-  S3 a b (3+c) d (3+e) f -->*
-  S3 a b c (3+d) e f.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s a b c d e:
-  S0 a b c d e -->*
-  S0 (b+a) 0 (b+c) d e.
-Proof.
-  gen a c.
-  ind b Inc0.
-Qed.
-
-Lemma Inc1s a b c d e n:
-  S1 (n*3+a) b (n*3+c) d e -->*
-  S1 a (n*3+b) c d e.
-Proof.
-  gen a b c.
-  ind n Inc1.
-Qed.
-
-Lemma Inc2s a b c d e f:
-  S2 a b c d e f -->*
-  S2 a b (d+c) 0 (d+e) f.
-Proof.
-  gen c e.
-  ind d Inc2.
-Qed.
-
-Lemma Inc3s a b c d e f n:
-  S3 a b (n*3+c) d (n*3+e) f -->*
-  S3 a b c (n*3+d) e f.
-Proof.
-  gen c d e.
-  ind n Inc3.
-Qed.
-
-Lemma Incs2323 a b d:
-  S2 a (1+b) 0 (1+d*3) 1 1-->*
-  S3 a b 0 (4+d*3) 1 0.
-Proof.
-  follow Inc2s.
-  mid (S3 a (1+b) (1+d*3) 1 (3+d*3) 1); [es|].
-  follow (Inc3s a (1+b) 1 1 3 1 d).
-  mid (S2 a b 0 (3+d*3) 0 0); [es|].
-  follow Inc2s.
-  mid (S3 a b (3+d*3) 1 (4+d*3) 0); [es|].
-  follow (Inc3s a b 0 1 1 0 (1+d)).
-  finish.
-Qed.
-
-Lemma Incs0101 b d e:
-  S0 1 (1+b*3) 0 (1+d) e -->*
-  S1 3 (2+b*3) 3 d e.
-Proof.
-  follow Inc0s.
-  mid (S1 (2+b*3) 2 (1+b*3) (1+d) e); [es|].
-  follow (Inc1s 2 2 1 (1+d) e b).
-  mid (S0 0 (3+b*3) 0 d e); [es|].
-  follow Inc0s.
-  mid (S1 (3+b*3) 2 (3+b*3) d e); [es|].
-  follow (Inc1s 3 2 3 d e b).
-  finish.
-Qed.
-
-
-
-Definition S4 b d e :=
-  S0 1 (1+b*3) 0 (3+d*3) (2+e*3).
-
-Lemma Inc4 b d e:
-  S4 b (1+d) e -->*
-  S4 (1+b) d (1+e).
-Proof.
-  unfold S4.
-  replace (3+(1+d)*3) with (1+(2+(1+d)*3)) by lia.
-  follow Incs0101.
-  mid (S2 (4+b*3) (1+((1+d)*3)) 0 (1+e*3) 1 1); [es|].
-  follow Incs2323.
-  es.
-Qed.
-
-Lemma Inc4s b d e:
-  S4 b d e -->*
-  S4 (d+b) 0 (d+e).
-Proof.
-  gen b e.
-  ind d Inc4.
-Qed.
-
-Definition S2' a c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1]^^c <* [0] <{{C}} [1] *> [1;0]^^d *> [1;1] *> const 0.
-
-Lemma Inc2' a c d:
-  S2' a c (1+d) -->*
-  S2' a (1+c) d.
-Proof.
-  es.
-Qed.
-
-Lemma Inc2s' a c d:
-  S2' a c d -->*
-  S2' a (d+c) 0.
-Proof.
-  gen c.
-  ind d Inc2'.
-Qed.
-
-Definition S3' a c d :=
-  const 0 <* [0;0;1] <* [0;1]^^a <* [1]^^c <{{B}} [1] *> [0;1]^^(d) *> const 0.
-
-Lemma Inc3' a c d:
-  S3' a (3+c) d -->*
-  S3' a c (3+d).
-Proof.
-  es.
-Qed.
-
-Lemma Inc3s' a c d n:
-  S3' a (n*3+c) d -->*
-  S3' a c (n*3+d).
-Proof.
-  gen c d.
-  ind n Inc3'.
-Qed.
-
-
-Definition S0' a b c d :=
-  const 0 <* [1]^^a <* [0;1] {{C}}> [1;0]^^b *> [1;1] *> [0]^^c *> [0;1]^^d *> const 0.
-
-Lemma Inc0' a b c d:
-  S0' a (1+b) c d -->*
-  S0' (1+a) b (1+c) d.
-Proof.
-  es.
-Qed.
-
-Lemma Inc0s' a b c d:
-  S0' a b c d -->*
-  S0' (b+a) 0 (b+c) d.
-Proof.
-  gen a c.
-  ind b Inc0'.
-Qed.
-
-
-Definition S1' a b c d :=
-  const 0 <* [1]^^(a) <{{B}} [1;0]^^b *> [0]^^(c) *> [1;0]^^d *> const 0.
-
-Lemma Inc1' a b c d:
-  S1' (3+a) b (3+c) d -->*
-  S1' a (3+b) c d.
-Proof.
-  es.
-Qed.
-
-Lemma Inc1s' a b c d n:
-  S1' (n*3+a) b (n*3+c) d -->*
-  S1' a (n*3+b) c d.
-Proof.
-  gen a b c.
-  ind n Inc1'.
-Qed.
-
-Definition config n :=
-  S4 1 n 0.
-
-Lemma BigStep n:
-  config n -->+
-  config (5+n*2).
-Proof.
-  unfold config.
-  follow Inc4s.
-  unfold S4.
-  change (3+0*3) with 3.
-  follow Incs0101.
-  mid10 (S2 (4+(n+1)*3) 1 0 (1+n*3) 1 1); [es|].
-  follow Incs2323.
-  mid (S2' (6+n*3) 1 (9+n*3)); [es|].
-  follow Inc2s'.
-  mid (S3' (6+n*3) (10+n*3) 1); [es|].
-  follow (Inc3s' (6+n*3) 1 1 (3+n)).
-  mid (S0' 1 (6+n*3) 0 (10+n*3)); [es|].
-  follow Inc0s'.
-  mid (S1' (7+n*3) 2 (7+n*3) (10+n*3)); [es|].
-  follow (Inc1s' 1 2 1 (10+n*3) (2+n)).
-  mid (S2 1 (7+n*3) 1 (10+n*3) 0 0); [es|].
-  follow Inc2s.
-  mid (S3 1 (7+n*3) (11+n*3) 1 (11+n*3) 0); [es|].
-  follow (Inc3s 1 (7+n*3) 2 1 2 0 (3+n)).
-  mid (S0 1 4 0 (18+n*3+n*3) 2).
-  2: finish.
-  es.
-Qed.
-
-
-Lemma nonhalt:~halts tm c0.
-Proof.
-  apply multistep_nonhalt with (c':=config O).
-  1: unfold config,S4,S0; solve_init.
-  apply progress_nonhalt_simple.
-  intros n.
-  eexists.
-  apply BigStep.
-Qed.
-
-End TM20.
