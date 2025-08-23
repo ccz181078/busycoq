@@ -583,3 +583,316 @@ Qed.
 End TM6.
 
 
+Module TM7.
+Definition tm := Eval compute in (TM_from_str "1RB0LD_1RC1RF_0RD0RE_1LE0RB_0LA1RE_---0RC").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c :=
+  l <* <[1;1;1;1;0;0;1]^^a <* <[0;0] <* [1]^^b {{E}}> [0;0;1]^^c *> 0inf.
+
+Lemma Inc1 l a b c:
+  S1 l a (4+b) (1+c) -->*
+  S1 l (1+a) b c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c:
+  S1 l a (n*4+b) (n+c) -->*
+  S1 l (n+a) b c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Definition S2 l a b c :=
+  l <* <[1;1;1;1;0;0;1]^^a <* [1]^^b {{E}}> [0;0;1]^^c *> 0inf.
+
+Lemma Inc l n c:
+  S1 l 0 ((1+n)*4+0) ((1+n)+c) -->*
+  S2 l n 3 (5+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Lemma Ov n c:
+  S1 0inf 0 ((2+n)*4+3) ((2+n)+(2+c)) -->+
+  S2 0inf (2+n) 11 (6+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Definition P' n c2 :=
+  forall l k c,
+  S2 l (n+k) 11 (6+c) -->*
+  S2 l k ((2+n)*4+3) (c2+c).
+
+Lemma P'_S n c2:
+  P' n (4+n+c2) ->
+  P' (1+n) (15+n+c2+c2).
+Proof.
+  unfold P'; intros.
+  epose proof (H _ (1+k) _) as I1.
+  follow I1. clear I1.
+  mid (S1 (l <* <[1;1;1;1;0;0;1]^^k <* [1]^^4) 0 ((1+(2+n))*4+0) ((1+(2+n))+(1+c2+c))).
+  1: es.
+  follow Inc.
+  mid (S2 ([1] ^^ 4 *> [1; 0; 0; 1; 1; 1; 1] ^^ k *> l) (n) 11 (17 + (c2 + c))).
+  1: es.
+  epose proof (H _ O (11+c2+c)) as I1.
+  follow I1. clear I1.
+  es.
+Qed.
+
+Definition S' '(n,c) := S2 0inf n 11 (6+c).
+
+Lemma BigStep n c c2:
+  P' n (4+n+c2) ->
+  S' (n,c) -->+
+  S' (2+n,c2+c).
+Proof.
+  unfold P',S'.
+  intros HP.
+  epose proof (HP _ O _) as I1.
+  follow I1. clear I1.
+  mid01 (S1 0inf 0 ((2+n)*4+3) ((2+n)+(2+(c2+c)))).
+  1: es.
+  follow10 Ov.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S'(O,2)).
+  1: unfold S',S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(n,c) => exists c2, P' n (4+n+c2)).
+  2: exists 2; unfold P'; es.
+  intros [n c] [c2 HP].
+  epose proof (P'_S _ _ HP) as HP1.
+  replace (15+n+c2+c2) with (4+(1+n)+(10+c2*2)) in HP1 by lia.
+  epose proof (P'_S _ _ HP1) as HP2.
+  eexists (_,_); split.
+  1: apply BigStep,HP.
+  exists (30+c2*4).
+  applys_eq HP2; lia.
+Qed.
+
+End TM7.
+
+
+Module TM8.
+Definition tm := Eval compute in (TM_from_str "1LB0RD_0LC1RB_1RD0LA_1RE1RF_0RA0RB_---0RE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c :=
+  l <* <[1;1;1;1;0;0;1]^^a <* <[0;0] <* [1]^^b {{B}}> [0;0;1]^^c *> 0inf.
+
+Lemma Inc1 l a b c:
+  S1 l a (4+b) (1+c) -->*
+  S1 l (1+a) b c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c:
+  S1 l a (n*4+b) (n+c) -->*
+  S1 l (n+a) b c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Definition S2 l a b c :=
+  l <* <[1;1;1;1;0;0;1]^^a <* [1]^^b {{B}}> [0;0;1]^^c *> 0inf.
+
+Lemma Inc l n c:
+  S1 l 0 ((1+n)*4+0) ((1+n)+c) -->*
+  S2 l n 3 (5+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Lemma Ov n c:
+  S1 0inf 0 ((2+n)*4+3) ((2+n)+(2+c)) -->+
+  S2 0inf (2+n) 11 (6+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Definition P' n c2 :=
+  forall l k c,
+  S2 l (n+k) 11 (6+c) -->*
+  S2 l k ((2+n)*4+3) (c2+c).
+
+Lemma P'_S n c2:
+  P' n (4+n+c2) ->
+  P' (1+n) (15+n+c2+c2).
+Proof.
+  unfold P'; intros.
+  epose proof (H _ (1+k) _) as I1.
+  follow I1. clear I1.
+  mid (S1 (l <* <[1;1;1;1;0;0;1]^^k <* [1]^^4) 0 ((1+(2+n))*4+0) ((1+(2+n))+(1+c2+c))).
+  1: es.
+  follow Inc.
+  mid (S2 ([1] ^^ 4 *> [1; 0; 0; 1; 1; 1; 1] ^^ k *> l) (n) 11 (17 + (c2 + c))).
+  1: es.
+  epose proof (H _ O (11+c2+c)) as I1.
+  follow I1. clear I1.
+  es.
+Qed.
+
+Definition S' '(n,c) := S2 0inf n 11 (6+c).
+
+Lemma BigStep n c c2:
+  P' n (4+n+c2) ->
+  S' (n,c) -->+
+  S' (2+n,c2+c).
+Proof.
+  unfold P',S'.
+  intros HP.
+  epose proof (HP _ O _) as I1.
+  follow I1. clear I1.
+  mid01 (S1 0inf 0 ((2+n)*4+3) ((2+n)+(2+(c2+c)))).
+  1: es.
+  follow10 Ov.
+  finish.
+Qed.
+
+Lemma P'_O: P' 0 6.
+Proof.
+  unfold P'. es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S'(2,2)).
+  1: unfold S',S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(n,c) => exists c2, P' n (4+n+c2)).
+  2: eexists; eapply (P'_S _ _ (P'_S _ _ P'_O)).
+  intros [n c] [c2 HP].
+  epose proof (P'_S _ _ HP) as HP1.
+  replace (15+n+c2+c2) with (4+(1+n)+(10+c2*2)) in HP1 by lia.
+  epose proof (P'_S _ _ HP1) as HP2.
+  eexists (_,_); split.
+  1: apply BigStep,HP.
+  exists (30+c2*4).
+  applys_eq HP2; lia.
+Qed.
+
+End TM8.
+
+
+Module TM9.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_0RC0RD_1LD0RA_0LE1RD_1RA0LC_---0RB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c :=
+  l <* <[1;1;1;1;0;0;1]^^a <* <[0;0] <* [1]^^b {{D}}> [0;0;1]^^c *> 0inf.
+
+Lemma Inc1 l a b c:
+  S1 l a (4+b) (1+c) -->*
+  S1 l (1+a) b c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c:
+  S1 l a (n*4+b) (n+c) -->*
+  S1 l (n+a) b c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Definition S2 l a b c :=
+  l <* <[1;1;1;1;0;0;1]^^a <* [1]^^b {{D}}> [0;0;1]^^c *> 0inf.
+
+Lemma Inc l n c:
+  S1 l 0 ((1+n)*4+0) ((1+n)+c) -->*
+  S2 l n 3 (5+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Lemma Ov n c:
+  S1 0inf 0 ((2+n)*4+3) ((2+n)+(2+c)) -->+
+  S2 0inf (2+n) 11 (6+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Definition P' n c2 :=
+  forall l k c,
+  S2 l (n+k) 11 (6+c) -->*
+  S2 l k ((2+n)*4+3) (c2+c).
+
+Lemma P'_S n c2:
+  P' n (4+n+c2) ->
+  P' (1+n) (15+n+c2+c2).
+Proof.
+  unfold P'; intros.
+  epose proof (H _ (1+k) _) as I1.
+  follow I1. clear I1.
+  mid (S1 (l <* <[1;1;1;1;0;0;1]^^k <* [1]^^4) 0 ((1+(2+n))*4+0) ((1+(2+n))+(1+c2+c))).
+  1: es.
+  follow Inc.
+  mid (S2 ([1] ^^ 4 *> [1; 0; 0; 1; 1; 1; 1] ^^ k *> l) (n) 11 (17 + (c2 + c))).
+  1: es.
+  epose proof (H _ O (11+c2+c)) as I1.
+  follow I1. clear I1.
+  es.
+Qed.
+
+Definition S' '(n,c) := S2 0inf n 11 (6+c).
+
+Lemma BigStep n c c2:
+  P' n (4+n+c2) ->
+  S' (n,c) -->+
+  S' (2+n,c2+c).
+Proof.
+  unfold P',S'.
+  intros HP.
+  epose proof (HP _ O _) as I1.
+  follow I1. clear I1.
+  mid01 (S1 0inf 0 ((2+n)*4+3) ((2+n)+(2+(c2+c)))).
+  1: es.
+  follow10 Ov.
+  finish.
+Qed.
+
+Lemma P'_O: P' 0 6.
+Proof.
+  unfold P'. es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S'(0,1)%nat).
+  1: unfold S',S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(n,c) => exists c2, P' n (4+n+c2)).
+  2: eexists; eapply P'_O.
+  intros [n c] [c2 HP].
+  epose proof (P'_S _ _ HP) as HP1.
+  replace (15+n+c2+c2) with (4+(1+n)+(10+c2*2)) in HP1 by lia.
+  epose proof (P'_S _ _ HP1) as HP2.
+  eexists (_,_); split.
+  1: apply BigStep,HP.
+  exists (30+c2*4).
+  applys_eq HP2; lia.
+Qed.
+
+End TM9.
+
+

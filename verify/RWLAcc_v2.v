@@ -105,3 +105,27 @@ Proof. solve_nonhalt 2. Time Qed.
 Lemma nonhalt33: ~halts (TM_from_str "1RB1RC_1LB0RA_1RD0LD_1LE1LA_---1LF_1LC0LC") c0.
 Proof. solve_nonhalt 30. Time Qed.
 
+Lemma nonhalt34: ~halts (TM_from_str "1RB0LC_1RC0RF_1LD0RE_1LE1LD_0RB0LA_---1RE") c0.
+Proof. solve_nonhalt 6. Time Qed.
+
+Lemma nonhalt35: ~halts (TM_from_str "1RB0RE_1LC0RD_1LD1LC_0RA0LF_---1RD_1RA0LB") c0.
+Proof. solve_nonhalt 6. Time Qed.
+
+Lemma nonhalt36: ~halts (TM_from_str "1RB0RA_0LC0RA_0LE1LD_1LC0LF_1LA0RB_0LB---") c0.
+Proof. solve_nonhalt 10. Time Qed.
+
+Lemma nonhalt37: ~halts (TM_from_str "1RB0RA_0LC0RA_0LE1LD_1LC0LF_1LA0LE_0LB---") c0.
+Proof. solve_nonhalt 10. Time Qed.
+
+Lemma nonhalt38: ~halts (TM_from_str "1RB---_1RC1LD_1RD1RF_1LB0LE_0RE0LB_0RA0RF") c0.
+Proof. solve_nonhalt 10. Time Qed.
+
+Lemma nonhalt39: ~halts (TM_from_str "1RB0RA_0LC0RD_1LD1LB_1RA1LE_1LF---_1LB0LB") c0.
+Proof. solve_nonhalt 9. Time Qed.
+
+Lemma nonhalt40: ~halts (TM_from_str "1RB---_1RC0RC_0RD0LE_1RE1RC_1LF1RA_1LC0LF") c0.
+Proof. solve_nonhalt 9. Time Qed.
+
+Lemma nonhalt41: ~halts (TM_from_str "1RB1LE_1RC0RB_0LD0RA_1LA1LC_1LF---_1LC0LC") c0.
+Proof. solve_nonhalt 9. Time Qed.
+
