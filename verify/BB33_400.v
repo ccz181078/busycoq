@@ -1,4 +1,4 @@
-(** * Unofficial holdout ID 494 1RB2LA0LA_2LC---2RA_0RA2RC1LC *)
+(** * Unofficial holdout ID 400 1RB1LC---_0LC2RB1LB_2LA0RC1RC *)
 (** Coq proof by Jason Yuen. Proof sketch by Matthew House. *)
 
 From BusyCoq Require Import Individual33.
@@ -6,7 +6,17 @@ From Coq Require Import PeanoNat Decidable.
 From Coq Require Import Lia String.
 Set Default Goal Selector "!".
 
-Definition tm := Eval compute in (TM_from_str "1RB2LA0LA_2LC---2RA_0RA2RC1LC").
+Definition tm := Eval compute in (TM_from_str "1LB1RC---_0RC2LB1RB_2RA0LC1LC").
+
+Notation "'1'" := S2.
+Notation "'2'" := S1.
+Notation "l '{{A}}>'  r" := (l {{BB33.C}}> r) (at level 30).
+Notation "l '{{B}}>'  r" := (l {{BB33.A}}> r) (at level 30).
+Notation "l '{{C}}>'  r" := (l {{BB33.B}}> r) (at level 30).
+Notation "l '<{{A}}' r" := (l <{{BB33.C}} r) (at level 30).
+Notation "l '<{{B}}' r" := (l <{{BB33.A}} r) (at level 30).
+Notation "l '<{{C}}' r" := (l <{{BB33.B}} r) (at level 30).
+
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
@@ -317,4 +327,5 @@ Proof.
     (C := fun '(i, r) => D (a 0) (cc i - c 0) r).
   intros [i r]. destruct (D_next i r) as [r' H]. exists (S i, r'). exact H.
 Qed.
+
 

@@ -13,6 +13,7 @@ Open Scope sym.
 Notation "0" := S0 : sym_scope.
 Notation "1" := S1 : sym_scope.
 Notation "2" := S2 : sym_scope.
+Notation "'0inf'" := (const 0) : sym_scope.
 
 (* Make sure that [{{A}}>] still refers to the state, even if we shadowed
    [A] itself with something else. *)
@@ -24,6 +25,302 @@ Notation "l '<{{A}}' r" := (l <{{A}} r) (at level 30).
 Notation "l '<{{B}}' r" := (l <{{B}} r) (at level 30).
 Notation "l '<{{C}}' r" := (l <{{C}} r) (at level 30).
 
+Ltac mid m :=
+  eapply evstep_trans with (c':=m).
+
+Ltac mid10 m :=
+  eapply progress_evstep_trans with (c':=m).
+
+Ltac mid01 m :=
+  eapply evstep_progress_trans with (c':=m).
+
+Ltac follow10 H :=
+  eapply progress_evstep_trans; [ apply H; fail | idtac ].
+
+Ltac follow100 H :=
+  apply progress_evstep;
+  follow10 H.
+
+Ltac follow11 H :=
+  eapply progress_trans; [ apply H; fail | idtac ].
+
+
+Ltac steps := cbn; intros;
+  repeat ((try apply evstep_refl); step).
+
+Ltac solve_const0_eq:=
+  cbv; (repeat rewrite <-const_unfold); reflexivity.
+
+Lemma lpow_rotate a0 a1 (b:Stream Sym) n:
+  (a1::a0)^^n *> a1 >> b = a1 >> (a0++[a1])^^n *> b.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    simpl_tape.
+    rewrite IHn.
+    reflexivity.
+Qed.
+
+
+Lemma lpow_rotate_const0 a0 n:
+  (0::a0)^^n *> const 0 = 0 >> (a0++[0])^^n *> const 0.
+Proof.
+  rewrite const_unfold.
+  rewrite lpow_rotate.
+  rewrite <-const_unfold.
+  reflexivity.
+Qed.
+
+Lemma lpow_rotate' a0 a1 (b:Stream Sym) n:
+  (a1++a0)^^n *> a1 *> b = a1 *> (a0++a1)^^n *> b.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    simpl_tape.
+    rewrite IHn.
+    reflexivity.
+Qed.
+
+Lemma lpow_mul{A} (a:list A) b n:
+  a^^(b*n) = (a^^n)^^b.
+Proof.
+  induction b.
+  - reflexivity.
+  - cbn.
+    rewrite lpow_add.
+    congruence.
+Qed.
+
+Lemma flat_map_lpow{A B} (f:A->list B) ls n:
+  List.flat_map f (ls^^n) = (List.flat_map f ls)^^n.
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    rewrite <-IHn.
+    apply List.flat_map_app.
+Qed.
+
+Lemma Forall_lpow{A} (P:A->Prop) a n:
+  List.Forall P a ->
+  List.Forall P (a^^n).
+Proof.
+  intro H.
+  induction n.
+  - auto.
+  - cbn.
+    rewrite List.Forall_app; split; auto.
+Qed.
+
+Lemma lpow_length{A} (s:list A) n:
+  List.length (s^^n) = n*(List.length s).
+Proof.
+  induction n.
+  - reflexivity.
+  - cbn.
+    rewrite List.length_app,IHn.
+    reflexivity.
+Qed.
+
+Lemma lpow_all0 a n:
+  a *> const 0 = const 0 ->
+  a^^n *> const 0 = const 0.
+Proof.
+  intro H.
+  induction n.
+  - reflexivity.
+  - simpl_tape.
+    rewrite IHn.
+    apply H.
+Qed.
+
+Lemma lpow_add' (a:list Sym) n1 n2 r:
+  a^^n1 *> a^^n2 *> r =
+  a^^(n1+n2) *> r.
+Proof.
+  rewrite lpow_add.
+  rewrite Str_app_assoc.
+  reflexivity.
+Qed.
+
+Lemma shift_rule_L d tm x x' X:
+  (forall l r,
+    l <* x <{{X}} d *> r -[ tm ]->*
+    l <{{X}} d *> x' *> r) ->
+  forall l r n,
+    l <* x^^n <{{X}} d *> r -[ tm ]->*
+    l <{{X}} d *> x'^^n *> r.
+Proof.
+  intros.
+  gen l r.
+  induction n; intros.
+  - finish.
+  - simpl_tape.
+    follow H.
+    follow IHn.
+    rewrite lpow_shift'.
+    finish.
+Qed.
+
+Lemma shift_rule_R d tm x x' X:
+  (forall l r,
+    l <* d {{X}}> x *> r -[ tm ]->*
+    l <* x' <* d {{X}}> r) ->
+  forall l r n,
+    l <* d {{X}}> x^^n *> r -[ tm ]->*
+    l <* x'^^n <* d {{X}}> r.
+Proof.
+  intros.
+  gen l r.
+  induction n; intros.
+  - finish.
+  - simpl_tape.
+    follow H.
+    follow IHn.
+    rewrite lpow_shift'.
+    finish.
+Qed.
+
+Lemma Str_cons_def{A} (a:A) b:
+  a >> b = [a] *> b.
+Proof.
+  reflexivity.
+Qed.
+
+Ltac step1 :=
+  match goal with
+  | |- (_ -[ _ ]->+ _) => eapply progress_intro
+  | |- (_ -[ _ ]->* _) => eapply evstep_step
+  | _ => fail "fail1"
+  end; [prove_step|simpl_tape].
+
+Ltac simpl_rotate :=
+  cbn;
+  repeat ((rewrite lpow_rotate || rewrite lpow_rotate_const0); cbn).
+
+Ltac step1s :=
+  repeat ((try (apply evstep_refl'; reflexivity; fail)); step1).
+
+Ltac execute_with_rotate :=
+  simpl_rotate; step1s.
+
+Ltac find_shift_rule :=
+  steps;
+  eapply evstep_refl';
+  repeat f_equal;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  cbn[List.app];
+  f_equal;
+  fail.
+
+Open Scope list.
+
+Ltac use_shift_rule :=
+  match goal with
+  | |- (_ -[ _ ]->+ _) => eapply evstep_progress_trans
+  | |- (_ -[ _ ]->* _) => eapply evstep_trans
+  | _ => idtac "fail1"; fail
+  end; [
+    let x :=
+    match goal with
+    | |- (_ <* _ ^^ _ <{{ _ }} _ -[ _ ]->* _) => shift_rule_L
+    | |- (_ {{ _ }}> _ ^^ _ *> _ -[ _ ]->* _) => shift_rule_R
+    | _ => idtac "fail2"; fail
+    end in
+      (eapply (x []); find_shift_rule) ||
+      (eapply (x [_]); find_shift_rule) ||
+      (eapply (x [_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_]); find_shift_rule) ||
+      (fail)
+  |].
+
+Ltac use_shift_rule' :=
+  match goal with
+  | |- (_ -[ _ ]->+ _) => eapply evstep_progress_trans
+  | |- (_ -[ _ ]->* _) => eapply evstep_trans
+  | _ => idtac "fail1"; fail
+  end; [
+    let x :=
+    match goal with
+    | |- (_ <* _ ^^ _ <{{ _ }} _ -[ _ ]->* _) => shift_rule_L
+    | |- (_ {{ _ }}> _ ^^ _ *> _ -[ _ ]->* _) => shift_rule_R
+    | _ => idtac "fail2"; fail
+    end in
+      (eapply (x []); find_shift_rule) ||
+      (eapply (x [_]); find_shift_rule) ||
+      (eapply (x [_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (eapply (x [_;_;_;_;_;_;_;_;_;_;_;_]); find_shift_rule) ||
+      (fail)
+  |].
+
+Ltac execute_with_shift_rule :=
+  intros;
+  repeat (execute_with_rotate; use_shift_rule).
+
+Ltac execute_with_shift_rule' :=
+  intros;
+  repeat (execute_with_rotate; use_shift_rule').
+
+Ltac simpl_flat_map :=
+  repeat rewrite List.flat_map_app;
+  repeat rewrite flat_map_lpow;
+  cbn;
+  simpl_tape.
+
+Ltac casen_execute_with_shift_rule n :=
+  (execute_with_shift_rule; fail) ||
+  (destruct n; [ step1s | execute_with_shift_rule ]).
+
+Ltac er := execute_with_rotate.
+Ltac sr := use_shift_rule; simpl_rotate.
+
+Ltac unfold_config_expr x :=
+match x with
+| ?a ?b => unfold_config_expr a
+| ?a => try (unfold a)
+end.
+
+Ltac unfold_config :=
+match goal with
+| |- ?a -[_]->* ?b =>
+  unfold_config_expr a;
+  unfold_config_expr b
+| |- ?a -[_]->+ ?b =>
+  unfold_config_expr a;
+  unfold_config_expr b
+end.
+
+Ltac es :=
+  intros;
+  unfold_config;
+  repeat
+  (rewrite lpow_add ||
+  rewrite Str_app_assoc ||
+  rewrite lpow_mul);
+  simpl_tape;
+  execute_with_shift_rule.
+
+Ltac ind n H :=
+  induction n as [|n IHn]; intros;
+  [ finish |
+    cbn[Nat.add];
+    follow H;
+    follow IHn;
+    finish ].
 
 Definition Sym_from_char(x:ascii):option Sym :=
 match x with

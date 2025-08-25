@@ -1282,3 +1282,1052 @@ Qed.
 
 End TM67.
 
+
+Module TM27.
+Definition tm := Eval compute in (TM_from_str "1RB1LA_0RC1RE_1LD0RB_1RA0LD_1RF1RC_0RA---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation "l <| r" := (l <{{A}} [1;1;1;1;1;1;0;0] *> r) (at level 30).
+Notation "l |> r" := (l <* [1;1;1;1;1;0;1;1] {{C}}> r) (at level 30).
+
+Lemma LInc l r n:
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+Proof.
+  es.
+Qed.
+
+Lemma RInc l r n:
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Notation "l |2> r" := (l <* [0;1;1;1;1;1] {{B}}> r) (at level 30).
+
+Lemma LOv r n m:
+  ldh <* ld1^^n <| rd1^^m *> rd0 *> r -->+
+  ldh <* ld0^^(2+n) <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_S l r m:
+  l |2> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld1 <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_O l r n:
+  l <* ld0 <* ld1^^n |2> rd0 *> r -->+
+  l <| rd0^^(1+n) *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv l r n m:
+  l |> rd1^^n *> [1] *> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld0 <* ld1^^(1+n) <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc l lenR n m:
+  1+n<2^(lenR+1) ->
+  l |> RC1 lenR (1+n) m -->+
+  l <| RC1 lenR n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma LC_Ov lenL x i:
+  LC lenL 0 <| RC ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+1+i) ((((2^lenL-1)*2+1)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma RC_Ov2_1 lenL k x i:
+  k<2^lenL ->
+  LC lenL k |2> RC (((x*2+1)*2^i-1)*2+1) -->+
+  LC (lenL+1+1+i) ((k*2*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv2_S.
+Qed.
+
+Lemma RC_Ov2_0 lenL i2 k x i:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC ((x*2+1)*2^i*2) -->+
+  LC lenL k <| RC1 (i+1+i2) ((((2^i-1)*2+1)*2^i2-1)*2+1) x.
+Proof.
+  solve_rule ROv2_O.
+Qed.
+
+Lemma RC_Ov2_0_0 lenL i2 k:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC (0*2) -->+
+  LC lenL k <| RC (2^i2*2).
+Proof.
+  epose proof (ROv2_O _ 0inf _) as I1.
+  solve_rule I1.
+Qed.
+
+Lemma RC1_Ov lenL k lenR x i:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+(1+lenR)+1+i) (((k*2+1)*2^(1+lenR)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv.
+Qed.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR'(lenL k n:nat)
+| cfgR1(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR' lenL k n => LC lenL k |2> RC n
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+end.
+
+Close Scope sym.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => k<2^lenL /\ k+n+1 < 2^lenL*2 /\ k+n+1 <> 2^lenL
+| cfgR' lenL k m => m < k < 2^lenL /\ m mod 2 = 1
+| cfgR1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+end.
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbitS_cases n.
+      divmod2_cases x.
+      * lowbit_cases n'.
+        {
+          eex cfgL.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0_0.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          pp_pow2_lt_le i (lenL+1).
+          lia.
+        }
+        {
+          eex cfgR1.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0.
+          1: rw_pa; lia.
+          1: rewrite (Nat.add_comm ((2^lenL-1)*2)).
+          1: follow100 LC_Inc.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          zify_pow2sub1; lia.
+        }
+      * eex cfgR'.
+        1: apply LC_Ov.
+        spl.
+        zify_le_mul_r; lia.
+    + eex cfgL.
+      1: follow10 LC_Inc; follow100 RC_Inc; finish.
+      lia.
+  - divmod2_cases n.
+    1: lia.
+    lowbitS_cases n'.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+      * remember (k-1) as k'.
+        replace k with (k'+1) in * by lia.
+        clear k Heqk'.
+        eex cfgR1.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k'+1)*2) with (1+(k'*2+1)) by lia.
+        1: follow100 LC_Inc.
+        1: spl.
+        1: finish.
+        spl.
+        zify_pow2sub1; lia.
+    + eex cfgR'.
+      1: apply RC_Ov2_1; lia.
+      spl.
+      zify_le_mul_r; lia.
+  - destruct n as [|n].
+    2:{
+      destruct k as [|k].
+      1: lia.
+      eex cfgR1.
+      1: follow10 RC1_Inc; follow100 LC_Inc; finish.
+      spl.
+    }
+    lowbitS_cases m.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+        solve_v1 k lenL lenR.
+      * eex cfgR1.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k*2+1)*2^(1+lenR)) with (1+((k*2+1)*2^(1+lenR)-1)) by lia.
+        1: follow100 LC_Inc.
+        1: solve_v1 k lenL lenR.
+        1: finish.
+        spl.
+        rw_pa.
+        zify_pow2sub1; lia.
+    + lowbitS_cases n'.
+      eex cfgR'.
+      1: follow10 RC1_Ov; finish.
+      spl.
+      zify_le_mul_r; lia.
+Qed.
+
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=to_config (cfgL 7 83 3)).
+  1: esx.
+  eapply progress_nonhalt_cond.
+  1: apply closed.
+  cbn; lia.
+Qed.
+
+End TM27.
+
+
+Module TM34.
+Definition tm := Eval compute in (TM_from_str "1RB0LA_1RC1LB_0RD1RE_1LA0RC_1RF1RD_0RB---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation "l <| r" := (l <{{B}} [1;1;1;1;1;1;0;0] *> r) (at level 30).
+Notation "l |> r" := (l <* [1;1;1;1;1;0;1;1] {{D}}> r) (at level 30).
+
+Lemma LInc l r n:
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+Proof.
+  es.
+Qed.
+
+Lemma RInc l r n:
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Notation "l |2> r" := (l <* [0;1;1;1;1;1] {{C}}> r) (at level 30).
+
+Lemma LOv r n m:
+  ldh <* ld1^^n <| rd1^^m *> rd0 *> r -->+
+  ldh <* ld0^^(2+n) <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_S l r m:
+  l |2> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld1 <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_O l r n:
+  l <* ld0 <* ld1^^n |2> rd0 *> r -->+
+  l <| rd0^^(1+n) *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv l r n m:
+  l |> rd1^^n *> [1] *> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld0 <* ld1^^(1+n) <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc l lenR n m:
+  1+n<2^(lenR+1) ->
+  l |> RC1 lenR (1+n) m -->+
+  l <| RC1 lenR n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma LC_Ov lenL x i:
+  LC lenL 0 <| RC ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+1+i) ((((2^lenL-1)*2+1)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma RC_Ov2_1 lenL k x i:
+  k<2^lenL ->
+  LC lenL k |2> RC (((x*2+1)*2^i-1)*2+1) -->+
+  LC (lenL+1+1+i) ((k*2*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv2_S.
+Qed.
+
+Lemma RC_Ov2_0 lenL i2 k x i:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC ((x*2+1)*2^i*2) -->+
+  LC lenL k <| RC1 (i+1+i2) ((((2^i-1)*2+1)*2^i2-1)*2+1) x.
+Proof.
+  solve_rule ROv2_O.
+Qed.
+
+Lemma RC_Ov2_0_0 lenL i2 k:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC (0*2) -->+
+  LC lenL k <| RC (2^i2*2).
+Proof.
+  epose proof (ROv2_O _ 0inf _) as I1.
+  solve_rule I1.
+Qed.
+
+Lemma RC1_Ov lenL k lenR x i:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+(1+lenR)+1+i) (((k*2+1)*2^(1+lenR)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv.
+Qed.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR'(lenL k n:nat)
+| cfgR1(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR' lenL k n => LC lenL k |2> RC n
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+end.
+
+Close Scope sym.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => k<2^lenL /\ k+n+1 < 2^lenL*2 /\ k+n+1 <> 2^lenL
+| cfgR' lenL k m => m < k < 2^lenL /\ m mod 2 = 1
+| cfgR1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+end.
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbitS_cases n.
+      divmod2_cases x.
+      * lowbit_cases n'.
+        {
+          eex cfgL.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0_0.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          pp_pow2_lt_le i (lenL+1).
+          lia.
+        }
+        {
+          eex cfgR1.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0.
+          1: rw_pa; lia.
+          1: rewrite (Nat.add_comm ((2^lenL-1)*2)).
+          1: follow100 LC_Inc.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          zify_pow2sub1; lia.
+        }
+      * eex cfgR'.
+        1: apply LC_Ov.
+        spl.
+        zify_le_mul_r; lia.
+    + eex cfgL.
+      1: follow10 LC_Inc; follow100 RC_Inc; finish.
+      lia.
+  - divmod2_cases n.
+    1: lia.
+    lowbitS_cases n'.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+      * remember (k-1) as k'.
+        replace k with (k'+1) in * by lia.
+        clear k Heqk'.
+        eex cfgR1.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k'+1)*2) with (1+(k'*2+1)) by lia.
+        1: follow100 LC_Inc.
+        1: spl.
+        1: finish.
+        spl.
+        zify_pow2sub1; lia.
+    + eex cfgR'.
+      1: apply RC_Ov2_1; lia.
+      spl.
+      zify_le_mul_r; lia.
+  - destruct n as [|n].
+    2:{
+      destruct k as [|k].
+      1: lia.
+      eex cfgR1.
+      1: follow10 RC1_Inc; follow100 LC_Inc; finish.
+      spl.
+    }
+    lowbitS_cases m.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+        solve_v1 k lenL lenR.
+      * eex cfgR1.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k*2+1)*2^(1+lenR)) with (1+((k*2+1)*2^(1+lenR)-1)) by lia.
+        1: follow100 LC_Inc.
+        1: solve_v1 k lenL lenR.
+        1: finish.
+        spl.
+        rw_pa.
+        zify_pow2sub1; lia.
+    + lowbitS_cases n'.
+      eex cfgR'.
+      1: follow10 RC1_Ov; finish.
+      spl.
+      zify_le_mul_r; lia.
+Qed.
+
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=to_config (cfgL 3 5 3)).
+  1: esx.
+  eapply progress_nonhalt_cond.
+  1: apply closed.
+  cbn; lia.
+Qed.
+
+End TM34.
+
+
+Module TM36.
+Definition tm := Eval compute in (TM_from_str "1RB1RE_0RC---_1RD1LC_0RE1RA_1LF0RD_1RC0LF").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation "l <| r" := (l <{{C}} [1;1;1;1;1;1;0;0] *> r) (at level 30).
+Notation "l |> r" := (l <* [1;1;1;1;1;0;1;1] {{E}}> r) (at level 30).
+
+Lemma LInc l r n:
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+Proof.
+  es.
+Qed.
+
+Lemma RInc l r n:
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Notation "l |2> r" := (l <* [0;1;1;1;1;1] {{D}}> r) (at level 30).
+
+Lemma LOv r n m:
+  ldh <* ld1^^n <| rd1^^m *> rd0 *> r -->+
+  ldh <* ld0^^(2+n) <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_S l r m:
+  l |2> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld1 <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_O l r n:
+  l <* ld0 <* ld1^^n |2> rd0 *> r -->+
+  l <| rd0^^(1+n) *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv l r n m:
+  l |> rd1^^n *> [1] *> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld0 <* ld1^^(1+n) <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc l lenR n m:
+  1+n<2^(lenR+1) ->
+  l |> RC1 lenR (1+n) m -->+
+  l <| RC1 lenR n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma LC_Ov lenL x i:
+  LC lenL 0 <| RC ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+1+i) ((((2^lenL-1)*2+1)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma RC_Ov2_1 lenL k x i:
+  k<2^lenL ->
+  LC lenL k |2> RC (((x*2+1)*2^i-1)*2+1) -->+
+  LC (lenL+1+1+i) ((k*2*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv2_S.
+Qed.
+
+Lemma RC_Ov2_0 lenL i2 k x i:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC ((x*2+1)*2^i*2) -->+
+  LC lenL k <| RC1 (i+1+i2) ((((2^i-1)*2+1)*2^i2-1)*2+1) x.
+Proof.
+  solve_rule ROv2_O.
+Qed.
+
+Lemma RC_Ov2_0_0 lenL i2 k:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC (0*2) -->+
+  LC lenL k <| RC (2^i2*2).
+Proof.
+  epose proof (ROv2_O _ 0inf _) as I1.
+  solve_rule I1.
+Qed.
+
+Lemma RC1_Ov lenL k lenR x i:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+(1+lenR)+1+i) (((k*2+1)*2^(1+lenR)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv.
+Qed.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR'(lenL k n:nat)
+| cfgR1(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR' lenL k n => LC lenL k |2> RC n
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+end.
+
+Close Scope sym.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => k<2^lenL /\ k+n+1 < 2^lenL*2 /\ k+n+1 <> 2^lenL
+| cfgR' lenL k m => m < k < 2^lenL /\ m mod 2 = 1
+| cfgR1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+end.
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbitS_cases n.
+      divmod2_cases x.
+      * lowbit_cases n'.
+        {
+          eex cfgL.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0_0.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          pp_pow2_lt_le i (lenL+1).
+          lia.
+        }
+        {
+          eex cfgR1.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0.
+          1: rw_pa; lia.
+          1: rewrite (Nat.add_comm ((2^lenL-1)*2)).
+          1: follow100 LC_Inc.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          zify_pow2sub1; lia.
+        }
+      * eex cfgR'.
+        1: apply LC_Ov.
+        spl.
+        zify_le_mul_r; lia.
+    + eex cfgL.
+      1: follow10 LC_Inc; follow100 RC_Inc; finish.
+      lia.
+  - divmod2_cases n.
+    1: lia.
+    lowbitS_cases n'.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+      * remember (k-1) as k'.
+        replace k with (k'+1) in * by lia.
+        clear k Heqk'.
+        eex cfgR1.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k'+1)*2) with (1+(k'*2+1)) by lia.
+        1: follow100 LC_Inc.
+        1: spl.
+        1: finish.
+        spl.
+        zify_pow2sub1; lia.
+    + eex cfgR'.
+      1: apply RC_Ov2_1; lia.
+      spl.
+      zify_le_mul_r; lia.
+  - destruct n as [|n].
+    2:{
+      destruct k as [|k].
+      1: lia.
+      eex cfgR1.
+      1: follow10 RC1_Inc; follow100 LC_Inc; finish.
+      spl.
+    }
+    lowbitS_cases m.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+        solve_v1 k lenL lenR.
+      * eex cfgR1.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k*2+1)*2^(1+lenR)) with (1+((k*2+1)*2^(1+lenR)-1)) by lia.
+        1: follow100 LC_Inc.
+        1: solve_v1 k lenL lenR.
+        1: finish.
+        spl.
+        rw_pa.
+        zify_pow2sub1; lia.
+    + lowbitS_cases n'.
+      eex cfgR'.
+      1: follow10 RC1_Ov; finish.
+      spl.
+      zify_le_mul_r; lia.
+Qed.
+
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=to_config (cfgL 11 2015 3)).
+  1: esx.
+  eapply progress_nonhalt_cond.
+  1: apply closed.
+  cbn; lia.
+Qed.
+
+End TM36.
+
+
+Module TM51.
+Definition tm := Eval compute in (TM_from_str "1LB0RD_1RC0LB_1RD1LC_0RA1RE_1RF1RA_0RC---").
+(* similar to TM34 *)
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation "l <| r" := (l <{{C}} [1;1;1;1;1;1;0;0] *> r) (at level 30).
+Notation "l |> r" := (l <* [1;1;1;1;1;0;1;1] {{A}}> r) (at level 30).
+
+Lemma LInc l r n:
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+Proof.
+  es.
+Qed.
+
+Lemma RInc l r n:
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Notation "l |2> r" := (l <* [0;1;1;1;1;1] {{D}}> r) (at level 30).
+
+Lemma LOv r n m:
+  ldh <* ld1^^n <| rd1^^m *> rd0 *> r -->+
+  ldh <* ld0^^(2+n) <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_S l r m:
+  l |2> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld1 <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2_O l r n:
+  l <* ld0 <* ld1^^n |2> rd0 *> r -->+
+  l <| rd0^^(1+n) *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv l r n m:
+  l |> rd1^^n *> [1] *> rd1^^(1+m) *> rd0 *> r -->+
+  l <* ld0 <* ld1^^(1+n) <* ld0 <* ld1^^m |2> r.
+Proof.
+  es.
+Qed.
+
+
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc l lenR n m:
+  1+n<2^(lenR+1) ->
+  l |> RC1 lenR (1+n) m -->+
+  l <| RC1 lenR n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma LC_Ov lenL x i:
+  LC lenL 0 <| RC ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+1+i) ((((2^lenL-1)*2+1)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma RC_Ov2_1 lenL k x i:
+  k<2^lenL ->
+  LC lenL k |2> RC (((x*2+1)*2^i-1)*2+1) -->+
+  LC (lenL+1+1+i) ((k*2*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv2_S.
+Qed.
+
+Lemma RC_Ov2_0 lenL i2 k x i:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC ((x*2+1)*2^i*2) -->+
+  LC lenL k <| RC1 (i+1+i2) ((((2^i-1)*2+1)*2^i2-1)*2+1) x.
+Proof.
+  solve_rule ROv2_O.
+Qed.
+
+Lemma RC_Ov2_0_0 lenL i2 k:
+  k<2^lenL ->
+  LC (lenL+1+i2) ((k*2+1)*2^i2) |2> RC (0*2) -->+
+  LC lenL k <| RC (2^i2*2).
+Proof.
+  epose proof (ROv2_O _ 0inf _) as I1.
+  solve_rule I1.
+Qed.
+
+Lemma RC1_Ov lenL k lenR x i:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((x*2+1)*2^i-1) -->+
+  LC (lenL+1+(1+lenR)+1+i) (((k*2+1)*2^(1+lenR)*2+1)*2^i) |2> RC x.
+Proof.
+  solve_rule ROv.
+Qed.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR'(lenL k n:nat)
+| cfgR1(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR' lenL k n => LC lenL k |2> RC n
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+end.
+
+Close Scope sym.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => k<2^lenL /\ k+n+1 < 2^lenL*2 /\ k+n+1 <> 2^lenL
+| cfgR' lenL k m => m < k < 2^lenL /\ m mod 2 = 1
+| cfgR1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+end.
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbitS_cases n.
+      divmod2_cases x.
+      * lowbit_cases n'.
+        {
+          eex cfgL.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0_0.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          pp_pow2_lt_le i (lenL+1).
+          lia.
+        }
+        {
+          eex cfgR1.
+          1: follow10 LC_Ov.
+          1: follow100 RC_Ov2_0.
+          1: rw_pa; lia.
+          1: rewrite (Nat.add_comm ((2^lenL-1)*2)).
+          1: follow100 LC_Inc.
+          1: rw_pa; lia.
+          1: finish.
+          spl.
+          zify_pow2sub1; lia.
+        }
+      * eex cfgR'.
+        1: apply LC_Ov.
+        spl.
+        zify_le_mul_r; lia.
+    + eex cfgL.
+      1: follow10 LC_Inc; follow100 RC_Inc; finish.
+      lia.
+  - divmod2_cases n.
+    1: lia.
+    lowbitS_cases n'.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+      * remember (k-1) as k'.
+        replace k with (k'+1) in * by lia.
+        clear k Heqk'.
+        eex cfgR1.
+        1: follow10 RC_Ov2_1.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k'+1)*2) with (1+(k'*2+1)) by lia.
+        1: follow100 LC_Inc.
+        1: spl.
+        1: finish.
+        spl.
+        zify_pow2sub1; lia.
+    + eex cfgR'.
+      1: apply RC_Ov2_1; lia.
+      spl.
+      zify_le_mul_r; lia.
+  - destruct n as [|n].
+    2:{
+      destruct k as [|k].
+      1: lia.
+      eex cfgR1.
+      1: follow10 RC1_Inc; follow100 LC_Inc; finish.
+      spl.
+    }
+    lowbitS_cases m.
+    divmod2_cases x.
+    + lowbit_cases n'.
+      * eex cfgL.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0_0.
+        1: spl.
+        1: finish.
+        spl.
+        solve_v1 k lenL lenR.
+      * eex cfgR1.
+        1: follow10 RC1_Ov.
+        1: follow100 RC_Ov2_0.
+        1: spl.
+        1: replace ((k*2+1)*2^(1+lenR)) with (1+((k*2+1)*2^(1+lenR)-1)) by lia.
+        1: follow100 LC_Inc.
+        1: solve_v1 k lenL lenR.
+        1: finish.
+        spl.
+        rw_pa.
+        zify_pow2sub1; lia.
+    + lowbitS_cases n'.
+      eex cfgR'.
+      1: follow10 RC1_Ov; finish.
+      spl.
+      zify_le_mul_r; lia.
+Qed.
+
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=to_config (cfgL 2 3 2)).
+  1: esx.
+  eapply progress_nonhalt_cond.
+  1: apply closed.
+  cbn; lia.
+Qed.
+
+End TM51.
+
+

@@ -520,6 +520,33 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma BinDec2_mulpow2 d0 d1 dw len n i r:
+  (n*2+1)*2^i<2^(len+1+i) ->
+  BinDec2 d0 d1 dw (len+i) ((n*2+1)*2^i) r =
+  (d1++dw)^^i *> d0 *> BinDec (dw++d0) (dw++d1) len n r.
+Proof.
+  replace (len+1+i) with (len+i+1) by lia.
+  destruct i.
+  - rewrite Nat.add_0_r.
+    intros.
+    rewrite Nat.mul_1_r.
+    apply BinDec2_mul2add1.
+  - cbn[Nat.pow].
+    pose proof (Nat.pow_nonzero 2 i).
+    replace ((n*2+1)*(2*2^i)) with (((n*2+1)*2^i)*2) by lia.
+    rewrite BinDec2_mul2.
+    replace (len+S i) with (len+1+i) by lia.
+    intros.
+    rewrite pow2_S in H0.
+    rewrite BinDec_mulpow2 by lia.
+    rewrite Nat.pow_add_r in H0.
+    do 2 rewrite <-Nat.mul_lt_mono_pos_r in H0 by lia.
+    rewrite BinDec_mul2add1 by lia.
+    cbn.
+    repeat rewrite Str_app_assoc.
+    rewrite lpow_rotate'.
+    reflexivity.
+Qed.
 Lemma BinInc_O d1:
   BinInc d1 O =
   0inf.
@@ -732,6 +759,7 @@ Ltac rw_Bin :=
   rewrite BinDec2_mul2 ||
   rewrite BinDec2_mul2add1 ||
   rewrite BinDec2_mulpow2sub1 ||
+  rewrite BinDec2_mulpow2 ||
   rewrite BinInc_pow2 ||
   rewrite BinInc_mulpow2 ||
   rewrite BinInc_mulpow2sub1 ||

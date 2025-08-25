@@ -896,3 +896,125 @@ Qed.
 End TM9.
 
 
+Module TM10.
+Definition tm := Eval compute in (TM_from_str "1LB1LA_1LC0RE_0LD0RC_1LE1LF_1RC1RE_---0LA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c :=
+  l <* [1]^^a <{{B}} [1]^^b *> [0;1;0] *> [1;1;1;1;1;0;1;0]^^c *> 0inf.
+
+Lemma Inc1 l a b c:
+  S1 l (1+a) b c -->*
+  S1 l a (2+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 l a b c:
+  S1 l a b c -->*
+  S1 l 0 (a*2+b) c.
+Proof.
+  gen b c.
+  ind a Inc1.
+Qed.
+
+Definition S2 l n c :=
+  l <* [0]^^n <{{D}} [0] *> [1;1;1;1;1;0;1;0]^^c *> 0inf.
+
+Lemma Inc_1 l n c:
+  S1 (l <* <[1;0;0;0]) (n*2+1) 4 c -->+
+  S2 (l <* <[1;1;1]) (n*4+2) (1+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Lemma Inc_0 l n c:
+  S1 (l <* <[0;0;0;0]) (n*2+1) 4 c -->+
+  S2 (l <* <[1;1;1]) (n*4+2) (1+c).
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Definition P1 n c1 :=
+  forall l c,
+  S2 l (n*4+7) c -->+
+  S1 l (n*2+3) 4 (c1+c).
+
+Definition P2 n c1 :=
+  forall l c,
+  S2 (l <* <[1;1;1]) (n*4+6) c -->+
+  S1 l (n*2+5) 4 (c1+c).
+
+Lemma P1_S n c1:
+  P1 n c1 ->
+  P2 n c1 ->
+  P1 (1+n) (1+c1+c1).
+Proof.
+  unfold P1,P2.
+  intros HP1 HP2 l c.
+  mid01 (S2 (l <* [0;0;0;0]) (n*4+7) c).
+  1: es.
+  follow10 HP1.
+  replace (n*2+3) with ((1+n)*2+1) by lia.
+  follow100 Inc_0.
+  replace ((1+n)*4+2) with (n*4+6) by lia.
+  follow100 HP2.
+  finish.
+Qed.
+
+Lemma P2_S n c1:
+  P1 n c1 ->
+  P2 n c1 ->
+  P2 (1+n) (1+c1+c1).
+Proof.
+  unfold P1,P2.
+  intros HP1 HP2 l c.
+  mid01 (S2 (l <* <[1;1] <* <[1;0;0;0]) (n*4+7) c).
+  1: es.
+  follow10 HP1.
+  replace (n*2+3) with ((1+n)*2+1) by lia.
+  follow100 Inc_1.
+  replace ((1+n)*4+2) with (n*4+6) by lia.
+  follow100 HP2.
+  es.
+Qed.
+
+Lemma P_n n:
+  exists c1,
+  P1 n c1 /\ P2 n c1.
+Proof.
+  induction n.
+  - exists O; unfold P1,P2; split; es.
+  - destruct IHn as [c1 [HP1 HP2]].
+    exists (1+c1+c1).
+    split.
+    + apply P1_S; auto.
+    + apply P2_S; auto.
+Qed.
+
+Definition S '(n,c) :=
+  S2 (0inf <* <[1;1;1]) (n*4+6) c.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S (O,3)).
+  1: unfold S,S2; esx.
+  eapply progress_nonhalt_simple.
+  intros [n c].
+  epose proof (P_n n) as [c1 [HP1 HP2]].
+  unfold P2 in HP2.
+  eexists (1+n,1+c1+c).
+  unfold S.
+  follow10 HP2.
+  mid (S1 (0inf <* [0]^^4) ((2+n)*2+1) 4 (c1+c)).
+  1: es.
+  follow100 Inc_0.
+  finish.
+Qed.
+
+End TM10.
+
