@@ -1,5 +1,5 @@
 From BusyCoq Require Import CTL62.
-(*
+
 Lemma nonhalt1: ~halts (TM_from_str "1RB1LC_1RC1RE_1LD0RE_---0LE_0LF1RC_1RA0LA") c0.
 Proof. solve_cert (CPS_LRU 100000001 400000 400000 12 3200 2 6 0 0). Time Qed.
 
@@ -1649,7 +1649,7 @@ Proof. solve_cert (NG 0 1000000 1000000 6 80 0 0 true). Time Qed.
 
 Lemma nonhalt559: ~halts (TM_from_str "1RB0RB_1RC1RA_0LD0RE_1LE1LD_0RF1LC_---0RB") c0.
 Proof. solve_cert (NG 0 1000000 1000000 6 80 0 0 true). Time Qed.
-*)
+
 Lemma nonhalt560: ~halts (TM_from_str "1RB0RE_1RC---_1RD0LF_0RE0RC_1RF0RB_1LC0LA") c0.
 Proof. solve_cert (NG 0 1000000 1000000 16 8 0 0 true). Time Qed.
 

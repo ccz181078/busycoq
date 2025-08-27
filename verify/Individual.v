@@ -219,6 +219,12 @@ match ls with
 | (a,b)::t => (l,a)::(lrcons b t r)
 end.
 
+Fixpoint lcons(l:DH0)(ls:list (DH0*DH0)):(list (DH0*DH0))*DH0 :=
+match ls with
+| nil => (nil,l)
+| (a,b)::t => let (x,y):=(lcons b t) in ((l,a)::x,y)
+end.
+
 Lemma lrcons_lrcons h1 h2 ls h3 h4:
   lrcons h1 (lrcons h2 ls h3) h4 =
   (h1,h2)::ls++[(h3,h4)].
@@ -590,6 +596,39 @@ Proof.
     follow11 H5.
     follow11 (to_DH_config_progress_unflip (H6 r4)).
     eapply IHls; eauto.
+Qed.
+
+Lemma sideRLs_concat_v2 {tm h1 h2 ls ls' l1 l2 r1 r2}:
+  lcons h1 ls = (ls',h2) ->
+  ls<>[] ->
+  sideRLs (flip tm) ls l1 l2 ->
+  sideRLs tm ls' r1 r2 ->
+  l1 {{{ (h1,R) }}} r1 -[ tm ]->+
+  l2 {{{ (h2,R) }}} r2.
+Proof.
+  gen h1 h2 ls' l1 l2 r1 r2.
+  induction ls; intros.
+  1: congruence.
+  destruct a as [a b].
+  cbn in H.
+  destruct (lcons b ls) as [ls'0 h2'] eqn:E.
+  inverts H.
+  inverts H1.
+  inverts H2.
+  destruct ls as [|h t].
+  - cbn in E.
+    inverts E.
+    inverts H8.
+    inverts H9.
+    follow11 H6.
+    eapply (to_DH_config_progress_unflip (H7 _)).
+  - epose proof (IHls _ _ _ _ _ _ _ E _ H8 H9) as I1.
+    follow11 H6.
+    eapply progress_trans.
+    2: apply I1.
+    eapply (to_DH_config_progress_unflip (H7 _)).
+  Unshelve.
+  congruence.
 Qed.
 
 Lemma sideRL_1 tm h1 h2 r1 r2:
