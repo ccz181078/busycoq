@@ -304,6 +304,13 @@ match goal with
   unfold_config_expr b
 end.
 
+Ltac st :=
+  repeat
+  (rewrite lpow_add ||
+  rewrite Str_app_assoc ||
+  rewrite lpow_mul);
+  simpl_tape.
+
 Ltac es :=
   intros;
   unfold_config;
@@ -321,6 +328,43 @@ Ltac ind n H :=
     follow H;
     follow IHn;
     finish ].
+
+Ltac solve_seg :=
+  unfold segRL,segRR,segLL,segLR; intros; cbn;
+  (eapply evstep_progress_trans || eapply evstep_trans);
+  [ repeat (rewrite Str_app_assoc || cbn[Str_app]);
+    simpl_tape;
+    finish
+  | ];
+  (repeat (er; try sr)); finish;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  cbn[app];
+  reflexivity.
+
+Ltac solve_segRLs :=
+  repeat (
+  (eapply segRLs_S; [solve_seg |]) ||
+  (eapply segRLs_RR_LLs; [solve_seg |]) ||
+  (eapply segLLs_LR_LLs; [solve_seg |]) ||
+  (eapply segLLs_LL_RLs; [solve_seg |]) ||
+  eapply segRLs_O ||
+  rewrite lpow_add ||
+  rewrite lpow_mul ||
+  rewrite <-List.app_assoc ||
+  rewrite lpow_rotate_list ||
+  rewrite List.app_nil_r ||
+  cbn[app] || cbn[lpow]).
+
+Ltac solve_sideRLs :=
+  st;
+  simpl_rotate;
+  repeat (eapply sideRLseq_S;
+  [ intros ?l;
+    unfold to_DH_config; cbn;
+    (repeat (er; try sr)) | ] ||
+  eapply sideRLseq_O).
+
 Definition Sym_from_char(x:ascii):option Sym :=
 match x with
 | "0"%char => Some S0

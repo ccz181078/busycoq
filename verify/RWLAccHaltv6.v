@@ -416,3 +416,9 @@ Proof. solve_halt. Time Qed.
 Lemma tm153: halts_at_trans (TM_from_str "1RB0LC_0RC1RE_1LD0RF_1LA0RB_1RD1RA_0RA---") c0 (F,1).
 Proof. solve_halt. Time Qed.
 
+Lemma tm154: halts_at_trans (TM_from_str "1RB1LA_1LC0RC_1LD1RC_1LD1LE_0LF0LA_---0RA") c0 (F,0).
+Proof. solve_halt. Time Qed.
+
+Lemma tm155: halts_at_trans (TM_from_str "1RB1LA_1LC0RC_1LD1RC_0LC1LE_0LF0LA_---0RA") c0 (F,0).
+Proof. solve_halt. Time Qed.
+

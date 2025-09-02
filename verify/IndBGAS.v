@@ -47,6 +47,31 @@ Ltac solve_hlin_nonhalt cfg :=
     (solve_hlin_nonhalt_T (config_exploop cfg) 1000000%N)
   end.
 
+Lemma nonhalt133: ~halts (TM_from_str "1RB1RE_0LC1RA_1RD1LD_1LB1LE_1LF0RB_---0LA") c0.
+Proof.
+  solve_hlin_nonhalt (
+  upd_config [
+  set_allowed_repeaters (Some [
+    [0]++[1]^^8;
+    [0;1;1;0]++[1]^^5;
+    [0;1;1;0]++[1]^^8
+  ]);
+  set_max_repeater_len 16;
+  set_max_repeater_size (Some 16%N);
+  set_rep_step1_limit 1]
+  default_config).
+Time Qed.
+
+Lemma nonhalt132: ~halts (TM_from_str "1RB1LC_1RC1RE_1LD0LD_1LE1LA_0RB1LF_---1RC") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 8).
+Time Qed.
+
+Lemma nonhalt131: ~halts (TM_from_str "1RB1LC_1RC1RE_1LD0LD_1LE1LA_0RB0LF_---1LA") c0.
+Proof.
+  solve_hlin_nonhalt (config_fixed_block_size 8).
+Time Qed.
+
 Lemma nonhalt130: ~halts (TM_from_str "1RB1LD_1LC0RF_1RF0RD_1LA1LE_0LB---_0LD0RC") c0.
 Proof.
   solve_hlin_nonhalt default_config.

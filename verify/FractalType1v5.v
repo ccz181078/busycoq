@@ -1,5 +1,5 @@
 From BusyCoq Require Import Individual62.
-Require Import Lia.
+Require Import ZifyNat Lia.
 Require Import ZArith.
 Require Import String.
 Require Import List.
@@ -878,5 +878,429 @@ Proof.
 Qed.
 
 End TM7.
+
+
+Module TM8.
+Definition tm := Eval compute in (TM_from_str "1RB0LE_0RC0RF_1LD0RB_1LA---_1LB0LD_1RA1RA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b c r :=
+  0inf <* <[1;0;1]^^a <* <[0;1;1]^^b {{B}}> [0;0;1]^^c *> r.
+
+Lemma Inc0 a b c r:
+  S0 (2+a) b (1+c) r -->*
+  S0 a (3+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 n a b c r:
+  S0 (n*2+a) b (n+c) r -->*
+  S0 a (n*3+b) c r.
+Proof.
+  gen a b c r.
+  ind n Inc0.
+Qed.
+
+Lemma Inc1 a b:
+  S0 (1+a) b 0 0inf -->*
+  S0 a (2+b) 0 0inf.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b:
+  S0 a b 0 0inf -->*
+  S0 0 (a*2+b) 0 0inf.
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Notation "l <| r" := (l <{{E}} [0;1] *> r) (at level 30).
+
+Definition P n :=
+  forall r,
+  0inf <| [0;0;1]^^(1+n) *> r -->*
+  0inf <* <[1;0;1]^^n <* <[1;0;0] {{B}}> r.
+
+Lemma P_S_1 n:
+  P (n*2+1) ->
+  P (n*3+5).
+Proof.
+  unfold P.
+  intros HP r.
+  mid (0inf <| [0;0;1]^^(1+(n*2+1)) *> [0;0;1]^^(n+4) *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+1) 2 (n+3) r).
+  1: es.
+  follow Incs0.
+  mid (0inf <| [0;0;1]^^(n*3+4) *> [1;1;0;0;1] *> r).
+  1: es.
+  mid (0inf <| [0;0;1]^^(1+(n*2+1)) *> [0;0;1]^^(n+2) *> [1;1;0;0;1] *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+1) 2 (n+1) ([1;1;0;0;1]*>r)).
+  1: es.
+  follow Incs0.
+  es.
+Qed.
+
+Lemma P_S_0 n:
+  P (n*2) ->
+  P (n*3+3).
+Proof.
+  unfold P.
+  intros HP r.
+  mid (0inf <| [0;0;1]^^(1+(n*2)) *> [0;0;1]^^(n+3) *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+0) 2 (n+2) r).
+  1: es.
+  follow Incs0.
+  mid (0inf <| [0;0;1]^^(n*3+2) *> [0;0;0;0;1] *> r).
+  1: es.
+  mid (0inf <| [0;0;1]^^(1+(n*2)) *> [0;0;1]^^(n+1) *> [0;0;0;0;1] *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+0) 2 (n+0) ([0;0;0;0;1]*>r)).
+  1: es.
+  follow Incs0.
+  es.
+Qed.
+
+Lemma P_S n:
+  P n ->
+  P (n+n/2+(n mod 2)+3).
+Proof.
+  intros HP.
+  remember (n/2) as n1.
+  remember (n mod 2) as n2.
+  replace n with (n1*2+n2) in * by lia.
+  destruct n2 as [|[|]]. 3: lia.
+  - rewrite Nat.add_0_r in HP.
+    apply P_S_0 in HP.
+    applys_eq HP; lia.
+  - apply P_S_1 in HP.
+    applys_eq HP; lia.
+Qed.
+
+Definition S2 n := 0inf <| [0;0;1]^^n *> [1] *> 0inf.
+
+Lemma BigStep a n:
+  a+2<=n /\ n*2<=a*3+4 ->
+  P a ->
+  S2 n -->+
+  S2 (a*3+6-n).
+Proof.
+  unfold P,S2.
+  intros Hn HP.
+  remember (a*3+6-n) as v2.
+  replace n with ((1+a)+(1+(n-a-2))) by lia.
+  rewrite lpow_add,Str_app_assoc.
+  follow HP.
+  mid10 (S0 a 2 (n-a-2) ([1]*>0inf)).
+  1: es.
+  remember (n-a-2) as b.
+  mid (S0 (b*2+(a-b*2)) 2 (b+0) ([1]*>0inf)).
+  1: finish.
+  follow Incs0.
+  mid (S0 (a-b*2) (b*3+3) 0 0inf).
+  1: es.
+  follow Incs1.
+  unfold S0.
+  remember (((a - b * 2) * 2 + (b * 3 + 3))) as v1.
+  mid (S2 (1+v1)).
+  1: es.
+  unfold S2.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 7).
+  1: unfold S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun n => exists a, (a+2<=n /\ n<=a+a/2+1) /\ P a).
+  2: exists 5; split; [lia|]; unfold P; es.
+  intros n [a [Ha HP]].
+  eexists; split.
+  1: eapply (BigStep a); [lia|apply HP].
+  eexists; split.
+  2: apply P_S,HP.
+  lia.
+Qed.
+
+End TM8.
+
+
+Module TM9.
+Definition tm := Eval compute in (TM_from_str "1RB1RB_1RC0LF_0RD0RA_0LE0RC_1LB---_1LC0LE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b c r :=
+  0inf <* <[1;0;1]^^a <* <[0;1;1]^^b {{C}}> [0;0;1]^^c *> r.
+
+Lemma Inc0 a b c r:
+  S0 (2+a) b (1+c) r -->*
+  S0 a (3+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 n a b c r:
+  S0 (n*2+a) b (n+c) r -->*
+  S0 a (n*3+b) c r.
+Proof.
+  gen a b c r.
+  ind n Inc0.
+Qed.
+
+Lemma Inc1 a b:
+  S0 (1+a) b 0 0inf -->*
+  S0 a (2+b) 0 0inf.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b:
+  S0 a b 0 0inf -->*
+  S0 0 (a*2+b) 0 0inf.
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Notation "l <| r" := (l <{{F}} [0;1] *> r) (at level 30).
+
+Definition P n :=
+  forall r,
+  0inf <| [0;0;1]^^(1+n) *> r -->*
+  0inf <* <[1;0;1]^^n <* <[1;0;0] {{C}}> r.
+
+Lemma P_S_1 n:
+  P (n*2+1) ->
+  P (n*3+4).
+Proof.
+  unfold P.
+  intros HP r.
+  mid (0inf <| [0;0;1]^^(1+(n*2+1)) *> [0;0;1]^^(n+3) *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+1) 2 (n+2) r).
+  1: es.
+  follow Incs0.
+  mid (0inf <| [0;0;1]^^(n*3+4) *> [0;1] *> r).
+  1: es.
+  mid (0inf <| [0;0;1]^^(1+(n*2+1)) *> [0;0;1]^^(n+2) *> [0;1] *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+1) 2 (n+1) ([0;1]*>r)).
+  1: es.
+  follow Incs0.
+  es.
+Qed.
+
+Lemma P_S_0 n:
+  P (n*2) ->
+  P (n*3+3).
+Proof.
+  unfold P.
+  intros HP r.
+  mid (0inf <| [0;0;1]^^(1+(n*2)) *> [0;0;1]^^(n+3) *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+0) 2 (n+2) r).
+  1: es.
+  follow Incs0.
+  mid (0inf <| [0;0;1]^^(n*3+2) *> [0;0;0;0;1] *> r).
+  1: es.
+  mid (0inf <| [0;0;1]^^(1+(n*2)) *> [0;0;1]^^(n+1) *> [0;0;0;0;1] *> r).
+  1: replace (n*3) with (n*2+n) by lia; es.
+  follow HP.
+  mid (S0 (n*2+0) 2 (n+0) ([0;0;0;0;1]*>r)).
+  1: es.
+  follow Incs0.
+  es.
+Qed.
+
+Lemma P_S n:
+  P n ->
+  P (n+n/2+3).
+Proof.
+  intros HP.
+  remember (n/2) as n1.
+  remember (n mod 2) as n2.
+  replace n with (n1*2+n2) in * by lia.
+  destruct n2 as [|[|]]. 3: lia.
+  - rewrite Nat.add_0_r in HP.
+    apply P_S_0 in HP.
+    applys_eq HP; lia.
+  - apply P_S_1 in HP.
+    applys_eq HP; lia.
+Qed.
+
+Definition S2 n := 0inf <| [0;0;1]^^n *> 0inf.
+
+Lemma BigStep a n:
+  a+2<=n /\ n*2<=a*3+4 ->
+  P a ->
+  S2 n -->+
+  S2 (a*3+5-n).
+Proof.
+  unfold P,S2.
+  intros Hn HP.
+  remember (a*3+5-n) as v2.
+  replace n with ((1+a)+(1+(n-a-2))) by lia.
+  rewrite lpow_add,Str_app_assoc.
+  follow HP.
+  mid10 (S0 a 2 (n-a-2) (0inf)).
+  1: es.
+  remember (n-a-2) as b.
+  mid (S0 (b*2+(a-b*2)) 2 (b+0) (0inf)).
+  1: finish.
+  follow Incs0.
+  mid (S0 (a-b*2) (b*3+2) 0 0inf).
+  1: es.
+  follow Incs1.
+  remember (((a - b * 2) * 2 + (b * 3 + 2))) as v1.
+  replace v2 with (1+v1) by lia.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 6).
+  1: unfold S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun n => exists a, (a+2<=n /\ n<=a+a/2) /\ P a).
+  2: exists 4; split; [lia|]; unfold P; es.
+  intros n [a [Ha HP]].
+  eexists; split.
+  1: eapply (BigStep a); [lia|apply HP].
+  eexists; split.
+  2: apply P_S,HP.
+  lia.
+Qed.
+
+End TM9.
+
+
+Module TM10.
+Definition tm := Eval compute in (TM_from_str "1LB0RF_0RC1LE_---0RD_1RA1RA_1RD0LA_1RD1RB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b c r :=
+  0inf <* <[1;1;0]^^a <* <[1;1] <* <[1;1;0]^^b <* <[1;1] {{A}}> [0;1;1]^^c *> r.
+
+Lemma Inc0 a b c r:
+  S0 (1+a) b (1+c) r -->*
+  S0 a (2+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 n a b c r:
+  S0 (n+a) b (n+c) r -->*
+  S0 a (n*2+b) c r.
+Proof.
+  gen a b c r.
+  ind n Inc0.
+Qed.
+
+Lemma Inc1 a b:
+  S0 (1+a) b 0 0inf -->*
+  S0 a (3+b) 0 0inf.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b:
+  S0 a b 0 0inf -->*
+  S0 0 (a*3+b) 0 0inf.
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Notation "l <| r" := (l <{{B}} [1] *> r) (at level 30).
+
+Definition P n :=
+  forall r,
+  0inf <| [0;1;1]^^(4+n) *> r -->*
+  S0 n 2 0 r.
+
+Lemma P_S n:
+  P n ->
+  P (n*2+4).
+Proof.
+  unfold P.
+  intros HP r.
+  mid (0inf <| [0;1;1]^^(4+n) *> [0;1;1]^^(4+n) *> r).
+  1: replace (n*2) with (n+n) by lia; es.
+  follow HP.
+  mid (S0 (n+0) 2 (n+4) r).
+  1: es.
+  follow Incs0.
+  mid (0inf <| [0;1;1]^^(n*2+5) *> [1;1;0;1;1;0;1;1] *> r).
+  1: es.
+  mid (0inf <| [0;1;1]^^(4+n) *> [0;1;1]^^(1+n) *> [1;1;0;1;1;0;1;1] *> r).
+  1: replace (n*2) with (n+n) by lia; es.
+  follow HP.
+  mid (S0 (n+0) 2 (n+1) ([1;1;0;1;1;0;1;1]*>r)).
+  1: es.
+  follow Incs0.
+  es.
+Qed.
+
+Definition S2 n := 0inf <| [0;1;1]^^n *> 0inf.
+
+Lemma BigStep a n:
+  a+4<=n<=a*2+4 ->
+  P a ->
+  S2 n -->+
+  S2 (a*4+10-n).
+Proof.
+  unfold P,S2.
+  intros Hn HP.
+  remember (a*3+6-n) as v2.
+  replace n with ((4+a)+((n-a-4))) by lia.
+  rewrite lpow_add,Str_app_assoc.
+  follow HP.
+  mid01 (S0 a 2 (n-a-4) 0inf).
+  1: es.
+  remember (n-a-4) as b.
+  mid01 (S0 (b+(a-b)) 2 (b+0) 0inf).
+  1: finish.
+  follow Incs0.
+  follow Incs1.
+  remember (((a - b) * 3 + (b * 2 + 2))) as v1.
+  unfold S0.
+  mid10 (S2 (4+v1)).
+  1: es.
+  unfold S2.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 13).
+  1: unfold S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun n => exists a, (a+4<=n<=a*2+2) /\ P a).
+  2: exists 8; split; [lia|]; apply (P_S 2); unfold P; es.
+  intros n [a [Ha HP]].
+  eexists; split.
+  1: eapply (BigStep a); [lia|apply HP].
+  eexists; split.
+  2: apply P_S,HP.
+  lia.
+Qed.
+
+End TM10.
 
 

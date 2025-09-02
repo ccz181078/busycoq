@@ -45,6 +45,50 @@ Ltac solve_hlin_nonhalt cfg :=
     (solve_hlin_nonhalt_T cfg 1000000%N)
   end.
 
+Module Bell.
+
+Lemma nonhalt1: ~halts (TM_from_str "1RB0LD_1LC1RF_---1RD_0LF1RE_1LA1RC_1RA0RF") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config
+  [set_max_repeater_len 32]
+  default_config).
+Time Qed.
+
+Lemma nonhalt2: ~halts (TM_from_str "1RB1LF_1LC0RE_1LA1LD_1LB0LD_0RD1LA_---1LE") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config
+  [set_max_repeater_len 32]
+  default_config).
+Time Qed.
+
+Lemma nonhalt3: ~halts (TM_from_str "1RB0LE_1RC1RF_1LD1RE_1RA1LD_---0LF_1RA0RF") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config
+  [set_max_repeater_len 32]
+  default_config).
+Time Qed.
+
+Lemma nonhalt4: ~halts (TM_from_str "1RB0LD_1RC1RE_1LA1RF_0LE1RC_1RA0RE_---1RD") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config
+  [set_max_repeater_len 32]
+  default_config).
+Time Qed.
+
+Lemma nonhalt5: ~halts (TM_from_str "1RB1LE_1LC0RF_1RE1LD_1LB0LD_---1LF_0RD1LA") c0.
+Proof.
+  solve_hlin_nonhalt
+  (upd_config
+  [set_max_repeater_len 32]
+  default_config).
+Time Qed.
+
+End Bell.
+
 Module hlin.
 
 Lemma nonhalt1: ~halts (TM_from_str "1RB0RF_1LC1RE_1LD0LC_0LE0LB_1LA1RA_---1RB") c0.

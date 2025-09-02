@@ -13,6 +13,13 @@ Ltac solve_loop2'' min_b n_skip k T :=
     apply (decide_loop2_spec' _ (min_b,16%nat) n_skip k T);
     native_cast_no_check (eq_refl true)
   end.
+Ltac solve_loop2''' min_b min_d n_skip k T :=
+  match goal with
+  | |- ~halts (TM_from_str ?x) c0 =>
+    idtac x;
+    apply (decide_loop2_spec' _ (min_b,min_d) n_skip k T);
+    native_cast_no_check (eq_refl true)
+  end.
 Ltac solve_loop2' n_skip k T := solve_loop2'' O n_skip k T.
 Ltac solve_loop2 k T := solve_loop2' O k T.
 
@@ -506,4 +513,16 @@ Proof. solve_loop2' 1 5 40000%N. Time Qed.
 
 Lemma tm163: ~halts (TM_from_str "1RB1RF_0RC0RB_1LD1RB_0LE---_1LC1LF_1RA0LF") c0.
 Proof. solve_loop2' 1 5 40000%N. Time Qed.
+
+Lemma tm164: ~halts (TM_from_str "1RB0LA_1RC1LB_1RD1LA_0RE1RF_1LA---_1RE0RD") c0.
+Proof. solve_loop2''' 8 8 1 5 10000%N. Time Qed.
+
+Lemma tm165: ~halts (TM_from_str "1RB0LA_1RC1LB_1RD1LA_1RE1RF_1LB---_0RE0RD") c0.
+Proof. solve_loop2''' 8 8 1 5 10000%N. Time Qed.
+
+Lemma tm166: ~halts (TM_from_str "1RB1RE_1LC0RA_0LF0LD_1LE1LC_1RA0RC_0LD---") c0.
+Proof. solve_loop2''' 8 8 1 5 20000%N. Time Qed.
+
+Lemma tm167: ~halts (TM_from_str "1RB0LF_0RC0RD_0RD---_1RE1RB_1LF0LB_1LA1LE") c0.
+Proof. solve_loop2''' 8 8 1 5 20000%N. Time Qed.
 
