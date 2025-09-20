@@ -129,3 +129,12 @@ Proof. solve_nonhalt 9. Time Qed.
 Lemma nonhalt41: ~halts (TM_from_str "1RB1LE_1RC0RB_0LD0RA_1LA1LC_1LF---_1LC0LC") c0.
 Proof. solve_nonhalt 9. Time Qed.
 
+Lemma nonhalt42: ~halts (TM_from_str "1RB1RF_1LC0RD_1RE0RD_0RC0LE_1LB0RA_0RE---") c0.
+Proof. solve_nonhalt 24. Time Qed.
+
+Lemma nonhalt43: ~halts (TM_from_str "1RB0LE_1LC0LE_1RA0LD_1LA1LF_0LB0RC_0LC---") c0.
+Proof. solve_nonhalt 24. Time Qed.
+
+Lemma nonhalt44: ~halts (TM_from_str "1RB0LF_0RC0RF_1RD---_1LE0LB_1LA0LD_1RA0RE") c0.
+Proof. solve_nonhalt 24. Time Qed.
+

@@ -1304,3 +1304,116 @@ Qed.
 End TM10.
 
 
+Module TM11.
+Definition tm := Eval compute in (TM_from_str "1RB0RD_1LC1LF_0RA0LB_0RE0RF_1RC0LB_1RD---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b c r :=
+  0inf <* <[0;1]^^a <* [1] <* <[0;1]^^b {{D}}> [0;1]^^c *> r.
+
+Lemma Inc0 a b c r:
+  S0 (1+a) b (1+c) r -->*
+  S0 a (2+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 n a b c r:
+  S0 (n+a) b (n+c) r -->*
+  S0 a (n*2+b) c r.
+Proof.
+  gen a b c r.
+  ind n Inc0.
+Qed.
+
+Lemma Inc1 a b:
+  S0 (1+a) b 0 0inf -->*
+  S0 a (4+b) 0 0inf.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b:
+  S0 a b 0 0inf -->*
+  S0 0 (a*4+b) 0 0inf.
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Notation "l <| r" := (l <{{C}} [1] *> r) (at level 30).
+
+Definition P n :=
+  forall r,
+  0inf <| [0;1]^^(2+n) *> r -->*
+  S0 n 1 0 r.
+
+Lemma P_S n:
+  P n ->
+  P (n*2+2).
+Proof.
+  unfold P.
+  intros HP r.
+  mid (0inf <| [0;1]^^(2+n) *> [0;1]^^(2+n) *> r).
+  1: replace (n*2) with (n+n) by lia; es.
+  follow HP.
+  mid (S0 (n+0) 1 (n+2) r).
+  1: es.
+  follow Incs0.
+  mid (0inf <| [0;1]^^(n*2+2) *> [0;0;1] *> r).
+  1: es.
+  mid (0inf <| [0;1]^^(2+n) *> [0;1]^^(n) *> [0;0;1] *> r).
+  1: replace (n*2) with (n+n) by lia; es.
+  follow HP.
+  mid (S0 (n+0) 1 (n+0) ([0;0;1]*>r)).
+  1: es.
+  follow Incs0.
+  es.
+Qed.
+
+Definition S2 n := 0inf <| [0;1]^^n *> 0inf.
+
+Lemma BigStep a n:
+  a+2<=n<=a*2+2 ->
+  P a ->
+  S2 n -->+
+  S2 (a*6+8-n*2).
+Proof.
+  unfold P,S2.
+  intros Hn HP.
+  replace n with ((2+a)+((n-a-2))) by lia.
+  rewrite lpow_add,Str_app_assoc.
+  follow HP.
+  mid01 (S0 a 1 (n-a-2) 0inf).
+  1: es.
+  remember (n-a-2) as b.
+  mid01 (S0 (b+(a-b)) 1 (b+0) 0inf).
+  1: finish.
+  follow Incs0.
+  follow Incs1.
+  remember (((a - b) * 4 + (b * 2 + 1))) as v1.
+  mid10 (S2 (3+v1)).
+  1: es.
+  unfold S2.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 12).
+  1: unfold S2; esx.
+  eapply progress_nonhalt_cond with (P:=fun n => exists a, (a+2<=n<=a*2+2) /\ P a).
+  2: exists 6; split; [lia|]; apply (P_S 2); unfold P; es.
+  intros n [a [Ha HP]].
+  eexists; split.
+  1: eapply (BigStep a); [lia|apply HP].
+  eexists; split.
+  2: apply P_S,HP.
+  lia.
+Qed.
+
+End TM11.
+
+

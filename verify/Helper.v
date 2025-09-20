@@ -300,3 +300,11 @@ Program Fixpoint strip_prefix (xs ys : list A) : {zs | ys = xs ++ zs} + {True} :
 End StripPrefix.
 
 Arguments strip_prefix {A} eqb !xs !ys.
+
+Inductive iter_halts{A}(f:A->option A):A->Prop :=
+| iter_halts_O x:
+  f x = None -> iter_halts f x
+| iter_halts_S x y:
+  f x = Some y -> iter_halts f y -> iter_halts f x
+.
+

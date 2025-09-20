@@ -776,6 +776,80 @@ Proof.
   apply I1.
 Qed.
 
+Lemma halts_step_iff tm c1 c2:
+  c1 -[ tm ]-> c2 ->
+  halts tm c1 <-> halts tm c2.
+Proof.
+  intros H.
+  split; intro H0.
+  - unfold halts in *.
+    destruct H0 as [n [c [I1 I2]]].
+    inverts I1.
+    1: eapply halted_no_step in I2; apply I2 in H; destruct H.
+    exists n0,c; split; eauto.
+  - eapply halts_step; eauto.
+Qed.
+
+Lemma halts_evstep_iff tm c1 c2:
+  c1 -[ tm ]->* c2 ->
+  halts tm c1 <-> halts tm c2.
+Proof.
+  intros H.
+  induction H.
+  1: tauto.
+  apply halts_step_iff in H.
+  tauto.
+Qed.
+
+Lemma halts_iff : forall tm (A : Type) (i0 : A) (f: A -> option A)
+  (C : A -> Q * tape) (P : A -> Prop),
+  (forall i, P i ->
+  match f i with
+  | Some i' => C i -[ tm ]->+ C i' /\ P i'
+  | None => halts tm (C i)
+  end) ->
+  P i0 ->
+  halts tm (C i0) <-> iter_halts f i0.
+Proof.
+  introv Hstep Hi0.
+  split; intro I1.
+  - destruct I1 as [n [c [I1 I2]]].
+    gen i0.
+    induction n using Wf_nat.lt_wf_ind; intros.
+    apply Hstep in Hi0.
+    destruct (f i0) eqn:E.
+    * destruct Hi0 as [Hi0 HP].
+      apply progress_multistep in Hi0.
+      destruct Hi0 as [n' Hi0].
+      assert (I3:halts_in tm (C i0) n) by eauto.
+      assert (I4:S n'<=n). {
+        assert (n<S n'->False). {
+          intro.
+          unshelve epose proof (exceeds_halt _ _ _ _ _ I3 _ Hi0); [lia|tauto].
+        }
+        lia.
+      }
+      replace n with (S n'+(n-(S n'))) in I1 by lia.
+      apply rewind_split in I1.
+      destruct I1 as [c' [I5 I6]].
+      multistep_deterministic.
+      eapply iter_halts_S.
+      1: apply E.
+      eapply H.
+      3: apply I6.
+      2: eauto.
+      lia.
+    * econstructor; eauto.
+  - induction I1.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eauto.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eapply halts_evstep.
+      1: apply IHI1,Hstep.
+      eapply progress_evstep,Hstep.
+Qed.
 
 Definition sigma_score_sym: Sym->nat :=
   fun s =>

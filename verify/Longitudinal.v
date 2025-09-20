@@ -220,6 +220,21 @@ Proof.
   apply (unflip_progress _ _ _ H).
 Qed.
 
+Lemma sideRLs_concat_v2_L {tm h1 h2 ls ls' l1 l2 r1 r2}:
+  lcons h1 ls = (ls',h2) ->
+  ls<>[] ->
+  sideRLs (flip tm) ls' l1 l2 ->
+  sideRLs tm ls r1 r2 ->
+  l1 {{{ (h1,L) }}} r1 -[ tm ]->+
+  l2 {{{ (h2,L) }}} r2.
+Proof.
+  intros Hc Hls HL HR.
+  rewrite <-(flip_involutive tm) in HR.
+  epose proof (sideRLs_concat_v2 Hc Hls HR HL) as H.
+  destruct h1,h2.
+  apply (unflip_progress _ _ _ H).
+Qed.
+
 Lemma sideRLs_concat_1 [tm hR hL n l1 l2 r1 r2]:
   sideRLs tm ([(hR,hL)]^^n) r1 r2 ->
   sideRLs (flip tm) ([(hL,hR)]^^n) l1 l2 ->

@@ -1,7 +1,7 @@
-From BusyCoq Require Import Individual62.
+From BusyCoq Require Import Individual62 Longitudinal.
 Require Import Lia.
 Require Import ZArith.
-Require Import String.
+Require Import String List.
 Require Import ZifyNat.
 
 Open Scope list.
@@ -26,6 +26,7 @@ repeat rewrite config_to_cconfig;
 apply cconfig_evstep_dec_spec with (n:=1000000);
 vm_compute;
 reflexivity.
+
 
 Module TM1.
 Definition tm := Eval compute in (TM_from_str "1LB0LE_0RC0LD_0RE1RA_0LB1LA_1RC1RF_0RA---").
@@ -2381,5 +2382,785 @@ Proof.
 Qed.
 
 End TM26.
+
+
+From BusyCoq Require ES_v2.
+
+Ltac es_v2 := ES_v2.es.
+
+Module TM27.
+Definition tm := Eval compute in (TM_from_str "1RB0LB_1LA0LC_1LB1RD_0LD0RE_1RC0RF_1RE---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c d e :=
+  0inf <{{B}} [1;0]^^a *> [0] *> [1;0]^^b *> [1] *> [1;0]^^(1+c) *> [0] *> [1;0]^^d *> [1] *> [1;0]^^(1+e) *> 0inf.
+
+Lemma Inc1 a b c d e:
+  S1 a (1+b) c (1+d) e -->*
+  S1 (2+a) b (1+c) d (3+e).
+Proof.
+  es.
+Qed.
+
+Lemma Inc2 a c d e:
+  S1 a 0 c (1+d) e -->*
+  S1 (2+a) 0 c d (3+e).
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n a b c d e:
+  S1 a (n+b) c (n+d) e -->*
+  S1 (n*2+a) b (n+c) d (n*3+e).
+Proof.
+  gen a b c d e.
+  ind n Inc1.
+Qed.
+
+Lemma Incs2 a c d e:
+  S1 a 0 c d e -->*
+  S1 (d*2+a) 0 c 0 (d*3+e).
+Proof.
+  gen a c e.
+  ind d Inc2.
+Qed.
+
+Lemma Rst a c e:
+  S1 a 0 c 0 e -->+
+  S1 0 (2+a) 1 (2+c+e) 5.
+Proof.
+  unfold S1.
+  do 21 (er; sr).
+  es_v2.
+Qed.
+
+Definition S2 '(a,b) := S1 0 (a+0) 1 (a+b) 5.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S2 (24,21)).
+  1: unfold S2,S1; esx.
+  eapply progress_nonhalt_simple.
+  intros [a b].
+  exists (2+a*2+b*2,6+a*2+b).
+  unfold S2.
+  follow Incs1.
+  follow Incs2.
+  follow10 Rst.
+  finish.
+Qed.
+
+End TM27.
+
+
+Module TM28.
+Definition tm := Eval compute in (TM_from_str "1RB1LD_1LC1RA_1LA0LD_0LC0RE_1LF0RA_1LE---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation hR := (B,[]).
+Notation hL := (A,[1;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Definition RC0 a b c := [1;1;0]^^a *> [1;1;1;1;1;1;0;1;1;0]^^b *> [1;1]^^(1+c) *> 0inf.
+
+Lemma RIncs0b a b c:
+  sideRLs tm (hRL^^(b*2)) (RC0 a b c) (RC0 (b*2+a) 0 c).
+Proof.
+  unfold RC0.
+  gen a.
+  induction b; intros.
+  1: esx.
+  replace (S b*2) with (2+b*2) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  2: applys_eq (IHb (2+a)); flia.
+  esx.
+Qed.
+
+Lemma RIncs0c a c:
+  sideRLs tm (hRL^^c) (RC0 a 0 c) (RC0 a 0 0).
+Proof.
+  unfold RC0.
+  induction c.
+  1: esx.
+  replace (S c) with (1+c) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  2: applys_eq IHc; flia.
+  esx.
+Qed.
+
+Definition RC1 a b := [1;1;0]^^a *> [0] *> [1]^^b *> 0inf.
+
+Lemma RIncs1 a b:
+  sideRLs tm (hRL^^a) (RC1 a b) (RC1 0 (a+b)).
+Proof.
+  unfold RC1.
+  gen b.
+  induction a; intros.
+  1: esx.
+  replace (S a) with (1+a) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  2: applys_eq (IHa (S b)); flia.
+  esx.
+Qed.
+
+Definition RC2 a b := [0] *> [1;1;1;0;1;1;0;1;1;1]^^a *> [1]^^b *> 0inf.
+
+Notation hR1 := (B,<[0;0;1;0;0;1;0;0;1;0;0;1;1;1;1;1;1;1]).
+Notation hRL4 := [(hR1,hL);(hR,hL);(hR,hL);(hR,hL)].
+Notation hLR4 := [(hL,hR1);(hL,hR);(hL,hR);(hL,hR)].
+
+Lemma RIncs2 a b:
+  sideRLs tm (hRL4^^a) (RC2 0 b) (RC2 a b).
+Proof.
+  unfold RC2.
+  induction a.
+  1: esx.
+  replace (S a) with (a+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply IHa.
+  esx.
+Qed.
+
+Lemma RIncs a b c n:
+  sideRLs tm (hRL^^(b*2+c+1+(b*2+a))++hRL4^^n) (RC0 a b c) (RC2 n ((b*2+a)+1)).
+Proof.
+  eapply sideRLs_trans.
+  2: apply RIncs2.
+  remember (b*2+a) as v1.
+  repeat rewrite lpow_add.
+  unfold RC0,RC2.
+  eapply sideRLs_trans.
+  1: eapply sideRLs_trans.
+  1: eapply sideRLs_trans.
+  1: apply RIncs0b.
+  1: apply RIncs0c.
+  2: apply RIncs1.
+  subst.
+  unfold RC0,RC1.
+  esx.
+Qed.
+
+Definition MC0 b c :=
+  <[0;0;1;0;0;1;1;1;1;1;1;1;1;1]^^b <+ <[0;1;1;1;1;1;1;1] <+ <[0;0;1;0;0;1;0;0;1;0;0;1;1;1;1;1;1;1]^^c.
+
+Lemma MIncs0 b c:
+  segRLs tm' (hLR^^(b*2)) [] (MC0 b c) (MC0 0 (b+c)).
+Proof.
+  unfold MC0.
+  gen c.
+  induction b; intros.
+  1: esx.
+  replace (S b*2) with (2+b*2) by lia.
+  rewrite lpow_add.
+  eapply @segRLs_trans with (ls2:=[]).
+  2: applys_eq (IHb (1+c)); flia.
+  esx.
+Qed.
+
+Definition MC1 c :=
+  <[0;0;1;0;0;1;0;0;1;0;0;1;1;1;1;1;1;1]^^c.
+
+Lemma MIncs1 n c:
+  segRLs tm' (hLR^^n) (hLR^^n) (MC1 c) (MC1 c).
+Proof.
+  unfold MC1.
+  eapply segRLs_wall.
+  1: solve_seg.
+  1: solve_seg.
+Qed.
+
+Lemma MIncs1' c:
+  segRLs tm' (hLR4^^c) (hLR^^(c*4)) (MC1 c) (MC1 0).
+Proof.
+  unfold MC1.
+  induction c.
+  1: esx.
+  replace (S c*4) with (4+c*4) by lia.
+  replace (S c) with (1+c) by lia.
+  do 2 rewrite lpow_add.
+  eapply segRLs_trans.
+  2: apply IHc.
+  esx.
+Qed.
+
+Notation hL2 := (C,[0;1;1;0;1;0;1;0;1;0]).
+Notation hLR2 := [(hL2,hR)].
+Lemma MInc01 c:
+  segRLs tm' hLR hLR2 (MC0 0 c) (MC1 c).
+Proof.
+  unfold MC0,MC1.
+  esx.
+Qed.
+
+Lemma MIncs b n:
+  segRLs tm' (hLR^^(b*2+1+n)++hLR4^^b) (hLR2++hLR^^(n+b*4)) (MC0 b 0) (MC1 0).
+Proof.
+  repeat rewrite lpow_add.
+  rewrite app_assoc.
+  eapply segRLs_trans.
+  1: eapply segRLs_trans.
+  1: eapply @segRLs_trans with (ls2:=[]).
+  1: apply MIncs0.
+  1: apply MInc01.
+  1: rewrite Nat.add_0_r.
+  1: apply MIncs1.
+  apply MIncs1'.
+Qed.
+
+Definition LC0 a :=
+  0inf <* <[0;0;1;1;1]^^a. 
+
+Definition LC0' a :=
+  0inf <* <[0;0;1;1;1]^^a <* <[0;0;1;1;1;1;1;1;1;1;1].
+
+Definition LC1 a b :=
+  0inf <* <[0;0;1;1;1]^^a <* <[1] <* <[1;1;0;0;1;0;0;1;1;1;1;1;1;1]^^b. 
+
+Definition LC1' a b :=
+  0inf <* <[0;0;1;1;1]^^a <* <[1] <* <[1;1;0;0;1;0;0;1;1;1;1;1;1;1]^^b <* <[1;1] <* <[0;0;1;0;0;1;0;0;1;0;0;1;1;1;1;1;1;1].
+
+Lemma LInc0 a:
+  sideRLs tm' hLR2 (LC0 (1+a)) (LC1 a 1).
+Proof.
+  unfold LC0,LC1.
+  esx.
+Qed.
+
+Lemma LInc0' a:
+  sideRLs tm' hLR2 (LC0' a) (LC1' a 0).
+Proof.
+  unfold LC0',LC1'.
+  esx.
+Qed.
+
+Lemma LIncs1 n a b:
+  sideRLs tm' (hLR^^(n*2)) (LC1 (n*2+a) b) (LC1 a (n+b)).
+Proof.
+  unfold LC1.
+  gen b.
+  induction n; intros.
+  1: esx.
+  replace (S n*2) with (2+n*2) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  2: applys_eq (IHn (S b)); flia.
+  esx.
+Qed.
+
+Lemma LIncs1' n a b:
+  sideRLs tm' (hLR^^(n*2)) (LC1' (n*2+a) b) (LC1' a (n+b)).
+Proof.
+  unfold LC1'.
+  gen b.
+  induction n; intros.
+  1: esx.
+  replace (S n*2) with (2+n*2) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  2: applys_eq (IHn (S b)); flia.
+  esx.
+Qed.
+
+Definition LC2 a b :=
+  0inf <* <[0;0;1;1;1]^^a <* <[0;0;1] <* <[1;1;0;0;1;0;0;1;1;1;1;1;1;1]^^b. 
+
+Definition LC2' a b :=
+  0inf <* <[0;0;1;1;1]^^a <* <[0;0;1] <* <[1;1;0;0;1;0;0;1;1;1;1;1;1;1]^^b <* <[1;1] <* <[0;0;1;0;0;1;0;0;1;0;0;1;1;1;1;1;1;1].
+
+Definition LC2x a b :=
+  0inf <* <[0;0;1;1;1]^^a <* <[1;1;1;1] <* <[1;1;0;0;1;0;0;1;1;1;1;1;1;1]^^b. 
+
+Definition LC2x' a b :=
+  0inf <* <[0;0;1;1;1]^^a <* <[1;1;1;1] <* <[1;1;0;0;1;0;0;1;1;1;1;1;1;1]^^b <* <[1;1] <* <[0;0;1;0;0;1;0;0;1;0;0;1;1;1;1;1;1;1].
+
+Lemma LIncs2 a b:
+  sideRLs tm' (hLR^^a) (LC1 0 b) (LC2 a b).
+Proof.
+  unfold LC1,LC2.
+  induction a.
+  1: esx.
+  replace (S a) with (a+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: applys_eq IHa; flia.
+  esx.
+Qed.
+
+Lemma LIncs2' a b:
+  sideRLs tm' (hLR^^a) (LC1' 0 b) (LC2' a b).
+Proof.
+  unfold LC1',LC2'.
+  induction a.
+  1: esx.
+  replace (S a) with (a+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: applys_eq IHa; flia.
+  esx.
+Qed.
+
+Lemma LIncs2x a b:
+  sideRLs tm' (hLR^^a) (LC1 1 b) (LC2x a b).
+Proof.
+  unfold LC1,LC2x.
+  induction a.
+  1: esx.
+  replace (S a) with (a+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: applys_eq IHa; flia.
+  esx.
+Qed.
+
+Lemma LIncs2x' a b:
+  sideRLs tm' (hLR^^a) (LC1' 1 b) (LC2x' a b).
+Proof.
+  unfold LC1',LC2x'.
+  induction a.
+  1: esx.
+  replace (S a) with (a+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: applys_eq IHa; flia.
+  esx.
+Qed.
+
+Lemma LIncs n m:
+  sideRLs tm' (hLR2++hLR^^(n*2+m)) (LC0 (1+(n*2+0))) (LC2 m (n+1)).
+Proof.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply LInc0.
+  eapply sideRLs_trans.
+  1: apply LIncs1.
+  apply LIncs2.
+Qed.
+
+Lemma LIncs' n m:
+  sideRLs tm' (hLR2++hLR^^(n*2+m)) (LC0' ((n*2+0))) (LC2' m (n+0)).
+Proof.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply LInc0'.
+  eapply sideRLs_trans.
+  1: apply LIncs1'.
+  apply LIncs2'.
+Qed.
+
+Lemma LIncsx n m:
+  sideRLs tm' (hLR2++hLR^^(n*2+m)) (LC0 (1+(n*2+1))) (LC2x m (n+1)).
+Proof.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply LInc0.
+  eapply sideRLs_trans.
+  1: apply LIncs1.
+  apply LIncs2x.
+Qed.
+
+Lemma LIncsx' n m:
+  sideRLs tm' (hLR2++hLR^^(n*2+m)) (LC0' ((n*2+1))) (LC2x' m (n+0)).
+Proof.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply LInc0'.
+  eapply sideRLs_trans.
+  1: apply LIncs1'.
+  apply LIncs2x'.
+Qed.
+
+
+Definition S0 a b c d :=
+  LC0 a <* MC0 b 0 {{{ (hR,R) }}} RC0 4 c d.
+
+Definition S0' a b c d :=
+  LC0' a <* MC0 b 0 {{{ (hR,R) }}} RC0 4 c d.
+
+Definition S0x a b c d :=
+  LC0 a <* MC0 b 0 {{{ (hL,L) }}} RC0 4 c d.
+
+Definition S0x' a b c d :=
+  LC0' a <* MC0 b 0 {{{ (hL,L) }}} RC0 4 c d.
+
+Lemma init:
+  c0 -->* S0x 21 5 5 5.
+Proof.
+  unfold S0x.
+  esx.
+Qed.
+
+Lemma lrcons_hLR_hLR4 n m:
+  lrcons hR (hLR^^n++hLR4^^m) hL = (hRL^^S n++hRL4^^m).
+Proof.
+  induction n.
+  - cbn.
+    induction m.
+    1: trivial.
+    cbn.
+    rewrite <-IHm.
+    trivial.
+  - cbn in *.
+    rewrite <-IHn.
+    trivial.
+Qed.
+
+Lemma S0_nxt_1 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+3 ->
+  b*2+1<=c*4+d+4 ->
+  S0 (1+a*2) b c d -->+
+  S0 (4+(c*4+d+3+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b (c*4+d+4-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncs a (c*4+d+3+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (S(c*4+d+4)) in * by lia.
+  epose proof (sideRLs_concat HL') as I1.
+  rewrite lrcons_hLR_hLR4 in I1.
+  specialize (I1 HR).
+  rewrite Nat.add_0_r in *.
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+3+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma S0_nxt_0 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+3 ->
+  b*2+1<=c*4+d+4 ->
+  S0 (1+(a*2+1)) b c d -->+
+  S0' (2+(c*4+d+3+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b (c*4+d+4-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncsx a (c*4+d+3+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (S(c*4+d+4)) in * by lia.
+  epose proof (sideRLs_concat HL') as I1.
+  rewrite lrcons_hLR_hLR4 in I1.
+  specialize (I1 HR).
+  follow10 I1.
+  cbn.
+  unfold LC2x.
+  remember (c*4+d+3+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma S0'_nxt_0 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+3 ->
+  b*2+1<=c*4+d+4 ->
+  S0' (a*2) b c d -->+
+  S0x (6+(c*4+d+3+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0'.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b (c*4+d+4-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncs' a (c*4+d+3+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (S(c*4+d+4)) in * by lia.
+  epose proof (sideRLs_concat HL') as I1.
+  rewrite lrcons_hLR_hLR4 in I1.
+  specialize (I1 HR).
+  rewrite Nat.add_0_r in *.
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+3+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma S0'_nxt_1 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+3 ->
+  b*2+1<=c*4+d+4 ->
+  S0' (a*2+1) b c d -->+
+  S0x' (4+(c*4+d+3+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0'.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b (c*4+d+4-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncsx' a (c*4+d+3+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (S(c*4+d+4)) in * by lia.
+  epose proof (sideRLs_concat HL') as I1.
+  rewrite lrcons_hLR_hLR4 in I1.
+  specialize (I1 HR).
+  rewrite Nat.add_0_r in *.
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+3+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma lcons_hLR_hLR4 n m:
+  (hLR^^n++hLR4^^m,hL) = lcons hL (hRL^^n++hRL4^^m).
+Proof.
+  induction n.
+  - cbn.
+    induction m.
+    1: trivial.
+    cbn.
+    rewrite <-IHm.
+    trivial.
+  - cbn in *.
+    rewrite <-IHn.
+    trivial.
+Qed.
+
+Lemma S0x_nxt_1 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+4 ->
+  b*2+1<=c*4+d+5 ->
+  S0x (1+a*2) b c d -->+
+  S0 (4+(c*4+d+4+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0x.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b ((c*4+d+5)-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncs a (c*4+d+4+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (c*4+d+5) in * by lia.
+  eassert (I1:_). {
+    eapply sideRLs_concat_v2_L.
+    4: apply HR.
+    3: apply HL'.
+    2: rewrite Nat.add_comm; cbn; congruence.
+    rewrite lcons_hLR_hLR4; reflexivity.
+  }
+  rewrite Nat.add_0_r in *.
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+4+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma S0x_nxt_0 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+4 ->
+  b*2+1<=c*4+d+5 ->
+  S0x (1+(a*2+1)) b c d -->+
+  S0' (2+(c*4+d+4+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0x.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b ((c*4+d+5)-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncsx a (c*4+d+4+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (c*4+d+5) in * by lia.
+  eassert (I1:_). {
+    eapply sideRLs_concat_v2_L.
+    4: apply HR.
+    3: apply HL'.
+    2: rewrite Nat.add_comm; cbn; congruence.
+    rewrite lcons_hLR_hLR4; reflexivity.
+  }
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+4+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma S0x'_nxt_0 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+4 ->
+  b*2+1<=c*4+d+5 ->
+  S0x' (a*2) b c d -->+
+  S0x (6+(c*4+d+4+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0x'.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b ((c*4+d+5)-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncs' a (c*4+d+4+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (c*4+d+5) in * by lia.
+  eassert (I1:_). {
+    eapply sideRLs_concat_v2_L.
+    4: apply HR.
+    3: apply HL'.
+    2: rewrite Nat.add_comm; cbn; congruence.
+    rewrite lcons_hLR_hLR4; reflexivity.
+  }
+  rewrite Nat.add_0_r in *.
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+4+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Lemma S0x'_nxt_1 a b c d:
+  1<=a ->
+  a*2<=b*2+c*4+d+4 ->
+  b*2+1<=c*4+d+5 ->
+  S0x' (a*2+1) b c d -->+
+  S0x' (4+(c*4+d+4+b*2-a*2)) (a-1) b (3+c).
+Proof.
+  intros.
+  unfold S0x'.
+  epose proof (RIncs 4 c d b) as HR.
+  epose proof (MIncs b ((c*4+d+5)-(b*2+1))) as HM.
+  rewrite Nat.add_comm,Nat.sub_add in HM by lia.
+  epose proof (LIncsx' a (c*4+d+4+b*2-a*2)) as HL.
+  eassert (HL':_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HL.
+    applys_eq HM; flia.
+  }
+  clear HM HL.
+  replace (c*2+d+1+(c*2+4)) with (c*4+d+5) in * by lia.
+  eassert (I1:_). {
+    eapply sideRLs_concat_v2_L.
+    4: apply HR.
+    3: apply HL'.
+    2: rewrite Nat.add_comm; cbn; congruence.
+    rewrite lcons_hLR_hLR4; reflexivity.
+  }
+  rewrite Nat.add_0_r in *.
+  follow10 I1.
+  cbn.
+  unfold LC2.
+  remember (c*4+d+4+b*2-a*2) as v1.
+  remember (a-1) as a'.
+  replace a with (1+a') in * by lia.
+  es.
+Qed.
+
+Definition S1 '(a,b,c,d,t',tx) :=
+match t',tx with
+| O,O => S0 (1+a) b c d
+| O,S _ => S0x (1+a) b c d
+| S _,O => S0' a b c d
+| S _,S _ => S0x' a b c d
+end.
+
+Lemma BigStep a b c d t' tx:
+  2<=a ->
+  a<=b*2+c*4+d+3 ->
+  b*2+1<=c*4+d+4 ->
+  t'<=1 ->
+  tx<=1 ->
+  S1 (a,b,c,d,t',tx) -->+
+  S1 (3+t'*2+tx+(b*2+c*4+d+3-a),a/2-1,b,3+c,a mod 2,t').
+Proof.
+  intros.
+  remember (a/2) as a'.
+  remember (a mod 2) as am2.
+  replace a with (a'*2+am2) in * by lia.
+  unfold S1.
+  destruct am2 as [|[|]]. 3: lia.
+  - destruct t',tx; rewrite Nat.add_0_r.
+    applys_eq (S0_nxt_1 a'); flia.
+    applys_eq (S0x_nxt_1 a'); flia.
+    applys_eq (S0'_nxt_0 a'); flia.
+    applys_eq (S0x'_nxt_0 a'); flia.
+  - destruct t',tx.
+    applys_eq (S0_nxt_0 a'); flia.
+    applys_eq (S0x_nxt_0 a'); flia.
+    applys_eq (S0'_nxt_1 a'); flia.
+    applys_eq (S0x'_nxt_1 a'); flia.
+Qed.
+
+Opaque S1.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S1 (20,5,5,5,0,1)%nat).
+  1: apply init.
+  do 6
+  (eapply multistep_nonhalt;
+  [ apply progress_evstep,BigStep; try lia | ]; cbn).
+  eapply progress_nonhalt_cond with (P:=fun '(a,b,c,d,t',tx) =>
+  2<=a /\ a<=b*2+c*4+d+3 /\ b*2+1<=c*4+d+4 /\ t'<=1 /\ tx<=1 /\ c*3+d+6<=a*2+b*2 /\ a<=b*4+c+8 /\ a<=b+c*7+d*2 /\ b+c*4+d+7<=a*3 /\ c*4+d*6<=a*3+b*10+8 /\ a*7<=b*4+c*22+d*6+19 /\ c*22+d*7+32<=a*9+b*8 /\ a*5+b*4+11<=c*29+d*9 /\ a>=20 /\ b>=20 /\ c>=20 /\ d>=20).
+  2: lia.
+  intros [[[[[a b] c] d] t] tx] HP.
+  eexists; split.
+  1: apply BigStep; lia.
+  repeat split; try lia.
+Qed.
+
+End TM28.
 
 

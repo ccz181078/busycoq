@@ -4960,3 +4960,1595 @@ Qed.
 End TM15.
 
 
+Module TM16.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LE_0RC0RF_0LD0RD_1LA0LA_0LC0RB_0RA---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation ld := [1;0;0;0;1;0;0;0].
+Notation rd0 := [0;0;0].
+Notation rd1 := [1;0;0].
+Notation lh := (0inf<*<[1;0;0;0;0]).
+Notation lh0 := (0inf<*<[1;0;0;1;0]).
+
+Notation hR := (B,[1;0;0;1]).
+Notation hL := (A,[0;0;0;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Lemma LOv r:
+  lh {{{ (hL,L) }}} r -->*
+  lh0 {{{ (hR,R) }}} [1;0;0;0] *> r.
+Proof. es. Qed.
+
+
+Ltac R_sub n :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    rewrite <-(Nat.sub_add n a) by lia'
+  end.
+
+Ltac R_m2 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2) by lia'
+  end.
+
+Ltac R_m2a1 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2+1) by lia'
+  end.
+
+Ltac R_x x :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with x by lia'
+  end.
+Lemma rw_1000_ld r:
+  [1;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd0 r:
+  [1;0;0;0] *> [0;0;0] *> r = [1;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd1 r:
+  [1;0;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_ld r:
+  [0;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd0 r:
+  [0;0;0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd1 r:
+  [0;0;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_ld r:
+  [1;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd0 r:
+  [1;0;0;0;1;0;0] *> [0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd1 r:
+  [1;0;0;0;1;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_ld r:
+  [0;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd0 r:
+  [0;0;0;0;1;0;0] *> [0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd1 r:
+  [0;0;0;0;1;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_ld r:
+  [1;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd0 r:
+  [1;0] *> [0;0;0] *> r = [1;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd1 r:
+  [1;0] *> [1;0;0] *> r = [1;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_ld r:
+  [0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd0 r:
+  [0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd1 r:
+  [0;0] *> [1;0;0] *> r = [0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_lds n r:
+  [1;0;0;0] *> ld^^n *> r = ld^^n *> [1;0;0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+Lemma rw_00_rd1s n r:
+  [0;0] *> rd1^^n *> r = [0;0;1]^^n *> [0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+
+Ltac rw_0 :=
+  let h_0 := fresh "h" in
+  match goal with
+  | |- sideRLs _ ?h _ _ =>
+    remember h as h_0
+  end;
+  cbn[Nat.add]; cbn[lpow];
+  repeat rewrite Str_app_assoc;
+  repeat rewrite Str_app_nil;
+  subst h_0;
+  repeat (
+  rewrite rw_1000_ld ||
+  rewrite rw_1000_rd0 ||
+  rewrite rw_1000_rd1 ||
+  rewrite rw_0000_ld ||
+  rewrite rw_0000_rd0 ||
+  rewrite rw_0000_rd1 ||
+  rewrite rw_1000100_ld ||
+  rewrite rw_1000100_rd0 ||
+  rewrite rw_1000100_rd1 ||
+  rewrite rw_0000100_ld ||
+  rewrite rw_0000100_rd0 ||
+  rewrite rw_0000100_rd1 ||
+  rewrite rw_10_ld ||
+  rewrite rw_10_rd0 ||
+  rewrite rw_10_rd1 ||
+  rewrite rw_00_ld ||
+  rewrite rw_00_rd0 ||
+  rewrite rw_00_rd1 ||
+  rewrite rw_1000_lds ||
+  rewrite rw_00_rd1s).
+
+Ltac ss := solve_segRLs.
+
+Lemma segRLs_d1_d0 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n+1)) rd1 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 1 n); flia; ss.
+Qed.
+
+Lemma segRLs_d1_d1 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd1 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d0 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd0 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d1 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n)) rd0 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_ld n:
+  segRLs tm (hRL^^(n)) (hRL^^(n*2)) ld ld.
+Proof.
+  applys_eq (segRLs_addmul_v2 1 2 0 0 n); flia; ss.
+Qed.
+
+Lemma sideRLs_lds n i r r':
+  sideRLs tm (hRL^^(2^(i+n)+0)) r r' ->
+  sideRLs tm (hRL^^(2^n+0)) (ld^^i*>r) (ld^^i*>r').
+Proof.
+  gen n.
+  induction i; intros.
+  - apply H.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: apply segRLs_ld.
+    specialize (IHi (S n)).
+    applys_eq IHi.
+    1: cbn[Nat.pow]; flia.
+    applys_eq H; flia.
+Qed.
+
+Lemma hRL_00 n s r r':
+  sideRLs tm (hRL^^n) ((1::0::s)*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ((0::0::s)*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_101 n r r':
+  sideRLs tm (hRL^^n) (rd0*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;1]*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_10001001 n r r' r0:
+  sideRLs tm (hRL^^1) r r0 ->
+  sideRLs tm (hRL^^n) (ld*>r0) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;0;0;1;0;0;1]*>r) r'.
+Proof.
+  intros H H0.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H0.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma sideRLs_001s k n r r':
+  2<=k ->
+  sideRLs tm (hRL^^(2^k-3)) r r' ->
+  sideRLs tm (hRL^^(2^(k+n)-3)) ([0;0;1]^^n*>r) (rd1^^n*>r').
+Proof.
+  intros.
+  rewrite (Nat.pow_le_mono_r_iff 2) in H by lia.
+  induction n.
+  - applys_eq H0; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    2: apply IHn.
+    rewrite <-(Nat.add_1_r n).
+    applys_eq (segRLs_addmul_v2 2 1 3 0 (2^(k+n)-3)); rw_pa; flia; ss.
+Qed.
+
+Lemma sideRLs_001s_v1 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*6+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*6+c) with (n*3+c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Lemma sideRLs_001s_v2 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^c-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*3+c) with (c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Ltac sscs :=
+  simpl_nat;
+  repeat (
+  match goal with
+  | |- ?G => idtac G
+  end;
+  match goal with
+  | |- sideRLs _ (_^^O) _ _ =>
+    solve[eapply sideRLseq_O]
+  | |- sideRLs _ _ ((0::0::_)*>_) _ =>
+    R_sub 1%nat; eapply hRL_00
+  | |- sideRLs _ _ ([1;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_101
+  | |- sideRLs _ _ ([1;0;0;0;1;0;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_10001001
+  | |- sideRLs _ _ (ld*>_) _ =>
+    ssc segRLs_ld
+  | |- sideRLs _ _ (ld^^_*>_) _ =>
+    eapply sideRLs_lds
+  | |- sideRLs _ _ ([0;0;1]^^_*>_) _ =>
+    (eapply sideRLs_001s_v1;[lia|]) ||
+    (eapply sideRLs_001s_v2;[lia|])
+  | |- sideRLs _ _ (rd0*>_) _ =>
+    (R_m2a1; ssc segRLs_d0_d1) ||
+    (R_m2; ssc segRLs_d0_d0)
+  | |- sideRLs _ _ (rd1*>_) _ =>
+    (R_m2a1; ssc segRLs_d1_d0) ||
+    (R_m2; ssc segRLs_d1_d1)
+  end; simpl_nat);
+  match goal with
+  | |- ?G => idtac "fail"; idtac G
+  end.
+
+Definition RC i n :=
+match i with
+| 0%nat => (ld)^^(10+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd1*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd1*>0inf
+| 1%nat => (ld)^^(11+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd1*>rd1*>rd0*>rd1*>0inf
+| 2 => (ld)^^(12+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd1*>rd0*>(rd1)^^(4+n*3)*>ld*>rd1*>rd1*>rd1*>rd0*>rd1*>0inf
+| 3 => (ld)^^(13+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 4 => (ld)^^(14+n*6)*>rd1*>ld*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>(rd1)^^(3+n*3)*>ld*>rd0*>rd0*>rd1*>rd0*>rd0*>rd1*>rd1*>0inf
+| 5 => (ld)^^(15+n*6)*>rd1*>ld*>(rd1)^^(5+n*3)*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd0*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 6 => (ld)^^(16+n*6)*>rd1*>ld*>(rd1)^^(6+n*3)*>ld*>rd1*>rd0*>(rd1)^^(8+n*3)*>ld*>rd1*>rd1*>0inf
+| _ => 0inf
+end.
+
+Ltac sscs' :=
+  unshelve (
+  eapply sideRLs_feq2; [|shelve];
+  rw_0;
+  sscs;
+  solve_sideRLs);
+  simpl_tape; simpl_rotate; reflexivity.
+
+Lemma RC_Incs i n:
+  i<6 ->
+  sideRLs tm (hRL^^(2^1+0)) ([1;0;0;0]*>RC i n) (RC (S i) n).
+Proof.
+  intro Hn.
+  unfold RC.
+  do 6
+  (destruct i; [solve[sscs']|]).
+  lia.
+Qed.
+
+Lemma RC_eq n:
+  RC 6 n = RC 0 (S n).
+Proof.
+  unfold RC.
+  st; simpl_rotate; reflexivity.
+Qed.
+
+Definition S0 '(i,n) := lh {{{ (hL,L) }}} RC i n.
+
+Lemma BigStep i n:
+  i<6 ->
+  S0 (i,n) -->+
+  S0 (S i,n).
+Proof.
+  intros Hi.
+  unfold S0.
+  follow LOv.
+  epose proof (@sideRLs_concat tm hR hL hLR lh0 lh _ _) as I1.
+  cbn in I1.
+  unshelve epose proof (I1 _ (RC_Incs i n Hi)) as I1.
+  1: esx.
+  apply I1.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (O,O)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(i,n) => i<6).
+  2: lia.
+  intros [i n] Hi.
+  assert (i<5\/i=5) as [E|E] by lia.
+  - exists (S i,n); split.
+    1: apply BigStep,Hi.
+    lia.
+  - eexists (O,S n); split; [|lia].
+    follow10 (BigStep i n Hi).
+    unfold S0.
+    rewrite <-RC_eq.
+    finish.
+Qed.
+
+End TM16.
+
+
+Module TM17.
+
+Definition tm := Eval compute in (TM_from_str "1LB0LB_1RC0LF_0RE0RD_0RB---_0LA0RA_0LE0RC").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation ld := [1;0;0;0;1;0;0;0].
+Notation rd0 := [0;0;0].
+Notation rd1 := [1;0;0].
+Notation lh := (0inf<*<[1;0;0;0;0]).
+Notation lh0 := (0inf<*<[1;0;0;1;0]).
+
+Notation hR := (C,[1;0;0;1]).
+Notation hL := (B,[0;0;0;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Lemma LOv r:
+  lh {{{ (hL,L) }}} r -->*
+  lh0 {{{ (hR,R) }}} [1;0;0;0] *> r.
+Proof. es. Qed.
+
+
+Ltac R_sub n :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    rewrite <-(Nat.sub_add n a) by lia'
+  end.
+
+Ltac R_m2 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2) by lia'
+  end.
+
+Ltac R_m2a1 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2+1) by lia'
+  end.
+
+Ltac R_x x :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with x by lia'
+  end.
+Lemma rw_1000_ld r:
+  [1;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd0 r:
+  [1;0;0;0] *> [0;0;0] *> r = [1;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd1 r:
+  [1;0;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_ld r:
+  [0;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd0 r:
+  [0;0;0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd1 r:
+  [0;0;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_ld r:
+  [1;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd0 r:
+  [1;0;0;0;1;0;0] *> [0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd1 r:
+  [1;0;0;0;1;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_ld r:
+  [0;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd0 r:
+  [0;0;0;0;1;0;0] *> [0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd1 r:
+  [0;0;0;0;1;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_ld r:
+  [1;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd0 r:
+  [1;0] *> [0;0;0] *> r = [1;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd1 r:
+  [1;0] *> [1;0;0] *> r = [1;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_ld r:
+  [0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd0 r:
+  [0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd1 r:
+  [0;0] *> [1;0;0] *> r = [0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_lds n r:
+  [1;0;0;0] *> ld^^n *> r = ld^^n *> [1;0;0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+Lemma rw_00_rd1s n r:
+  [0;0] *> rd1^^n *> r = [0;0;1]^^n *> [0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+
+Ltac rw_0 :=
+  let h_0 := fresh "h" in
+  match goal with
+  | |- sideRLs _ ?h _ _ =>
+    remember h as h_0
+  end;
+  cbn[Nat.add]; cbn[lpow];
+  repeat rewrite Str_app_assoc;
+  repeat rewrite Str_app_nil;
+  subst h_0;
+  repeat (
+  rewrite rw_1000_ld ||
+  rewrite rw_1000_rd0 ||
+  rewrite rw_1000_rd1 ||
+  rewrite rw_0000_ld ||
+  rewrite rw_0000_rd0 ||
+  rewrite rw_0000_rd1 ||
+  rewrite rw_1000100_ld ||
+  rewrite rw_1000100_rd0 ||
+  rewrite rw_1000100_rd1 ||
+  rewrite rw_0000100_ld ||
+  rewrite rw_0000100_rd0 ||
+  rewrite rw_0000100_rd1 ||
+  rewrite rw_10_ld ||
+  rewrite rw_10_rd0 ||
+  rewrite rw_10_rd1 ||
+  rewrite rw_00_ld ||
+  rewrite rw_00_rd0 ||
+  rewrite rw_00_rd1 ||
+  rewrite rw_1000_lds ||
+  rewrite rw_00_rd1s).
+
+Ltac ss := solve_segRLs.
+
+Lemma segRLs_d1_d0 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n+1)) rd1 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 1 n); flia; ss.
+Qed.
+
+Lemma segRLs_d1_d1 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd1 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d0 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd0 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d1 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n)) rd0 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_ld n:
+  segRLs tm (hRL^^(n)) (hRL^^(n*2)) ld ld.
+Proof.
+  applys_eq (segRLs_addmul_v2 1 2 0 0 n); flia; ss.
+Qed.
+
+Lemma sideRLs_lds n i r r':
+  sideRLs tm (hRL^^(2^(i+n)+0)) r r' ->
+  sideRLs tm (hRL^^(2^n+0)) (ld^^i*>r) (ld^^i*>r').
+Proof.
+  gen n.
+  induction i; intros.
+  - apply H.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: apply segRLs_ld.
+    specialize (IHi (S n)).
+    applys_eq IHi.
+    1: cbn[Nat.pow]; flia.
+    applys_eq H; flia.
+Qed.
+
+Lemma hRL_00 n s r r':
+  sideRLs tm (hRL^^n) ((1::0::s)*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ((0::0::s)*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_101 n r r':
+  sideRLs tm (hRL^^n) (rd0*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;1]*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_10001001 n r r' r0:
+  sideRLs tm (hRL^^1) r r0 ->
+  sideRLs tm (hRL^^n) (ld*>r0) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;0;0;1;0;0;1]*>r) r'.
+Proof.
+  intros H H0.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H0.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma sideRLs_001s k n r r':
+  2<=k ->
+  sideRLs tm (hRL^^(2^k-3)) r r' ->
+  sideRLs tm (hRL^^(2^(k+n)-3)) ([0;0;1]^^n*>r) (rd1^^n*>r').
+Proof.
+  intros.
+  rewrite (Nat.pow_le_mono_r_iff 2) in H by lia.
+  induction n.
+  - applys_eq H0; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    2: apply IHn.
+    rewrite <-(Nat.add_1_r n).
+    applys_eq (segRLs_addmul_v2 2 1 3 0 (2^(k+n)-3)); rw_pa; flia; ss.
+Qed.
+
+Lemma sideRLs_001s_v1 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*6+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*6+c) with (n*3+c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Lemma sideRLs_001s_v2 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^c-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*3+c) with (c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Ltac sscs :=
+  simpl_nat;
+  repeat (
+  match goal with
+  | |- ?G => idtac G
+  end;
+  match goal with
+  | |- sideRLs _ (_^^O) _ _ =>
+    solve[eapply sideRLseq_O]
+  | |- sideRLs _ _ ((0::0::_)*>_) _ =>
+    R_sub 1%nat; eapply hRL_00
+  | |- sideRLs _ _ ([1;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_101
+  | |- sideRLs _ _ ([1;0;0;0;1;0;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_10001001
+  | |- sideRLs _ _ (ld*>_) _ =>
+    ssc segRLs_ld
+  | |- sideRLs _ _ (ld^^_*>_) _ =>
+    eapply sideRLs_lds
+  | |- sideRLs _ _ ([0;0;1]^^_*>_) _ =>
+    (eapply sideRLs_001s_v1;[lia|]) ||
+    (eapply sideRLs_001s_v2;[lia|])
+  | |- sideRLs _ _ (rd0*>_) _ =>
+    (R_m2a1; ssc segRLs_d0_d1) ||
+    (R_m2; ssc segRLs_d0_d0)
+  | |- sideRLs _ _ (rd1*>_) _ =>
+    (R_m2a1; ssc segRLs_d1_d0) ||
+    (R_m2; ssc segRLs_d1_d1)
+  end; simpl_nat);
+  match goal with
+  | |- ?G => idtac "fail"; idtac G
+  end.
+
+Definition RC i n :=
+match i with
+| 0%nat => (ld)^^(10+n*6)*>rd1*>ld*>(rd1)^^(2+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd1*>0inf
+| 1%nat => (ld)^^(11+n*6)*>rd1*>ld*>(rd1)^^(2+n*3)*>ld*>rd0*>rd1*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd1*>rd1*>rd0*>rd1*>0inf
+| 2 => (ld)^^(12+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(4+n*3)*>ld*>rd1*>rd1*>rd1*>rd0*>rd1*>0inf
+| 3 => (ld)^^(13+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd0*>rd1*>ld*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 4 => (ld)^^(14+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(3+n*3)*>ld*>rd0*>rd0*>rd1*>rd0*>rd0*>rd1*>rd1*>0inf
+| 5 => (ld)^^(15+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd0*>rd1*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd0*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 6 => (ld)^^(16+n*6)*>rd1*>ld*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(8+n*3)*>ld*>rd1*>rd1*>0inf
+| _ => 0inf
+end.
+
+Ltac sscs' :=
+  unshelve (
+  eapply sideRLs_feq2; [|shelve];
+  rw_0;
+  sscs;
+  solve_sideRLs);
+  simpl_tape; simpl_rotate; reflexivity.
+
+Lemma RC_Incs i n:
+  i<6 ->
+  sideRLs tm (hRL^^(2^1+0)) ([1;0;0;0]*>RC i n) (RC (S i) n).
+Proof.
+  intro Hn.
+  unfold RC.
+  do 2
+  (destruct i; [destruct n; cbn[Nat.mul]; sscs'|]).
+  do 4
+  (destruct i; [solve[sscs']|]).
+  lia.
+Qed.
+
+Lemma RC_eq n:
+  RC 6 n = RC 0 (S n).
+Proof.
+  unfold RC.
+  st; simpl_rotate; reflexivity.
+Qed.
+
+Definition S0 '(i,n) := lh {{{ (hL,L) }}} RC i n.
+
+Lemma BigStep i n:
+  i<6 ->
+  S0 (i,n) -->+
+  S0 (S i,n).
+Proof.
+  intros Hi.
+  unfold S0.
+  follow LOv.
+  epose proof (@sideRLs_concat tm hR hL hLR lh0 lh _ _) as I1.
+  cbn in I1.
+  unshelve epose proof (I1 _ (RC_Incs i n Hi)) as I1.
+  1: esx.
+  apply I1.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (O,O)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(i,n) => i<6).
+  2: lia.
+  intros [i n] Hi.
+  assert (i<5\/i=5) as [E|E] by lia.
+  - exists (S i,n); split.
+    1: apply BigStep,Hi.
+    lia.
+  - eexists (O,S n); split; [|lia].
+    follow10 (BigStep i n Hi).
+    unfold S0.
+    rewrite <-RC_eq.
+    finish.
+Qed.
+
+End TM17.
+
+
+Module TM18.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LE_0RC0RF_0LD0RB_1LA0LA_0LC1LB_0RA---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation ld := [1;0;0;0;1;0;0;0].
+Notation rd0 := [0;0;0].
+Notation rd1 := [1;0;0].
+Notation lh := (0inf<*<[1;0;0;0;0]).
+Notation lh0 := (0inf<*<[1;0;0;1;0]).
+
+Notation hR := (B,[1;0;0;1]).
+Notation hL := (A,[0;0;0;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Lemma LOv r:
+  lh {{{ (hL,L) }}} r -->*
+  lh0 {{{ (hR,R) }}} [1;0;0;0] *> r.
+Proof. es. Qed.
+
+
+Ltac R_sub n :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    rewrite <-(Nat.sub_add n a) by lia'
+  end.
+
+Ltac R_m2 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2) by lia'
+  end.
+
+Ltac R_m2a1 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2+1) by lia'
+  end.
+
+Ltac R_x x :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with x by lia'
+  end.
+Lemma rw_1000_ld r:
+  [1;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd0 r:
+  [1;0;0;0] *> [0;0;0] *> r = [1;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd1 r:
+  [1;0;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_ld r:
+  [0;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd0 r:
+  [0;0;0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd1 r:
+  [0;0;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_ld r:
+  [1;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd0 r:
+  [1;0;0;0;1;0;0] *> [0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd1 r:
+  [1;0;0;0;1;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_ld r:
+  [0;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd0 r:
+  [0;0;0;0;1;0;0] *> [0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd1 r:
+  [0;0;0;0;1;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_ld r:
+  [1;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd0 r:
+  [1;0] *> [0;0;0] *> r = [1;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd1 r:
+  [1;0] *> [1;0;0] *> r = [1;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_ld r:
+  [0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd0 r:
+  [0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd1 r:
+  [0;0] *> [1;0;0] *> r = [0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_lds n r:
+  [1;0;0;0] *> ld^^n *> r = ld^^n *> [1;0;0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+Lemma rw_00_rd1s n r:
+  [0;0] *> rd1^^n *> r = [0;0;1]^^n *> [0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+
+Ltac rw_0 :=
+  let h_0 := fresh "h" in
+  match goal with
+  | |- sideRLs _ ?h _ _ =>
+    remember h as h_0
+  end;
+  cbn[Nat.add]; cbn[lpow];
+  repeat rewrite Str_app_assoc;
+  repeat rewrite Str_app_nil;
+  subst h_0;
+  repeat (
+  rewrite rw_1000_ld ||
+  rewrite rw_1000_rd0 ||
+  rewrite rw_1000_rd1 ||
+  rewrite rw_0000_ld ||
+  rewrite rw_0000_rd0 ||
+  rewrite rw_0000_rd1 ||
+  rewrite rw_1000100_ld ||
+  rewrite rw_1000100_rd0 ||
+  rewrite rw_1000100_rd1 ||
+  rewrite rw_0000100_ld ||
+  rewrite rw_0000100_rd0 ||
+  rewrite rw_0000100_rd1 ||
+  rewrite rw_10_ld ||
+  rewrite rw_10_rd0 ||
+  rewrite rw_10_rd1 ||
+  rewrite rw_00_ld ||
+  rewrite rw_00_rd0 ||
+  rewrite rw_00_rd1 ||
+  rewrite rw_1000_lds ||
+  rewrite rw_00_rd1s).
+
+Ltac ss := solve_segRLs.
+
+Lemma segRLs_d1_d0 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n+1)) rd1 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 1 n); flia; ss.
+Qed.
+
+Lemma segRLs_d1_d1 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd1 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d0 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd0 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d1 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n)) rd0 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_ld n:
+  segRLs tm (hRL^^(n)) (hRL^^(n*2)) ld ld.
+Proof.
+  applys_eq (segRLs_addmul_v2 1 2 0 0 n); flia; ss.
+Qed.
+
+Lemma sideRLs_lds n i r r':
+  sideRLs tm (hRL^^(2^(i+n)+0)) r r' ->
+  sideRLs tm (hRL^^(2^n+0)) (ld^^i*>r) (ld^^i*>r').
+Proof.
+  gen n.
+  induction i; intros.
+  - apply H.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: apply segRLs_ld.
+    specialize (IHi (S n)).
+    applys_eq IHi.
+    1: cbn[Nat.pow]; flia.
+    applys_eq H; flia.
+Qed.
+
+Lemma hRL_00 n s r r':
+  sideRLs tm (hRL^^n) ((1::0::s)*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ((0::0::s)*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_101 n r r':
+  sideRLs tm (hRL^^n) (rd0*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;1]*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_10001001 n r r' r0:
+  sideRLs tm (hRL^^1) r r0 ->
+  sideRLs tm (hRL^^n) (ld*>r0) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;0;0;1;0;0;1]*>r) r'.
+Proof.
+  intros H H0.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H0.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma sideRLs_001s k n r r':
+  2<=k ->
+  sideRLs tm (hRL^^(2^k-3)) r r' ->
+  sideRLs tm (hRL^^(2^(k+n)-3)) ([0;0;1]^^n*>r) (rd1^^n*>r').
+Proof.
+  intros.
+  rewrite (Nat.pow_le_mono_r_iff 2) in H by lia.
+  induction n.
+  - applys_eq H0; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    2: apply IHn.
+    rewrite <-(Nat.add_1_r n).
+    applys_eq (segRLs_addmul_v2 2 1 3 0 (2^(k+n)-3)); rw_pa; flia; ss.
+Qed.
+
+Lemma sideRLs_001s_v1 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*6+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*6+c) with (n*3+c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Lemma sideRLs_001s_v2 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^c-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*3+c) with (c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Ltac sscs :=
+  simpl_nat;
+  repeat (
+  match goal with
+  | |- ?G => idtac G
+  end;
+  match goal with
+  | |- sideRLs _ (_^^O) _ _ =>
+    solve[eapply sideRLseq_O]
+  | |- sideRLs _ _ ((0::0::_)*>_) _ =>
+    R_sub 1%nat; eapply hRL_00
+  | |- sideRLs _ _ ([1;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_101
+  | |- sideRLs _ _ ([1;0;0;0;1;0;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_10001001
+  | |- sideRLs _ _ (ld*>_) _ =>
+    ssc segRLs_ld
+  | |- sideRLs _ _ (ld^^_*>_) _ =>
+    eapply sideRLs_lds
+  | |- sideRLs _ _ ([0;0;1]^^_*>_) _ =>
+    (eapply sideRLs_001s_v1;[lia|]) ||
+    (eapply sideRLs_001s_v2;[lia|])
+  | |- sideRLs _ _ (rd0*>_) _ =>
+    (R_m2a1; ssc segRLs_d0_d1) ||
+    (R_m2; ssc segRLs_d0_d0)
+  | |- sideRLs _ _ (rd1*>_) _ =>
+    (R_m2a1; ssc segRLs_d1_d0) ||
+    (R_m2; ssc segRLs_d1_d1)
+  end; simpl_nat);
+  match goal with
+  | |- ?G => idtac "fail"; idtac G
+  end.
+
+Definition RC i n :=
+match i with
+| 0%nat => (ld)^^(10+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd1*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd1*>0inf
+| 1%nat => (ld)^^(11+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd1*>rd1*>rd0*>rd1*>0inf
+| 2 => (ld)^^(12+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd1*>rd0*>(rd1)^^(4+n*3)*>ld*>rd1*>rd1*>rd1*>rd0*>rd1*>0inf
+| 3 => (ld)^^(13+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 4 => (ld)^^(14+n*6)*>rd1*>ld*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>(rd1)^^(3+n*3)*>ld*>rd0*>rd0*>rd1*>rd0*>rd0*>rd1*>rd1*>0inf
+| 5 => (ld)^^(15+n*6)*>rd1*>ld*>(rd1)^^(5+n*3)*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd0*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 6 => (ld)^^(16+n*6)*>rd1*>ld*>(rd1)^^(6+n*3)*>ld*>rd1*>rd0*>(rd1)^^(8+n*3)*>ld*>rd1*>rd1*>0inf
+| _ => 0inf
+end.
+
+Ltac sscs' :=
+  unshelve (
+  eapply sideRLs_feq2; [|shelve];
+  rw_0;
+  sscs;
+  solve_sideRLs);
+  simpl_tape; simpl_rotate; reflexivity.
+
+Lemma RC_Incs i n:
+  i<6 ->
+  sideRLs tm (hRL^^(2^1+0)) ([1;0;0;0]*>RC i n) (RC (S i) n).
+Proof.
+  intro Hn.
+  unfold RC.
+  do 6
+  (destruct i; [solve[sscs']|]).
+  lia.
+Qed.
+
+Lemma RC_eq n:
+  RC 6 n = RC 0 (S n).
+Proof.
+  unfold RC.
+  st; simpl_rotate; reflexivity.
+Qed.
+
+Definition S0 '(i,n) := lh {{{ (hL,L) }}} RC i n.
+
+Lemma BigStep i n:
+  i<6 ->
+  S0 (i,n) -->+
+  S0 (S i,n).
+Proof.
+  intros Hi.
+  unfold S0.
+  follow LOv.
+  epose proof (@sideRLs_concat tm hR hL hLR lh0 lh _ _) as I1.
+  cbn in I1.
+  unshelve epose proof (I1 _ (RC_Incs i n Hi)) as I1.
+  1: esx.
+  apply I1.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (O,O)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(i,n) => i<6).
+  2: lia.
+  intros [i n] Hi.
+  assert (i<5\/i=5) as [E|E] by lia.
+  - exists (S i,n); split.
+    1: apply BigStep,Hi.
+    lia.
+  - eexists (O,S n); split; [|lia].
+    follow10 (BigStep i n Hi).
+    unfold S0.
+    rewrite <-RC_eq.
+    finish.
+Qed.
+
+End TM18.
+
+
+Module TM19.
+
+Definition tm := Eval compute in (TM_from_str "1LB0LB_1RC0LF_0RE0RD_0RB---_0LA0RC_0LE1LC").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation ld := [1;0;0;0;1;0;0;0].
+Notation rd0 := [0;0;0].
+Notation rd1 := [1;0;0].
+Notation lh := (0inf<*<[1;0;0;0;0]).
+Notation lh0 := (0inf<*<[1;0;0;1;0]).
+
+Notation hR := (C,[1;0;0;1]).
+Notation hL := (B,[0;0;0;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Lemma LOv r:
+  lh {{{ (hL,L) }}} r -->*
+  lh0 {{{ (hR,R) }}} [1;0;0;0] *> r.
+Proof. es. Qed.
+
+
+Ltac R_sub n :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    rewrite <-(Nat.sub_add n a) by lia'
+  end.
+
+Ltac R_m2 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2) by lia'
+  end.
+
+Ltac R_m2a1 :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with (a/2*2+1) by lia'
+  end.
+
+Ltac R_x x :=
+  match goal with
+  | |- sideRLs _ (_^^?a) _ _ =>
+    replace a with x by lia'
+  end.
+Lemma rw_1000_ld r:
+  [1;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd0 r:
+  [1;0;0;0] *> [0;0;0] *> r = [1;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_rd1 r:
+  [1;0;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_ld r:
+  [0;0;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd0 r:
+  [0;0;0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000_rd1 r:
+  [0;0;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_ld r:
+  [1;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd0 r:
+  [1;0;0;0;1;0;0] *> [0;0;0] *> r = [1;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000100_rd1 r:
+  [1;0;0;0;1;0;0] *> [1;0;0] *> r = [1;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_ld r:
+  [0;0;0;0;1;0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd0 r:
+  [0;0;0;0;1;0;0] *> [0;0;0] *> r = [0;0;0;0;1;0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_0000100_rd1 r:
+  [0;0;0;0;1;0;0] *> [1;0;0] *> r = [0;0;0;0;1;0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_ld r:
+  [1;0] *> [1;0;0;0;1;0;0;0] *> r = [1;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd0 r:
+  [1;0] *> [0;0;0] *> r = [1;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_10_rd1 r:
+  [1;0] *> [1;0;0] *> r = [1;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_ld r:
+  [0;0] *> [1;0;0;0;1;0;0;0] *> r = [0;0;1] *> [0;0;0] *> [1;0;0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd0 r:
+  [0;0] *> [0;0;0] *> r = [0;0;0] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_00_rd1 r:
+  [0;0] *> [1;0;0] *> r = [0;0;1] *> [0;0] *> r.
+Proof. reflexivity. Qed.
+
+Lemma rw_1000_lds n r:
+  [1;0;0;0] *> ld^^n *> r = ld^^n *> [1;0;0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+Lemma rw_00_rd1s n r:
+  [0;0] *> rd1^^n *> r = [0;0;1]^^n *> [0;0] *> r.
+Proof.
+  simpl_rotate; reflexivity.
+Qed.
+
+
+Ltac rw_0 :=
+  let h_0 := fresh "h" in
+  match goal with
+  | |- sideRLs _ ?h _ _ =>
+    remember h as h_0
+  end;
+  cbn[Nat.add]; cbn[lpow];
+  repeat rewrite Str_app_assoc;
+  repeat rewrite Str_app_nil;
+  subst h_0;
+  repeat (
+  rewrite rw_1000_ld ||
+  rewrite rw_1000_rd0 ||
+  rewrite rw_1000_rd1 ||
+  rewrite rw_0000_ld ||
+  rewrite rw_0000_rd0 ||
+  rewrite rw_0000_rd1 ||
+  rewrite rw_1000100_ld ||
+  rewrite rw_1000100_rd0 ||
+  rewrite rw_1000100_rd1 ||
+  rewrite rw_0000100_ld ||
+  rewrite rw_0000100_rd0 ||
+  rewrite rw_0000100_rd1 ||
+  rewrite rw_10_ld ||
+  rewrite rw_10_rd0 ||
+  rewrite rw_10_rd1 ||
+  rewrite rw_00_ld ||
+  rewrite rw_00_rd0 ||
+  rewrite rw_00_rd1 ||
+  rewrite rw_1000_lds ||
+  rewrite rw_00_rd1s).
+
+Ltac ss := solve_segRLs.
+
+Lemma segRLs_d1_d0 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n+1)) rd1 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 1 n); flia; ss.
+Qed.
+
+Lemma segRLs_d1_d1 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd1 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d0 n:
+  segRLs tm (hRL^^(n*2)) (hRL^^(n)) rd0 rd0.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 0 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_d0_d1 n:
+  segRLs tm (hRL^^(n*2+1)) (hRL^^(n)) rd0 rd1.
+Proof.
+  applys_eq (segRLs_addmul_v2 2 1 1 0 n); flia; ss.
+Qed.
+
+Lemma segRLs_ld n:
+  segRLs tm (hRL^^(n)) (hRL^^(n*2)) ld ld.
+Proof.
+  applys_eq (segRLs_addmul_v2 1 2 0 0 n); flia; ss.
+Qed.
+
+Lemma sideRLs_lds n i r r':
+  sideRLs tm (hRL^^(2^(i+n)+0)) r r' ->
+  sideRLs tm (hRL^^(2^n+0)) (ld^^i*>r) (ld^^i*>r').
+Proof.
+  gen n.
+  induction i; intros.
+  - apply H.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: apply segRLs_ld.
+    specialize (IHi (S n)).
+    applys_eq IHi.
+    1: cbn[Nat.pow]; flia.
+    applys_eq H; flia.
+Qed.
+
+Lemma hRL_00 n s r r':
+  sideRLs tm (hRL^^n) ((1::0::s)*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ((0::0::s)*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_101 n r r':
+  sideRLs tm (hRL^^n) (rd0*>r) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;1]*>r) r'.
+Proof.
+  intros H.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma hRL_10001001 n r r' r0:
+  sideRLs tm (hRL^^1) r r0 ->
+  sideRLs tm (hRL^^n) (ld*>r0) r' ->
+  sideRLs tm (hRL^^(n+1)) ([1;0;0;0;1;0;0;1]*>r) r'.
+Proof.
+  intros H H0.
+  rewrite Nat.add_comm,lpow_add.
+  eapply sideRLs_trans.
+  2: apply H0.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  esx.
+Qed.
+
+Lemma sideRLs_001s k n r r':
+  2<=k ->
+  sideRLs tm (hRL^^(2^k-3)) r r' ->
+  sideRLs tm (hRL^^(2^(k+n)-3)) ([0;0;1]^^n*>r) (rd1^^n*>r').
+Proof.
+  intros.
+  rewrite (Nat.pow_le_mono_r_iff 2) in H by lia.
+  induction n.
+  - applys_eq H0; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    2: apply IHn.
+    rewrite <-(Nat.add_1_r n).
+    applys_eq (segRLs_addmul_v2 2 1 3 0 (2^(k+n)-3)); rw_pa; flia; ss.
+Qed.
+
+Lemma sideRLs_001s_v1 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*6+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*6+c) with (n*3+c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Lemma sideRLs_001s_v2 c n r r':
+  2<=c ->
+  sideRLs tm (hRL^^(2^c-3)) r r' ->
+  sideRLs tm (hRL^^(2^(n*3+c)-3)) ([0;0;1]^^(n*3)*>r) (rd1^^(n*3)*>r').
+Proof.
+  replace (n*3+c) with (c+n*3) by lia.
+  intros.
+  apply sideRLs_001s; [lia|assumption].
+Qed.
+
+Ltac sscs :=
+  simpl_nat;
+  repeat (
+  match goal with
+  | |- ?G => idtac G
+  end;
+  match goal with
+  | |- sideRLs _ (_^^O) _ _ =>
+    solve[eapply sideRLseq_O]
+  | |- sideRLs _ _ ((0::0::_)*>_) _ =>
+    R_sub 1%nat; eapply hRL_00
+  | |- sideRLs _ _ ([1;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_101
+  | |- sideRLs _ _ ([1;0;0;0;1;0;0;1]*>_) _ =>
+    R_sub 1%nat; eapply hRL_10001001
+  | |- sideRLs _ _ (ld*>_) _ =>
+    ssc segRLs_ld
+  | |- sideRLs _ _ (ld^^_*>_) _ =>
+    eapply sideRLs_lds
+  | |- sideRLs _ _ ([0;0;1]^^_*>_) _ =>
+    (eapply sideRLs_001s_v1;[lia|]) ||
+    (eapply sideRLs_001s_v2;[lia|])
+  | |- sideRLs _ _ (rd0*>_) _ =>
+    (R_m2a1; ssc segRLs_d0_d1) ||
+    (R_m2; ssc segRLs_d0_d0)
+  | |- sideRLs _ _ (rd1*>_) _ =>
+    (R_m2a1; ssc segRLs_d1_d0) ||
+    (R_m2; ssc segRLs_d1_d1)
+  end; simpl_nat);
+  match goal with
+  | |- ?G => idtac "fail"; idtac G
+  end.
+
+Definition RC i n :=
+match i with
+| 0%nat => (ld)^^(10+n*6)*>rd1*>ld*>(rd1)^^(2+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd1*>0inf
+| 1%nat => (ld)^^(11+n*6)*>rd1*>ld*>(rd1)^^(2+n*3)*>ld*>rd0*>rd1*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd1*>rd1*>rd0*>rd1*>0inf
+| 2 => (ld)^^(12+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(4+n*3)*>ld*>rd1*>rd1*>rd1*>rd0*>rd1*>0inf
+| 3 => (ld)^^(13+n*6)*>rd1*>ld*>(rd1)^^(3+n*3)*>ld*>rd0*>rd1*>ld*>rd0*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 4 => (ld)^^(14+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(3+n*3)*>ld*>rd0*>rd0*>rd1*>rd0*>rd0*>rd1*>rd1*>0inf
+| 5 => (ld)^^(15+n*6)*>rd1*>ld*>(rd1)^^(4+n*3)*>ld*>rd0*>rd1*>ld*>rd0*>(rd1)^^(6+n*3)*>ld*>rd0*>rd0*>rd0*>rd0*>rd1*>rd1*>0inf
+| 6 => (ld)^^(16+n*6)*>rd1*>ld*>(rd1)^^(5+n*3)*>ld*>rd1*>rd0*>ld*>rd1*>rd0*>(rd1)^^(8+n*3)*>ld*>rd1*>rd1*>0inf
+| _ => 0inf
+end.
+
+Ltac sscs' :=
+  unshelve (
+  eapply sideRLs_feq2; [|shelve];
+  rw_0;
+  sscs;
+  solve_sideRLs);
+  simpl_tape; simpl_rotate; reflexivity.
+
+Lemma RC_Incs i n:
+  i<6 ->
+  sideRLs tm (hRL^^(2^1+0)) ([1;0;0;0]*>RC i n) (RC (S i) n).
+Proof.
+  intro Hn.
+  unfold RC.
+  do 2
+  (destruct i; [destruct n; cbn[Nat.mul]; sscs'|]).
+  do 4
+  (destruct i; [solve[sscs']|]).
+  lia.
+Qed.
+
+Lemma RC_eq n:
+  RC 6 n = RC 0 (S n).
+Proof.
+  unfold RC.
+  st; simpl_rotate; reflexivity.
+Qed.
+
+Definition S0 '(i,n) := lh {{{ (hL,L) }}} RC i n.
+
+Lemma BigStep i n:
+  i<6 ->
+  S0 (i,n) -->+
+  S0 (S i,n).
+Proof.
+  intros Hi.
+  unfold S0.
+  follow LOv.
+  epose proof (@sideRLs_concat tm hR hL hLR lh0 lh _ _) as I1.
+  cbn in I1.
+  unshelve epose proof (I1 _ (RC_Incs i n Hi)) as I1.
+  1: esx.
+  apply I1.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (O,O)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(i,n) => i<6).
+  2: lia.
+  intros [i n] Hi.
+  assert (i<5\/i=5) as [E|E] by lia.
+  - exists (S i,n); split.
+    1: apply BigStep,Hi.
+    lia.
+  - eexists (O,S n); split; [|lia].
+    follow10 (BigStep i n Hi).
+    unfold S0.
+    rewrite <-RC_eq.
+    finish.
+Qed.
+
+End TM19.
+
+

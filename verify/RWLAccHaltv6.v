@@ -422,3 +422,33 @@ Proof. solve_halt. Time Qed.
 Lemma tm155: halts_at_trans (TM_from_str "1RB1LA_1LC0RC_1LD1RC_0LC1LE_0LF0LA_---0RA") c0 (F,0).
 Proof. solve_halt. Time Qed.
 
+Lemma tm156: halts_at_trans (TM_from_str "1RB1RE_1LC0RC_0RA0LD_1LB1LE_0RC1RF_0RC---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm157: halts_at_trans (TM_from_str "1RB0RA_1RC0LC_0LD0RA_1LB1LE_0RE0LF_1RD---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm158: halts_at_trans (TM_from_str "1RB0RA_1RC0LC_0LD0RA_1LB1LE_0LC0LF_1RD---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm159: halts_at_trans (TM_from_str "1RB1RE_1RC0LC_0LD0RA_1LB1LE_0LC0LF_1RD---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm160: halts_at_trans (TM_from_str "1RB1RE_1LC0RC_0RA0LD_1LB0LD_0RC1RF_0LA---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm161: halts_at_trans (TM_from_str "1RB1RE_1LC0RC_0RA0LD_1LB1LE_0RC1RF_0LA---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm162: halts_at_trans (TM_from_str "1RB1RF_1RC0LC_0LD0RA_1LB1LE_0LC1LF_0LC---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm163: halts_at_trans (TM_from_str "1RB1RE_1LC0RC_0RA0LD_1LB1LF_0LE1RF_0RC---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm164: halts_at_trans (TM_from_str "1RB0RA_1RC0LC_0LD0RA_1LB1LE_0LC1LF_0LC---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
+Lemma tm165: halts_at_trans (TM_from_str "1RB1RE_1LC0RC_0RA0LD_1LB0LD_0LE1RF_0RC---") c0 (F,1).
+Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
+
