@@ -52,6 +52,78 @@ Ltac solve_eqv tm tm' f T1 T2 :=
   [ intros q s; destruct q,s; cbn; congruence
   | intros q s s' d q'; destruct q,s; cbn; intros H; inverts H; reflexivity ].
 
+Module Step3ToStep1.
+Ltac solve_step3_to_step1 :=
+  match goal with
+  | |- halts ?tm c0 <-> halts ?tm' c0 =>
+    rewrite (halts_iff tm' _ c0 (step_c tm') (fun x=>x) (fun _=>True)); trivial;
+    [| intros [q [[l m] r]] _; destruct q,m; cbn; solve[split; trivial; es|esx]];
+    rewrite (halts_iff tm _ c0 (step_c tm') (fun x=>x) (fun _=>True)); trivial;
+    [ tauto |];
+    intros [q [[l m] r]] _; destruct q,m; cbn; try solve[split; trivial; solve[es|destruct l as [[|] l]; destruct r as [[|] r]; es]|esx]
+  end.
+
+Module TM1.
+Definition tm := TM_from_str "1RB0RD_0RC1RF_1RD---_0LE1LE_1RA1LD_1RD0LF".
+Definition tm' := TM_from_str "1RB0RD_0RC1RF_1RD---_0LE1LE_1RA1LD_1LD0LF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_step3_to_step1.
+Time Qed.
+End TM1.
+
+Module TM2.
+Definition tm := TM_from_str "1RB1RA_0RC1RF_1LD---_0LE1LE_1RA1LD_1RD0LF".
+Definition tm' := TM_from_str "1RB1RA_0RC1RF_1LD---_0LE1LE_1RA1LD_1LD0LF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_step3_to_step1.
+Time Qed.
+End TM2.
+
+Module TM3.
+Definition tm := TM_from_str "1RB0LD_1RC1RF_0LA1LA_1LC1RE_0RD1RD_---1RA".
+Definition tm' := TM_from_str "1RB0LC_0LC1RF_1LE1RD_0RC1RC_0LA1LA_---1RA".
+Definition tm0 := TM_from_str "1RB0LD_0LD1RF_0LA1LA_1LC1RE_0RD1RD_---1RA".
+Lemma eqv0: halts tm c0 <-> halts tm0 c0.
+Proof.
+  solve_step3_to_step1.
+Time Qed.
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv0.
+  solve_eqv tm0 tm' (mp_from_str "ABECDF") 0 0.
+Time Qed.
+End TM3.
+
+Module TM4.
+Definition tm := TM_from_str "1RB1RA_0RC1RC_1RD0LF_0LE1LE_1RA1LD_---0LC".
+Definition tm' := TM_from_str "1RB1RA_0RC1RC_1LD0LF_0LE1LE_1RA1LD_---0LC".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_step3_to_step1.
+Time Qed.
+End TM4.
+
+Module TM5.
+Definition tm := TM_from_str "1RB1RF_0LC1LC_0LD1LB_1LE0LE_1RA---_0RA0RF".
+Definition tm' := TM_from_str "1LB1RF_0LC1LC_0LD1LB_1LE0LE_1RA---_0RA0RF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_step3_to_step1.
+Time Qed.
+End TM5.
+
+Module TM6.
+Definition tm := TM_from_str "1RB0RD_0RC1RF_1RD---_0LE1LE_1RA1LD_1LD0LF".
+Definition tm' := TM_from_str "1RB0RD_0RC1RF_1LD---_0LE1LE_1RA1LD_1LD0LF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_step3_to_step1.
+Time Qed.
+End TM6.
+
+End Step3ToStep1.
 
 Module TM1.
 Definition tm := TM_from_str "1RB0LC_1LC0RE_1RB1LD_1LA1LD_---0RF_1LA1RF".
