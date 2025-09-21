@@ -6,6 +6,42 @@ Require Import String.
 
 Open Scope list.
 
+Module SOC5x2.
+
+Definition tm0 := Eval compute in (TM_from_str "1LB1RC_0LC0LB_1RD0RA_1RE---_1RA0RA_------").
+
+Theorem nonhalt0: ~halts tm0 c0.
+Proof.
+  solve_SOCv1 tm0 (Build_SOC_cert_v1 C A [0;1] [0;1] 0%nat [1]%nat [1;1]%nat [0]%nat []%nat [1;1]%nat [0]%nat 31 12).
+Qed.
+
+
+Definition tm1 := Eval compute in (TM_from_str "1LB1RC_0LC0LB_1RD0RA_1RE---_1RA1LA_------").
+
+Theorem nonhalt1: ~halts tm1 c0.
+Proof.
+  solve_SOCv1 tm1 (Build_SOC_cert_v1 C A [0;1] [0;1] 0%nat [1]%nat [1;1]%nat [0]%nat []%nat [1;1]%nat [0]%nat 31 12).
+Qed.
+
+
+Definition tm2 := Eval compute in (TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------").
+
+Theorem nonhalt2: ~halts tm2 c0.
+Proof.
+  solve_SOCv1 tm2 (Build_SOC_cert_v1 B C [1;1] [0;1] 0%nat [0]%nat [0;0]%nat [1]%nat []%nat [1;1]%nat [0]%nat 31 10).
+Qed.
+
+
+Definition tm3 := Eval compute in (TM_from_str "1LB1RD_1LC0LB_1RA1LC_1RE0RA_1RC---_------").
+
+Theorem nonhalt3: ~halts tm3 c0.
+Proof.
+  solve_SOCv1 tm3 (Build_SOC_cert_v1 C A [1;1] [0;1] 0%nat [0]%nat [0;0]%nat [1]%nat []%nat [1;1]%nat [0]%nat 31 11).
+Qed.
+
+End SOC5x2.
+
+
 Definition tm0 := Eval compute in (TM_from_str "1RB---_1LC0LB_1RD1LC_1LB1RE_1RF0RD_1RC---").
 
 Theorem nonhalt0: ~halts tm0 c0.

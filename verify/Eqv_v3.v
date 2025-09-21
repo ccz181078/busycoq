@@ -10660,3 +10660,1461 @@ Time Qed.
 End TM559.
 
 
+Module TM560.
+Definition tm := TM_from_str "1RB1RA_1LC0RC_1RF1LD_0RE0LB_---1RC_0LA1RD".
+Definition tm' := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
+Definition tm0 := TM'_from_str "0RF0RB_1RF1RB_1LP1RF_1RI1RB_1RN0RI_1LP1RI_0LL0RV_1LL0RJ_0RV0RJ_1RV1LG_1RF0LP_1RN1LP_0RQ0LL_1RQ0RV_---0LG_0RJ1LG_---0RJ_---1RJ_---1RV_---1LG_1LP0RN_1RF1RN_0LC1RQ_1LC0RV".
+Definition tm0' := TM'_from_str "0RF0RN_1RF1RN_1LP1RQ_1RI0RB_1RN0RI_1LP1RI_0LL0RB_1LL0RJ_0RB0RJ_1RB1LG_1RF0LP_1RN1LP_0RQ0LL_1RQ0RB_---0LG_0RJ1LG_---0RJ_---1RJ_---1RB_---1LG".
+Definition tm1 := TM'_from_str "1RB1RF_1LC1RG_0RH1LD_0LE0RA_1RF1LC_1RI0RA_0RA0RH_1RA1LD_---0RH".
+Definition tm2 := TM'_from_str "1RB1RF_1LC1RG_0RH1LD_0LE0RA_1RF1LC_1RI0RA_0RA0RH_1RA1LD_1RJ0RH_1RJ1RJ".
+Definition l0 := [1;1;1;1;0;1;1;0]%N.
+Definition mp := mp_from_str "VFPGLNIJQ".
+Definition mp' := mp_from_str "BFPGLNIJQ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 29 29.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM560.
+
+
+Module TM561.
+Definition tm := TM_from_str "1LB---_0RC1LF_0RD1RC_1LE1RB_0RE1LA_0LB0LA".
+Definition tm' := TM_from_str "1LB---_0RC1LE_0RD1RC_1LA1RB_0LB0LA_------".
+Definition tm0 := TM'_from_str "0RJ---_1LX---_0LH---_1LH---_0RI1LG_1RI1LC_0RM0LX_0RJ1LX_0RM0RJ_1RM1RJ_1LH1RM_0RF1RJ_1LH0RF_1LD1RF_0LT1RI_1LT1LC_0RQ1LH_1RQ---_0RQ0LD_1LH1LD_0RM0LH_0LX---_0LG0LC_1LG1LC".
+Definition tm0' := TM'_from_str "0RJ---_1LT---_0LH---_1LH---_0RI1LG_1RI1LC_0RM0LT_0RJ1LT_0RM0RJ_1RM1RJ_1LH1RM_0RF1RJ_1LH0RF_---1RF_0LD1RI_1LD1LC_0RM0LH_0LT---_0LG0LC_1LG1LC".
+Definition tm1 := TM'_from_str "1RB1LG_0RC0RE_1LD0RA_0RE1LF_1RC1RE_1LH1LG_0LD---_0RC0LF".
+Definition tm2 := TM'_from_str "1RB1LG_0RC0RE_1LD0RA_0RE1LF_1RC1RE_1LH1LG_0LD1RI_0RC0LF_1RI1RI".
+Definition l0 := [0;1;0;1;0;1;1;0]%N.
+Definition mp := mp_from_str "FIMHJXCG".
+Definition mp' := mp_from_str "FIMHJTCG".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 71 71.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM561.
+
+
+Module TM562.
+Definition tm := TM_from_str "1LB0LA_1RC0LA_1LA1RD_0RE---_0RF1RF_0RB0LA".
+Definition tm' := TM_from_str "1LB0LA_1RC0LA_1LF1RD_0RE---_0RF1RF_0RB0LA".
+Definition tm0 := TM'_from_str "1RN0LH_1LC0LC_0LH0LC_1LH1LC_0RJ0LH_1RJ0LC_1LC0LC_1RN1LC_1LH0RN_1LC1RN_0LD1RQ_1LD---_0RQ---_1RQ---_0RU---_0RV---_0RU0RV_1RU1RV_0RE1RE_0LH0LC_0RE0LH_1RE0LC_0RJ0LC_0LH1LC".
+Definition tm0' := TM'_from_str "1RN0LH_1LC0LC_0LH0LC_1LH1LC_0RJ0LH_1RJ0LC_1LC0LC_1RN1LC_0LH0RN_1LC1RN_0LX1RQ_1LX---_0RQ---_1RQ---_0RU---_0RV---_0RU0RV_1RU1RV_0RE1RE_0LH0LC_0RE0LH_1RE0LC_0RJ0LC_0LH1LC".
+Definition tm1 := TM'_from_str "1LB1RD_0LC0LB_1RD1LB_1RE---_0RF0RH_0RG0LC_0RA0LC_1RG0LB".
+Definition tm2 := TM'_from_str "1LB1RD_0LC0LB_1RD1LB_1RE1RI_0RF0RH_0RG0LC_0RA0LC_1RG0LB_1RI1RI".
+Definition l0 := [1;1;0;1;1;0;1;0]%N.
+Definition mp := mp_from_str "JCHNQUEV".
+Definition mp' := mp_from_str "JCHNQUEV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 12 12.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM562.
+
+
+Module TM563.
+Definition tm := TM_from_str "1RB---_1LC1RF_1RD1RC_0LE1RF_0LF1LE_1RA0RD".
+Definition tm' := TM_from_str "1RB---_1RC1RF_1RD1RC_0LE1RF_0LF1LE_1RA0RD".
+Definition tm0 := TM'_from_str "0RF---_1RF---_1RJ---_1RV---_1RV0RV_1RJ1RV_0LL1RB_1LL1RM_0RN0RJ_1RN1RJ_0LT1RN_1RV1RJ_0LW0RV_0LT1RV_0LS1RB_1LS1RM_1RF1LW_0LW1LT_0LW0LT_1LW1LT_0RB0RM_1RB1RM_1RF0LW_---0RV".
+Definition tm0' := TM'_from_str "0RF---_1RF---_1RJ---_1RV---_0RJ0RV_1RJ1RV_1RN1RB_1RJ1RM_0RN0RJ_1RN1RJ_0LT1RN_1RV1RJ_0LW0RV_0LT1RV_0LS1RB_1LS1RM_1RF1LW_0LW1LT_0LW0LT_1LW1LT_0RB0RM_1RB1RM_1RF0LW_---0RV".
+Definition tm1 := TM'_from_str "0LB1RF_1LC1LB_1RD0LC_1RE1RF_1RA1RE_1RH1RG_0LC0RF_1RD---".
+Definition tm2 := TM'_from_str "0LB1RF_1LC1LB_1RD0LC_1RE1RF_1RA1RE_1RH1RG_0LC0RF_1RD1RI_1RI1RI".
+Definition l0 := [1;1;1;0;1;1;1;1]%N.
+Definition mp := mp_from_str "NTWFJVMB".
+Definition mp' := mp_from_str "NTWFJVMB".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 15 15.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM563.
+
+
+Module TM564.
+Definition tm := TM_from_str "1LB1LA_0RC1LD_0RD1RC_1LE0LB_1LF---_1RA1LD".
+Definition tm' := TM_from_str "1LB1LA_0RC1LD_0RD1RC_1LE0LB_1LF---_1LA1LD".
+Definition tm0 := TM'_from_str "0RJ1LH_1LP1LD_0LH0LD_1LH1LD_0RI1LT_1RI1LG_0RM0LP_0RJ1LP_0RM0RJ_1RM1RJ_1LX1RM_0RM1RJ_1LX0RM_---0LP_0LT0LG_1LT1LG_1LD---_1LP---_0LX---_1LX---_0RB1LT_1RB1LG_1LP0LP_1LD1LP".
+Definition tm0' := TM'_from_str "0RJ1LH_1LP1LD_0LH0LD_1LH1LD_0RI1LT_1RI1LG_0RM0LP_0RJ1LP_0RM0RJ_1RM1RJ_1LX1RM_0RM1RJ_1LX0RM_---0LP_0LT0LG_1LT1LG_1LD---_1LP---_0LX---_1LX---_1LH1LT_1LD1LG_0LD0LP_1LD1LP".
+Definition tm1 := TM'_from_str "1LB0RA_1LF1LC_1LE1LD_0RA0LC_1LB---_1LG1LF_0RH1LC_1RA1RH".
+Definition tm2 := TM'_from_str "1LB0RA_1LF1LC_1LE1LD_0RA0LC_1LB1RI_1LG1LF_0RH1LC_1RA1RH_1RI1RI".
+Definition l0 := [0;1;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "MXPGTDHJ".
+Definition mp' := mp_from_str "MXPGTDHJ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 16 16.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM564.
+
+
+Module TM565.
+Definition tm := TM_from_str "1LB0RE_0RC0LB_0LA1LD_1RA0RF_1RD1RE_0RA---".
+Definition tm' := TM_from_str "1LB0LA_1RC0LA_1LB0RD_1RE1RD_1RC0RF_0RC---".
+Definition tm0 := TM'_from_str "1RQ0RQ_1LG1RQ_0LH0RN_1LH0RR_0RI0LH_1RI0LG_0LH0LG_1RQ1LG_0LH1RQ_0RN---_0LC0LP_1LC1LP_0RB0RU_1RB1RU_1LG0RA_1RQ---_0RN0RR_1RN1RR_1RB1RN_1RU1RR_0RA---_1RA---_1RQ---_0RQ---".
+Definition tm0' := TM'_from_str "1RM0LH_1LC0LC_0LH0LC_1LH1LC_0RJ0LH_1RJ0LC_1LC0LC_1RM1LC_1RM0RM_1LC1RM_0LH0RR_1LH0RN_0RR0RN_1RR1RN_1RJ1RR_1RU1RN_0RJ0RU_1RJ1RU_1LC0RI_1RM---_0RI---_1RI---_1RM---_0RM---".
+Definition tm1 := TM'_from_str "1LB1RD_0LC0LB_1RD1LB_0RE0RH_1RA1RF_0RG---_1RD0RD_1RE1RH".
+Definition tm2 := TM'_from_str "1LB1RD_0LC0LB_1RD1LB_0RE0RH_1RA1RF_0RG1RI_1RD0RD_1RE1RH_1RI1RI".
+Definition l0 := [1;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "BGHQNUAR".
+Definition mp' := mp_from_str "JCHMRUIN".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 16 16.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM565.
+
+
+Module TM566.
+Definition tm := TM_from_str "1RB0RC_1LC1RA_0RE1RD_1LF0RB_---1RD_1LB0LD".
+Definition tm' := TM_from_str "1RB0RC_1LC1RA_1RE1RD_1LF0RB_---1LA_1LB0LD".
+Definition tm0 := TM'_from_str "0RF0RI_1RF1RI_1RE0RQ_1RB0RN_0RN0RB_1RE1RB_0LL1RF_1LL1RI_0RQ0RN_1RQ1RN_---1LO_0RN1RE_1LH0RE_1LO1RE_0LX0RN_1LX0RB_---0RN_---1RN_---1LO_---1RE_1LL0LX_1RI0RN_0LH0LO_1LH1LO".
+Definition tm0' := TM'_from_str "0RF0RI_1RF1RI_1RE0RR_1RB0RN_0RN0RB_1RE1RB_0LL1RF_1LL1RI_0RR0RN_1RR1RN_---1LO_0RN1RE_1LH0RE_1LO1RE_0LX0RN_1LX0RB_---1RB_---0RN_---0LD_---1LD_1LL0LX_1RI0RN_0LH0LO_1LH1LO".
+Definition tm1 := TM'_from_str "1RB1RI_0RC0RI_1LD1RB_0LE0RC_1LF1LD_1LH1RG_0RJ0RC_0RC---_1RA1RG_---0RC".
+Definition tm2 := TM'_from_str "1RB1RI_0RC0RI_1LD1RB_0LE0RC_1LF1LD_1LH1RG_0RJ0RC_0RC---_1RA1RG_1RK0RC_1RK1RK".
+Definition l0 := [0;1;0;1;1;1;1;1]%N.
+Definition mp := mp_from_str "FENOXHILBQ".
+Definition mp' := mp_from_str "FENOXHILBR".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 9%N l0 (NG 0 1000 1000 1 1 0 0 true) 17 17.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM566.
+
+
+Module TM567.
+Definition tm := TM_from_str "1LB0RB_1LC0LE_1RD1LB_1RA0RD_1LB0LF_0RE---".
+Definition tm' := TM_from_str "1LB0RB_1LC0LE_1RD1LB_1RA0RD_1LB1LF_0RC---".
+Definition tm0 := TM'_from_str "1LL0RE_1LS1RE_0LH1RM_1LH0LH_1RM0LH_1LH0LW_0LL0LS_1LL1LS_0RN1LL_1RN1LS_1RB0LH_1RM1LH_0RB0RM_1RB1RM_1LS0RB_1RE0RM_1LL1LL_1LS---_0LH0LW_1LH1LW_0RQ---_1RQ---_1LL---_1LL---".
+Definition tm0' := TM'_from_str "1LL0RE_1LS1RE_0LH1RM_1LH0LH_1RM0LH_1LH0LX_0LL0LS_1LL1LS_0RN1LL_1RN1LS_1RB0LH_1RM1LH_0RB0RM_1RB1RM_1LS0RB_1RE0RM_1LL1LL_1LS---_0LH0LX_1LH1LX_0RI---_1RI---_0RN---_1LL---".
+Definition tm1 := TM'_from_str "1LB1RG_0LC0LD_1LE1LB_1LE---_1RF1LC_0RA0RF_1RF0LC".
+Definition tm2 := TM'_from_str "1LB1RG_0LC0LD_1LE1LB_1LE1RH_1RF1LC_0RA0RF_1RF0LC_1RH1RH".
+Definition l0 := [1;0;0;0;0;1;1;0]%N.
+Definition mp := mp_from_str "BSHWLME".
+Definition mp' := mp_from_str "BSHXLME".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 17 17.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM567.
+
+
+Module TM568.
+Definition tm := TM_from_str "1LB1LE_1RC1LD_1RA0RC_1LA0LB_0LF0RD_1LD---".
+Definition tm' := TM_from_str "1LB1LE_1RC1LD_1RA0RC_1LA0LB_1LF0RD_1RD---".
+Definition tm0 := TM'_from_str "1RI1LW_1LP1RB_0LH0LT_1LH1LT_0RJ1LD_1RJ1LG_1RB0LP_1RI1LP_0RB0RI_1RB1RI_1LP0RB_1RB0RI_1LH1RB_1LT0LP_0LD0LG_1LD1LG_0LP0RM_---1RM_0LW1LH_1LW1RB_1LD---_1LG---_0LP---_1LP---".
+Definition tm0' := TM'_from_str "1RI1LX_1LP1RB_0LH0LT_1LH1LT_0RJ1LD_1RJ1LG_1RB0LP_1RI1LP_0RB0RI_1RB1RI_1LP0RB_1RB0RI_1LH1RB_1LT0LP_0LD0LG_1LD1LG_0LP0RM_---1RM_0LX1LH_1LX1RB_0RN---_1RN---_1LT---_0LP---".
+Definition tm1 := TM'_from_str "1LB1RA_1LD1LC_1RA0LB_1LE1LG_1RF1LB_0RA0RF_1LH1RA_0LB---".
+Definition tm2 := TM'_from_str "1LB1RA_1LD1LC_1RA0LB_1LE1LG_1RF1LB_0RA0RF_1LH1RA_0LB1RI_1RI1RI".
+Definition l0 := [1;0;0;0;1;1;1;1]%N.
+Definition mp := mp_from_str "BPGDHITW".
+Definition mp' := mp_from_str "BPGDHITX".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 17 17.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM568.
+
+
+Module TM569.
+Definition tm := TM_from_str "1LB0LF_1RC0LE_1LB0RD_1RC0RD_1LA1LE_0LB---".
+Definition tm' := TM_from_str "1LB0LF_1RC0LE_0LD0RC_0RB1RA_1LA1LE_0LB---".
+Definition tm0 := TM'_from_str "1RM0LG_1LS---_0LH0LW_1LH1LW_0RJ0LD_1RJ0LT_1LS0LS_1RM1LS_1RM0RM_1LS1RM_0LH0RJ_1LH0RM_0RJ0RM_1RJ1RM_1LS0RJ_1RM0RM_1LH1LD_1LW1LT_0LD0LT_1LD1LT_1LS---_0LS---_0LG---_1LG---".
+Definition tm0' := TM'_from_str "1RI0LG_1LS---_0LH0LW_1LH1LW_0RJ0LD_1RJ0LT_1LS0LS_1RI1LS_0RJ0RI_1LS1RI_0LO0RJ_1LO0RI_0RE0RB_1RE1RB_0RJ1LS_0LD---_1LH1LD_1LW1LT_0LD0LT_1LD1LT_1LS---_0LS---_0LG---_1LG---".
+Definition tm1 := TM'_from_str "0RB0RA_1LC1RA_0LD0LG_1LH1LE_0LF---_1LC0LC_1LD1LG_1RA1LC".
+Definition tm2 := TM'_from_str "0RB0RA_1LC1RA_0LD0LG_1LH1LE_0LF1RI_1LC0LC_1LD1LG_1RA1LC_1RI1RI".
+Definition l0 := [1;0;0;1;0;1;0;1]%N.
+Definition mp := mp_from_str "MJSDWGTH".
+Definition mp' := mp_from_str "IJSDWGTH".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 17 17.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM569.
+
+
+Module TM570.
+Definition tm := TM_from_str "1LB1LA_1RC1LF_0RE0LD_---1RC_0RF1RD_1RA0LA".
+Definition tm' := TM_from_str "1LB1LA_1RC1LE_0RD0RD_0RE1RF_1RA0LA_---1RC".
+Definition tm0 := TM'_from_str "1RQ1LH_1LX1LD_0LH0LD_1LH1LD_0RJ1LD_1RJ1LC_1RQ0LX_1RQ1LX_0RQ---_1RQ1RQ_0RU0LO_0RN1LO_---0RJ_---1RJ_---1RQ_---1RQ_0RU0RN_1RU1RN_0RB---_0LH1RJ_0RB0LH_1RB0LD_1LX0LC_1LD1LC".
+Definition tm0' := TM'_from_str "1RM1LH_1LT1LD_0LH0LD_1LH1LD_0RJ1LD_1RJ1LC_1RM0LT_1RM1LT_0RM0RM_1RM1RM_0RQ0RQ_0RV0RV_0RQ0RV_1RQ1RV_0RB---_0LH1RJ_0RB0LH_1RB0LD_1LT0LC_1LD1LC_---0RJ_---1RJ_---1RM_---1RM".
+Definition tm1 := TM'_from_str "0RB0LE_1LC1LD_1LD1LF_1LE1LD_1RG1LC_0LE0LD_0RA0RH_---1RI_1RG1RG".
+Definition tm2 := TM'_from_str "0RB0LE_1LC1LD_1LD1LF_1LE1LD_1RG1LC_0LE0LD_0RA0RH_1RJ1RI_1RG1RG_1RJ1RJ".
+Definition l0 := [1;0;1;1;0;1;1;0]%N.
+Definition mp := mp_from_str "UBXDHCQNJ".
+Definition mp' := mp_from_str "QBTDHCMVJ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 17 17.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM570.
+
+
+Module TM571.
+Definition tm := TM_from_str "1LB1RD_1LC0LB_1RA1LE_1RF0RA_0LD0RC_1RC---".
+Definition tm' := TM_from_str "1LB1RD_1LC0LB_1RA1LE_1RF0RA_0LD0LD_1RC---".
+Definition tm0 := TM'_from_str "1LL0RN_1LG1RN_0LH1RV_1LH1RA_1RN0LL_1LT0LG_0LL0LG_1LL1LG_0RB1LO_1RB1LO_1LG0LT_1RN1LT_0RV0RA_1RV1RA_1RJ1LL_---0RN_1RJ0RI_1LL1RI_0LO0RB_1LO1LO_0RJ---_1RJ---_1RB---_1LO---".
+Definition tm0' := TM'_from_str "1LL0RN_1LG1RN_0LH1RV_1LH1RA_1RN0LL_1LT0LG_0LL0LG_1LL1LG_0RB1LO_1RB1LO_1LG0LT_1RN1LT_0RV0RA_1RV1RA_1RJ1LL_---0RN_1RJ1RJ_1LL1LL_0LO0LO_1LO1LO_0RJ---_1RJ---_1RB---_1LO---".
+Definition tm1 := TM'_from_str "1LB1RG_0LC0LB_1RG1LD_1LE1LE_1RF1LC_1RA1LE_1RI1RH_1LC0RG_1RF---".
+Definition tm2 := TM'_from_str "1LB1RG_0LC0LB_1RG1LD_1LE1LE_1RF1LC_1RA1LE_1RI1RH_1LC0RG_1RF1RJ_1RJ1RJ".
+Definition l0 := [1;1;0;1;0;1;1;1]%N.
+Definition mp := mp_from_str "BGLTOJNAV".
+Definition mp' := mp_from_str "BGLTOJNAV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 17 17.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM571.
+
+
+Module TM572.
+Definition tm := TM_from_str "1LB1LA_1LC0LF_1RD0LA_0LE0RD_0RC1RB_0LC---".
+Definition tm' := TM_from_str "1LB1LA_1LC0LF_1RD0LA_1LC0RE_1RD0RE_0LC---".
+Definition tm0 := TM'_from_str "1LL1LH_1LW1LD_0LH0LD_1LH1LD_1RM0LK_1LC---_0LL0LW_1LL1LW_0RN0LH_1RN0LD_1LC0LC_1RM1LC_0RN0RM_1LC1RM_0LS0RN_1LS0RM_0RI0RF_1RI1RF_0RN1LC_0LH---_1LC---_0LC---_0LK---_1LK---".
+Definition tm0' := TM'_from_str "1LL1LH_1LW1LD_0LH0LD_1LH1LD_1RQ0LK_1LC---_0LL0LW_1LL1LW_0RN0LH_1RN0LD_1LC0LC_1RQ1LC_1RQ0RQ_1LC1RQ_0LL0RN_1LL0RQ_0RN0RQ_1RN1RQ_1LC0RN_1RQ0RQ_1LC---_0LC---_0LK---_1LK---".
+Definition tm1 := TM'_from_str "1LB1RH_0LC0LF_1LG1LD_0LE---_1LB0LB_1LC1LF_1RH1LB_0RA0RH".
+Definition tm2 := TM'_from_str "1LB1RH_0LC0LF_1LG1LD_0LE1RI_1LB0LB_1LC1LF_1RH1LB_0RA0RH_1RI1RI".
+Definition l0 := [1;0;0;1;0;0;1;0]%N.
+Definition mp := mp_from_str "NCHWKDLM".
+Definition mp' := mp_from_str "NCHWKDLQ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM572.
+
+
+Module TM573.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1LB_0RC0LF_1LB---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1LB_0RC0LF_0RC---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LW_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC1RM_0RB1RM_1RB1LS_1LS0LH_1RQ1LH_0RI0LH_1RI---_0LH0LW_0RM1LW_1RM---_1LS---_0LH---_1LH---".
+Definition tm0' := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LW_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC1RM_0RB1RM_1RB1LS_1LS0LH_1RQ1LH_0RI0LH_1RI---_0LH0LW_0RM1LW_0RI---_1RI---_0LH---_0RM---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD1RC_1LE1RG_0LB0LF_0LB---_0RA0LB".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD1RC_1LE1RG_0LB0LF_0LB1RH_0RA0LB_1RH1RH".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSWQ".
+Definition mp' := mp_from_str "IHMBSWQ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM573.
+
+
+Module TM574.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_0LE---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_0LB---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LS_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS0LS_1RQ---_0RI0LH_1RI0LS_0LH0LS_0RM1LS_0LH---_0LS---_0LS---_1LS---".
+Definition tm0' := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LS_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS0LS_1RQ---_0RI0LH_1RI0LS_0LH0LS_0RM1LS_0RI---_0LS---_0LG---_1LG---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD0RG_1LE1RF_0LB0LE_0RA0LB_0LE---".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD0RG_1LE1RF_0LB0LE_0RA0LB_0LE1RH_1RH1RH".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSQV".
+Definition mp' := mp_from_str "IHMBSQV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM574.
+
+
+Module TM575.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_1LB---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_1LE---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LS_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS1LS_1RQ---_0RI0LH_1RI0LS_0LH0LS_0RM1LS_1RM---_1LS---_0LH---_1LH---".
+Definition tm0' := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LS_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS1LS_1RQ---_0RI0LH_1RI0LS_0LH0LS_0RM1LS_0RM---_1LS---_0LT---_1LT---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD0RG_1LE1RF_0LB0LE_0RA0LB_1LE---".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD0RG_1LE1RF_0LB0LE_0RA0LB_1LE1RH_1RH1RH".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSQV".
+Definition mp' := mp_from_str "IHMBSQV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM575.
+
+
+Module TM576.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LE_1LD---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_0RE---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LS_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RU_0RB0RU_1RB1RU_1LS1RQ_1RQ---_0RI0LH_1RI0LS_0LH0LS_0RM1LS_1RQ---_------_0LP---_1LP---".
+Definition tm0' := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LS_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS1RQ_1RQ---_0RI0LH_1RI0LS_0LH0LS_0RM1LS_0RQ---_1RQ---_0RI---_0LH---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD0RG_1LE1RF_0LB0LE_0RA0LB_1RF---".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD0RG_1LE1RF_0LB0LE_0RA0LB_1RF1RH_1RH1RH".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSQU".
+Definition mp' := mp_from_str "IHMBSQV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM576.
+
+
+Module TM577.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_1LA---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LA_0LE---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LC_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS0LH_1RQ---_0RI0LH_1RI0RI_0LH0LC_0RM1LC_1LH---_0LH---_0LD---_1LD---".
+Definition tm0' := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LC_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RU_0RB0RU_1RB1RU_1LS0LH_1RQ---_0RI0LH_1RI0RI_0LH0LC_0RM1LC_0LH---_0LC---_0LS---_1LS---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD0RH_1LE1RG_0LB0LF_0LB---_0RA0LB_0LB---".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD0RH_1LE1RG_0LB0LF_0LB---_0RA0LB_0LB1RI_1RI1RI".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSCQV".
+Definition mp' := mp_from_str "IHMBSCQU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 true) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM577.
+
+
+Module TM578.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LA_0RE---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_1LF0RD_1RA0RF_0RC0LA_0RE---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LC_0RI0LS_1RM1LS_0LH0RM_0RI1RM_0LC0RB_1LC0RU_0RB0RU_1RB1RU_1LS0RQ_1RQ---_0RI0LH_1RI0RI_0LH0LC_0RM1LC_0RQ---_1RQ---_0RI---_0LH---".
+Definition tm0' := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LC_---0LS_1RM1LS_0LH0RM_---1RM_0LX0RB_1LX0RU_0RB0RU_1RB1RU_1LS0RQ_1RQ---_0RI0LH_1RI0RI_0LH0LC_0RM1LC_0RQ---_1RQ---_0RI---_0LH---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD0RH_1LE1RG_0LB0LF_0LB---_0RA0LB_0RG---".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD0RH_1LE1RG_0LB0LF_0LB---_0RA0LB_0RG1RI_1RI1RI".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSCQU".
+Definition mp' := mp_from_str "IHMBSCQU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 true) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM578.
+
+
+Module TM579.
+Definition tm := TM_from_str "1LB0RE_1RC0LE_1LF0RD_1RA1RF_0RC0LA_0RE---".
+Definition tm' := TM_from_str "1LB0LD_1RC0LE_0LA0RD_1RA1RF_0RC0LA_0RE---".
+Definition tm0 := TM'_from_str "1RM0RQ_1LS1RQ_0LH0RI_1LH0LH_0RJ0LH_1RJ0LC_---0LS_1RM1LS_0LH0RM_---1RM_0LX0RB_1LX0RV_0RB0RV_1RB1RV_1LS1RQ_1RQ---_0RI0LH_1RI0RI_0LH0LC_0RM1LC_0RQ---_1RQ---_0RI---_0LH---".
+Definition tm0' := TM'_from_str "1RM1LS_1LS1RQ_0LH0LO_1LH1LO_0RJ0LH_1RJ0LC_0LO0LS_1RM1LS_0LH0RM_0LO1RM_0LC0RB_1LC0RV_0RB0RV_1RB1RV_1LS1RQ_1RQ---_0RI0LH_1RI0LO_0LH0LC_0RM1LC_0RQ---_1RQ---_0RI---_0LH---".
+Definition tm1 := TM'_from_str "0LB0RC_1RC1LE_0RD0RH_1LE1RG_0LB0LF_0LB---_0RA0LB_1RG---".
+Definition tm2 := TM'_from_str "0LB0RC_1RC1LE_0RD0RH_1LE1RG_0LB0LF_0LB---_0RA0LB_1RG1RI_1RI1RI".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IHMBSCQV".
+Definition mp' := mp_from_str "IHMBSCQV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 true) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM579.
+
+
+Module TM580.
+Definition tm := TM_from_str "1RB0RA_1RC---_1LD1RF_1RF1LE_0LC0LE_1RF0RA".
+Definition tm' := TM_from_str "1RB0RA_1RC---_1LD1RF_1RA1LE_0LC0LE_1RF0RA".
+Definition tm0 := TM'_from_str "0RF0RA_1RF1RA_1RJ0RF_---0RA_0RJ---_1RJ---_1LT---_1RV---_1RA0RV_1LT1RV_0LP1RV_1LP1RA_0RV1LK_1RV1LS_1RV0LT_1RA1LT_0LP0LK_1RV0LS_0LK0LS_1LK1LS_0RV0RA_1RV1RA_1RV0RF_1RA0RA".
+Definition tm0' := TM'_from_str "0RF0RA_1RF1RA_1RJ0RF_---0RA_0RJ---_1RJ---_1LT---_1RV---_1RA0RV_1LT1RV_0LP1RV_1LP1RA_0RB1LK_1RB1LS_1RF0LT_1RA1LT_0LP0LK_1RV0LS_0LK0LS_1LK1LS_0RV0RA_1RV1RA_1RV0RF_1RA0RA".
+Definition tm1 := TM'_from_str "0RB0RA_1RC---_1LD1RH_---1LE_0LF0LE_0LG1RH_1RA1LD_1RH1RA".
+Definition tm2 := TM'_from_str "0RB0RA_1RC1RI_1LD1RH_---1LE_0LF0LE_0LG1RH_1RA1LD_1RH1RA_1RI1RI".
+Definition l0 := [1;0;1;1;1;1;1;0]%N.
+Definition mp := mp_from_str "AFJTSKPV".
+Definition mp' := mp_from_str "AFJTSKPV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 true) 20 20.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM580.
+
+
+Module TM581.
+Definition tm := TM_from_str "1RB0RA_1RC---_1LD1RF_1RA1LE_0LC0LE_1RF0RA".
+Definition tm' := TM_from_str "1RB0RA_1RC---_1LD0RF_1RA1LE_0LC0LE_1LB1LD".
+Definition tm0 := TM'_from_str "0RF0RA_1RF1RA_1RJ0RF_---0RA_0RJ---_1RJ---_1LT---_1RV---_1RA0RV_1LT1RV_0LP1RV_1LP1RA_0RB1LK_1RB1LS_1RF0LT_1RA1LT_0LP0LK_1RV0LS_0LK0LS_1LK1LS_0RV0RA_1RV1RA_1RV0RF_1RA0RA".
+Definition tm0' := TM'_from_str "0RF0RA_1RF1RA_1RJ0RF_---0RA_0RJ---_1RJ---_1LT---_1RU---_1RA0RU_1LT1RU_0LP1RU_1LP1RA_0RB1LK_1RB1LS_1RF0LT_1RA1LT_0LP0LK_1RU0LS_0LK0LS_1LK1LS_1RU1RA_---1LT_0LH0LP_1LH1LP".
+Definition tm1 := TM'_from_str "0RB0RA_1RC---_1LD1RH_---1LE_0LF0LE_0LG1RH_1RA1LD_1RH1RA".
+Definition tm2 := TM'_from_str "0RB0RA_1RC1RI_1LD1RH_---1LE_0LF0LE_0LG1RH_1RA1LD_1RH1RA_1RI1RI".
+Definition l0 := [1;0;1;1;1;1;1;0]%N.
+Definition mp := mp_from_str "AFJTSKPV".
+Definition mp' := mp_from_str "AFJTSKPU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 true) 20 20.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM581.
+
+
+Module TM582.
+Definition tm := TM_from_str "1LB0RD_0LC1RD_1RA0LE_0RA0RB_0LB0LF_---0RE".
+Definition tm' := TM_from_str "1LB0RD_0LC1RD_1RA0LE_0RA0RB_0LB0LF_---0LC".
+Definition tm0 := TM'_from_str "1LK0RM_1RE1RM_0LH0RA_1LH0RE_1RE0RN_0LS1RN_0LK1RA_1LK1RE_0RB0LG_1RB0LW_1RE0LS_1RM1LS_0RA0RE_1RA1RE_1LK1RE_0RM0RN_0LK---_1RA0LK_0LG0LW_1LG1LW_---0RQ_---1RQ_---0LK".
+Definition tm0' := TM'_from_str "1LK0RM_1RE1RM_0LH0RA_1LH0RE_1RE0RN_0LS1RN_0LK1RA_1LK1RE_0RB0LG_1RB0LW_1RE0LS_1RM1LS_0RA0RE_1RA1RE_1LK1RE_0RM0RN_0LK---_1RA0LK_0LG0LW_1LG1LW_---1RE_---0LS_---0LK_---1LK".
+Definition tm1 := TM'_from_str "1LB0RH_1RC0LE_1RC0RD_1RA---_0LF0LG_0LB1RA_---0LB_0RA---".
+Definition tm2 := TM'_from_str "1LB0RH_1RC0LE_1RC0RD_1RA---_0LF0LG_0LB1RA_1RI0LB_0RA---_1RI1RI".
+Definition l0 := [1;1;1;1;0;1;0;0]%N.
+Definition mp := mp_from_str "AKENSGWM".
+Definition mp' := mp_from_str "AKENSGWM".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (RWL_mod 1001 1000 1000 1 3200 2 2 2 0) 20 20.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM582.
+
+
+Module TM583.
+Definition tm := TM_from_str "1LB---_1RC0RD_1RE0LD_0RA1RB_1LF1LE_0RB0LF".
+Definition tm' := TM_from_str "1LB---_1RC0RF_1RD1RC_1LE1LD_0RB0LE_0RA1RB".
+Definition tm0 := TM'_from_str "1RJ---_0RF---_0LH---_1LH---_0RJ0RM_1RJ1RM_1RR0RA_1RJ0RF_0RR1RJ_1RR1RJ_1LW0LO_1LT1LO_0RA0RF_1RA1RF_1RJ1RJ_---1RM_0RM1LX_1LW1LT_0LX0LT_1LX1LT_0RE0RJ_1RE0LW_0RJ0LW_0RM1LW".
+Definition tm0' := TM'_from_str "1RJ---_0RF---_0LH---_1LH---_0RJ0RU_1RJ1RU_1RN0RA_1RJ0RF_0RN0RJ_1RN1RJ_1LS1RN_1LP1RJ_0RU1LT_1LS1LP_0LT0LP_1LT1LP_0RE0RJ_1RE0LS_0RJ0LS_0RU1LS_0RA0RF_1RA1RF_1RJ1RJ_---1RU".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC1RI_1RI1RI".
+Definition l0 := [0;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "RWJTXMFA".
+Definition mp' := mp_from_str "NSJPTUFA".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 22 22.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM583.
+
+
+Module TM584.
+Definition tm := TM_from_str "1RB0RF_0RC0RF_1RD---_1LE0RA_0LB0LE_1LD1RA".
+Definition tm' := TM_from_str "1RB0RF_0RC0RF_1RD---_1LE0RB_0LB0LE_1LD1RA".
+Definition tm0 := TM'_from_str "0RF0RU_1RF1RU_1RI1LT_1RU0RB_0RI0RU_1RI1RU_0RN1LT_---0RB_0RN---_1RN---_1LS---_1RA---_1LG0RA_1LS1RA_0LT0RF_1LT0RU_0RN0LG_1LT0LS_0LG0LS_1LG1LS_1LT0RB_0RU1RB_0LP1RF_1LP1RU".
+Definition tm0' := TM'_from_str "0RF0RU_1RF1RU_1RI1LT_1RU0RB_0RI0RU_1RI1RU_0RN1LT_---0RB_0RN---_1RN---_1LS---_1RE---_1LG0RE_1LS1RE_0LT0RI_1LT0RU_0RN0LG_1LT0LS_0LG0LS_1LG1LS_1LT0RB_0RU1RB_0LP1RF_1LP1RU".
+Definition tm1 := TM'_from_str "0RB---_1LC1RF_0LD0LC_0RB1LE_1LD1LC_---0RG_1LE0RH_1RI1RG_1RA1RG".
+Definition tm2 := TM'_from_str "0RB1RJ_1LC1RF_0LD0LC_0RB1LE_1LD1LC_---0RG_1LE0RH_1RI1RG_1RA1RG_1RJ1RJ".
+Definition l0 := [0;1;0;0;1;0;1;1]%N.
+Definition mp := mp_from_str "INSGTAUBF".
+Definition mp' := mp_from_str "INSGTEUBF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 true) 22 22.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM584.
+
+
+Module TM585.
+Definition tm := TM_from_str "1RB0RA_1LC0RC_1LE0LD_1LC0LF_1RA1LC_0RB---".
+Definition tm' := TM_from_str "1RB0RA_1LC0RC_1LE0LD_1LC1LF_1RA1LC_0RE---".
+Definition tm0 := TM'_from_str "0RF0RA_1RF1RA_1LO0RF_1RI0RA_1LT0RI_1LO1RI_0LL1RA_1LL0LL_1RA0LL_1LL0LW_0LT0LO_1LT1LO_1LT1LT_1LO---_0LL0LW_1LL1LW_0RB1LT_1RB1LO_1RF0LL_1RA1LL_0RE---_1RE---_1LT---_0RI---".
+Definition tm0' := TM'_from_str "0RF0RA_1RF1RA_1LO0RF_1RI0RA_1LT0RI_1LO1RI_0LL1RA_1LL0LL_1RA0LL_1LL0LX_0LT0LO_1LT1LO_1LT1LT_1LO---_0LL0LX_1LL1LX_0RB1LT_1RB1LO_1RF0LL_1RA1LL_0RQ---_1RQ---_0RB---_1LT---".
+Definition tm1 := TM'_from_str "1LB1RF_0LC0LG_1LD1LB_1RE1LC_0RA0RE_1RE0LC_1LD---".
+Definition tm2 := TM'_from_str "1LB1RF_0LC0LG_1LD1LB_1RE1LC_0RA0RE_1RE0LC_1LD1RH_1RH1RH".
+Definition l0 := [1;1;0;0;1;1;0;0]%N.
+Definition mp := mp_from_str "FOLTAIW".
+Definition mp' := mp_from_str "FOLTAIX".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 22 22.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM585.
+
+
+Module TM586.
+Definition tm := TM_from_str "1RB1RC_0LA---_1RD0RA_1RE0LA_1LF1LE_0RC0LF".
+Definition tm' := TM_from_str "1RB1RF_1RC---_1RD0LA_1LE1LD_0RF0LE_1RC0RA".
+Definition tm0 := TM'_from_str "0RF0RJ_1RF1RJ_1RN1RN_---1RA_1RN---_1RN---_0LC---_1LC---_0RN0RA_1RN1RA_1RR0RF_1RN0RJ_0RR1RN_1RR1RN_1LW0LC_1LT1LC_0RA1LX_1LW1LT_0LX0LT_1LX1LT_0RI0RN_1RI0LW_0RN0LW_0RA1LW".
+Definition tm0' := TM'_from_str "0RF0RV_1RF1RV_1RJ1RJ_---1RA_0RJ---_1RJ---_1RN---_1RJ---_0RN1RJ_1RN1RJ_1LS0LC_1LP1LC_0RA1LT_1LS1LP_0LT0LP_1LT1LP_0RU0RJ_1RU0LS_0RJ0LS_0RA1LS_0RJ0RA_1RJ1RA_1RN0RF_1RJ0RV".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC1RI_1RI1RI".
+Definition l0 := [0;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "RWNTXAJF".
+Definition mp' := mp_from_str "NSJPTAVF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 23 23.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM586.
+
+
+Module TM587.
+Definition tm := TM_from_str "1RB1RF_1RC---_1RD0LA_1LE1LD_0RF0LE_1RC0RA".
+Definition tm' := TM_from_str "1RB1RF_1LC---_1RD1RC_1LE1LD_0RF0LE_1RC0RA".
+Definition tm0 := TM'_from_str "0RF0RV_1RF1RV_1RJ1RJ_---1RA_0RJ---_1RJ---_1RN---_1RJ---_0RN1RJ_1RN1RJ_1LS0LC_1LP1LC_0RA1LT_1LS1LP_0LT0LP_1LT1LP_0RU0RJ_1RU0LS_0RJ0LS_0RA1LS_0RJ0RA_1RJ1RA_1RN0RF_1RJ0RV".
+Definition tm0' := TM'_from_str "0RF0RV_1RF1RV_1RJ1RJ_---1RA_1LP---_1RJ---_0LL---_1LL---_0RN0RJ_1RN1RJ_1LS1RN_1LP1RJ_0RA1LT_1LS1LP_0LT0LP_1LT1LP_0RU0RJ_1RU0LS_0RJ0LS_0RA1LS_0RJ0RA_1RJ1RA_1RN0RF_1RJ0RV".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC1RI_1RI1RI".
+Definition l0 := [0;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "NSJPTAVF".
+Definition mp' := mp_from_str "NSJPTAVF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 23 23.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM587.
+
+
+Module TM588.
+Definition tm := TM_from_str "1RB1RF_1LC---_1RD1RC_1LE1LD_0RF0LE_1RC0RA".
+Definition tm' := TM_from_str "1RB1RC_0LA---_1RD0RA_1RE1RD_1LF1LE_0RC0LF".
+Definition tm0 := TM'_from_str "0RF0RV_1RF1RV_1RJ1RJ_---1RA_1LP---_1RJ---_0LL---_1LL---_0RN0RJ_1RN1RJ_1LS1RN_1LP1RJ_0RA1LT_1LS1LP_0LT0LP_1LT1LP_0RU0RJ_1RU0LS_0RJ0LS_0RA1LS_0RJ0RA_1RJ1RA_1RN0RF_1RJ0RV".
+Definition tm0' := TM'_from_str "0RF0RJ_1RF1RJ_1RN1RN_---1RA_1RN---_1RN---_0LC---_1LC---_0RN0RA_1RN1RA_1RR0RF_1RN0RJ_0RR0RN_1RR1RN_1LW1RR_1LT1RN_0RA1LX_1LW1LT_0LX0LT_1LX1LT_0RI0RN_1RI0LW_0RN0LW_0RA1LW".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RC1RI_1RI1RI".
+Definition l0 := [0;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "NSJPTAVF".
+Definition mp' := mp_from_str "RWNTXAJF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 23 23.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM588.
+
+
+Module TM589.
+Definition tm := TM_from_str "1RB---_1RC0RF_1RD1RC_1LE1LD_0RB0LE_1RA1RB".
+Definition tm' := TM_from_str "1RB---_1RC0RF_1RD0LF_1LE1LD_0RB0LE_1RA1RB".
+Definition tm0 := TM'_from_str "0RF---_1RF---_1RJ---_1RU---_0RJ0RU_1RJ1RU_1RN0RB_1RJ0RF_0RN0RJ_1RN1RJ_1LS1RN_1LP1RJ_0RU1LT_1LS1LP_0LT0LP_1LT1LP_0RE0RJ_1RE0LS_0RJ0LS_0RU1LS_0RB0RF_1RB1RF_1RF1RJ_---1RU".
+Definition tm0' := TM'_from_str "0RF---_1RF---_1RJ---_1RU---_0RJ0RU_1RJ1RU_1RN0RB_1RJ0RF_0RN1RF_1RN1RJ_1LS0LW_1LP1LW_0RU1LT_1LS1LP_0LT0LP_1LT1LP_0RE0RJ_1RE0LS_0RJ0LS_0RU1LS_0RB0RF_1RB1RF_1RF1RJ_---1RU".
+Definition tm1 := TM'_from_str "1RB1RA_1LC1LD_0RA0LC_1LE1LD_0RF1LC_0RH0RG_1RA1RF_1RG---".
+Definition tm2 := TM'_from_str "1RB1RA_1LC1LD_0RA0LC_1LE1LD_0RF1LC_0RH0RG_1RA1RF_1RG1RI_1RI1RI".
+Definition l0 := [0;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "JNSPTUFB".
+Definition mp' := mp_from_str "JNSPTUFB".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 23 23.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM589.
+
+
+Module TM590.
+Definition tm := TM_from_str "1RB1LA_1RC1LD_1LA0RE_1RF0LA_0LA0RD_---0RD".
+Definition tm' := TM_from_str "1RB1LA_1RC1LD_1LA0RE_1RE0LA_1LF0RD_0RD---".
+Definition tm0 := TM'_from_str "0RF1LC_1RF1LD_1RJ0LD_1LC1LD_0RJ1RM_1RJ1LC_1LD0LP_1RQ1LP_1LC0RQ_1LD1RQ_0LD1RJ_1LD0RM_0RV1RJ_1RV0LD_---0LC_1RM1LC_1RJ0RM_0LD1RM_0LC0RV_1LC1RJ_---0RM_---1RM_---0RV_---1RJ".
+Definition tm0' := TM'_from_str "0RF1LC_1RF1LD_1RJ0LD_1LC1LD_0RJ1RM_1RJ1LC_1LD0LP_1RQ1LP_1LC0RQ_1LD1RQ_0LD1RJ_1LD0RM_0RR1RJ_1RR0LD_---0LC_1RM1LC_1RJ0RM_---1RM_0LX0RR_1LX1RJ_0RM---_1RM---_0RR---_1RJ---".
+Definition tm1 := TM'_from_str "1LB1RD_1LC1LB_1RA0LB_1RA0RE_0RF1RA_---1RE".
+Definition tm2 := TM'_from_str "1LB1RD_1LC1LB_1RA0LB_1RA0RE_0RF1RA_1RG1RE_1RG1RG".
+Definition l0 := [1;1;0;0;1;1;1;1]%N.
+Definition mp := mp_from_str "JDCQMV".
+Definition mp' := mp_from_str "JDCQMR".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 5%N l0 (NG 0 1000 1000 1 1 0 0 false) 23 23.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM590.
+
+
+Module TM591.
+Definition tm := TM_from_str "1LB---_1RC1RF_1LD0RD_0RB0LE_1LC0LE_0LF0RA".
+Definition tm' := TM_from_str "1LB---_1RC1RF_1LD0RD_0RB0LE_1LC0LE_0RD0RA".
+Definition tm0 := TM'_from_str "1RM---_1RA---_0LH---_1LH---_0RJ0RV_1RJ1RV_1LS1RM_1RM1RA_0RV0RM_1LS1RM_0LP0RE_1LP0LL_0RE0LL_1RE0LS_0RJ0LS_0RV1LS_1LP0LL_0LL0LS_0LL0LS_1LL1LS_0LW0RA_1RM1RA_0LW1RM_1LW---".
+Definition tm0' := TM'_from_str "1RM---_1RA---_0LH---_1LH---_0RJ0RV_1RJ1RV_1LS1RM_1RM1RA_0RV0RM_1LS1RM_0LP0RE_1LP0LL_0RE0LL_1RE0LS_0RJ0LS_0RV1LS_1LP0LL_0LL0LS_0LL0LS_1LL1LS_0RM0RA_1RM1RA_0RE1RM_0LL---".
+Definition tm1 := TM'_from_str "1RB1RH_0RC0LF_0RD0RA_1LE1RB_0LF0LE_1LG0LF_0RA1LE_1RB---".
+Definition tm2 := TM'_from_str "1RB1RH_0RC0LF_0RD0RA_1LE1RB_0LF0LE_1LG0LF_0RA1LE_1RB1RI_1RI1RI".
+Definition l0 := [0;1;1;0;0;1;0;0]%N.
+Definition mp := mp_from_str "VMEJSLPA".
+Definition mp' := mp_from_str "VMEJSLPA".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 24 24.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM591.
+
+
+Module TM592.
+Definition tm := TM_from_str "1LB0RB_0RC0LE_1RA1RD_0RB0RF_1LA1LD_1LC---".
+Definition tm' := TM_from_str "1LB0RB_0RC0LE_1RA1RD_0RB1RF_1LA1LF_0RB---".
+Definition tm0 := TM'_from_str "0RN0RE_1LS1RE_0LH0RI_1LH0LD_0RI0LD_1RI0LP_0RB0LS_0RN1LS_0RB0RN_1RB1RN_1LS1RE_1RE1RU_0RE0RU_1RE1RU_0RI1RE_0LD---_1LH0LD_0LD---_0LD0LP_1LD1LP_1RE---_1RU---_0LL---_1LL---".
+Definition tm0' := TM'_from_str "0RN0RE_1LS1RE_0LH0RI_1LH0LD_0RI0LD_1RI0LX_0RB0LS_0RN1LS_0RB0RN_1RB1RN_1LS1RE_1RE1RV_0RE0RV_1RE1RV_0RI1RE_0LD---_1LH0LD_0LD---_0LD0LX_1LD1LX_0RE---_1RE---_0RI---_0LD---".
+Definition tm1 := TM'_from_str "1RB1RI_0RC0LF_0RD0RA_1LE1RB_0LF0LH_1LG0LF_0RA1LE_0LF---_1RB---".
+Definition tm2 := TM'_from_str "1RB1RI_0RC0LF_0RD0RA_1LE1RB_0LF0LH_1LG0LF_0RA1LE_0LF1RJ_1RB1RJ_1RJ1RJ".
+Definition l0 := [0;1;1;0;0;1;0;0]%N.
+Definition mp := mp_from_str "NEIBSDHPU".
+Definition mp' := mp_from_str "NEIBSDHXV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 25 25.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM592.
+
+
+Module TM593.
+Definition tm := TM_from_str "1LB1RE_0RC---_1LF0LD_1RE1LC_1RF0RE_1LD0LA".
+Definition tm' := TM_from_str "1LB1RB_1RC---_1LD0LA_1RF1LE_1LC0LD_1RC0RF".
+Definition tm0 := TM'_from_str "1RV0RR_---1RR_0LH1RV_1LH1RQ_0RI---_1RI---_1LP---_1RV---_1LP1RV_1LC0LL_0LX0LO_1LX1LO_0RR1LX_1RR1LO_1RV0LL_1RQ1LL_0RV0RQ_1RV1RQ_1LL0RV_1RV0RQ_1RQ0LH_1LL1RV_0LP0LC_1LP1LC".
+Definition tm0' := TM'_from_str "1RJ0RF_---1RF_0LH1RJ_1LH---_0RJ---_1RJ---_1LT---_1RJ---_1RU0LH_1LT1RJ_0LP0LC_1LP1LC_0RV1LL_1RV1LO_1RJ0LT_1RU1LT_1LP1RJ_1LC0LT_0LL0LO_1LL1LO_0RJ0RU_1RJ1RU_1LT0RJ_1RJ0RU".
+Definition tm1 := TM'_from_str "1LB1RA_1LD1LC_1RA0LB_1LE1LG_1RF1LB_0RA0RF_0LH1RA_1RA---".
+Definition tm2 := TM'_from_str "1LB1RA_1LD1LC_1RA0LB_1LE1LG_1RF1LB_0RA0RF_0LH1RA_1RA1RI_1RI1RI".
+Definition l0 := [1;0;0;0;1;1;1;1]%N.
+Definition mp := mp_from_str "VLOXPQCH".
+Definition mp' := mp_from_str "JTOLPUCH".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 25 25.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM593.
+
+
+Module TM594.
+Definition tm := TM_from_str "1LB0RC_0RC---_1LF0LD_1RE1LC_1RF0RE_1LD1LA".
+Definition tm' := TM_from_str "1LB0RD_1RC---_1LE1LA_1LC0LE_1RF1LD_1RC0RF".
+Definition tm0 := TM'_from_str "1RV0RI_---1RI_0LH1LP_1LH1RV_0RI---_1RI---_1LP---_1RV---_1LP1RV_1LD0LL_0LX0LO_1LX1LO_0RR1LX_1RR1LO_1RV0LL_1RQ1LL_0RV0RQ_1RV1RQ_1LL0RV_1RV0RQ_1RQ1LH_1LL1RV_0LP0LD_1LP1LD".
+Definition tm0' := TM'_from_str "1RJ0RM_---1RM_0LH1LT_1LH1RJ_0RJ---_1RJ---_1LP---_1RJ---_1RU1LH_1LP1RJ_0LT0LD_1LT1LD_1LT1RJ_1LD0LP_0LL0LS_1LL1LS_0RV1LL_1RV1LS_1RJ0LP_1RU1LP_0RJ0RU_1RJ1RU_1LP0RJ_1RJ0RU".
+Definition tm1 := TM'_from_str "1LB1RA_1LD1LC_1RA0LB_1LE1LG_1RF1LB_0RA0RF_1LH1RA_1RA---".
+Definition tm2 := TM'_from_str "1LB1RA_1LD1LC_1RA0LB_1LE1LG_1RF1LB_0RA0RF_1LH1RA_1RA1RI_1RI1RI".
+Definition l0 := [1;0;0;0;1;1;1;1]%N.
+Definition mp := mp_from_str "VLOXPQDH".
+Definition mp' := mp_from_str "JPSLTUDH".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 25 25.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM594.
+
+
+Module TM595.
+Definition tm := TM_from_str "1LB0RD_0RC1LE_---1LD_1RA1RB_1LF0LE_0RF0LA".
+Definition tm' := TM_from_str "1LB0RD_1RC1LE_---0RD_1RA1RB_1LF0LE_0RF0LA".
+Definition tm0 := TM'_from_str "1RM0RM_1LT1RM_0LH0RB_1LH0RF_0RI1LX_1RI1LS_---0LT_1RM1LT_---1RM_---1LS_---0LP_---1LP_0RB0RF_1RB1RF_1LT1RI_1RM1LS_0LH0LX_1LC0LS_0LX0LS_1LX1LS_0RU0LH_1RU0RB_0RU0LC_0LH1LC".
+Definition tm0' := TM'_from_str "1RM0RM_1LT1RM_0LH0RB_1LH0RF_0RJ1LX_1RJ1LS_---0LT_1RM1LT_---0RM_---1RM_---0RB_---0RF_0RB0RF_1RB1RF_1LT1RJ_1RM1LS_0LH0LX_1LC0LS_0LX0LS_1LX1LS_0RU0LH_1RU0RB_0RU0LC_0LH1LC".
+Definition tm1 := TM'_from_str "0RB0RH_1LC1RA_1LD1LG_0LF1LE_0LF0RB_1RA1LC_0LD0LG_1RI1LG_---1RA".
+Definition tm2 := TM'_from_str "0RB0RH_1LC1RA_1LD1LG_0LF1LE_0LF0RB_1RA1LC_0LD0LG_1RI1LG_1RJ1RA_1RJ1RJ".
+Definition l0 := [1;0;1;0;1;1;0;1]%N.
+Definition mp := mp_from_str "MBTXCHSFI".
+Definition mp' := mp_from_str "MBTXCHSFJ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 25 25.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM595.
+
+
+Module TM596.
+Definition tm := TM_from_str "1RB0RA_1LC0RA_0LD0LB_0RE0LB_1RF---_1LA1RE".
+Definition tm' := TM_from_str "1RB0RA_1LC0RA_0LD0LB_0RE0LB_1RF---_1LB1RE".
+Definition tm0 := TM'_from_str "0RF0RA_1RF1RA_1LG0RF_1RA0RA_1LO0RA_1LG1RA_0LL0RF_1LL0RA_0RV0LL_0LG0RF_0LO0LG_1LO1LG_0RQ0LL_1RQ0RF_0RV0LG_---1LG_0RV---_1RV---_0RA---_1RR---_1RA0RR_0RA1RR_0LD1RV_1LD---".
+Definition tm0' := TM'_from_str "0RF0RA_1RF1RA_1LG0RF_1RA0RA_1LO0RA_1LG1RA_0LL0RF_1LL0RA_0RV0LL_0LG0RF_0LO0LG_1LO1LG_0RQ0LL_1RQ0RF_0RV0LG_---1LG_0RV---_1RV---_0RA---_1RR---_1LL0RR_0RA1RR_0LH1RV_1LH---".
+Definition tm1 := TM'_from_str "0RB0RA_1LC1RA_0LD0RB_1LE1LC_0RF0LC_0RA1RG_1RF---".
+Definition tm2 := TM'_from_str "0RB0RA_1LC1RA_0LD0RB_1LE1LC_0RF0LC_0RA1RG_1RF1RH_1RH1RH".
+Definition l0 := [0;0;1;0;1;0;0;1]%N.
+Definition mp := mp_from_str "AFGLOVR".
+Definition mp' := mp_from_str "AFGLOVR".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 26 26.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM596.
+
+
+Module TM597.
+Definition tm := TM_from_str "1LB1RE_1LC1LF_1LD0LE_1RA0LB_1RD0RA_---1LD".
+Definition tm' := TM_from_str "1LB1RE_1LC0LF_1LD0LE_1RA0LB_1RD0RA_---0RB".
+Definition tm0 := TM'_from_str "1LL0RR_1LX1RR_0LH1RN_1LH1RA_1LP---_1LS1LP_0LL0LX_1LL1LX_1RR1RB_1LG1LL_0LP0LS_1LP1LS_0RB0LL_1RB0LX_1LX0LG_1RR1LG_0RN0RA_1RN1RA_1RB1LL_0LX0RR_---1RR_---1LG_---0LP_---1LP".
+Definition tm0' := TM'_from_str "1LL0RR_1LW1RR_0LH1RN_1LH1RA_1LP---_1LS1LP_0LL0LW_1LL1LW_1RR1RB_1LG1LL_0LP0LS_1LP1LS_0RB0LL_1RB0LW_1LW0LG_1RR1LG_0RN0RA_1RN1RA_1RB1LL_0LW0RR_---0RE_---1RE_---1LP".
+Definition tm1 := TM'_from_str "1RB1RI_1RC0LD_1LD1RA_---1LE_1RA1LF_0LG0LD_1LE1LH_1RC1LG_1LG0RA".
+Definition tm2 := TM'_from_str "1RB1RI_1RC0LD_1LD1RA_1RJ1LE_1RA1LF_0LG0LD_1LE1LH_1RC1LG_1LG0RA_1RJ1RJ".
+Definition l0 := [1;1;1;1;1;0;1;0]%N.
+Definition mp := mp_from_str "RNBXPGLSA".
+Definition mp' := mp_from_str "RNBWPGLSA".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 26 26.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM597.
+
+
+Module TM598.
+Definition tm := TM_from_str "1LB0RD_1LC1LE_1RD0RA_0LC1RA_0LF---_1LA1RB".
+Definition tm' := TM_from_str "1LB0RD_1LC1LE_1RD0RA_1LB1RA_0LF---_1LA1RB".
+Definition tm0 := TM'_from_str "1LL0RM_1LT1RM_0LH1LL_1LH0RB_1RB1LW_0RM---_0LL0LT_1LL1LT_0RN0RA_1RN1RA_1LL1LL_1RB0RM_1LL0RB_1LL1RB_0LK1LT_1LK1RM_0LD---_0RM---_0LW---_1LW---_1LH0RF_0RB1RF_0LD0RM_1LD---".
+Definition tm0' := TM'_from_str "1LL0RM_1LT1RM_0LH1LL_1LH0RB_1RB1LW_0RM---_0LL0LT_1LL1LT_0RN0RA_1RN1RA_1LT1LL_1RB0RM_1LL0RB_1LT1RB_0LH1LT_1LH1RM_0LD---_0RM---_0LW---_1LW---_1LH0RF_0RB1RF_0LD0RM_1LD---".
+Definition tm1 := TM'_from_str "1LB0RC_1RC0RA_1LD1RA_1LE---_0LF0RA_1LG0RC_1LB1LD".
+Definition tm2 := TM'_from_str "1LB0RC_1RC0RA_1LD1RA_1LE1RH_0LF0RA_1LG0RC_1LB1LD_1RH1RH".
+Definition l0 := [1;0;0;1;0;1;0;1]%N.
+Definition mp := mp_from_str "MLBTWDH".
+Definition mp' := mp_from_str "MLBTWDH".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 27 27.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM598.
+
+
+Module TM599.
+Definition tm := TM_from_str "1LB0RA_1RC1LC_0RD1LD_1LE0LB_1LF---_1RA1RB".
+Definition tm' := TM_from_str "1LB0RA_1RC1LC_0RD1LD_1LE0LB_1LF---_1RA1LD".
+Definition tm0 := TM'_from_str "1LG0RA_1LL1RA_0LH1LG_1LH0RA_0RJ1RM_1RJ1LP_1RM0LL_1LG1LL_0RM1LT_1RM1LG_1LX0LP_1RM1LP_1LX1RM_---0LL_0LT0LG_1LT1LG_1RA---_1LP---_0LX---_1LX---_0RB0RF_1RB1RF_1LL1RJ_1RA1LP".
+Definition tm0' := TM'_from_str "1LG0RA_1LL1RA_0LH1LG_1LH0RA_0RJ1RM_1RJ1LP_1RM0LL_1LG1LL_0RM1LT_1RM1LG_1LX0LP_1RM1LP_1LX1RM_---0LL_0LT0LG_1LT1LG_1RA---_1LP---_0LX---_1LX---_0RB1LT_1RB1LG_1LL0LP_1RA1LP".
+Definition tm1 := TM'_from_str "1LB1RA_1RG1LC_1LF1LD_1RA0LE_1RA1LC_1LB---_1LD0RG".
+Definition tm2 := TM'_from_str "1LB1RA_1RG1LC_1LF1LD_1RA0LE_1RA1LC_1LB1RH_1LD0RG_1RH1RH".
+Definition l0 := [1;0;0;1;1;1;1;1]%N.
+Definition mp := mp_from_str "MXPGLTA".
+Definition mp' := mp_from_str "MXPGLTA".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 27 27.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM599.
+
+
+Module TM600.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1LD---".
+Definition tm' := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LF0RA_1LC---".
+Definition tm0 := TM'_from_str "0RF0RV_1RF1RV_1LO1LO_1RM---_1RA0RM_1LO1RM_0LL0RQ_1LL0LL_0RR0LL_1RR0LO_0RQ0LO_1RA1LO_0RQ0LL_1RQ0LO_0LL0LO_0RA1LO_0LL0RA_0RQ1RA_0LG0RF_1LG0RV_0RA---_1LO---_0LP---_1LP---".
+Definition tm0' := TM'_from_str "0RF0RV_1RF1RV_1LO1LO_1RM---_1RA0RM_1LO1RM_0LL0RQ_1LL0LL_0RR0LL_1RR0LO_---0LO_1RA1LO_0RQ0LL_1RQ0LO_0LL0LO_0RA1LO_0LL0RA_---1RA_0LW0RF_1LW0RV_1RA---_1LO---_0LL---_1LL---".
+Definition tm1 := TM'_from_str "0RB0RG_1LC1RE_0LD0LC_1RA1LC_0RF0LD_0LD0RA_1LC---".
+Definition tm2 := TM'_from_str "0RB0RG_1LC1RE_0LD0LC_1RA1LC_0RF0LD_0LD0RA_1LC1RH_1RH1RH".
+Definition l0 := [1;0;1;1;0;1;0;0]%N.
+Definition mp := mp_from_str "AFOLMQV".
+Definition mp' := mp_from_str "AFOLMQV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 27 27.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM600.
+
+
+Module TM601.
+Definition tm := TM_from_str "1RB1RF_1LC0LA_1RE0LD_0RE0LD_0LB0RA_0RD---".
+Definition tm' := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1LA---".
+Definition tm0 := TM'_from_str "0RF0RV_1RF1RV_1LO1RM_1RM---_1RA1LO_1LO1RM_0LL0LC_1LL1LC_0RR0LL_1RR0LO_0LC0LO_1RA1LO_0RQ0LL_1RQ0LO_0LL0LO_0RA1LO_0LL0RA_0LC1RA_0LG0RF_1LG0RV_0RM---_1RM---_0RQ---_0LL---".
+Definition tm0' := TM'_from_str "0RF0RU_1RF1RU_1LO1RM_1RM---_1RA0RM_1LO1RM_0LL0RQ_1LL0LL_0RR0LL_1RR0LO_0RQ0LO_1RA1LO_0RQ0LL_1RQ0LO_0LL0LO_0RA1LO_0LL0RA_0RQ1RA_0LG0RF_1LG0RU_1RM---_------_0LD---_1LD---".
+Definition tm1 := TM'_from_str "0RB0RG_1LC1RE_0LD0LC_1RA1LC_0RF0LD_0LD0RA_1RE---".
+Definition tm2 := TM'_from_str "0RB0RG_1LC1RE_0LD0LC_1RA1LC_0RF0LD_0LD0RA_1RE1RH_1RH1RH".
+Definition l0 := [1;0;1;1;0;1;0;0]%N.
+Definition mp := mp_from_str "AFOLMQV".
+Definition mp' := mp_from_str "AFOLMQU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 27 27.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM601.
+
+
+Module TM602.
+Definition tm := TM_from_str "1RB1LA_1LC1RE_1RD0LC_1LD1RA_0RF0RB_0LB---".
+Definition tm' := TM_from_str "1RB1LA_1LC1RE_1RD0LC_1LA1RA_0RF0RB_0LB---".
+Definition tm0 := TM'_from_str "0RF1RR_1RF1LD_1LK0LD_1RR1LD_1RB0RR_1LK1RR_0LL1RU_1LL1RE_0RN1LD_1RN0LK_1LD0LK_1RB1LK_1LP0RB_1LD1RB_0LP1RF_1LP1LD_0RU0RE_1RU1RE_0LL1RB_---0RR_0LL---_1RU---_0LG---_1LG---".
+Definition tm0' := TM'_from_str "0RF1RR_1RF1LD_1LK0LD_1RR1LD_1RB0RR_1LK1RR_0LL1RU_1LL1RE_0RN1LD_1RN0LK_1LD0LK_1RB1LK_1RR0RB_1LD1RB_0LD1RF_1LD1LD_0RU0RE_1RU1RE_0LL1RB_---0RR_0LL---_1RU---_0LG---_1LG---".
+Definition tm1 := TM'_from_str "1LB1RD_1LC0LB_1RD1LC_1RG1RE_1RF0RD_1RA1LC_0LH---_---1LB".
+Definition tm2 := TM'_from_str "1LB1RD_1LC0LB_1RD1LC_1RG1RE_1RF0RD_1RA1LC_0LH1RI_---1LB_1RI1RI".
+Definition l0 := [1;1;1;1;0;1;1;1]%N.
+Definition mp := mp_from_str "FKDREBUL".
+Definition mp' := mp_from_str "FKDREBUL".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 28 28.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM602.
+
+
+Module TM603.
+Definition tm := TM_from_str "1LB0LF_1LC0RC_0RD0LA_1RB1RE_0RC1RE_1RA---".
+Definition tm' := TM_from_str "1LB1LF_1LC0RC_0RD0LA_1RB1RE_0RC1RE_0RC---".
+Definition tm0 := TM'_from_str "1LL0LH_0LH---_0LH0LW_1LH1LW_0RR0RI_1LC1RI_0LL0RM_1LL0LH_0RM0LH_1RM0LW_0RF0LC_0RR1LC_0RF0RR_1RF1RR_1LC1RI_1RI1RR_0RI0RR_1RI1RR_0RM1RI_0LH1RR_0RB---_1RB---_0LH---".
+Definition tm0' := TM'_from_str "1LL0LH_0LH---_0LH0LX_1LH1LX_0RR0RI_1LC1RI_0LL0RM_1LL0LH_0RM0LH_1RM0LX_0RF0LC_0RR1LC_0RF0RR_1RF1RR_1LC1RI_1RI1RR_0RI0RR_1RI1RR_0RM1RI_0LH1RR_0RI---_1RI---_0RM---_0LH---".
+Definition tm1 := TM'_from_str "1LB1RG_0LC0LE_1LD0LC_0RF1LB_0LC---_1RG1RF_0RH0LC_0RA0RF".
+Definition tm2 := TM'_from_str "1LB1RG_0LC0LE_1LD0LC_0RF1LB_0LC1RI_1RG1RF_0RH0LC_0RA0RF_1RI1RI".
+Definition l0 := [0;1;1;0;1;1;0;0]%N.
+Definition mp := mp_from_str "FCHLWRIM".
+Definition mp' := mp_from_str "FCHLXRIM".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 29 29.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM603.
+
+
+Module TM604.
+Definition tm := TM_from_str "1LB0RC_1RC0LB_0RD1LB_0LA1RE_0LE1RF_0RA---".
+Definition tm' := TM_from_str "1LB0RC_1RC0LB_0RD1LB_0LA1RE_0RA1RF_0RA---".
+Definition tm0 := TM'_from_str "1LG0RI_1LG1RI_0LH0RM_1LH1LG_0RJ1RM_1RJ0LG_1RM0LG_1LG1LG_0RM1LG_1RM1LG_0LH0LH_0RR1LH_0LH0RR_0RM1RR_0LC1RA_1LC1RV_0LS0RV_1RA1RV_0LS1RA_1LS---_0RA---_1RA---_1LG---_0RI---".
+Definition tm0' := TM'_from_str "1LG0RI_1LG1RI_0LH0RM_1LH1LG_0RJ1RM_1RJ0LG_1RM0LG_1LG1LG_0RM1LG_1RM1LG_0LH0LH_0RR1LH_0LH0RR_0RM1RR_0LC1RA_1LC1RV_0RA0RV_1RA1RV_1LG1RA_0RI---_0RA---_1RA---_1LG---_0RI---".
+Definition tm1 := TM'_from_str "0RB1LD_0LC0RE_1LD1LD_1RB0LD_1RF1RG_1LD0RA_1RF---".
+Definition tm2 := TM'_from_str "0RB1LD_0LC0RE_1LD1LD_1RB0LD_1RF1RG_1LD0RA_1RF1RH_1RH1RH".
+Definition l0 := [1;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "IMHGRAV".
+Definition mp' := mp_from_str "IMHGRAV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 29 29.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM604.
+
+
+Module TM605.
+Definition tm := TM_from_str "1LB0RC_1LC0LA_0RD0LB_1RA0RE_1RC0RF_1LD---".
+Definition tm' := TM_from_str "1LB0LE_1LC0LA_0RD0LB_1RA0RE_1RC1RF_0RC---".
+Definition tm0 := TM'_from_str "1LL0RI_1LC1RI_0LH0RM_1LH0LL_0RQ0LH_1LG0RM_0LL0LC_1LL1LC_0RM0LL_1RM0LC_0RB0LG_0RQ1LG_0RB0RQ_1RB1RQ_1LC0RJ_1RI0RU_0RJ0RU_1RJ1RU_1RM1RI_0LC---_1RI---_0RU---_0LP---_1LP---".
+Definition tm0' := TM'_from_str "1LL1RM_1LC1RI_0LH0LS_1LH1LS_0RQ0LH_1LG0LS_0LL0LC_1LL1LC_0RM0LL_1RM0LC_0RB0LG_0RQ1LG_0RB0RQ_1RB1RQ_1LC0RJ_1RI0RV_0RJ0RV_1RJ1RV_1RM1RI_0LC---_0RI---_1RI---_0RM---_0LL---".
+Definition tm1 := TM'_from_str "1LB1RI_0LC---_1LD1LB_0RF1LE_0LD---_0RG0RH_1RJ0LB_1RI---_0RJ0LD_0RA0RF".
+Definition tm2 := TM'_from_str "1LB1RI_0LC---_1LD1LB_0RF1LE_0LD---_0RG0RH_1RJ0LB_1RI1RK_0RJ0LD_0RA0RF_1RK1RK".
+Definition l0 := [0;0;1;0;0;1;0;0]%N.
+Definition mp := mp_from_str "BCHLGQJUIM".
+Definition mp' := mp_from_str "BCHLGQJVIM".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 9%N l0 (NG 0 1000 1000 1 1 0 0 true) 30 30.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM605.
+
+
+Module TM606.
+Definition tm := TM_from_str "1LB0RF_1RC0LD_1RA1RC_---0LE_1RA1LE_0RA1RC".
+Definition tm' := TM_from_str "1LB0RF_1RC0LD_1RA1RC_---0LE_1RA1LE_1RB1RC".
+Definition tm0 := TM'_from_str "1RJ0RU_1LO1RU_0LH0RA_1LH0RJ_0RJ---_1RJ0LS_1RB0LO_1RJ1LO_0RB0RJ_1RB1RJ_1LO1RB_1RU1RJ_---1LO_---0LT_---0LS_---1LS_0RB1RU_1RB1LT_1LO0LT_1RU1LT_0RA0RJ_1RA1RJ_1RJ1RB_0RU1RJ".
+Definition tm0' := TM'_from_str "1RJ0RU_1LO1RU_0LH0RF_1LH0RJ_0RJ---_1RJ0LS_1RB0LO_1RJ1LO_0RB0RJ_1RB1RJ_1LO1RB_1RU1RJ_---1LO_---0LT_---0LS_---1LS_0RB1RU_1RB1LT_1LO0LT_1RU1LT_0RF0RJ_1RF1RJ_1RJ1RB_0LS1RJ".
+Definition tm1 := TM'_from_str "1LB1RE_---0LC_1LB0LD_1RE1LD_0RG0RF_1RA1RF_1RF---".
+Definition tm2 := TM'_from_str "1LB1RE_1RH0LC_1LB0LD_1RE1LD_0RG0RF_1RA1RF_1RF---_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;0;1]%N.
+Definition mp := mp_from_str "BOSTUJA".
+Definition mp' := mp_from_str "BOSTUJF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 0 2 0 true) 30 30.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM606.
+
+
+Module TM607.
+Definition tm := TM_from_str "1LB1RD_1LC1LE_0RD1LA_1RA0RA_1LF0LB_---1RB".
+Definition tm' := TM_from_str "1LB1RD_1LC1LE_0RD1LA_1RA0RA_1LF0LB_---0LB".
+Definition tm0 := TM'_from_str "1LL0RN_1LT1RN_0LH1RB_1LH1RA_0RA1LX_1LD1LG_0LL0LT_1LL1LT_0RM1LH_1RM1RA_0RB0LD_0RA1LD_0RB0RA_1RB1RA_1LT1LL_1RN0RN_---0LL_1LG0LT_0LX0LG_1LX1LG_---0RF_---1RF_---1LD_---1LG".
+Definition tm0' := TM'_from_str "1LL0RN_1LT1RN_0LH1RB_1LH1RA_0RA1LX_1LD1LG_0LL0LT_1LL1LT_0RM1LH_1RM1RA_0RB0LD_0RA1LD_0RB0RA_1RB1RA_1LT1LL_1RN0RN_---0LL_1LG0LT_0LX0LG_1LX1LG_---0LL_---0LT_---0LG_---1LG".
+Definition tm1 := TM'_from_str "1LB0RG_0RA1LC_1LD1RA_1LB1LE_1LI1LF_0LB0LE_1RH1RA_1LE1RG_---1LF".
+Definition tm2 := TM'_from_str "1LB0RG_0RA1LC_1LD1RA_1LB1LE_1LI1LF_0LB0LE_1RH1RA_1LE1RG_1RJ1LF_1RJ1RJ".
+Definition l0 := [0;0;1;0;1;1;0;1]%N.
+Definition mp := mp_from_str "ALDHTGNBX".
+Definition mp' := mp_from_str "ALDHTGNBX".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 32 32.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM607.
+
+
+Module TM608.
+Definition tm := TM_from_str "1LB1RC_1LC0RE_1LD1LF_1RE0RB_1LC1RB_0LA---".
+Definition tm' := TM_from_str "1LB1RC_1LC0RE_1LD1LF_1RE0RB_0LD1RB_0LA---".
+Definition tm0 := TM'_from_str "1LL0RJ_0RF1RJ_0LH0RQ_1LH---_1LP0RQ_1LX1RQ_0LL1LP_1LL0RF_1RF1LC_0RQ---_0LP0LX_1LP1LX_0RR0RE_1RR1RE_1LX1LP_1RF0RQ_1LP0RF_1LX1RF_0LL1LX_1LL1RQ_0LH---_0RQ---_0LC---_1LC---".
+Definition tm0' := TM'_from_str "1LL0RJ_0RF1RJ_0LH0RQ_1LH---_1LP0RQ_1LX1RQ_0LL1LP_1LL0RF_1RF1LC_0RQ---_0LP0LX_1LP1LX_0RR0RE_1RR1RE_1LP1LP_1RF0RQ_1LP0RF_1LP1RF_0LO1LX_1LO1RQ_0LH---_0RQ---_0LC---_1LC---".
+Definition tm1 := TM'_from_str "1LB1RG_1LC---_0LD0RG_1LE0RA_1LF1LB_1RA0RG_1LF0RA".
+Definition tm2 := TM'_from_str "1LB1RG_1LC1RH_0LD0RG_1LE0RA_1LF1LB_1RA0RG_1LF0RA_1RH1RH".
+Definition l0 := [0;0;0;0;0;0;0;0]%N.
+Definition mp := mp_from_str "FXCHLPQ".
+Definition mp' := mp_from_str "FXCHLPQ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 34 34.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM608.
+
+
+Module TM609.
+Definition tm := TM_from_str "1RB1LA_1LA0RC_1LD1RC_0LD1LE_0LF0LA_---1RB".
+Definition tm' := TM_from_str "1RB1LA_1LC0RD_---1LA_1LE1RD_0LE1LF_1LC0LA".
+Definition tm0 := TM'_from_str "0RF1RI_1RF1LD_1LD0LD_1RI1LD_1RI0RI_1LD1RI_0LD1LO_1LD0RJ_1LO0RJ_1LT1RJ_0LP1LT_1LP1RJ_0LO1LW_0LT1LC_0LO0LT_1LO1LT_---1LD_1LD0LD_0LW0LC_1LW1LC_---0RF_---1RF_---1LD_---1RI".
+Definition tm0' := TM'_from_str "0RF1RM_1RF1LD_1LD0LD_1RM1LD_---0RM_1LD1RM_0LL1LS_1LL0RN_---1RM_---1LD_---0LD_---1LD_1LS0RN_1LX1RN_0LT1LX_1LT1RN_0LS1LL_0LX1LC_0LS0LX_1LS1LX_---1LD_1LD0LD_0LL0LC_1LL1LC".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_---1LD_---0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_1RH1LD_---0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JTCDIWO".
+Definition mp' := mp_from_str "NXCDMLS".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 34 34.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM609.
+
+
+Module TM610.
+Definition tm := TM_from_str "1RB1LA_1LC0RD_---1LA_1LE1RD_0LE1LF_1LC0LA".
+Definition tm' := TM_from_str "1RB1LA_1LC0RD_---1RA_1LE1RD_0LE1LF_1LC0LA".
+Definition tm0 := TM'_from_str "0RF1RM_1RF1LD_1LD0LD_1RM1LD_---0RM_1LD1RM_0LL1LS_1LL0RN_---1RM_---1LD_---0LD_---1LD_1LS0RN_1LX1RN_0LT1LX_1LT1RN_0LS1LL_0LX1LC_0LS0LX_1LS1LX_---1LD_1LD0LD_0LL0LC_1LL1LC".
+Definition tm0' := TM'_from_str "0RF1RM_1RF1LD_1LD0LD_1RM1LD_---0RM_1LD1RM_0LL1LS_1LL0RN_---0RB_---1RB_---1RF_---1LD_1LS0RN_1LX1RN_0LT1LX_1LT1RN_0LS1LL_0LX1LC_0LS0LX_1LS1LX_---1LD_1LD0LD_0LL0LC_1LL1LC".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_---1LD_---0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_1RH1LD_---0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "NXCDMLS".
+Definition mp' := mp_from_str "NXCDMLS".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 34 34.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM610.
+
+
+Module TM611.
+Definition tm := TM_from_str "1RB1LA_1LC0RD_---1RA_1LE1RD_0LE1LF_1LC0LA".
+Definition tm' := TM_from_str "1RB1LA_1LA0RC_1LD1RC_0LD1LE_1LF0LA_---1RA".
+Definition tm0 := TM'_from_str "0RF1RM_1RF1LD_1LD0LD_1RM1LD_---0RM_1LD1RM_0LL1LS_1LL0RN_---0RB_---1RB_---1RF_---1LD_1LS0RN_1LX1RN_0LT1LX_1LT1RN_0LS1LL_0LX1LC_0LS0LX_1LS1LX_---1LD_1LD0LD_0LL0LC_1LL1LC".
+Definition tm0' := TM'_from_str "0RF1RI_1RF1LD_1LD0LD_1RI1LD_1RI0RI_1LD1RI_0LD1LO_1LD0RJ_1LO0RJ_1LT1RJ_0LP1LT_1LP1RJ_0LO1LX_0LT1LC_0LO0LT_1LO1LT_---1LD_1LD0LD_0LX0LC_1LX1LC_---0RB_---1RB_---1RF_---1LD".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_---1LD_---0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_1RH1LD_---0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "NXCDMLS".
+Definition mp' := mp_from_str "JTCDIXO".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 34 34.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM611.
+
+
+Module TM612.
+Definition tm := TM_from_str "1RB1LA_1LA0RC_1LD1RC_0LD1LE_1LF0LA_---1RA".
+Definition tm' := TM_from_str "1RB1LA_1LA0RC_1LD1RC_0LD1LE_1LF0LA_---0RE".
+Definition tm0 := TM'_from_str "0RF1RI_1RF1LD_1LD0LD_1RI1LD_1RI0RI_1LD1RI_0LD1LO_1LD0RJ_1LO0RJ_1LT1RJ_0LP1LT_1LP1RJ_0LO1LX_0LT1LC_0LO0LT_1LO1LT_---1LD_1LD0LD_0LX0LC_1LX1LC_---0RB_---1RB_---1RF_---1LD".
+Definition tm0' := TM'_from_str "0RF1RI_1RF1LD_1LD0LD_1RI1LD_1RI0RI_1LD1RI_0LD1LO_1LD0RJ_1LO0RJ_1LT1RJ_0LP1LT_1LP1RJ_0LO1LX_0LT1LC_0LO0LT_1LO1LT_---1LD_1LD0LD_0LX0LC_1LX1LC_---0RQ_---1RQ_------_---1LD".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_---1LD_---0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_1RH1LD_---0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JTCDIXO".
+Definition mp' := mp_from_str "JTCDIXO".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 34 34.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM612.
+
+
+Module TM613.
+Definition tm := TM_from_str "1RB1LA_1LA0RC_1LD1RC_0LD1LE_1LF0LA_---0RE".
+Definition tm' := TM_from_str "1RB1LA_1LA0RC_1LD1RC_0LD1LE_1LF0LA_---1LA".
+Definition tm0 := TM'_from_str "0RF1RI_1RF1LD_1LD0LD_1RI1LD_1RI0RI_1LD1RI_0LD1LO_1LD0RJ_1LO0RJ_1LT1RJ_0LP1LT_1LP1RJ_0LO1LX_0LT1LC_0LO0LT_1LO1LT_---1LD_1LD0LD_0LX0LC_1LX1LC_---0RQ_---1RQ_------_---1LD".
+Definition tm0' := TM'_from_str "0RF1RI_1RF1LD_1LD0LD_1RI1LD_1RI0RI_1LD1RI_0LD1LO_1LD0RJ_1LO0RJ_1LT1RJ_0LP1LT_1LP1RJ_0LO1LX_0LT1LC_0LO0LT_1LO1LT_---1LD_1LD0LD_0LX0LC_1LX1LC_---1RI_---1LD_---0LD_---1LD".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_---1LD_---0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LG0RA_1RH1LD_---0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JTCDIXO".
+Definition mp' := mp_from_str "JTCDIXO".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 34 34.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM613.
+
+
+Module TM614.
+Definition tm := TM_from_str "1RB0RE_1RC1RB_1LD1LC_0RA0LD_0RF1RA_0LA---".
+Definition tm' := TM_from_str "1RB1RE_1RC---_1LD1LC_0RE0LD_1RF0RA_1RC1RF".
+Definition tm0 := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RU_1RF0RB_0RJ0RF_1RJ1RF_1LO1RJ_1LL1RF_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RU0RB_1RU1RB_1RJ1RF_---1RQ_1RJ---_0RU---_0LC---_1LC---".
+Definition tm0' := TM'_from_str "0RF0RR_1RF1RR_1RJ1RV_---1RA_0RJ---_1RJ---_1LO---_1LL---_0RA1LP_1LO1LL_0LP0LL_1LP1LL_0RQ0RV_1RQ0LO_0RV0LO_0RA1LO_0RV0RA_1RV1RA_1RJ0RF_1RV0RR_0RJ0RV_1RJ1RV_1LO1RJ_1LL1RV".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RA---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1RA1RI_1RI1RI".
+Definition l0 := [0;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JOFLPQBU".
+Definition mp' := mp_from_str "JOVLPARF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 35 35.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM614.
+
+
+Module TM615.
+Definition tm := TM_from_str "1RB0RE_1RC1RB_1LD1LC_0RA0LD_0RF1RA_1LB---".
+Definition tm' := TM_from_str "1RB0RE_1RC0LE_1LD1LC_0RA0LD_0RF1RA_1LB---".
+Definition tm0 := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RU_1RF0RB_0RJ0RF_1RJ1RF_1LO1RJ_1LL1RF_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RU0RB_1RU1RB_1LL1RF_---1RQ_1LL---_1RF---_0LH---_1LH---".
+Definition tm0' := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RU_1RF0RB_0RJ1LL_1RJ1RF_1LO0LS_1LL1LS_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RU0RB_1RU1RB_1LL1RF_---1RQ_1LL---_1LS---_0LH---_1LH---".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1LD---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1LD1RI_1RI1RI".
+Definition l0 := [0;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JOFLPQBU".
+Definition mp' := mp_from_str "JOFLPQBU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 35 35.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM615.
+
+
+Module TM616.
+Definition tm := TM_from_str "1RB0RE_1RC0LE_1LD1LC_0RA0LD_0RF1RA_1LB---".
+Definition tm' := TM_from_str "1RB0RE_1RC1RB_1LD1LC_0RA0LD_1RF1RA_1LC---".
+Definition tm0 := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RU_1RF0RB_0RJ1LL_1RJ1RF_1LO0LS_1LL1LS_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RU0RB_1RU1RB_1LL1RF_---1RQ_1LL---_1LS---_0LH---_1LH---".
+Definition tm0' := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RV_1RF0RB_0RJ0RF_1RJ1RF_1LO1RJ_1LL1RF_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RV0RB_1RV1RB_1LL1RF_---1RQ_1LP---_1LL---_0LL---_1LL---".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1LD---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1LD1RI_1RI1RI".
+Definition l0 := [0;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JOFLPQBU".
+Definition mp' := mp_from_str "JOFLPQBV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 35 35.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM616.
+
+
+Module TM617.
+Definition tm := TM_from_str "1RB0RE_1RC1RB_1LD1LC_0RA0LD_1RF1RA_1LC---".
+Definition tm' := TM_from_str "1RB0RE_1RC0LE_1LD1LC_0RA0LD_1RF1RA_1LC---".
+Definition tm0 := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RV_1RF0RB_0RJ0RF_1RJ1RF_1LO1RJ_1LL1RF_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RV0RB_1RV1RB_1LL1RF_---1RQ_1LP---_1LL---_0LL---_1LL---".
+Definition tm0' := TM'_from_str "0RF0RQ_1RF1RQ_1RJ0RV_1RF0RB_0RJ1LL_1RJ1RF_1LO0LS_1LL1LS_0RQ1LP_1LO1LL_0LP0LL_1LP1LL_0RA0RF_1RA0LO_0RF0LO_0RQ1LO_0RV0RB_1RV1RB_1LL1RF_---1RQ_1LP---_1LL---_0LL---_1LL---".
+Definition tm1 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1LD---".
+Definition tm2 := TM'_from_str "1LB1LD_0RC0LB_1RA1RC_1LE1LD_0RF1LB_0RH0RG_1RC1RF_1LD1RI_1RI1RI".
+Definition l0 := [0;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JOFLPQBV".
+Definition mp' := mp_from_str "JOFLPQBV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 35 35.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM617.
+
+
+Module TM618.
+Definition tm := TM_from_str "1LB1RA_1LC1LE_1RD1LC_1LC0RA_1LF0LC_---0LB".
+Definition tm' := TM_from_str "1LB1RA_1LC1LE_1RD1LC_0LD0RA_1LF0LC_---0LB".
+Definition tm0 := TM'_from_str "1LL0RB_1LT1RB_0LH1LT_1LH1RB_1RA1LX_1LL1LK_0LL0LT_1LL1LT_0RN1RA_1RN1LL_1LL0LL_1RA1LL_1RA0RA_1LL1RA_0LL1LL_1LL0RB_---1LL_1LG0LL_0LX0LK_1LX1LK_---0LL_---0LT_---0LG_---1LG".
+Definition tm0' := TM'_from_str "1LL0RB_1LT1RB_0LH1LT_1LH1RB_1RA1LX_1LL1LK_0LL0LT_1LL1LT_0RN1RA_1RN1LL_1LL0LL_1RA1LL_0LO0RA_1LL1RA_0LO1LL_1LO0RB_---1LL_1LG0LL_0LX0LK_1LX1LK_---0LL_---0LT_---0LG_---1LG".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LD0RA_---1LG_0LD0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LD0RA_1RH1LG_0LD0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "BTKLAXG".
+Definition mp' := mp_from_str "BTKLAXG".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 37 37.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM618.
+
+
+Module TM619.
+Definition tm := TM_from_str "1LB1RA_1LC1LE_1RD1LC_0LD0RA_1LF0LC_---0LB".
+Definition tm' := TM_from_str "1LB1RA_0LC1LE_1RD0RA_0RA0LC_1LF0LD_---0LB".
+Definition tm0 := TM'_from_str "1LL0RB_1LT1RB_0LH1LT_1LH1RB_1RA1LX_1LL1LK_0LL0LT_1LL1LT_0RN1RA_1RN1LL_1LL0LL_1RA1LL_0LO0RA_1LL1RA_0LO1LL_1LO0RB_---1LL_1LG0LL_0LX0LK_1LX1LK_---0LL_---0LT_---0LG_---1LG".
+Definition tm0' := TM'_from_str "1LK0RB_1LT1RB_0LH1LT_1LH1RB_1RA1LX_1LK1LO_0LK0LT_1LK1LT_0RN0RA_1RN1RA_1RA1LK_1LK0RB_0RA1RA_1RA1LK_1LK0LK_0RB1LK_---1LK_1LG0LK_0LX0LO_1LX1LO_---0LK_---0LT_---0LG_---1LG".
+Definition tm1 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LD0RA_---1LG_0LD0LB".
+Definition tm2 := TM'_from_str "1LB1RA_1LF1LC_1LD0LD_1RE1LD_1LD0RA_1RH1LG_0LD0LB_1RH1RH".
+Definition l0 := [1;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "BTKLAXG".
+Definition mp' := mp_from_str "BTOKAXG".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 37 37.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM619.
+
+
+Module TM620.
+Definition tm := TM_from_str "1LB0LC_1RC0LE_1LE0RD_1RA1RB_0RF1LA_1RB---".
+Definition tm' := TM_from_str "1LB0LC_1RC0LE_1LE0RD_1RA1RB_1RF1LA_1LC---".
+Definition tm0 := TM'_from_str "1RM0LT_1LS0RB_0LH0LK_1LH1LK_0RJ0RF_1RJ0LD_1LD0LS_1RM1LS_---0RM_1LD1RM_0LT0RB_1LT0RF_0RB0RF_1RB1RF_1LS1RJ_0RB0LD_0RU1LH_1RU1LK_0RF0LD_---1LD_0RF---_1RF---_1RJ---_0LD---".
+Definition tm0' := TM'_from_str "1RM0LT_1LS0RB_0LH0LK_1LH1LK_0RJ0RF_1RJ0LD_1LD0LS_1RM1LS_---0RM_1LD1RM_0LT0RB_1LT0RF_0RB0RF_1RB1RF_1LS1RJ_0RB0LD_0RV1LH_1RV1LK_0RF0LD_---1LD_1LT---_0RF---_0LL---_1LL---".
+Definition tm1 := TM'_from_str "1LB1RH_1LE1LC_0LD0RI_---1LB_1RH1LF_0RG0LB_1RA0LB_0RI0RG_1LF0RI".
+Definition tm2 := TM'_from_str "1LB1RH_1LE1LC_0LD0RI_1RJ1LB_1RH1LF_0RG0LB_1RA0LB_0RI0RG_1LF0RI_1RJ1RJ".
+Definition l0 := [1;0;1;1;0;1;0;1]%N.
+Definition mp := mp_from_str "JDKTHSFMB".
+Definition mp' := mp_from_str "JDKTHSFMB".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 40 40.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM620.
+
+
+Module TM621.
+Definition tm := TM_from_str "1RB1LA_1RC0RF_1RD---_0LE1RB_0LA0RD_1LD1RF".
+Definition tm' := TM_from_str "1RB0LE_1RC0RF_1RD---_0LA1RB_1RB1LE_1LD1RF".
+Definition tm0 := TM'_from_str "0RF1RU_1RF1LD_1RJ0LD_1RU1LD_0RJ0RU_1RJ1RU_1RN1LS_---0RV_0RN---_1RN---_0LC---_1RF---_0LC0RF_0LC1RF_0LS1RJ_1LS1RU_1RJ0RM_0LD1RM_0LC0LC_1LC0RF_1LS0RV_1RU1RV_0LP1RU_1LP1RV".
+Definition tm0' := TM'_from_str "0RF1RJ_1RF0LT_1RJ0LS_1RU1LS_0RJ0RU_1RJ1RU_1RN1LC_---0RV_0RN---_1RN---_0LS---_1RF---_1RJ0RF_0LS1RF_0LC1RJ_1LC1RU_0RF1RU_1RF1LT_1RJ0LT_1RU1LT_1LC0RV_1RU1RV_0LP1RU_1LP1RV".
+Definition tm1 := TM'_from_str "1RB1RA_1LC0RA_---0LD_1RE0LH_1RF---_0LD1RG_1RE1RB_1RB1LH".
+Definition tm2 := TM'_from_str "1RB1RA_1LC0RA_---0LD_1RE0LH_1RF1RI_0LD1RG_1RE1RB_1RB1LH_1RI1RI".
+Definition l0 := [1;1;1;1;1;1;1;0]%N.
+Definition mp := mp_from_str "VUSCJNFD".
+Definition mp' := mp_from_str "VUCSJNFT".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 55 55.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM621.
+
+
+Module TM622.
+Definition tm := TM_from_str "1RB1RE_0RC0LB_1LD1RF_0LA0RB_0LB---_0RD1RA".
+Definition tm' := TM_from_str "1RB0RE_0RC0LB_1LD1RF_0LA0RB_1LA---_0RD1RA".
+Definition tm0 := TM'_from_str "0RF0RR_1RF1RR_1RI0LG_0LG---_0RI1LC_1RI0LG_1LC0LG_0RV1LG_1LC0RV_1LC1RV_0LP1RM_1LP1RB_1RI0RE_0LG1RE_0LC0RI_1LC1LC_1LC---_0LG---_0LG---_1LG---_0RM0RB_1RM1RB_1RI1RF_0RE1RR".
+Definition tm0' := TM'_from_str "0RF0RQ_1RF1RQ_1RI0LG_0LG---_0RI1LC_1RI0LG_1LC0LG_0RV1LG_1LC0RV_1LC1RV_0LP1RM_1LP1RB_1RI0RE_0LG1RE_0LC0RI_1LC1LC_0LG---_------_0LD---_1LD---_0RM0RB_1RM1RB_1RI1RF_0RE1RQ".
+Definition tm1 := TM'_from_str "1LB0RD_1RA0LC_1LB0LC_1RE1RG_1RA0RF_0RA1LB_1RH1RI_1RA0LC_0LC---".
+Definition tm2 := TM'_from_str "1LB0RD_1RA0LC_1LB0LC_1RE1RG_1RA0RF_0RA1LB_1RH1RI_1RA0LC_0LC1RJ_1RJ1RJ".
+Definition l0 := [1;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "ICGVMEBFR".
+Definition mp' := mp_from_str "ICGVMEBFQ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 15 15.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM622.
+
+
+Module TM623.
+Definition tm := TM_from_str "1RB0LB_0RC1RF_1LD1RE_0LA0RB_0RD1RA_0LA---".
+Definition tm' := TM_from_str "1RB0LB_0RC1RD_1LD1RE_0LA---_0RF1RA_0LA0RB".
+Definition tm0 := TM'_from_str "0RF1LC_1RF0LG_1RI0LG_1RV1LG_0RI0RV_1RI1RV_1LC0LG_0RR---_1LC0RR_0RV1RR_0LP1RM_1LP1RB_1RI0RE_0LG1RE_0LC0RI_1LC0RV_0RM0RB_1RM1RB_1RI1RF_0RE0LG_1RI---_0LG---_0LC---_1LC---".
+Definition tm0' := TM'_from_str "0RF1LC_1RF0LG_1RI0LG_1RN1LG_0RI0RN_1RI1RN_1LC0LG_0RR---_1LC0RR_---1RR_0LP1RU_1LP1RB_1RI---_0LG---_0LC---_1LC---_0RU0RB_1RU1RB_1RI1RF_0RE0LG_1RI0RE_0LG1RE_0LC0RI_1LC0RN".
+Definition tm1 := TM'_from_str "1LB0RD_1RA0LC_1LB0LC_1RE1RG_1RA0RF_0RA0RI_1RH0LC_1RA1RI_0LC---".
+Definition tm2 := TM'_from_str "1LB0RD_1RA0LC_1LB0LC_1RE1RG_1RA0RF_0RA0RI_1RH0LC_1RA1RI_0LC1RJ_1RJ1RJ".
+Definition l0 := [1;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "ICGRMEBFV".
+Definition mp' := mp_from_str "ICGRUEBFN".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 15 15.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM623.
+
+
+Module TM624.
+Definition tm := TM_from_str "1LB1RC_0LC0LB_1RD0RA_1RE---_1RF0RA_1RA1RB".
+Definition tm' := TM_from_str "1LB1RC_0LC0LB_1RD0RA_1RE---_1RF1LA_1RA1RB".
+Definition tm0 := TM'_from_str "1LK0RJ_1LG1RJ_0LH1RN_1LH1RA_1RR0LK_1LK0LG_0LK0LG_1LK1LG_0RN0RA_1RN1RA_1RR1LK_---0RJ_0RR---_1RR---_1RV---_1RA---_0RV0RA_1RV1RA_1RB1LK_1RF0RJ_0RB0RF_1RB1RF_1LG1LK_1RJ0LG".
+Definition tm0' := TM'_from_str "1LK0RJ_1LG1RJ_0LH1RN_1LH1RA_1RR0LK_1LK0LG_0LK0LG_1LK1LG_0RN0RA_1RN1RA_1RR1LK_---0RJ_0RR---_1RR---_1RV---_1RA---_0RV1LH_1RV1RA_1RB0LD_1RF1LD_0RB0RF_1RB1RF_1LG1LK_1RJ0LG".
+Definition tm1 := TM'_from_str "1RB1RI_1LC1RG_0LD0LC_1RE1LD_1RA1RF_1LD0RG_1RH1RF_1RE---_1LD0LC".
+Definition tm2 := TM'_from_str "1RB1RI_1LC1RG_0LD0LC_1RE1LD_1RA1RF_1LD0RG_1RH1RF_1RE1RJ_1LD0LC_1RJ1RJ".
+Definition l0 := [1;1;1;1;0;1;1;1]%N.
+Definition mp := mp_from_str "VBGKRAJNF".
+Definition mp' := mp_from_str "VBGKRAJNF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 18 18.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM624.
+
+
+Module TM625.
+Definition tm := TM_from_str "1LB1LA_1LC0LA_1RD1LB_1RE0RD_1RF0RB_1LE---".
+Definition tm' := TM_from_str "1LB1LA_1LC0LA_1RD1LB_1RE0RD_1RF0RB_0LC---".
+Definition tm0 := TM'_from_str "1LL1LH_1LC1LD_0LH0LD_1LH1LD_1RM0LH_1LH0LD_0LL0LC_1LL1LC_0RN1LL_1RN1LC_1RR0LH_1RM1LH_0RR0RM_1RR1RM_1RV0RR_1RE0RM_0RV0RE_1RV1RE_0LH1RM_---0LH_------_0LH---_0LT---_1LT---".
+Definition tm0' := TM'_from_str "1LL1LH_1LC1LD_0LH0LD_1LH1LD_1RM0LH_1LH0LD_0LL0LC_1LL1LC_0RN1LL_1RN1LC_1RR0LH_1RM1LH_0RR0RM_1RR1RM_1RV0RR_1RE0RM_0RV0RE_1RV1RE_0LH1RM_---0LH_1RR---_0LH---_0LK---_1LK---".
+Definition tm1 := TM'_from_str "1RB1RH_0LC---_1LF1LD_0LC0LE_1LC1LE_1RG1LC_0RA0RG_1RG0LC".
+Definition tm2 := TM'_from_str "1RB1RH_0LC1RI_1LF1LD_0LC0LE_1LC1LE_1RG1LC_0RA0RG_1RG0LC_1RI1RI".
+Definition l0 := [1;0;0;0;0;1;1;0]%N.
+Definition mp := mp_from_str "RVHCDLME".
+Definition mp' := mp_from_str "RVHCDLME".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 19 19.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM625.
+
+
+Module TM626.
+Definition tm := TM_from_str "1LB0RE_1LC1LB_1RD0LA_1RA1RC_0RC1RF_1LD---".
+Definition tm' := TM_from_str "1LB0RE_1LC1LB_1RD0LA_1RA1RC_0RC1RF_0LA---".
+Definition tm0 := TM'_from_str "1LL0RQ_1LH1RQ_0LH0RI_1LH0RV_1RJ1LL_1LC1LH_0LL0LH_1LL1LH_0RN0LH_1RN0RI_1RB0LC_1RJ1LC_0RB0RJ_1RB1RJ_1LH1RN_1RQ0RI_0RI0RV_1RI1RV_0RN0RI_0LH---_1RQ---_0RI---_0LP---_1LP---".
+Definition tm0' := TM'_from_str "1LL0RQ_1LH1RQ_0LH0RI_1LH0RV_1RJ1LL_1LC1LH_0LL0LH_1LL1LH_0RN0LH_1RN0RI_1RB0LC_1RJ1LC_0RB0RJ_1RB1RJ_1LH1RN_1RQ0RI_0RI0RV_1RI1RV_0RN0RI_0LH---_0LH---_0RI---_0LC---_1LC---".
+Definition tm1 := TM'_from_str "1LB1RH_1LC1LB_1RD1LF_1RG0RE_0RG0LB_0LB0RE_1RA1RD_0RE0RI_0RE---".
+Definition tm2 := TM'_from_str "1LB1RH_1LC1LB_1RD1LF_1RG0RE_0RG0LB_0LB0RE_1RA1RD_0RE0RI_0RE1RJ_1RJ1RJ".
+Definition l0 := [1;0;0;1;1;1;1;1]%N.
+Definition mp := mp_from_str "BHLJICNQV".
+Definition mp' := mp_from_str "BHLJICNQV".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 24 24.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM626.
+
+
+Module TM627.
+Definition tm := TM_from_str "1LB0RA_1LC1LA_1LD1LF_1RE---_1LA0RF_0LB1RE".
+Definition tm' := TM_from_str "1LB0RA_1LC1LA_1LD1LE_1RC---_0LB1RF_1LA0RE".
+Definition tm0 := TM'_from_str "1LL0RA_1LD1RA_0LH1LL_1LH0RA_1LP1LH_1LX0RA_0LL0LD_1LL1LD_1RU1LG_---1RU_0LP0LX_1LP1LX_0RR---_1RR---_0RA---_1RU---_1LH0RU_0RA1RU_0LD0LL_1LD0RR_0LL0RR_0LD1RR_0LG0RA_1LG1RU".
+Definition tm0' := TM'_from_str "1LL0RA_1LD1RA_0LH1LL_1LH0RA_1LP1LH_1LT0RA_0LL0LD_1LL1LD_1RQ1LG_---1RQ_0LP0LT_1LP1LT_0RJ---_1RJ---_------_1RQ---_0LL0RV_0LD1RV_0LG0RA_1LG1RQ_1LH0RQ_0RA1RQ_0LD0LL_1LD0RV".
+Definition tm1 := TM'_from_str "0LB0RH_1LG1LC_1LD1RA_0LB0LE_1LF0RI_1LB1LE_1RA---_0RI1RA_1LB0RI".
+Definition tm2 := TM'_from_str "0LB0RH_1LG1LC_1LD1RA_0LB0LE_1LF0RI_1LB1LE_1RA1RJ_0RI1RA_1LB0RI_1RJ1RJ".
+Definition l0 := [1;0;1;0;0;1;0;1]%N.
+Definition mp := mp_from_str "ULXGDHPRA".
+Definition mp' := mp_from_str "QLTGDHPVA".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 24 24.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM627.
+
+
+Module TM628.
+Definition tm := TM_from_str "1LB0RA_1LC1LA_1LD1LE_1RC---_0LB1RF_0RA0RE".
+Definition tm' := TM_from_str "1LB0RA_1LC1LA_1LD1LF_1RE---_0RA0RF_0LB1RE".
+Definition tm0 := TM'_from_str "1LL0RA_1LD1RA_0LH1LL_1LH0RA_1LP1LH_1LT0RA_0LL0LD_1LL1LD_1RQ1LG_---1RQ_0LP0LT_1LP1LT_0RJ---_1RJ---_------_1RQ---_0LL0RV_0LD1RV_0LG1RA_1LG1RQ_0RA0RQ_1RA1RQ_1LL0LL_0RA0RV".
+Definition tm0' := TM'_from_str "1LL0RA_1LD1RA_0LH1LL_1LH0RA_1LP1LH_1LX0RA_0LL0LD_1LL1LD_1RU1LG_---1RU_0LP0LX_1LP1LX_0RR---_1RR---_1RA---_1RU---_0RA0RU_1RA1RU_1LL0LL_0RA0RR_0LL0RR_0LD1RR_0LG1RA_1LG1RU".
+Definition tm1 := TM'_from_str "0LB0RH_1LG1LC_1LD1RA_0LB0LE_1LI0RF_1LB0RF_1RA---_1RF1RA_1LB1LE".
+Definition tm2 := TM'_from_str "0LB0RH_1LG1LC_1LD1RA_0LB0LE_1LI0RF_1LB0RF_1RA1RJ_1RF1RA_1LB1LE_1RJ1RJ".
+Definition l0 := [1;0;1;0;1;1;0;1]%N.
+Definition mp := mp_from_str "QLTGDAPVH".
+Definition mp' := mp_from_str "ULXGDAPRH".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 24 24.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM628.
+
+
+Module TM629.
+Definition tm := TM_from_str "1RB0LE_1LC1LB_0RD0LC_1RA0RE_1RF1RD_0RD---".
+Definition tm' := TM_from_str "1RB1RA_1LC1LB_0RD0LC_1RA0RE_1RF1RD_0RD---".
+Definition tm0 := TM'_from_str "0RF1RM_1RF1RB_1LK0LS_1LH1LS_0RQ1LL_1LK1LH_0LL0LH_1LL1LH_0RM0RB_1RM0LK_0RB0LK_0RQ1LK_0RB0RQ_1RB1RQ_1RF0RV_1RB0RN_0RV0RN_1RV1RN_1RM1RB_---1RQ_0RM---_1RM---_0RB---_0RQ---".
+Definition tm0' := TM'_from_str "0RF0RB_1RF1RB_1LK1RF_1LH1RB_0RQ1LL_1LK1LH_0LL0LH_1LL1LH_0RM0RB_1RM0LK_0RB0LK_0RQ1LK_0RB0RQ_1RB1RQ_1RF0RV_1RB0RN_0RV0RN_1RV1RN_1RM1RB_---1RQ_0RM---_1RM---_0RB---_0RQ---".
+Definition tm1 := TM'_from_str "1RB1RA_1LC1LD_0RA0LC_1LE1LD_0RF1LC_0RH0RG_1RA1RF_1RI---_0RA0RF".
+Definition tm2 := TM'_from_str "1RB1RA_1LC1LD_0RA0LC_1LE1LD_0RF1LC_0RH0RG_1RA1RF_1RI1RJ_0RA0RF_1RJ1RJ".
+Definition l0 := [0;0;1;0;1;0;1;0]%N.
+Definition mp := mp_from_str "BFKHLQNVM".
+Definition mp' := mp_from_str "BFKHLQNVM".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 25 25.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM629.
+
+
+Module TM630.
+Definition tm := TM_from_str "1RB0LE_1LC1LB_0RD0LC_1RA0RE_1RF1RD_1RC---".
+Definition tm' := TM_from_str "1RB1RA_1LC1LB_0RD0LC_1RA0RE_1RF1RD_1RC---".
+Definition tm0 := TM'_from_str "0RF1RJ_1RF1RB_1LK0LS_1LH1LS_0RQ1LL_1LK1LH_0LL0LH_1LL1LH_0RM0RB_1RM0LK_0RB0LK_0RQ1LK_0RB0RQ_1RB1RQ_1RF0RV_1RB0RN_0RV0RN_1RV1RN_1RJ1RB_---1RQ_0RJ---_1RJ---_1RM---_0LK---".
+Definition tm0' := TM'_from_str "0RF0RB_1RF1RB_1LK1RF_1LH1RB_0RQ1LL_1LK1LH_0LL0LH_1LL1LH_0RM0RB_1RM0LK_0RB0LK_0RQ1LK_0RB0RQ_1RB1RQ_1RF0RV_1RB0RN_0RV0RN_1RV1RN_1RJ1RB_---1RQ_0RJ---_1RJ---_1RM---_0LK---".
+Definition tm1 := TM'_from_str "0RB0RG_1RC1RB_1LD1LE_0RB0LD_1LF1LE_0RG1LD_0RI0RH_1RB1RG_1RJ---_1RA0LD".
+Definition tm2 := TM'_from_str "0RB0RG_1RC1RB_1LD1LE_0RB0LD_1LF1LE_0RG1LD_0RI0RH_1RB1RG_1RJ1RK_1RA0LD_1RK1RK".
+Definition l0 := [0;0;1;0;1;0;1;1]%N.
+Definition mp := mp_from_str "MBFKHLQNVJ".
+Definition mp' := mp_from_str "MBFKHLQNVJ".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 9%N l0 (NG 0 1000 1000 1 1 0 0 false) 25 25.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM630.
+
+
+Module TM631.
+Definition tm := TM_from_str "1LB0LD_1RC1RF_1RE1RD_0RB1LA_1LC---_1RB0LF".
+Definition tm' := TM_from_str "1LB0LD_1RC1RF_1RE1RD_0RB1LA_1LA---_1RB0LF".
+Definition tm0 := TM'_from_str "1RN0RJ_0LW0LD_0LH0LO_1LH1LO_0RJ0RV_1RJ1RV_1RR1RF_1RN0LW_0RR0RN_1RR1RN_1LO1RE_---1LO_0RE1LH_1RE1LO_0RJ0LD_0RV1LD_------_1LO---_0LL---_1LL---_0RF1RJ_1RF0LW_1RJ0LW_1RV1LW".
+Definition tm0' := TM'_from_str "1RN0RJ_0LW0LD_0LH0LO_1LH1LO_0RJ0RV_1RJ1RV_1RR1RF_1RN0LW_0RR0RN_1RR1RN_1LO1RE_---1LO_0RE1LH_1RE1LO_0RJ0LD_0RV1LD_1LH---_1LO---_0LD---_1LD---_0RF1RJ_1RF0LW_1RJ0LW_1RV1LW".
+Definition tm1 := TM'_from_str "1RB1RG_1LC---_0RA0LD_1LE1LC_1RG0LF_1RA0LF_1RH1LC_0RA0RI_1RJ0LF_1RA1RI".
+Definition tm2 := TM'_from_str "1RB1RG_1LC1RK_0RA0LD_1LE1LC_1RG0LF_1RA0LF_1RH1LC_0RA0RI_1RJ0LF_1RA1RI_1RK1RK".
+Definition l0 := [0;1;1;0;1;1;1;1]%N.
+Definition mp := mp_from_str "JRODHWNEVF".
+Definition mp' := mp_from_str "JRODHWNEVF".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 9%N l0 (NG 0 1000 1000 1 1 0 0 false) 50 50.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM631.
+
+
+Module TM632.
+Definition tm := TM_from_str "1RB1RC_0RC---_1RD0RA_1RE0LA_1LF1LE_0RC0LF".
+Definition tm' := TM_from_str "1RB1RC_0RC---_1RD0RA_1RE1RD_1LF1LE_0RC0LF".
+Definition tm0 := TM'_from_str "0RF0RJ_1RF1RJ_1RI1RN_---1RA_0RI---_1RI---_0RN---_0RA---_0RN0RA_1RN1RA_1RR0RF_1RN0RJ_0RR1RI_1RR1RN_1LW0LC_1LT1LC_0RA1LX_1LW1LT_0LX0LT_1LX1LT_0RI0RN_1RI0LW_0RN0LW_0RA1LW".
+Definition tm0' := TM'_from_str "0RF0RJ_1RF1RJ_1RI1RN_---1RA_0RI---_1RI---_0RN---_0RA---_0RN0RA_1RN1RA_1RR0RF_1RN0RJ_0RR0RN_1RR1RN_1LW1RR_1LT1RN_0RA1LX_1LW1LT_0LX0LT_1LX1LT_0RI0RN_1RI0LW_0RN0LW_0RA1LW".
+Definition tm1 := TM'_from_str "1RB1RA_1LC1LD_0RA0LC_1LE1LD_0RF1LC_0RH0RG_1RA1RF_1RI---_0RA0RF".
+Definition tm2 := TM'_from_str "1RB1RA_1LC1LD_0RA0LC_1LE1LD_0RF1LC_0RH0RG_1RA1RF_1RI1RJ_0RA0RF_1RJ1RJ".
+Definition l0 := [0;0;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "NRWTXAJFI".
+Definition mp' := mp_from_str "NRWTXAJFI".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 59 59.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM632.
+
+
+Module TM633.
+Definition tm := TM_from_str "1LB---_0RC1LF_0RE1RD_0RE1RC_1LA1RB_0LB0LA".
+Definition tm' := TM_from_str "1LB---_0RC1LF_0RE1RD_0LD1RC_1LA1RB_0LB0LA".
+Definition tm0 := TM'_from_str "0RN---_1LX---_0LH---_1LH---_0RI1LG_1RI1LC_0RQ0LX_0RN1LX_0RQ0RN_1RQ1RN_1LH1RQ_0RF1RJ_0RQ0RJ_1RQ1RJ_1LH1RQ_0RF1RN_1LH0RF_---1RF_0LD1RI_1LD1LC_0RQ0LH_0LX---_0LG0LC_1LG1LC".
+Definition tm0' := TM'_from_str "0RN---_1LX---_0LH---_1LH---_0RI1LG_1RI1LC_0RQ0LX_0RN1LX_0RQ0RN_1RQ1RN_1LH1RQ_0RF1RJ_0LO0RJ_1RQ1RJ_0LO1RQ_1LO1RN_1LH0RF_---1RF_0LD1RI_1LD1LC_0RQ0LH_0LX---_0LG0LC_1LG1LC".
+Definition tm1 := TM'_from_str "1RB1LH_0RC0RE_1LD0RA_0RE1LG_1RC1RF_1RC1RE_1LI1LH_0LD---_0RC0LG".
+Definition tm2 := TM'_from_str "1RB1LH_0RC0RE_1LD0RA_0RE1LG_1RC1RF_1RC1RE_1LI1LH_0LD1RJ_0RC0LG_1RJ1RJ".
+Definition l0 := [0;1;0;1;0;1;1;0]%N.
+Definition mp := mp_from_str "FIQHNJXCG".
+Definition mp' := mp_from_str "FIQHNJXCG".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 71 71.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM633.
+
+
+Module TM634.
+Definition tm := TM_from_str "1LB0LE_1LC1LF_1RD1LA_1RB1RD_1LA1RB_---0RE".
+Definition tm' := TM_from_str "1LB0LE_1LC0LF_1RD1LA_1RB1RD_1LA1RB_---0RD".
+Definition tm0 := TM'_from_str "1LL0LD_1LX1LD_0LH0LS_1LH1LS_1RN---_1LD0RF_0LL0LX_1LL1LX_0RN1LH_1RN1LS_1RF0LD_1RN1LD_0RF0RN_1RF1RN_1LD1RF_0RF1RN_1LH0RF_1LS1RF_0LD1LD_1LD0RF_---0RQ_---1RQ_---1LH_---0RF".
+Definition tm0' := TM'_from_str "1LL0LD_1LW1LD_0LH0LS_1LH1LS_1RN---_1LD0RF_0LL0LW_1LL1LW_0RN1LH_1RN1LS_1RF0LD_1RN1LD_0RF0RN_1RF1RN_1LD1RF_0RF1RN_1LH0RF_1LS1RF_0LD1LD_1LD0RF_---0RM_---1RM_---0RF_---0RN".
+Definition tm1 := TM'_from_str "1LB0RA_1LD1LC_0LB1LB_1LE1LG_1RF1LB_1RA1RF_---0RA".
+Definition tm2 := TM'_from_str "1LB0RA_1LD1LC_0LB1LB_1LE1LG_1RF1LB_1RA1RF_1RH0RA_1RH1RH".
+Definition l0 := [1;1;1;1;1;1;1;1;0;0;0;1;1;1;1;1]%N.
+Definition mp := mp_from_str "FDSHLNX".
+Definition mp' := mp_from_str "FDSHLNW".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 62 62.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM634.
+
+
+Module TM635.
+Definition tm := TM_from_str "1LB0LF_1RC1LD_1RA1RC_1LA0LE_1LD1RA_---0RC".
+Definition tm' := TM_from_str "1LB1LF_1RC1LD_1RA1RC_1LA0LE_1LD1RA_---0RE".
+Definition tm0 := TM'_from_str "1RJ---_1LP0RB_0LH0LW_1LH1LW_0RJ1LD_1RJ1LS_1RB0LP_1RJ1LP_0RB0RJ_1RB1RJ_1LP1RB_0RB1RJ_1LH0LP_1LW1LP_0LD0LS_1LD1LS_1LD0RB_1LS1RB_0LP1LP_1LP0RB_---0RI_---1RI_---0RB_---0RJ".
+Definition tm0' := TM'_from_str "1RJ---_1LP0RB_0LH0LX_1LH1LX_0RJ1LD_1RJ1LS_1RB0LP_1RJ1LP_0RB0RJ_1RB1RJ_1LP1RB_0RB1RJ_1LH0LP_1LX1LP_0LD0LS_1LD1LS_1LD0RB_1LS1RB_0LP1LP_1LP0RB_---0RQ_---1RQ_---1LD_---0RB".
+Definition tm1 := TM'_from_str "1RB1RA_1LC0RB_1LE1LD_0LC1LC_1LF1LG_1RA1LC_---0RB".
+Definition tm2 := TM'_from_str "1RB1RA_1LC0RB_1LE1LD_0LC1LC_1LF1LG_1RA1LC_1RH0RB_1RH1RH".
+Definition l0 := [1;1;1;1;0;1;1;1;1;0;0;0;1;1;1;1]%N.
+Definition mp := mp_from_str "JBPSDHW".
+Definition mp' := mp_from_str "JBPSDHX".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 6%N l0 (NG 0 1000 1000 1 1 0 0 false) 71 71.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM635.
+
+
+Module TM636.
+Definition tm := TM_from_str "1RB0RD_1LC1RE_1LA0LD_0RE0RF_1LC1RA_0LB---".
+Definition tm' := TM_from_str "1RB0RE_0LB1RC_1LD1RA_1LA0LE_0RC0RF_0LC---".
+Definition tm0 := TM'_from_str "0RF0RM_1RF1RM_1LO0RQ_1RR0RU_1LD0RR_1LO1RR_0LL1LO_1LL1RB_1RR1LD_0RU0LL_0LD0LO_1LD1LO_0RQ0RU_1RQ1RU_1LD0LL_0RB---_1LD0RB_1LO1RB_0LL1RF_1LL1RM_0LL---_1LO---_0LG---_1LG---".
+Definition tm0' := TM'_from_str "0RF0RQ_1RF1RQ_1LS0RI_1RJ0RU_0LG0RJ_1LS1RJ_0LG1LS_1LG1RB_1LD0RB_1LS1RB_0LP1RF_1LP1RQ_1RJ1LD_0RU0LP_0LD0LS_1LD1LS_0RI0RU_1RI1RU_1LD0LP_0RB---_0LP---_1RF---_0LK---_1LK---".
+Definition tm1 := TM'_from_str "1LB1RE_1LD0LC_1LD1LB_1RA0RI_1RH1RF_0RG0RI_1LD0RE_1LB1RA_0LC---".
+Definition tm2 := TM'_from_str "1LB1RE_1LD0LC_1LD1LB_1RA0RI_1RH1RF_0RG0RI_1LD0RE_1LB1RA_0LC1RJ_1RJ1RJ".
+Definition l0 := [1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "ROLDBMQFU".
+Definition mp' := mp_from_str "JSPDBQIFU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 71 71.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM636.
+
+
+Module TM637.
+Definition tm := TM_from_str "1RB0RE_0LB1RC_1LD1RA_1LA0LE_0RC0RF_0LC---".
+Definition tm' := TM_from_str "1RB0RD_1LC1RE_1LA0LD_0RE0RF_1LC1RA_0LE---".
+Definition tm0 := TM'_from_str "0RF0RQ_1RF1RQ_1LS0RI_1RJ0RU_0LG0RJ_1LS1RJ_0LG1LS_1LG1RB_1LD0RB_1LS1RB_0LP1RF_1LP1RQ_1RJ1LD_0RU0LP_0LD0LS_1LD1LS_0RI0RU_1RI1RU_1LD0LP_0RB---_0LP---_1RF---_0LK---_1LK---".
+Definition tm0' := TM'_from_str "0RF0RM_1RF1RM_1LO0RQ_1RR0RU_1LD0RR_1LO1RR_0LL1LO_1LL1RB_1RR1LD_0RU0LL_0LD0LO_1LD1LO_0RQ0RU_1RQ1RU_1LD0LL_0RB---_1LD0RB_1LO1RB_0LL1RF_1LL1RM_0LL---_1RF---_0LS---_1LS---".
+Definition tm1 := TM'_from_str "1LB1RE_1LD0LC_1LD1LB_1RA0RI_1RH1RF_0RG0RI_1LD0RE_1LB1RA_0LC---".
+Definition tm2 := TM'_from_str "1LB1RE_1LD0LC_1LD1LB_1RA0RI_1RH1RF_0RG0RI_1LD0RE_1LB1RA_0LC1RJ_1RJ1RJ".
+Definition l0 := [1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "JSPDBQIFU".
+Definition mp' := mp_from_str "ROLDBMQFU".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 71 71.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM637.
+
+
+Module TM638.
+Definition tm := TM_from_str "1LB0LA_1RC1LE_1RD0RC_0RE0LF_1LA1RD_---1LD".
+Definition tm' := TM_from_str "1LB0LA_1RC1LE_1LD0RC_0RE0LF_1LA1RD_---1LD".
+Definition tm0 := TM'_from_str "1RI0LH_1LT0LC_0LH0LC_1LH1LC_0RJ1LD_1RJ0LP_1RN0LT_1RI1LT_0RN0RI_1RN1RI_1RQ0RN_0LP0RI_0RQ---_1RQ0LP_1LH0LW_0RN1LW_1LH0RN_1LC1RN_0LD1RQ_1LD0LP_---0RN_---1LW_---0LP_---1LP".
+Definition tm0' := TM'_from_str "1RI0LH_1LT0LC_0LH0LC_1LH1LC_0RJ1LD_1RJ0LP_1LW0LT_1RI1LT_0RN0RI_1LW1RI_0LP0RN_1LP0RI_0RQ---_1RQ0LP_1LH0LW_0RN1LW_1LH0RN_1LC1RN_0LD1RQ_1LD0LP_---0RN_---1LW_---0LP_---1LP".
+Definition tm1 := TM'_from_str "1LB0RF_1RE1LC_1LD0LG_1LB1LH_0RF0RE_1RA0LG_0RF1LI_0LB0LH_---0LG".
+Definition tm2 := TM'_from_str "1LB0RF_1RE1LC_1LD0LG_1LB1LH_0RF0RE_1RA0LG_0RF1LI_0LB0LH_1RJ0LG_1RJ1RJ".
+Definition l0 := [1;0;1;0;0;1;0;1;0;1;0;1;0;1;0;1]%N.
+Definition mp := mp_from_str "QHTDINPCW".
+Definition mp' := mp_from_str "QHTDINPCW".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 115 115.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM638.
+
+
+Module TM639.
+Definition tm := TM_from_str "1RB1LA_0RC1LE_1LC0RD_1LE1RD_1LF0LA_1LB---".
+Definition tm' := TM_from_str "1LB0RE_1LC0LF_1LD---_0RA1LB_1LB1RE_1RD1LF".
+Definition tm0 := TM'_from_str "0RF1LC_1RF1LD_1RI0LD_1LC1LD_0RI1LX_1RI1LC_1LL0LT_0RM1LT_1LL0RM_0RN1RM_0LL1LX_1LL0RN_1LX0RN_1LC1RN_0LT1LC_1LT1RN_1LH1RI_---0LD_0LX0LC_1LX1LC_0RM---_1LT---_0LH---_1LH---".
+Definition tm0' := TM'_from_str "1LL0RQ_1LW1RQ_0LH1LL_1LH0RR_1LP1RA_---0LX_0LL0LW_1LL1LW_0RQ---_1LH---_0LP---_1LP---_0RA1LL_1RA1LW_1LL0LH_0RQ1LH_1LL0RR_1LW1RR_0LH1LW_1LH1RR_0RN1LW_1RN1LX_1RA0LX_1LW1LX".
+Definition tm1 := TM'_from_str "1LB1RA_1RD0LC_1LB1LC_---0RE_1LF0RA_1LG---_0RE1LH_1LF1LB".
+Definition tm2 := TM'_from_str "1LB1RA_1RD0LC_1LB1LC_---0RE_1LF0RA_1LG1RI_0RE1LH_1LF1LB_1RI1RI".
+Definition l0 := [1;1;0;1;0;0;1;1;1;1;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "NCDIMXHT".
+Definition mp' := mp_from_str "RWXAQLPH".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 7%N l0 (NG 0 1000 1000 1 1 0 0 false) 200 200.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM639.
+
+
+Module TM640.
+Definition tm := TM_from_str "1RB1LA_1RC0RE_1LD0LF_---1RA_1RF1RE_1LC0LA".
+Definition tm' := TM_from_str "1RB1LA_1RC0RE_1LD0LF_---1LA_1RF1RE_1LC0LA".
+Definition tm0 := TM'_from_str "0RF1RQ_1RF1LD_1RJ0LD_1RQ1LD_0RJ0RQ_1RJ1RQ_1LD0RV_0LC0RR_---0LL_1LD0LC_0LP0LW_1LP1LW_---0RB_---1RB_---1RF_---1LD_0RV0RR_1RV1RR_1LW1RV_0LD1RR_1LP1RJ_1LW0LD_0LL0LC_1LL1LC".
+Definition tm0' := TM'_from_str "0RF1RQ_1RF1LD_1RJ0LD_1RQ1LD_0RJ0RQ_1RJ1RQ_1LD0RV_0LC0RR_---0LL_1LD0LC_0LP0LW_1LP1LW_---1RQ_---1LD_---0LD_---1LD_0RV0RR_1RV1RR_1LW1RV_0LD1RR_1LP1RJ_1LW0LD_0LL0LC_1LL1LC".
+Definition tm1 := TM'_from_str "1LB0LD_0LG0LC_1RH0LD_1RE1LD_0RA0RF_1RA1RF_1LI1LB_1LD---".
+Definition tm2 := TM'_from_str "1LB0LD_0LG0LC_1RH0LD_1RE1LD_0RA0RF_1RA1RF_1LI1LB_1LD---_1RJ---_1RJ1RJ".
+Definition l0 := [1;0;1;1;1;1;1;1;1;1;1;1;1;1;1;1]%N.
+Definition mp := mp_from_str "VWCDQRLJP".
+Definition mp' := mp_from_str "VWCDQRLJP".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' tm0 tm0' tm1 tm2 mp mp' 8%N l0 (NG 0 1000 1000 1 1 0 0 false) 201 201.
+  rewrite I1',I1'0,I2',I2'0; reflexivity.
+Time Qed.
+End TM640.
+
+

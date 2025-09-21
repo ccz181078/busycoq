@@ -68,6 +68,240 @@ Ltac pp_pow2_lt_le x y :=
   rw_pa.
 
 
+Module Skelet33.
+Definition tm := Eval compute in (TM_from_str "1LB1RC_0LC0LB_1RD0RA_1RE---_1RA1LE_------").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation "l <| r" := (l <{{E}} [1;1;1;1] *> r) (at level 30).
+Notation "l |> r" := (l <* [0;1;0;1] {{A}}> r) (at level 30).
+
+Lemma LInc l r n:
+  l <* ld0 <* ld1^^n <| r -->+
+  l <* ld1 <* ld0^^n |> r.
+Proof.
+  es.
+Qed.
+
+Lemma RInc l r n:
+  l |> rd1^^n *> [0] *> r -->+
+  l <| rd0^^n *> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma LOv r n:
+  ldh <* ld1^^n <| r -->+
+  ldh <* ld0^^n |> [1] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv1 l r n:
+  l |> rd1^^n *> rm1 *> r -->+
+  l <* ld1 <* ld0^^(n*2) |> [1;0;0] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma ROv2 l r n:
+  l |> rd1^^n *> rm3 *> r -->+
+  l <* ld0 <* ld1 <* ld0^^(n*2) |> [0;0;0] *> r.
+Proof.
+  es.
+Qed.
+
+Lemma LC_Inc len n r:
+  1+n<2^len ->
+  LC len (1+n) <| r -->+
+  LC len n |> r.
+Proof.
+  intros H.
+  apply LBinDec_spec; try lia.
+  follow' LInc.
+Qed.
+
+Lemma RC_Inc n l:
+  l |> RC n -->+
+  l <| RC (1+n).
+Proof.
+  apply RBinInc_spec.
+  follow' RInc.
+Qed.
+
+Lemma RC1_Inc l lenR n m:
+  1+n<2^(lenR+1) ->
+  l |> RC1 lenR (1+n) m -->+
+  l <| RC1 lenR n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+Lemma RC2_Inc l lenR n m:
+  1+n<2^(lenR+1) ->
+  l |> RC2 lenR (1+n) m -->+
+  l <| RC2 lenR n m.
+Proof.
+  intros H.
+  apply RBinDec2_spec; try lia.
+  follow' RInc.
+Qed.
+
+
+Lemma LC_Ov lenL n i:
+  LC lenL O <| RC ((n*2+1)*2^i) -->+
+  LC lenL (2^lenL-1) |> RC1 i ((2^i-1)*2) n.
+Proof.
+  solve_rule LOv.
+Qed.
+
+Lemma RC1_Ov lenL lenR k i m:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2) m.
+Proof.
+  solve_rule ROv1.
+Qed.
+
+Lemma RC1_Ov_0 lenL lenR k:
+  k<2^lenL ->
+  LC lenL k |> RC1 lenR 0 0 -->+
+  LC (lenL+1+lenR*2) ((k*2+1)*2^(lenR*2)-1) |> RC 1.
+Proof.
+  epose proof (ROv1 _ 0inf _) as I1.
+  solve_rule I1.
+Qed.
+
+Lemma RC2_Ov lenL lenR k i m:
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 ((m*2+1)*2^i) -->+
+  LC (lenL+1+1+lenR*2) (((k*2+1)*2+1)*2^(lenR*2)-1) |> RC2 i ((2^i-1)*2+1) m.
+Proof.
+  solve_rule ROv2.
+Qed.
+
+Lemma RC2_Ov_0 lenL lenR k:
+  k<2^lenL ->
+  LC lenL k |> RC2 lenR 0 0 -->+
+  LC (lenL+1+1+lenR*2) (((k*2+1)*2+1)*2^(lenR*2)-1) |> RC 0.
+Proof.
+  epose proof (ROv2 _ 0inf _) as I1.
+  solve_rule I1.
+Qed.
+
+Close Scope sym.
+
+Inductive Config :=
+| cfgL(lenL k n:nat)
+| cfgR(lenL k n:nat)
+| cfgL1(lenL k lenR n m:nat)
+| cfgR1(lenL k lenR n m:nat)
+| cfgL2(lenL k lenR n m:nat)
+| cfgR2(lenL k lenR n m:nat)
+.
+
+Definition to_config(x:Config):=
+match x with
+| cfgL lenL k n => LC lenL k <| RC n
+| cfgR lenL k n => LC lenL k |> RC n
+| cfgL1 lenL k lenR n m => LC lenL k <| RC1 lenR n m
+| cfgR1 lenL k lenR n m => LC lenL k |> RC1 lenR n m
+| cfgL2 lenL k lenR n m => LC lenL k <| RC2 lenR n m
+| cfgR2 lenL k lenR n m => LC lenL k |> RC2 lenR n m
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfgL lenL k n => 2 <= k+n < 2^lenL
+| cfgR lenL k n => 2 <= k+n+1 < 2^lenL
+| cfgL1 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR1 lenL k lenR n m => n+m <= k < 2^lenL /\ n<2^(lenR+1) /\
+  (lenR=0 -> n=0 -> m=0 -> k+1 < 2^lenL)
+| cfgL2 lenL k lenR n m => n+m+1 <= k < 2^lenL /\ n<2^(lenR+1)
+| cfgR2 lenL k lenR n m => n+m <= k < 2^lenL /\ n<2^(lenR+1) 
+end.
+
+
+Lemma closed x:
+  P x ->
+  exists x', to_config x -->+ to_config x' /\ P x'.
+Proof.
+  unfold P,to_config.
+  intros HP.
+  destruct x.
+  - destruct k as [|k].
+    + lowbit_cases n.
+      1: lia.
+      eex cfgR1.
+      1: apply LC_Ov.
+      pose proof (split_bound_v1 x i (lenL)).
+      rw_pa.
+      spl.
+    + eex cfgR.
+      1: apply LC_Inc; lia.
+      lia.
+  - eex cfgL.
+    apply RC_Inc.
+    lia.
+  - destruct k as [|k].
+    1: lia.
+    eex cfgR1.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eex cfgR.
+        1: apply RC1_Ov_0; lia.
+        spl.
+        destruct lenR as [|lenR].
+        1: solve_pow2_lt.
+        replace (S lenR*2) with (lenR*2+2) by lia.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eex cfgR2.
+        1: apply RC1_Ov; lia.
+        spl.
+        pose proof (split_bound_v2 x i).
+        zify_le_mul_r; lia.
+    + eex cfgL1.
+      1: apply RC1_Inc; lia.
+      lia.
+  - destruct k as [|k].
+    1: lia.
+    eex cfgR2.
+    1: apply LC_Inc; lia.
+    lia.
+  - destruct n as [|n].
+    + lowbit_cases m.
+      * eex cfgR.
+        1: apply RC2_Ov_0; lia.
+        spl.
+        pose proof (Nat.mul_le_mono_pos_r (k+1) (2^lenL) (2^(lenR*2))).
+        solve_pow2_lt.
+      * eex cfgR2.
+        1: apply RC2_Ov; lia.
+        spl.
+        pose proof (split_bound_v2 x i).
+        zify_le_mul_r; lia.
+    + eex cfgL2.
+      1: apply RC2_Inc; lia.
+      lia.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=to_config (cfgL 3 3 0)).
+  1: esx.
+  eapply progress_nonhalt_cond.
+  1: apply closed.
+  cbn; lia.
+Qed.
+
+End Skelet33.
+
+
 Module TM101.
 Definition tm := Eval compute in (TM_from_str "1LB1RE_1RC0LB_0LD1RC_1RA1LD_1RF0RA_1RD---").
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).

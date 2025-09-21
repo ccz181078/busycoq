@@ -1466,3 +1466,6 @@ Proof. solve_loop2' 1 6 40000%N. Time Qed.
 Lemma tm484: ~halts (TM_from_str "1RB1LD_1RC0RB_1LA1RE_0LA1LE_0RF0RA_---0LC") c0.
 Proof. solve_loop2' 1 6 40000%N. Time Qed.
 
+Lemma tm485: ~halts (TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------") c0.
+Proof. solve_loop2 5 1000%N. Time Qed.
+

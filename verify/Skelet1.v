@@ -4,23 +4,16 @@
 
 Set Warnings "-abstract-large-number".
 From Coq Require Import PeanoNat.
-From Coq Require Import List. Import ListNotations.
+From Coq Require Import String List. Import ListNotations.
 From Coq Require Import Lia.
 From Coq Require Import PArith.BinPos PArith.Pnat.
 From Coq Require Import NArith.BinNat NArith.Nnat.
 From Coq Require Import Program.Tactics.
 From Coq Require Import ZifyBool.
-From BusyCoq Require Import Individual52.
+From BusyCoq Require Import Individual62.
 Set Default Goal Selector "!".
 
-Definition tm : TM := fun '(q, s) =>
-  match q, s with
-  | A, 0 => Some (1, R, B)  | A, 1 => Some (1, R, D)
-  | B, 0 => Some (1, L, C)  | B, 1 => Some (0, R, C)
-  | C, 0 => Some (1, R, A)  | C, 1 => Some (1, L, D)
-  | D, 0 => Some (0, R, E)  | D, 1 => Some (0, L, B)
-  | E, 0 => None            | E, 1 => Some (1, R, C)
-  end.
+Definition tm : TM := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
@@ -276,20 +269,43 @@ Definition K : rtape :=
 Definition uni_P : positive := 53946.
 Definition uni_T : positive := 4 * uni_P - 5.
 
-Definition eqb_l (a b : lsym) : {a = b} + {a <> b}.
-Proof.
-  decide equality; apply Pos.eq_dec.
-Defined.
+Definition eqb_l (a b : lsym) : bool :=
+match a,b with
+| l_xs n1,l_xs n2 => Pos.eqb n1 n2
+| l_D,l_D
+| l_P,l_P
+| l_C0,l_C0 | l_C1,l_C1 | l_C2,l_C2 | l_C3,l_C3
+| l_F0,l_F0 | l_F1,l_F1 | l_F2,l_F2 | l_F3,l_F3
+| l_G0,l_G0 | l_G1,l_G1 | l_G2,l_G2 => true
+| l_Fs n1,l_Fs n2 => Pos.eqb n1 n2
+| l_Gs n1,l_Gs n2 => Pos.eqb n1 n2
+| l_Hs n1,l_Hs n2 => Pos.eqb n1 n2
+| _,_ => false
+end.
 
-Definition eqb_r (a b : rsym) : {a = b} + {a <> b}.
+Lemma eqb_l_spec a b: if eqb_l a b then a=b else a<>b.
 Proof.
-  decide equality; apply Pos.eq_dec.
-Defined.
+  destruct a,b; cbn; try congruence.
+  all: destruct (Pos.eqb_spec n n0); congruence.
+Qed.
 
-Definition eqb_rtape (xs ys : rtape) : {xs = ys} + {xs <> ys}.
-Proof.
-  decide equality; apply eqb_r.
-Defined.
+
+Definition eqb_r (a b : rsym) : bool :=
+match a,b with
+| r_xs n1,r_xs n2 => Pos.eqb n1 n2
+| r_D,r_D => true
+| r_C,r_C => true
+| r_P,r_P => true
+| r_Gs n1,r_Gs n2 => Pos.eqb n1 n2
+| _,_ => false
+end.
+
+Fixpoint eqb_rtape (xs ys : rtape): bool :=
+match xs,ys with
+| xh::xt,yh::yt => if eqb_r xh yh then eqb_rtape xt yt else false
+| nil,nil => true
+| _,_ => false
+end.
 
 Notation left := TM.L.
 Notation right := TM.R.
@@ -464,6 +480,7 @@ Definition unrxs (r : rtape) : option rtape :=
   | _ => None
   end.
 
+
 Lemma unrxs_spec : forall r r',
   unrxs r = Some r' ->
   lift_right r = x *> lift_right r'.
@@ -476,9 +493,16 @@ Proof.
     handle_decr.
     cbn[lpow].
     unfold Gr at 1.
+    replace 30826 with (Pos.to_nat 30826) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    replace 72142 with (Pos.to_nat 72142) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    replace 3076 with (Pos.to_nat 3076) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    replace 1538 with (Pos.to_nat 1538) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
     autorewrite with tape_post.
+    generalize (x ^^ Pos.to_nat 30826 *> Dr *> x ^^ Pos.to_nat 72142 *> Dr *> x ^^ Pos.to_nat 3076 *> Dr *> x ^^ Pos.to_nat 1538 *> Dr *> Gr ^^ n *> lift_right r).
+    intro s.
+    replace (Pos.to_nat 299) with 299 by reflexivity.
     reflexivity.
-Qed.
+Time Qed.
 
 Arguments unrxs _ : simpl never.
 
@@ -1330,7 +1354,19 @@ Proof.
   apply lift_eq.
   - repeat apply lift_left_cons.
     rewrite lift_Fls. reflexivity.
-  - rewrite lift_Grs. reflexivity.
+  - rewrite lift_Grs. 
+    unfold G.
+    remember Gr as Gr'.
+    replace (N.to_nat 1) with (1%nat) by reflexivity.
+    cbn. subst Gr'.
+    rewrite app_nil_r.
+    unfold Gr.
+    replace 30826 with (Pos.to_nat 30826) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    replace 72142 with (Pos.to_nat 72142) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    replace 3076 with (Pos.to_nat 3076) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    replace 1538 with (Pos.to_nat 1538) by (rewrite <-Nat.eqb_eq; vm_compute; reflexivity).
+    autorewrite with tape_post.
+    reflexivity.
 Qed.
 
 Opaque J.
@@ -1381,11 +1417,49 @@ Proof.
   nia.
 Qed.
 
+Fixpoint strip_prefix'{A}(eqb:A->A->bool)(xs ys:list A):option (list A) :=
+match xs with
+| nil => Some ys
+| xh::xt =>
+  match ys with
+  | nil => None
+  | yh::yt =>
+    if eqb xh yh then strip_prefix' eqb xt yt else None
+  end
+end.
+
+Lemma strip_prefix'_spec{A}(eqb:A->A->bool) xs ys:
+  (forall a1 a2, if eqb a1 a2 then a1=a2 else a1<>a2)->
+  match strip_prefix' eqb xs ys with
+  | Some zs => ys = xs++zs
+  | None => True
+  end.
+Proof.
+  intro H.
+  generalize dependent ys.
+  induction xs.
+  - intros.
+    cbn.
+    reflexivity.
+  - intros.
+    destruct ys as [|b ys].
+    1: cbn; trivial.
+    cbn.
+    specialize (IHxs ys).
+    specialize (H a b).
+    destruct (eqb a b).
+    2: trivial.
+    subst b.
+    destruct (strip_prefix' eqb xs ys).
+    2: trivial.
+    congruence.
+Qed.
+
 Definition try_uni_cycle (c : conf) : option conf :=
   match c with
   | (right, l_D :: l_C1 :: l_xs xs :: l, r) =>
-    match strip_prefix eqb_l J l with
-    | [|| l ||] =>
+    match strip_prefix' eqb_l J l with
+    | Some l =>
       match uni_cycle_count xs r with
       | N0 => None
       | Npos n =>
@@ -1396,7 +1470,7 @@ Definition try_uni_cycle (c : conf) : option conf :=
         | None => None
         end
       end
-    | !! => None
+    | None => None
     end
   | _ => None
   end.
@@ -1410,7 +1484,8 @@ Proof.
   destruct l as [| [] l]; try discriminate.
   destruct l as [| [] l]; try discriminate.
   destruct l as [| [] l]; try discriminate. rename n into xs.
-  destruct (strip_prefix eqb_l J l) as [[l' El'] |]; try discriminate.
+  pose proof (strip_prefix'_spec eqb_l J l eqb_l_spec) as X.
+  destruct (strip_prefix' eqb_l J l) as [l' |]; try discriminate.
   subst l. rename l' into l.
   destruct (uni_cycle_count xs r) as [| n] eqn:Ecount; try discriminate.
   destruct (stride 0 (n * uni_T) r) as [r' |] eqn:Estride; inverts H.
@@ -1496,16 +1571,110 @@ Qed.
 Local Hint Immediate cycle_nonhalt : core.
 
 Local Obligation Tactic := intros; subst; auto; discriminate.
-    
-Program Definition is_cycling (c : conf) : {~ halts tm (lift c)} + {True} :=
+
+(* {~ halts tm (lift c)} + {True} *)
+Definition is_cycling (c : conf) : bool :=
   match c with
   | (right, l_C0 :: l, r) =>
-    Reduce (eqb_rtape K r)
-  | _ => No
+    eqb_rtape K r
+  | _ => false
   end.
 
-From Coq Require Extraction.
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlIntConv.
 
-Extraction "skelet1.ml" int_of_pos initial fullstep is_cycling.
+Lemma eqb_r_spec x1 x2:
+  if eqb_r x1 x2 then x1=x2 else x1<>x2.
+Proof.
+  destruct x1,x2; cbn; try congruence.
+  - destruct (Pos.eqb_spec n n0); congruence.
+  - destruct (Pos.eqb_spec n n0); congruence.
+Qed.
+
+Lemma eqb_rtape_spec x1 x2:
+  if eqb_rtape x1 x2 then x1=x2 else x1<>x2.
+Proof.
+  generalize dependent x2.
+  induction x1; intros.
+  - destruct x2 as [|h2 x2]; cbn; congruence.
+  - cbn.
+    destruct x2 as [|h2 x2]; cbn.
+    1: congruence.
+    pose proof (eqb_r_spec a h2).
+    destruct (eqb_r a h2).
+    2: congruence.
+    specialize (IHx1 x2).
+    destruct (eqb_rtape x1 x2);
+    congruence.
+Qed.
+
+Lemma is_cycling_spec c:
+  is_cycling c = true ->
+  ~ halts tm (lift c).
+Proof.
+  intro H.
+  unfold is_cycling in H.
+  destruct c as [[d l0] r].
+  destruct d.
+  1: congruence.
+  destruct l0 as [|h l0].
+  1: congruence.
+  destruct h; try congruence.
+  pose proof (eqb_rtape_spec K r) as E.
+  rewrite H in E.
+  subst.
+  apply cycle_nonhalt.
+Qed.
+
+Fixpoint doit n c :=
+  match n with
+  | O => false
+  | S n0 =>
+    if is_cycling c then
+      true
+    else
+      match fullstep c with
+      | Some c' => doit n0 c'
+      | None => false
+      end
+  end.
+
+Lemma doit_spec n c:
+  doit n c = true ->
+  ~halts tm (lift c).
+Proof.
+  generalize dependent c.
+  induction n.
+  - intros.
+    cbn in H.
+    congruence.
+  - intros.
+    cbn in H.
+    destruct (is_cycling c) eqn:E.
+    1: apply is_cycling_spec; auto 1.
+    destruct (fullstep c) eqn:E0.
+    2: congruence.
+    specialize (IHn _ H).
+    pose proof (fullstep_spec _ _ E0).
+    eapply multistep_nonhalt; eauto 1.
+Qed.
+
+Definition doit_result_def :=
+ doit 88000000 initial.
+
+Time Definition doit_result := Eval native_compute in doit_result_def.
+
+Lemma doit_result_spec:
+  doit_result_def = true.
+Proof.
+  assert (H:doit_result_def = doit_result) by (native_cast_no_check (eq_refl doit_result)).
+  apply H.
+Qed.
+
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init'.
+  eapply doit_spec with (n:=88000000).
+  assert (H0:doit_result_def = doit 88000000 initial) by reflexivity.
+  rewrite <-H0.
+  apply doit_result_spec.
+Qed.

@@ -26393,3 +26393,603 @@ Time Qed.
 End TM2634.
 
 
+Module TM2635.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RE_1LF0LA_1LA1RE_1LC---".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDCE") 0 0.
+Time Qed.
+End TM2635.
+
+
+Module TM2636.
+Definition tm := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LF_---0RB_1LC0LF".
+Definition tm' := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDED") 0 0.
+Time Qed.
+End TM2636.
+
+
+Module TM2637.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LA0LA_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2637.
+
+
+Module TM2638.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LF1RA_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2638.
+
+
+Module TM2639.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LF1RA_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2639.
+
+
+Module TM2640.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LF1RE_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RE_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2640.
+
+
+Module TM2641.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LA0LF_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2641.
+
+
+Module TM2642.
+Definition tm := TM_from_str "1RB---_1RC1LE_1LD1RF_1LE0LD_1RC1LB_1RA0RC".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDBE") 0 0.
+Time Qed.
+End TM2642.
+
+
+Module TM2643.
+Definition tm := TM_from_str "1RB0RA_0LC1RF_1RE1LD_1LC0LD_---0RB_1RB0RA".
+Definition tm' := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2643.
+
+
+Module TM2644.
+Definition tm := TM_from_str "1RB---_1RC1LE_1LD1RF_1LE0LD_1RC1LE_1RA0RC".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDBE") 0 0.
+Time Qed.
+End TM2644.
+
+
+Module TM2645.
+Definition tm := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RF_1LD1RE".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2645.
+
+
+Module TM2646.
+Definition tm := TM_from_str "1RB1LD_1RC0RF_1LA1RC_1LE0LA_1LC---_1RC0RF".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2646.
+
+
+Module TM2647.
+Definition tm := TM_from_str "1RB1LC_0RC0RF_1LD0LA_1LE---_1LA1RA_0RC0RF".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2647.
+
+
+Module TM2648.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LA1RA_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2648.
+
+
+Module TM2649.
+Definition tm := TM_from_str "1RB---_0LC1RF_0LD1LC_1RE1LB_1RB---_0RB0RE".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDAE") 0 0.
+Time Qed.
+End TM2649.
+
+
+Module TM2650.
+Definition tm := TM_from_str "1RB1RD_1LC0RF_1RA1LD_0RE0LB_---1RF_1RA1LD".
+Definition tm' := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2650.
+
+
+Module TM2651.
+Definition tm := TM_from_str "1RB---_1RC1LF_1LD1RE_1LB0LD_1RA0RC_1RC1LB".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2651.
+
+
+Module TM2652.
+Definition tm := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RF0RC_1RB---".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2652.
+
+
+Module TM2653.
+Definition tm := TM_from_str "1RB---_1RC1LB_1LD1RF_1LE0LD_1RC1LB_1RA0RC".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDBE") 0 0.
+Time Qed.
+End TM2653.
+
+
+Module TM2654.
+Definition tm := TM_from_str "1RB1LC_0RC0RF_1LD0LA_1LE---_1LA1RE_0RC0RF".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RE_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2654.
+
+
+Module TM2655.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LA1RF_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2655.
+
+
+Module TM2656.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LF0LF_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2656.
+
+
+Module TM2657.
+Definition tm := TM_from_str "1RB---_0LC1RF_0LD1LC_1RE1LB_1RB---_0RB0RA".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDAE") 0 0.
+Time Qed.
+End TM2657.
+
+
+Module TM2658.
+Definition tm := TM_from_str "1RB0RF_0LC1RA_1RE1LD_1LC0LD_---0RB_1RB0RA".
+Definition tm' := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2658.
+
+
+Module TM2659.
+Definition tm := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RF_1RA1LD".
+Definition tm' := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2659.
+
+
+Module TM2660.
+Definition tm := TM_from_str "1RB1RD_1LC0RF_1RA1LD_0RE0LB_---1RC_1RA1LD".
+Definition tm' := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2660.
+
+
+Module TM2661.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RF_1LA1RF".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RE_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEE") 0 0.
+Time Qed.
+End TM2661.
+
+
+Module TM2662.
+Definition tm := TM_from_str "1RB0RF_0LC1RA_1RE1LD_1LC0LD_---0RB_1RB0RF".
+Definition tm' := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2662.
+
+
+Module TM2663.
+Definition tm := TM_from_str "1RB---_1RC1LB_1LD1RF_1LE0LD_1RC1LE_1RA0RC".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDBE") 0 0.
+Time Qed.
+End TM2663.
+
+
+Module TM2664.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LF1RF_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2664.
+
+
+Module TM2665.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LF---_1LA1RC".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2665.
+
+
+Module TM2666.
+Definition tm := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LF_0RB0RA_0LC1RE".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2666.
+
+
+Module TM2667.
+Definition tm := TM_from_str "1RB---_0LC1RF_0LE1LD_0LE1LC_1RA1LB_0RB0RA".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCCDE") 0 0.
+Time Qed.
+End TM2667.
+
+
+Module TM2668.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LA1RE_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RE_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2668.
+
+
+Module TM2669.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LF---_1LA1RF".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2669.
+
+
+Module TM2670.
+Definition tm := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RF_1RB---".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2670.
+
+
+Module TM2671.
+Definition tm := TM_from_str "1RB---_0LC1RF_0LE1LD_0LE1LD_1RA1LB_0RB0RA".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCCDE") 0 0.
+Time Qed.
+End TM2671.
+
+
+Module TM2672.
+Definition tm := TM_from_str "1RB0RF_0LC1RF_1RE1LD_1LC0LD_---0RB_1RB0RA".
+Definition tm' := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2672.
+
+
+Module TM2673.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LF0LE_1RB1LD_1LC---".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDAE") 0 0.
+Time Qed.
+End TM2673.
+
+
+Module TM2674.
+Definition tm := TM_from_str "1RB---_1RC1LB_1LD1RF_1LB0LE_1LB0LE_1RA0RC".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDDE") 0 0.
+Time Qed.
+End TM2674.
+
+
+Module TM2675.
+Definition tm := TM_from_str "1RB---_1RC1LF_1LD1RE_1LB0LD_1RA0RC_1RC1LF".
+Definition tm' := TM_from_str "1RB---_1RC1LB_1LD1RE_1LB0LD_1RA0RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2675.
+
+
+Module TM2676.
+Definition tm := TM_from_str "1RB1LF_0RC0RB_1LD0LA_1LE---_1LA1RA_1LD0LA".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2676.
+
+
+Module TM2677.
+Definition tm := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RF0RA_0LC1RE".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2677.
+
+
+Module TM2678.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LF0LA_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2678.
+
+
+Module TM2679.
+Definition tm := TM_from_str "1RB1LC_0RC0RF_1LD0LA_1LE---_1LA0LA_0RC0RF".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2679.
+
+
+Module TM2680.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RE_1LF0LA_1LA1RC_1LC---".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDCE") 0 0.
+Time Qed.
+End TM2680.
+
+
+Module TM2681.
+Definition tm := TM_from_str "1RB1LF_0RC0RB_1LD0LA_1LE---_1LA0LA_1LD0LA".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2681.
+
+
+Module TM2682.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RF_1LA1RE".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RE_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEE") 0 0.
+Time Qed.
+End TM2682.
+
+
+Module TM2683.
+Definition tm := TM_from_str "1RB1LC_1LC1RA_0LF0LD_0RE1RD_1RB1LC_---0LC".
+Definition tm' := TM_from_str "1RB1LC_1LC1RA_0LE0LD_0RA1RD_---0LC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDAE") 0 0.
+Time Qed.
+End TM2683.
+
+
+Module TM2684.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RE_1LF0LA_1LA1RE_1LE---".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDCE") 0 0.
+Time Qed.
+End TM2684.
+
+
+Module TM2685.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LF_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2685.
+
+
+Module TM2686.
+Definition tm := TM_from_str "1RB1LD_1RC0RB_1LA1RE_1LF0LA_1LA1RC_1LE---".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDCE") 0 0.
+Time Qed.
+End TM2686.
+
+
+Module TM2687.
+Definition tm := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LF_---0RB_1LC0LD".
+Definition tm' := TM_from_str "1RB0RA_0LC1RA_1RE1LD_1LC0LD_---0RB_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDED") 0 0.
+Time Qed.
+End TM2687.
+
+
+Module TM2688.
+Definition tm := TM_from_str "1RB1LC_0RC0RB_1LD0LF_1LE---_1LF0LA_1RB1LC".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA0LA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEA") 0 0.
+Time Qed.
+End TM2688.
+
+
+Module TM2689.
+Definition tm := TM_from_str "1RB1LF_0RC0RB_1LD0LA_1LE---_1LA1RE_1LD0LA".
+Definition tm' := TM_from_str "1RB1LC_0RC0RB_1LD0LA_1LE---_1LA1RE_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEC") 0 0.
+Time Qed.
+End TM2689.
+
+
+Module TM2690.
+Definition tm := TM_from_str "1RB1RF_1LC0RC_1RA1LD_0RE0LB_---1RC_0RE0LB".
+Definition tm' := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDED") 0 0.
+Time Qed.
+End TM2690.
+
+
+Module TM2691.
+Definition tm := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LF_0RF0RA_0LC1RE".
+Definition tm' := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2691.
+
+
+Module TM2692.
+Definition tm := TM_from_str "1RB1LC_1LB1RA_0LF0LD_0RE1RD_1RB1LC_---0LC".
+Definition tm' := TM_from_str "1RB1LC_1LB1RA_0LE0LD_0RA1RD_---0LC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDAE") 0 0.
+Time Qed.
+End TM2692.
+
+
+Module TM2693.
+Definition tm := TM_from_str "1RB1LE_1RC0RB_1LD1RC_1RB1LE_1LF0LA_1LC---".
+Definition tm' := TM_from_str "1RB1LD_1RC0RB_1LA1RC_1LE0LA_1LC---_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCADE") 0 0.
+Time Qed.
+End TM2693.
+
+
+Module TM2694.
+Definition tm := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LF_---1RC_1LC0RC".
+Definition tm' := TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "ABCDEB") 0 0.
+Time Qed.
+End TM2694.
+
+
