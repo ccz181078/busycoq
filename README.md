@@ -6,15 +6,15 @@ We focus on proving whether each TM of given size halt or not, and we don't care
 
 First, there are some proven correct [deciders](https://wiki.bbchallenge.org/wiki/Decider), that can decide whether a TM halts (or fail to decide). We run deciders to solve most of the TMs.
 
-Then, for the rest of the TMs, we can write individual proof for them. If a TM (up to equivalence) haven't been proven, it become a holdout.
+Then, for the rest of the TMs, we can write individual proof for them. If a TM (up to equivalence) haven't been proven, it becomes a holdout.
 
-For BB(6), there're about 3300 holdouts, while about 200 individual proofs haven't been translated to Rocq.
+For BB(6), there're about 1800 holdouts, while about 250 individual proofs haven't been translated to Rocq.
 
 For BB(2,5), there're about 70 holdouts, while about 10 individual proofs haven't been translated to Rocq.
 
 For BB(3,3), see [BB(3,3) - BusyBeaverWiki](https://wiki.bbchallenge.org/wiki/BB(3,3)).
 
-The correctness of equivalence and [TNF enumeration](https://wiki.bbchallenge.org/wiki/Tree_Normal_Form) haven't been proven in Rocq.
+The correctness of [TNF enumeration](https://wiki.bbchallenge.org/wiki/Tree_Normal_Form) haven't been proven in Rocq.
 
 This project is based on [meithecatte/busycoq: Busy Beaver deciders backed by Coq proof](https://github.com/meithecatte/busycoq), a framework of TM definition, simulation and deciders.
 
@@ -142,7 +142,9 @@ This part is under active development, but the basic definitions are stable.
 
 ## Equivalence classes
 
-Two TMs are in the same equivalence class iff they (after state/direction permutation) reach the same configuration.
+The basic method (`Eqv_v2.v`): two TMs are in the same equivalence class iff they (after state/direction permutation) reach the same configuration and have the same transition table.
+
+A stronger method (mainly in `Eqv_v3.v`) is to do the back-symbol transform on TMs first, then simplify the transition table by removing unreachable transitions using CTL, and use the basic method to check equivalence.
 
 If any TM in the equivalence class is decided, all TMs in this class are also decided.
 
@@ -152,7 +154,7 @@ If none of TMs in the equivalence class is decided, one TM in this class is sele
 
 **All Rocq files are in the `verify` folder.**
 
-Use `make` to compile the framework.
+Use `make` to compile the framework. (tested on Coq 8.20)
 
 Individual proofs, hard-coded decider parameters for some TMs, and decider pipeline running on TNF enumeration won't be compiled by `make` because they'll take about **a month** (they depend on the part compiled by `make`, so **don't refactor anything** unless you know what you're doing).
 
