@@ -2,7 +2,10 @@ From BusyCoq Require Import Individual62.
 Require Import Lia.
 Require Import ZArith.
 Require Import String.
-From BusyCoq Require Import SimplTape.
+From BusyCoq Require ES_v2.
+
+Ltac es_v2 := ES_v2.es.
+
 
 Open Scope list.
 
@@ -1284,5 +1287,371 @@ Proof.
 Qed.
 
 End TM11.
+
+
+Module TM12.
+Definition tm := Eval compute in (TM_from_str "1RB1RA_1LC0RF_0LD0LC_1RE0LE_0RB0RC_0RA---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Ltac follow' H :=
+  let I1:=fresh "I" in
+  epose proof H as I1;
+  (eapply evstep_progress_trans || eapply evstep_trans); [| follow H]; [es | ].
+
+Definition S1 l a b c r :=
+  l <* <[1;0]^^a <* <[0;0] <* <[1]^^b {{B}}> [1;0;0;0;0]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l a b (1+c) r -->*
+  S1 l (1+a) (3+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 l a b c r:
+  S1 l a b c r -->*
+  S1 l (c+a) (c*3+b) 0 r.
+Proof.
+  gen a b.
+  ind c Inc1.
+Qed.
+
+Lemma P1 n m l r:
+  l <* <[1;0]^^m <* <[0;0] <* <[1;1]^^m {{A}}> [1;0]^^(4+n*2) *> [0]^^(4+n*5) *> [0;0;0;0;1]^^m *> [0;0;0;0;0] *> r -->*
+  l <{{E}} [0;0] *> [1;0]^^(4+m*2+n*2) *> [0]^^(8+m*5+n*5) *> [1] *> r.
+Proof.
+  gen m l r.
+  induction n; intros.
+  - mid (S1 (l) (3+m) (10+m*2) m ([0]*>r)).
+    1: es.
+    follow Incs1.
+    replace (m+(3+m)) with (3+m*2) by lia.
+    replace (m*3+(10+m*2)) with (10+m*5) by lia.
+    es.
+  - follow' (IHn O ([1;1]^^(1+m)*>[0;0]*>[0;1]^^m*>l) ([0;0;0;0;1]^^m*>[0;0;0;0;0]*>r)).
+    epose proof (IHn (1+m) l r) as I1.
+    remember (4+0*2+n*2) as v1.
+    do 2 (er; sr).
+    subst.
+    follow' I1.
+    es.
+Qed.
+
+Definition S0 '(n,m) := 0inf <* <[1;0]^^(1+m) <* <[0;0] <* <[1;1]^^m {{A}}> [1;0]^^(4+n*2) *> [0]^^(4+n*5) *> [0;0;0;0;1]^^m *> [0;0;1] *> 0inf.
+
+Lemma BigStep_1 n m:
+  S0 (1+n,m) -->+ S0 (n,1+m).
+Proof.
+  unfold S0.
+  follow' (P1 n 0 (0inf<*<[1;0]^^(1+m)<*<[0;0]<*<[1;1]^^(1+m)) ([0;0;0;0;1]^^m*>[0;0;1]*>0inf)).
+  remember (4+0*2+n*2) as v1.
+  do 2 (er; sr).
+  subst.
+  es.
+Qed.
+
+Definition S2 a b c :=
+  [1;0;0] *> [1]^^b *> [0;0;0] *> [1;0]^^a *> 0inf
+  {{B}}> [0;0;1;0;0]^^c *> [1] *> 0inf.
+
+Lemma Inc2 a b c:
+  S2 a b (1+c) -->*
+  S2 (1+a) (3+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 a b c:
+  S2 a b c -->*
+  S2 (c+a) (c*3+b) 0.
+Proof.
+  gen a b.
+  ind c Inc2.
+Qed.
+
+Lemma BigStep_0 m:
+  S0 (O,m) -->+ S0 (1+m,O).
+Proof.
+  mid10 (S2 (3+m) (7+m*2) m).
+  1: es.
+  follow Incs2.
+  replace (m+(3+m)) with (3+m*2) by lia.
+  replace (m*3+(7+m*2)) with (7+m*5) by lia.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (O,O)).
+  1: unfold S0; esx.
+  eapply progress_nonhalt_simple.
+  intros [n m].
+  destruct n.
+  - eexists; apply BigStep_0.
+  - eexists; apply BigStep_1.
+Qed.
+
+End TM12.
+
+
+Module TM13.
+Definition tm := Eval compute in (TM_from_str "1RB0LB_0RC1RB_1LD0RE_0LA0LD_0RF---_1RC1RF").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Ltac follow' H :=
+  let I1:=fresh "I" in
+  epose proof H as I1;
+  (eapply evstep_progress_trans || eapply evstep_trans); [| follow H]; [es | ].
+
+Definition S1 l a b c r :=
+  l <* <[1;0]^^a <* <[0;0] <* <[1]^^b {{C}}> [1;0;0;0;0]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l a b (1+c) r -->*
+  S1 l (1+a) (3+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 l a b c r:
+  S1 l a b c r -->*
+  S1 l (c+a) (c*3+b) 0 r.
+Proof.
+  gen a b.
+  ind c Inc1.
+Qed.
+
+Lemma P1 n m l r:
+  l <* <[1;0]^^m <* <[0;0] <* <[1;1]^^m {{F}}> [1;0]^^(4+n*2) *> [0]^^(4+n*5) *> [0;0;0;0;1]^^m *> [0;0;0;0;0] *> r -->*
+  l <{{B}} [0;0] *> [1;0]^^(4+m*2+n*2) *> [0]^^(8+m*5+n*5) *> [1] *> r.
+Proof.
+  gen m l r.
+  induction n; intros.
+  - mid (S1 (l) (3+m) (10+m*2) m ([0]*>r)).
+    1: es.
+    follow Incs1.
+    replace (m+(3+m)) with (3+m*2) by lia.
+    replace (m*3+(10+m*2)) with (10+m*5) by lia.
+    es.
+  - follow' (IHn O ([1;1]^^(1+m)*>[0;0]*>[0;1]^^m*>l) ([0;0;0;0;1]^^m*>[0;0;0;0;0]*>r)).
+    epose proof (IHn (1+m) l r) as I1.
+    remember (4+0*2+n*2) as v1.
+    do 2 (er; sr).
+    subst.
+    follow' I1.
+    es.
+Qed.
+
+Definition S0 '(n,m) := 0inf <* <[1;0]^^(1+m) <* <[0;0] <* <[1;1]^^m {{F}}> [1;0]^^(4+n*2) *> [0]^^(4+n*5) *> [0;0;0;0;1]^^m *> [0;1] *> 0inf.
+
+Lemma BigStep_1 n m:
+  S0 (1+n,m) -->+ S0 (n,1+m).
+Proof.
+  unfold S0.
+  follow' (P1 n 0 (0inf<*<[1;0]^^(1+m)<*<[0;0]<*<[1;1]^^(1+m)) ([0;0;0;0;1]^^m*>[0;1]*>0inf)).
+  remember (4+0*2+n*2) as v1.
+  do 2 (er; sr).
+  subst.
+  es.
+Qed.
+
+Definition S2 a b c :=
+  [0;0] *> [1]^^b *> [0;0;0] *> [1;0]^^a *> 0inf
+  {{F}}> [0;0;0;1;0]^^c *> [1] *> 0inf.
+
+Lemma Inc2 a b c:
+  S2 a b (1+c) -->*
+  S2 (1+a) (3+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 a b c:
+  S2 a b c -->*
+  S2 (c+a) (c*3+b) 0.
+Proof.
+  gen a b.
+  ind c Inc2.
+Qed.
+
+Lemma BigStep_0 m:
+  S0 (O,m) -->+ S0 (1+m,O).
+Proof.
+  mid10 (S2 (3+m) (7+m*2) m).
+  1: es.
+  follow Incs2.
+  replace (m+(3+m)) with (3+m*2) by lia.
+  replace (m*3+(7+m*2)) with (7+m*5) by lia.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 (O,O)).
+  1: unfold S0; esx.
+  eapply progress_nonhalt_simple.
+  intros [n m].
+  destruct n.
+  - eexists; apply BigStep_0.
+  - eexists; apply BigStep_1.
+Qed.
+
+End TM13.
+
+
+Module TM14.
+Definition tm := Eval compute in (TM_from_str "1RB0RA_1RC0RE_0LD1RA_0LA1LD_1RF0LC_0LE---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Ltac follow' H :=
+  let I1:=fresh "I" in
+  epose proof H as I1;
+  (eapply evstep_progress_trans || eapply evstep_trans); [| follow H]; [es | ].
+
+Definition S1 l a b :=
+  l <* <[1;1;1;0]^^a <* <[0;0;0] <* <[1;1;1;0;0]^^b {{A}}> 0inf.
+
+Lemma Inc1 l a b:
+  S1 l a (1+b) -->*
+  S1 l (1+a) b.
+Proof.
+  unfold S1.
+  es_v2.
+Qed.
+
+Lemma Incs1 l a b:
+  S1 l a b -->*
+  S1 l (b+a) 0.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma P1 n m l:
+  l <* <[1;1;1;0]^^m <* <[0;0;0] <* <[1;1;1;0;0]^^(1+m) {{A}}> [1;1;1;0;0;1;1;1]^^n *> 0inf -->*
+  l <{{A}} [0;1;0;0; 0;0;1;1;1] *> [1;1;1;0;0;1;1;1]^^(m+n) *> 0inf.
+Proof.
+  remember (m+n) as k.
+  gen n m l.
+  induction k using Wf_nat.lt_wf_ind; intros.
+  destruct k.
+  - replace m with O by lia.
+    replace n with O by lia.
+    es.
+  - gen m l.
+    induction n; intros.
+    + mid (S1 l m (1+m)).
+      1: es.
+      follow Incs1.
+      replace (1+m+m) with (1+m*2) by lia.
+      rewrite Heqk.
+      es.
+    + unshelve epose proof (H n _ n O _ ([0;0;1;1;1]^^(1+m)*>[0;0;0]*>[0;1;1;1]^^m*>l)) as I1.
+      1,2: lia.
+      follow' I1.
+      unshelve epose proof (IHn (S m) _ l) as I2.
+      1: lia.
+      follow' I2.
+      es.
+Qed.
+
+Definition S' n :=
+  0inf <* <[1;1;1;0;0;0;0; 1;1;1;0;0] {{A}}> [1;1;1;0;0;1;1;1]^^n *> 0inf.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 0).
+  1: unfold S'; esx.
+  eapply progress_nonhalt_simple.
+  intros n.
+  exists (S n).
+  unfold S'.
+  follow' (P1 n 0 (0inf<*<[1;1;1;0])).
+  follow' (P1 n 0 (0inf<*<[1;1;1;0;0;0;0])).
+  follow' (P1 n 0 (0inf<*<[1;1;1;0]^^2)).
+  es.
+Qed.
+
+End TM14.
+
+
+Module TM15.
+Definition tm := Eval compute in (TM_from_str "1RB1RA_1RC0RF_1RD0LC_0LE1LD_0RA1LC_---0RA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Ltac follow' H :=
+  let I1:=fresh "I" in
+  epose proof H as I1;
+  (eapply evstep_progress_trans || eapply evstep_trans); [| follow H]; [es | ].
+
+Definition S1 l a b c r :=
+  l <* <[0;1]^^a <* <[0;0] <* <[1]^^b {{B}}> [0;0;1;0]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l a b (1+c) r -->*
+  S1 l (1+a) (2+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 l a b c r:
+  S1 l a b c r -->*
+  S1 l (c+a) (c*2+b) 0 r.
+Proof.
+  gen a b.
+  ind c Inc1.
+Qed.
+
+Lemma P1 n m l r:
+  l <* <[0;1]^^m <* <[0;0] <* <[1]^^(2+m) {{B}}> [1;1;1;0]^^(1+n) *> [0]^^(3+n*3) *> [0;0;1;0]^^m *> r -->*
+  l <* <[0;1]^^(2+m*2+n*2) <* <[0;0] <* <[1]^^(5+m*3+n*3) {{B}}> r.
+Proof.
+  gen m l r.
+  induction n; intros.
+  - mid (S1 (l) (2+m) (5+m) m r).
+    1: es.
+    follow Incs1.
+    replace (m+(2+m)) with (2+m*2) by lia.
+    replace (m*2+(5+m)) with (5+m*3) by lia.
+    es.
+  - follow' (IHn O ([1]^^(2+m)*>[0;0]*>[1;0]^^m*>l) ([0;0;0]*>[0;0;1;0]^^m*>r)).
+    follow' (IHn (1+m) l r).
+    finish.
+Qed.
+
+Definition S' n :=
+  0inf <* <[1] <* <[0;0;1;1] {{B}}> [1;1;1;0]^^(1+n) *> [0]^^(3+n*3) *> 0inf.
+
+Lemma BigStep n:
+  S' n -->+
+  S' (1+n).
+Proof.
+  follow (P1 n 0 (0inf<*<[1]) 0inf).
+  follow' (P1 n O (0inf<*<[1]) ([0;0;1]*>0inf)).
+  follow' (P1 n 0 (0inf<*<[1;0;0;1]) ([0;0;0;0;1]*>0inf)).
+  follow' (P1 n O (0inf<*<[1;0;1]) ([0;0;1]^^2*>0inf)).
+  unfold S'.
+  rewrite (lpow_all0 [0]) by solve_const0_eq.
+  st.
+  er; sr.
+  er; sr.
+  er; use_shift_rule.
+  rewrite (lpow_all0 [0;0;0]) by solve_const0_eq.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 0).
+  1: unfold S'; esx.
+  eapply progress_nonhalt_simple.
+  intros n; eexists; apply BigStep.
+Qed.
+
+End TM15.
 
 

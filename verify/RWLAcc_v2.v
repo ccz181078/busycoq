@@ -1,10 +1,10 @@
-From BusyCoq Require Import RWLAcc62.
+From BusyCoq Require Import RWLAcc62_BigUint.
 
 Ltac solve_nonhalt' bsz bmaxT mnc T :=
-  eapply (decide_nonhalt_spec _ bsz bmaxT true mnc T);
+  eapply (decide_nonhalt_spec _ bsz bmaxT true (of_nat (N.to_nat mnc)) T);
   native_cast_no_check (eq_refl true). 
 
-Ltac solve_nonhalt bsz := solve_nonhalt' bsz 3200 N0 (10^8)%N.
+Ltac solve_nonhalt bsz := solve_nonhalt' bsz 3200 0%N (10^8)%N.
 
 Lemma nonhalt1: ~halts (TM_from_str "1RB0LB_0RC---_0RD0LE_0RE0LA_1LF0LA_1LC0LF") c0.
 Proof. solve_nonhalt 4. Time Qed.

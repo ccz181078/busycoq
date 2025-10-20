@@ -851,6 +851,71 @@ Proof.
       eapply progress_evstep,Hstep.
 Qed.
 
+Lemma halts_if : forall tm (A : Type) (i0 : A) (f: A -> option A)
+  (C : A -> Q * tape) (P : A -> Prop),
+  (forall i, P i ->
+  match f i with
+  | Some i' => C i -[ tm ]->* C i' /\ P i'
+  | None => halts tm (C i)
+  end) ->
+  P i0 ->
+  iter_halts f i0 ->
+  halts tm (C i0).
+Proof.
+  introv Hstep Hi0.
+  intro I1.
+  - induction I1.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eauto.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eapply halts_evstep.
+      1: apply IHI1,Hstep.
+      eapply Hstep.
+Qed.
+
+Lemma halts_if_simple : forall tm (A : Type) (i0 : A) (f: A -> option A)
+  (C : A -> Q * tape),
+  (forall i,
+  match f i with
+  | Some i' => C i -[ tm ]->* C i'
+  | None => halts tm (C i)
+  end) ->
+  iter_halts f i0 ->
+  halts tm (C i0).
+Proof.
+  intros.
+  eapply halts_if with (P:=fun _=>True) (f:=f) (C:=C).
+  - intros.
+    specialize (H i).
+    destruct (f i); tauto.
+  - trivial.
+  - apply H0.
+Qed.
+
+Fixpoint iter_halts_c{A}(f:A->option A)(x:A)(T:nat) :=
+match T with
+| O => false
+| S T0 =>
+  match f x with
+  | Some x' => iter_halts_c f x' T0
+  | None => true
+  end
+end.
+
+Lemma iter_halts_c_spec {A} f (x:A) T:
+  iter_halts_c f x T = true ->
+  iter_halts f x.
+Proof.
+  gen x.
+  induction T; cbn; intros.
+  - congruence.
+  - destruct (f x) eqn:E.
+    + eapply iter_halts_S; eauto.
+    + econstructor; eauto.
+Qed.
+
 Definition sigma_score_sym: Sym->nat :=
   fun s =>
   (if sym_eqb s s0 then 0 else 1)%nat.

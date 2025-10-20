@@ -5,6 +5,7 @@ Require Import String.
 Require Import List.
 From BusyCoq Require ES_v2.
 From BusyCoq Require Import NatMod.
+From BusyCoq Require NatMod_v2.
 
 Ltac es_v2 := ES_v2.es.
 Ltac flia := repeat (lia || f_equal).
@@ -669,5 +670,153 @@ Proof.
 Qed.
 
 End TM4.
+
+
+Module TM5.
+Definition tm := Eval compute in (TM_from_str "1RB0LD_1RC0RF_1LC1LA_0LE---_1LF0RB_0RC0RE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c :=
+  0inf <* [1] <* [0]^^a <* [1] <* [0]^^b <* <[1;0] <* [0;0;0]^^c {{F}}> 0inf.
+
+Lemma Inc1 a b c:
+  S1 a (1+b) c -->*
+  S1 a b (1+c).
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c:
+  S1 a b c -->*
+  S1 a 0 (b+c).
+Proof.
+  gen c.
+  ind b Inc1.
+Qed.
+
+Lemma Rst1 a c:
+  S1 (4+a) 0 c -->*
+  S1 a (c*3+7) 0.
+Proof.
+  es.
+Qed.
+
+Lemma Ov0 c:
+  halts tm (S1 0 0 c).
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma Ov1 c:
+  S1 1 0 c -->*
+  S1 (c*3+5) 0 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov2 c:
+  S1 2 0 c -->*
+  S1 (c*3+5) 0 1.
+Proof.
+  es.
+Qed.
+
+Lemma Ov3 c:
+  S1 3 0 c -->*
+  S1 (c*3+11) 0 1.
+Proof.
+  es.
+Qed.
+
+Lemma pow3mod2 k:
+  3^k mod 2 = 1%nat.
+Proof.
+  induction k.
+  - reflexivity.
+  - cbn[Nat.pow].
+    rewrite Nat.Div0.mul_mod.
+    rewrite IHk.
+    reflexivity.
+Qed.
+
+Lemma IncsRst1s n a:
+  S1 (a+n*4) 0 1 -->*
+  S1 a 0 ((3^n*9-7)/2).
+Proof.
+  gen a.
+  induction n; intros.
+  - finish.
+  - follow (IHn (4+a)).
+    follow Rst1.
+    follow Incs1.
+    cbn[Nat.pow].
+    pose proof (pow3mod2 n).
+    finish.
+Qed.
+
+Definition S' (x:nat*nat) := let '(a,b):=x in S1 b 0 1.
+
+Local Opaque Nat.div Nat.modulo.
+Close Scope sym.
+Import NatMod_v2.
+Import PairIter.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep with (c':=S' (0,5)).
+  2: unfold S',S1; esx.
+  eapply halts_if_simple with
+    (C:=S')
+    (f:=fun '(a,b0) =>
+    let b:=b0/4 in
+    match b0 mod 4 with
+    | 1 => Some (a,((3^b*9-7)/2)*3+5)
+    | 2 => Some (a,((3^b*9-7)/2)*3+5)
+    | 3 => Some (a,((3^b*9-7)/2)*3+11)
+    | _ => None
+    end).
+  - intros [a b0].
+    epose proof (div_mod' b0 4 (b0 mod 4) (eq_refl)) as I1.
+    remember (b0/4) as b.
+    unfold S'.
+    destruct (b0 mod 4) as [|[|[|[|]]]]; subst b0.
+    + eapply halts_evstep.
+      2: apply IncsRst1s.
+      apply Ov0.
+    + follow IncsRst1s.
+      apply Ov1.
+    + follow IncsRst1s.
+      apply Ov2.
+    + follow IncsRst1s.
+      apply Ov3.
+    + lia.
+  - eapply pair_iter_halts_if with (g:=fun ls =>
+    let a := Nvar 0 in
+    let b0 := Nvar 1 in
+    let b:=(b0/4)%Nexpr in
+    match Nmod'' (2^30) b0 ls 4 with
+    | None => Some ls
+    | Some b1 =>
+      (match b1 with
+      | 1 => cons2 (a,((3^b*9-7)/2)*3+5) ls
+      | 2 => cons2 (a,((3^b*9-7)/2)*3+5) ls
+      | 3 => cons2 (a,((3^b*9-7)/2)*3+11) ls
+      | _ => None
+      end)%Nexpr
+    end).
+    2:{
+      apply iter_halts_c_spec with (T:=16).
+      vm_compute; reflexivity.
+    }
+    solve_v1.
+    destruct (z mod 4) as [|[|[|[|]]]].
+    5: lia.
+    all: solve_v2.
+Qed.
+
+End TM5.
 
 

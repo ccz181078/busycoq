@@ -274,6 +274,41 @@ Proof.
   apply (unflip_evstep _ _ _ H).
 Qed.
 
+Lemma sideRLs_wall tm h1 r:
+  sideRLs tm h1 r r ->
+  forall k, sideRLs tm (h1^^k) r r.
+Proof.
+  intros.
+  induction k.
+  1: constructor.
+  replace (S k) with (1+k) by lia.
+  cbn.
+  eapply sideRLs_trans.
+  2: apply IHk.
+  apply H.
+Qed.
+
+Lemma sideRLs_1 tm hR hL r r':
+  sideRLs tm [(hR,hL)] r r' ->
+  forall l, l {{{ (hR,R) }}} r -[ tm ]->+ l {{{ (hL,L) }}} r'.
+Proof.
+  intros.
+  inverts H.
+  inverts H6.
+  apply H5.
+Qed.
+
+Lemma sideRLs_1L tm hR hL l l':
+  sideRLs (flip tm) [(hL,hR)] l l' ->
+  forall r, l {{{ (hL,L) }}} r -[ tm ]->+ l' {{{ (hR,R) }}} r.
+Proof.
+  intros.
+  eapply sideRLs_1 in H.
+  apply unflip_progress in H.
+  destruct hL,hR.
+  apply H.
+Qed.
+
 
 Module UC2.
 Section UnaryCounter2.

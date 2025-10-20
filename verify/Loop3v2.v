@@ -3164,3 +3164,1018 @@ Qed.
 End TM28.
 
 
+Module TM29.
+Definition tm := Eval compute in (TM_from_str "1RB1LC_0RC1RB_1LD0LE_1RE---_0LF0RE_1LA1LF").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b :=
+  0inf <{{F}} [1]^^a *> [0;0;1] *> [0;1;1]^^b *> 0inf.
+
+Lemma Inc0 a b:
+  S0 a (1+b) -->*
+  S0 (5+a) b.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 a b:
+  S0 a b -->*
+  S0 (b*5+a) 0.
+Proof.
+  gen a.
+  ind b Inc0.
+Qed.
+
+Lemma Ov2 a:
+  S0 (5+a*3) 0 -->+
+  S0 (a*5+15) 0.
+Proof.
+  mid10 (S0 15 a).
+  1: es.
+  follow Incs0.
+  finish.
+Qed.
+
+Lemma Ov0 a:
+  S0 (a*3) 0 -->+
+  S0 (a*5+7) 0.
+Proof.
+  mid10 (S0 2 (1+a)).
+  1: es.
+  follow Incs0.
+  finish.
+Qed.
+
+Definition S1 a b c :=
+  0inf <* [1] <* [0]^^a <{{F}} [1]^^b *> [0;0;1] *> [0;1;1]^^c *> 0inf.
+
+Lemma Inc1 a b c:
+  S1 (2+a) b (1+c) -->*
+  S1 a (5+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n a b c:
+  S1 (n*2+a) b (n+c) -->*
+  S1 a (n*5+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Ov1' b c:
+  S1 1 b c -->*
+  S1 (3+b) 0 c.
+Proof.
+  es.
+Qed.
+
+Lemma Ov0' b c:
+  S1 0 b (1+c) -->*
+  S0 (6+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Ov1 a:
+  169<=a ->
+  S0 (1+a*3) 0 -->+
+  S0 (a*5-319) 0.
+Proof.
+  intros.
+  mid10 (S1 1 2 (1+a)).
+  1: es.
+  follow Ov1'.
+  mid (S1 (2*2+1) 0 (2+(a-1))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (6*2+1) 0 (6+(a-7))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (16*2+1) 0 (16+(a-23))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (41*2+1) 0 (41+(a-64))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (104*2+0) 0 (104+(1+(a-169)))).
+  1: finish.
+  follow Incs1.
+  follow Ov0'.
+  follow Incs0.
+  finish.
+Qed.
+
+Definition S' n := S0 n 0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 532).
+  1: eapply without_counter with (n:=N.to_nat 92485).
+  1: eapply multistep_c_spec; vm_compute; simpl_tape; reflexivity.
+  eapply progress_nonhalt_cond with (P:=fun n=>n>=510).
+  2: lia.
+  intros n HP.
+  remember (n mod 3) as n1.
+  unfold S'.
+  destruct n1 as [|[|[|]]].
+  4: lia.
+  - replace n with (n/3*3) by lia.
+    eexists; split.
+    1: apply Ov0.
+    lia.
+  - replace n with (1+n/3*3) by lia.
+    eexists; split.
+    1: apply Ov1; lia.
+    lia.
+  - replace n with (5+(n/3-1)*3) by lia.
+    eexists; split.
+    1: apply Ov2.
+    lia.
+Qed.
+
+End TM29.
+
+
+Module TM30.
+Definition tm := Eval compute in (TM_from_str "1LB0LC_1RC---_0LD0RC_1LE1LD_1RF1LA_0RA1RF").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b :=
+  0inf <{{D}} [1]^^a *> [0;0;1] *> [0;1;1]^^b *> 0inf.
+
+Lemma Inc0 a b:
+  S0 a (1+b) -->*
+  S0 (5+a) b.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 a b:
+  S0 a b -->*
+  S0 (b*5+a) 0.
+Proof.
+  gen a.
+  ind b Inc0.
+Qed.
+
+Lemma Ov2 a:
+  S0 (5+a*3) 0 -->+
+  S0 (a*5+15) 0.
+Proof.
+  mid10 (S0 15 a).
+  1: es.
+  follow Incs0.
+  finish.
+Qed.
+
+Lemma Ov0 a:
+  S0 (a*3) 0 -->+
+  S0 (a*5+7) 0.
+Proof.
+  mid10 (S0 2 (1+a)).
+  1: es.
+  follow Incs0.
+  finish.
+Qed.
+
+Definition S1 a b c :=
+  0inf <* [1] <* [0]^^a <{{D}} [1]^^b *> [0;0;1] *> [0;1;1]^^c *> 0inf.
+
+Lemma Inc1 a b c:
+  S1 (2+a) b (1+c) -->*
+  S1 a (5+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n a b c:
+  S1 (n*2+a) b (n+c) -->*
+  S1 a (n*5+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Ov1' b c:
+  S1 1 b c -->*
+  S1 (3+b) 0 c.
+Proof.
+  es.
+Qed.
+
+Lemma Ov0' b c:
+  S1 0 b (1+c) -->*
+  S0 (6+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Ov1 a:
+  169<=a ->
+  S0 (1+a*3) 0 -->+
+  S0 (a*5-319) 0.
+Proof.
+  intros.
+  mid10 (S1 1 2 (1+a)).
+  1: es.
+  follow Ov1'.
+  mid (S1 (2*2+1) 0 (2+(a-1))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (6*2+1) 0 (6+(a-7))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (16*2+1) 0 (16+(a-23))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (41*2+1) 0 (41+(a-64))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (104*2+0) 0 (104+(1+(a-169)))).
+  1: finish.
+  follow Incs1.
+  follow Ov0'.
+  follow Incs0.
+  finish.
+Qed.
+
+Definition S' n := S0 n 0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 1041).
+  1: eapply without_counter with (n:=N.to_nat 616734).
+  1: eapply multistep_c_spec; vm_compute; simpl_tape; reflexivity.
+  eapply progress_nonhalt_cond with (P:=fun n=>n>=510).
+  2: lia.
+  intros n HP.
+  remember (n mod 3) as n1.
+  unfold S'.
+  destruct n1 as [|[|[|]]].
+  4: lia.
+  - replace n with (n/3*3) by lia.
+    eexists; split.
+    1: apply Ov0.
+    lia.
+  - replace n with (1+n/3*3) by lia.
+    eexists; split.
+    1: apply Ov1; lia.
+    lia.
+  - replace n with (5+(n/3-1)*3) by lia.
+    eexists; split.
+    1: apply Ov2.
+    lia.
+Qed.
+
+End TM30.
+
+
+Module TM31.
+Definition tm := Eval compute in (TM_from_str "1RB---_0LC0RB_1LD1LC_1RE1LF_0RF1RE_1LA0LB").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b :=
+  0inf <{{C}} [1]^^a *> [0;0;1] *> [0;1;1]^^b *> 0inf.
+
+Lemma Inc0 a b:
+  S0 a (1+b) -->*
+  S0 (5+a) b.
+Proof.
+  es.
+Qed.
+
+Lemma Incs0 a b:
+  S0 a b -->*
+  S0 (b*5+a) 0.
+Proof.
+  gen a.
+  ind b Inc0.
+Qed.
+
+Lemma Ov2 a:
+  S0 (5+a*3) 0 -->+
+  S0 (a*5+15) 0.
+Proof.
+  mid10 (S0 15 a).
+  1: es.
+  follow Incs0.
+  finish.
+Qed.
+
+Lemma Ov0 a:
+  S0 (a*3) 0 -->+
+  S0 (a*5+7) 0.
+Proof.
+  mid10 (S0 2 (1+a)).
+  1: es.
+  follow Incs0.
+  finish.
+Qed.
+
+Definition S1 a b c :=
+  0inf <* [1] <* [0]^^a <{{C}} [1]^^b *> [0;0;1] *> [0;1;1]^^c *> 0inf.
+
+Lemma Inc1 a b c:
+  S1 (2+a) b (1+c) -->*
+  S1 a (5+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n a b c:
+  S1 (n*2+a) b (n+c) -->*
+  S1 a (n*5+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Ov1' b c:
+  S1 1 b c -->*
+  S1 (3+b) 0 c.
+Proof.
+  es.
+Qed.
+
+Lemma Ov0' b c:
+  S1 0 b (1+c) -->*
+  S0 (6+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Ov1 a:
+  169<=a ->
+  S0 (1+a*3) 0 -->+
+  S0 (a*5-319) 0.
+Proof.
+  intros.
+  mid10 (S1 1 2 (1+a)).
+  1: es.
+  follow Ov1'.
+  mid (S1 (2*2+1) 0 (2+(a-1))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (6*2+1) 0 (6+(a-7))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (16*2+1) 0 (16+(a-23))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (41*2+1) 0 (41+(a-64))).
+  1: finish.
+  follow Incs1.
+  follow Ov1'.
+  mid (S1 (104*2+0) 0 (104+(1+(a-169)))).
+  1: finish.
+  follow Incs1.
+  follow Ov0'.
+  follow Incs0.
+  finish.
+Qed.
+
+Definition S' n := S0 n 0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 562).
+  1: eapply without_counter with (n:=N.to_nat 114973).
+  1: eapply multistep_c_spec; vm_compute; simpl_tape; reflexivity.
+  eapply progress_nonhalt_cond with (P:=fun n=>n>=510).
+  2: lia.
+  intros n HP.
+  remember (n mod 3) as n1.
+  unfold S'.
+  destruct n1 as [|[|[|]]].
+  4: lia.
+  - replace n with (n/3*3) by lia.
+    eexists; split.
+    1: apply Ov0.
+    lia.
+  - replace n with (1+n/3*3) by lia.
+    eexists; split.
+    1: apply Ov1; lia.
+    lia.
+  - replace n with (5+(n/3-1)*3) by lia.
+    eexists; split.
+    1: apply Ov2.
+    lia.
+Qed.
+
+End TM31.
+
+
+Module TM32.
+Definition tm := Eval compute in (TM_from_str "1LB1LE_0LC1LF_1RD1RC_1LA0RD_0RC0RF_---0LD").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b :=
+  0inf <{{A}} [1;0;1;0;1;0;1] *> [1;1;1]^^a *> [0] *> [1;0]^^b *> 0inf.
+
+Lemma Inc0 a b:
+  S0 a (4+b) -->+
+  S0 (5+a) b.
+Proof.
+  es.
+Qed.
+
+Lemma Ov00 a:
+  S0 (4+a*2) 0 -->+
+  S0 10 (a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov01 a:
+  S0 (a*2) 1 -->+
+  S0 2 (3+a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov03 a:
+  S0 (a*2) 3 -->+
+  S0 10 (1+a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov10 a:
+  S0 (a*2+1) 0 -->+
+  S0 4 (a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov12 a:
+  S0 (a*2+1) 2 -->+
+  S0 2 (5+a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov13 a:
+  S0 (a*2+1) 3 -->+
+  S0 4 (7+a*3).
+Proof.
+  es.
+Qed.
+
+Definition S1 l a b c :=
+  l <* [0]^^(1+a) <{{B}} [1;1;1]^^b *> [0] *> [1;0]^^c *> 0inf.
+
+Lemma Inc1 l a b c:
+  S1 l (2+a) b (2+c) -->*
+  S1 l a (2+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c:
+  S1 l (n*2+a) b (n*2+c) -->*
+  S1 l a (n*2+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Ov1a b c:
+  S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) 1 (1+b) (1+c) -->*
+  S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^6) (2+b*3) 1 c.
+Proof. es. Qed.
+
+Lemma Ov0b b c k:
+  S1 (0inf <* [1]^^k <* [0]^^4 <* [1]^^6) 0 (1+b) (1+c) -->*
+  S1 (0inf <* [1]^^k <* [0]^^4 <* [1]^^7) (1+b*3) 1 c.
+Proof. es. Qed.
+
+Lemma Ov1c b c:
+  S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^7) 1 (1+b) (1+c) -->*
+  S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^6) (2+b*3) 1 c.
+Proof. es. Qed.
+
+Lemma Ov1d b c:
+  S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^7) 1 b c -->*
+  S1 0inf 0 (12+b) c.
+Proof. es. Qed.
+
+
+Lemma Ov11 a:
+  273<=a ->
+  S0 (a*2+1) 1 -->+
+  S1 0inf 0 559 (a*3-817).
+Proof.
+  intros.
+  unfold S0.
+  st.
+  do 4 (er; sr).
+  do 132 step1.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) 7 1 (1+a*3)).
+  1: es.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) (3*2+1) 1 (3*2+(1+(a*3-6)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1a 6).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^6) (10*2+0) 1 (10*2+(1+(a*3-27)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 20).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^7) (30*2+1) 1 (30*2+(1+(a*3-88)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1c 60).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^6) (91*2+0) 1 (91*2+(1+(a*3-271)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 182).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^7) (273*2+1) 1 (273*2+((a*3-817)))).
+  1: finish.
+  follow Incs1.
+  follow Ov1d.
+  finish.
+Qed.
+
+Lemma Ov02 a:
+  273<=a ->
+  S0 (a*2) 2 -->+
+  S1 0inf 0 559 (a*3-818).
+Proof.
+  intros.
+  unfold S0.
+  st.
+  do 4 (er; sr).
+  do 132 step1.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) 7 1 (a*3)).
+  1: es.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) (3*2+1) 1 (3*2+(1+(a*3-7)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1a 6).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^6) (10*2+0) 1 (10*2+(1+(a*3-28)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 20).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^7) (30*2+1) 1 (30*2+(1+(a*3-89)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1c 60).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^6) (91*2+0) 1 (91*2+(1+(a*3-272)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 182).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^7) (273*2+1) 1 (273*2+((a*3-818)))).
+  1: finish.
+  follow Incs1.
+  follow Ov1d.
+  finish.
+Qed.
+
+Lemma Inc1' b c:
+  S1 0inf 0 b (2+c) -->+
+  S1 0inf 0 (2+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Rst00 b:
+  S1 0inf 0 (2+b*2) 0 -->+
+  S1 0inf 0 2 (2+b*3).
+Proof.
+  es.
+Qed.
+
+Lemma Rst01 b:
+  S1 0inf 0 (2+b*2) 1 -->+
+  S0 5 (b*3).
+Proof.
+  es.
+Qed.
+
+Lemma Rst10 b:
+  S1 0inf 0 (5+b*2) 0 -->+
+  S0 5 (2+b*3).
+Proof.
+  es.
+Qed.
+
+Lemma Rst11 b:
+  S1 0inf 0 (1+b*2) 1 -->+
+  S1 0inf 0 2 (3+b*3).
+Proof.
+  es.
+Qed.
+
+Inductive Config :=
+| cfg0(a b:nat)
+| cfg1(a b:nat).
+
+Definition cfg(x:Config) :=
+match x with
+| cfg0 a b => S0 a b
+| cfg1 a b => S1 0inf 0 a b
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfg0 a b => a*3+b*2>=1900
+| cfg1 a b => a*3+b*2>=1900
+end.
+
+Ltac flia :=
+  lia || (f_equal; flia).
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=cfg (cfg0 647 3)).
+  1: eapply without_counter with (n:=N.to_nat 961886).
+  1: eapply multistep_c_spec; vm_compute; simpl_tape; reflexivity.
+  eapply progress_nonhalt_cond with (P:=P); unfold P.
+  2: lia.
+  intros [a b|a b] HP; cbn[cfg].
+  - destruct b as [|[|[|[|]]]].
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov00 (a/2-2)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov10 (a/2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov01 (a/2)); flia.
+        lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Ov11 (a/2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Ov02 (a/2)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov12 (a/2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov03 (a/2)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov13 (a/2)); flia.
+        lia.
+    }
+    {
+      eexists (cfg0 _ _); split.
+      1: apply Inc0.
+      lia.
+    }
+  - destruct b as [|[|]].
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Rst00 (a/2-1)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Rst10 (a/2-2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Rst01 (a/2-1)); flia.
+        lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Rst11 (a/2)); flia.
+        lia.
+    }
+    {
+      eexists (cfg1 _ _); split.
+      1: apply Inc1'.
+      lia.
+    }
+Qed.
+
+End TM32.
+
+
+Module TM33.
+Definition tm := Eval compute in (TM_from_str "1LB0RA_1LC1LE_0LD1LF_1RA1RD_0RD0RF_---0LA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S0 a b :=
+  0inf <{{B}} [1;0;1;0;1;0;1] *> [1;1;1]^^a *> [0] *> [1;0]^^b *> 0inf.
+
+Lemma Inc0 a b:
+  S0 a (4+b) -->+
+  S0 (5+a) b.
+Proof.
+  es.
+Qed.
+
+Lemma Ov00 a:
+  S0 (4+a*2) 0 -->+
+  S0 10 (a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov01 a:
+  S0 (a*2) 1 -->+
+  S0 2 (3+a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov03 a:
+  S0 (a*2) 3 -->+
+  S0 10 (1+a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov10 a:
+  S0 (a*2+1) 0 -->+
+  S0 4 (a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov12 a:
+  S0 (a*2+1) 2 -->+
+  S0 2 (5+a*3).
+Proof.
+  es.
+Qed.
+
+Lemma Ov13 a:
+  S0 (a*2+1) 3 -->+
+  S0 4 (7+a*3).
+Proof.
+  es.
+Qed.
+
+Definition S1 l a b c :=
+  l <* [0]^^(1+a) <{{C}} [1;1;1]^^b *> [0] *> [1;0]^^c *> 0inf.
+
+Lemma Inc1 l a b c:
+  S1 l (2+a) b (2+c) -->*
+  S1 l a (2+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c:
+  S1 l (n*2+a) b (n*2+c) -->*
+  S1 l a (n*2+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Ov1a b c:
+  S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) 1 (1+b) (1+c) -->*
+  S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^6) (2+b*3) 1 c.
+Proof. es. Qed.
+
+Lemma Ov0b b c k:
+  S1 (0inf <* [1]^^k <* [0]^^4 <* [1]^^6) 0 (1+b) (1+c) -->*
+  S1 (0inf <* [1]^^k <* [0]^^4 <* [1]^^7) (1+b*3) 1 c.
+Proof. es. Qed.
+
+Lemma Ov1c b c:
+  S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^7) 1 (1+b) (1+c) -->*
+  S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^6) (2+b*3) 1 c.
+Proof. es. Qed.
+
+Lemma Ov1d b c:
+  S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^7) 1 b c -->*
+  S1 0inf 0 (12+b) c.
+Proof. es. Qed.
+
+
+Lemma Ov11 a:
+  273<=a ->
+  S0 (a*2+1) 1 -->+
+  S1 0inf 0 559 (a*3-817).
+Proof.
+  intros.
+  unfold S0.
+  st.
+  do 4 (er; sr).
+  do 132 step1.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) 7 1 (1+a*3)).
+  1: es.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) (3*2+1) 1 (3*2+(1+(a*3-6)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1a 6).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^6) (10*2+0) 1 (10*2+(1+(a*3-27)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 20).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^7) (30*2+1) 1 (30*2+(1+(a*3-88)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1c 60).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^6) (91*2+0) 1 (91*2+(1+(a*3-271)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 182).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^7) (273*2+1) 1 (273*2+((a*3-817)))).
+  1: finish.
+  follow Incs1.
+  follow Ov1d.
+  finish.
+Qed.
+
+Lemma Ov02 a:
+  273<=a ->
+  S0 (a*2) 2 -->+
+  S1 0inf 0 559 (a*3-818).
+Proof.
+  intros.
+  unfold S0.
+  st.
+  do 4 (er; sr).
+  do 132 step1.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) 7 1 (a*3)).
+  1: es.
+  mid (S1 (0inf <* [1]^^5 <* [0]^^4 <* [1]^^7) (3*2+1) 1 (3*2+(1+(a*3-7)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1a 6).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^6) (10*2+0) 1 (10*2+(1+(a*3-28)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 20).
+  mid (S1 (0inf <* [1]^^9 <* [0]^^4 <* [1]^^7) (30*2+1) 1 (30*2+(1+(a*3-89)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov1c 60).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^6) (91*2+0) 1 (91*2+(1+(a*3-272)))).
+  1: finish.
+  follow Incs1.
+  follow (Ov0b 182).
+  mid (S1 (0inf <* [1]^^15 <* [0]^^4 <* [1]^^7) (273*2+1) 1 (273*2+((a*3-818)))).
+  1: finish.
+  follow Incs1.
+  follow Ov1d.
+  finish.
+Qed.
+
+Lemma Inc1' b c:
+  S1 0inf 0 b (2+c) -->+
+  S1 0inf 0 (2+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Rst00 b:
+  S1 0inf 0 (2+b*2) 0 -->+
+  S1 0inf 0 2 (2+b*3).
+Proof.
+  es.
+Qed.
+
+Lemma Rst01 b:
+  S1 0inf 0 (2+b*2) 1 -->+
+  S0 5 (b*3).
+Proof.
+  es.
+Qed.
+
+Lemma Rst10 b:
+  S1 0inf 0 (5+b*2) 0 -->+
+  S0 5 (2+b*3).
+Proof.
+  es.
+Qed.
+
+Lemma Rst11 b:
+  S1 0inf 0 (1+b*2) 1 -->+
+  S1 0inf 0 2 (3+b*3).
+Proof.
+  es.
+Qed.
+
+Inductive Config :=
+| cfg0(a b:nat)
+| cfg1(a b:nat).
+
+Definition cfg(x:Config) :=
+match x with
+| cfg0 a b => S0 a b
+| cfg1 a b => S1 0inf 0 a b
+end.
+
+Definition P(x:Config):Prop :=
+match x with
+| cfg0 a b => a*3+b*2>=1900
+| cfg1 a b => a*3+b*2>=1900
+end.
+
+Ltac flia :=
+  lia || (f_equal; flia).
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=cfg (cfg0 274 615)).
+  1: eapply without_counter with (n:=N.to_nat 956340).
+  1: eapply multistep_c_spec; vm_compute; simpl_tape; reflexivity.
+  eapply progress_nonhalt_cond with (P:=P); unfold P.
+  2: lia.
+  intros [a b|a b] HP; cbn[cfg].
+  - destruct b as [|[|[|[|]]]].
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov00 (a/2-2)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov10 (a/2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov01 (a/2)); flia.
+        lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Ov11 (a/2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Ov02 (a/2)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov12 (a/2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov03 (a/2)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Ov13 (a/2)); flia.
+        lia.
+    }
+    {
+      eexists (cfg0 _ _); split.
+      1: apply Inc0.
+      lia.
+    }
+  - destruct b as [|[|]].
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Rst00 (a/2-1)); flia.
+        lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Rst10 (a/2-2)); flia.
+        lia.
+    }
+    {
+      assert ((a mod 2 = 0\/a mod 2 = 1)%nat) as [E|E] by lia.
+      - eexists (cfg0 _ _); split.
+        1: applys_eq (Rst01 (a/2-1)); flia.
+        lia.
+      - eexists (cfg1 _ _); split.
+        1: applys_eq (Rst11 (a/2)); flia.
+        lia.
+    }
+    {
+      eexists (cfg1 _ _); split.
+      1: apply Inc1'.
+      lia.
+    }
+Qed.
+
+End TM33.
+
+
