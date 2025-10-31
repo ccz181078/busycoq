@@ -339,3 +339,410 @@ Qed.
 End TM2.
 
 
+Module TM3.
+
+Definition tm := Eval compute in (TM_from_str "1RB0RE_1LC1RC_1RA0LD_0LC1LB_---0RF_1RF0RB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation "l <| r" := (l <{{B}} [1;0;0] *> r) (at level 30).
+Notation "l |> r" := (l <* [1;1;1] {{B}}> r) (at level 30).
+
+Notation hL := (B,[1;0;0]).
+Notation hR := (B,[1;1;1]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+
+Definition LC a b := 0inf <* [1]^^a <* <[1;0;0] <* [1]^^b <* <[1;0].
+
+Lemma LInc a b r:
+  LC a (1+b) <| r -->*
+  LC (1+a) b |> r.
+Proof.
+  unfold LC.
+  es.
+Qed.
+
+Lemma LIncs a b:
+  sideRLs tm' (hLR^^b) (LC a b) (LC (b+a) 0).
+Proof.
+  unfold LC.
+  gen a.
+  induction b; intros.
+  - esx.
+  - replace (S b) with (1+b) by lia.
+    rewrite lpow_add.
+    eapply sideRLs_trans.
+    2: applys_eq (IHb (1+a)); flia.
+    esx.
+Qed.
+
+Lemma LOv a r:
+  LC a 0 <| r -->*
+  LC 1 a |> [0] *> r.
+Proof.
+  unfold LC.
+  es.
+Qed.
+
+Definition RC0 len n r := BinDec [0;0;0] [1;0;0] len n r.
+
+Lemma RInc0 len n l r:
+  1+n<2^len ->
+  l |> RC0 len (1+n) r -->+
+  l <| RC0 len n r.
+Proof.
+  eapply RBinDec_spec.
+  es.
+Qed.
+
+Definition RC1 len n r := BinDec [0;1;0] [0;0;0] len n r.
+
+Lemma RC0_0 len n r:
+  n<2^len ->
+  [0] *> RC0 len n r =
+  RC1 len (2^len-1-n) ([0]*>r).
+Proof.
+  unfold RC0,RC1.
+  gen n.
+  induction len; intros.
+  - replace n with O by lia.
+    reflexivity.
+  - cbn[Nat.pow] in *.
+    rewrite <-Nat.add_1_r.
+    divmod2_cases n.
+    1: replace (2*2^len-1-n'*2) with ((2^len-1-n')*2+1) by lia.
+    2: replace (2*2^len-1-(n'*2+1)) with ((2^len-1-n')*2) by lia.
+    1,2: rw_Bin; solve_pow2_lt;
+    rewrite <-IHlen by lia; reflexivity.
+Qed.
+
+Lemma RIncs1 len n r:
+  n<2^len ->
+  sideRLs tm (hRL^^(n*2)) (RC1 len n r) ([0;0;0]^^len *> r).
+Proof.
+  unfold RC1.
+  gen n.
+  induction len; intros.
+  - replace n with O by lia.
+    esx.
+  - cbn[Nat.pow] in *.
+    cbn[lpow]; rewrite Str_app_assoc.
+    rewrite <-(Nat.add_1_r len).
+    divmod2_cases n;
+    rw_Bin; solve_pow2_lt.
+    + eapply segRLs_sideRLs_concat.
+      2: apply IHlen; lia.
+      replace ((n'*2)*2) with (n'*2*2+0) by lia.
+      eapply segRLs_addmul''; esx.
+    + eapply segRLs_sideRLs_concat.
+      2: apply IHlen; lia.
+      replace ((n'*2+1)*2) with (n'*2*2+2) by lia.
+      eapply segRLs_addmul''; esx.
+Qed.
+
+Lemma RIncs0 len n n0 r r':
+  n<2^len ->
+  sideRLs tm (hRL^^n0) r r' ->
+  sideRLs tm (hRL^^(n0*2^len+n)) ([0;0;0]^^len*>r) (RC0 len (2^len-1-n) r').
+Proof.
+  unfold RC0.
+  intros.
+  gen n.
+  induction len; intros.
+  - applys_eq H0; flia.
+  - cbn[Nat.pow] in *.
+    cbn[lpow]; rewrite Str_app_assoc.
+    rewrite <-(Nat.add_1_r len).
+    divmod2_cases n.
+    + replace (2*2^len-1-n'*2) with ((2^len-1-n')*2+1) by lia.
+      rw_Bin; solve_pow2_lt.
+      eapply segRLs_sideRLs_concat.
+      2: apply IHlen; lia.
+      replace (n0*2*2^len+n'*2) with ((n0*2^len+n')*2+0) by lia.
+      apply segRLs_addmul''; esx.
+    + replace (2*2^len-1-(n'*2+1)) with ((2^len-1-n')*2) by lia.
+      rw_Bin; solve_pow2_lt.
+      eapply segRLs_sideRLs_concat.
+      2: apply IHlen; lia.
+      replace (n0*2*2^len+(n'*2+1)) with ((n0*2^len+n')*2+1) by lia.
+      apply segRLs_addmul''; esx.
+Qed.
+
+Lemma RIncs len n n0 n1 r r':
+  n<2^len ->
+  n1<2^len ->
+  sideRLs tm (hRL^^n0) ([0]*>r) r' ->
+  sideRLs tm (hRL^^(n*2+(n0*2^len+n1))) ([0]*>RC0 len (2^len-1-n) r) (RC0 len (2^len-1-n1) r').
+Proof.
+  intros.
+  rewrite RC0_0 by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: applys_eq (RIncs1 len n); flia.
+  apply RIncs0; assumption.
+Qed.
+
+Definition S0 a len n r :=
+  LC a 0 <| RC0 len (2^len-1-n) r.
+
+Lemma OvIncs' len n n0 n1 r r':
+  n<2^len ->
+  n1<2^len ->
+  (n*2+(n0*2^len+n1)) <> O ->
+  sideRLs tm (hRL^^n0) ([0]*>r) r' ->
+  S0 (n*2+(n0*2^len+n1)-1) len n r -->+
+  S0 (n*2+(n0*2^len+n1)) len n1 r'.
+Proof.
+  intros.
+  unfold S0.
+  follow LOv.
+  epose proof (sideRLs_concat) as I.
+  rewrite (lrcons_lpow1 hR hL (n*2+(n0*2^len+n1))) in I by lia.
+  specialize (I (LIncs 1 _) (RIncs _ _ _ _ _ _ H H0 H2)).
+  unfold to_DH_config in I.
+  follow10 I.
+  finish.
+Qed.
+
+Lemma OvIncs len n n0 n1 r r':
+  n<2^len ->
+  n1<2^len ->
+  (n*2+(n0*2^len+n1)) <> O ->
+  sideRLs tm (hRL^^n0) ([0]*>r) r' ->
+  S0 (n*2+(n0*2^len+n1)-1) len n r -->*
+  S0 (n*2+(n0*2^len+n1)) len n1 r'.
+Proof.
+  intros.
+  apply progress_evstep,OvIncs'; assumption.
+Qed.
+
+Lemma OvIncs_a len n n1 r:
+  n*2+1<n1 ->
+  n1<2^len ->
+  n*3+2^len*2+1=n1*3 ->
+  S0 (n*2+(1*2^len+n1)-1) len n r -->*
+  S0 ((S n)*2+(1*2^len+(S n1))-1) len (S n) ([1;0;1]*>r).
+Proof.
+  intros.
+  follow OvIncs.
+  1,2: lia.
+  1: esx.
+  remember (n*2+2^len+1-n1) as v1.
+  mid (S0 (n1*2+(0*2^len+v1)-1) len n1 (1>>r)).
+  1: finish.
+  follow OvIncs.
+  1,2: lia.
+  1: esx.
+  remember (n1*2+1-(2^len+v1)) as v2.
+  mid (S0 (v1*2+(1*2^len+v2)-1) len v1 (0>>1>>r)).
+  1: finish.
+  follow OvIncs.
+  1,2,3: lia.
+  1: esx.
+  finish.
+Qed.
+
+Lemma OvIncs_b len n n1 r:
+  n*2+1<n1 ->
+  n1<2^len ->
+  n*3+2^len+1=n1*3 ->
+  S0 (n*2+(1*2^len+n1)-1) len n r -->*
+  S0 ((S n)*2+(1*2^len+(S n1))-1) len (S n) ([0;0;1]*>r).
+Proof.
+  intros.
+  follow OvIncs.
+  1,2: lia.
+  1: esx.
+  remember (n*2+2^len+1-n1) as v1.
+  mid (S0 (n1*2+(0*2^len+v1)-1) len n1 (1>>r)).
+  1: finish.
+  follow OvIncs.
+  1,2: lia.
+  1: esx.
+  remember (n1*2+1-(v1)) as v2.
+  mid (S0 (v1*2+(0*2^len+v2)-1) len v1 (0>>1>>r)).
+  1: finish.
+  follow OvIncs.
+  1,2,3: lia.
+  1: esx.
+  finish.
+Qed.
+
+Lemma OvIncs_b' len n n1 r:
+  n1<=n*2+1 ->
+  n<2^len ->
+  n1<2^len ->
+  n*3+2^len+1=n1*3 ->
+  S0 (n*2+(1*2^len+n1)-1) len n r -->*
+  S0 ((S n)*2+(1*2^len+(S n1))-1) len (S n) ([0;0;1]*>r).
+Proof.
+  intros.
+  follow OvIncs.
+  1: lia.
+  1: esx.
+  remember (n*2+1-n1) as v1.
+  mid (S0 (n1*2+(1*2^len+v1)-1) len n1 (1>>r)).
+  1: finish.
+  follow OvIncs.
+  1,2: lia.
+  1: esx.
+  remember (n1*2+1-(2^len+v1)) as v2.
+  mid (S0 (v1*2+(2*2^len+v2)-1) len v1 (1>>1>>r)).
+  1: finish.
+  follow OvIncs.
+  1-3: lia.
+  1: esx.
+  finish.
+Qed.
+
+Lemma OvIncs_b'' len n n1 r:
+  n<2^len ->
+  n1<2^len ->
+  n*3+2^len+1=n1*3 ->
+  S0 (n*2+(1*2^len+n1)-1) len n r -->*
+  S0 ((S n)*2+(1*2^len+(S n1))-1) len (S n) ([0;0;1]*>r).
+Proof.
+  intros.
+  destruct (Nat.ltb_spec (n*2+1) n1).
+  - apply OvIncs_b; lia.
+  - apply OvIncs_b'; lia.
+Qed.
+
+Lemma pow4_mod3 i:
+  2^(i*2) mod 3 = 1%nat.
+Proof.
+  induction i; cbn - [Nat.modulo]; lia.
+Qed.
+
+Lemma OvIncss_a len n n1 r:
+  n1*3 = (2^(len)*2+1) ->
+  n+1<=n1 ->
+  n+n1<=2^len ->
+  S0 ((1*2^(len)+n1)-1) (len) 0 r -->*
+  S0 (n*3+(1*2^(len)+n1)-1) (len) n ([1;0;1]^^n*>r).
+Proof.
+  intros.
+  induction n.
+  - finish.
+  - follow IHn.
+    1,2: lia.
+    follow (OvIncs_a len n (n+n1) ([1;0;1]^^n*>r)).
+    1-2: lia.
+    finish.
+Qed.
+
+Lemma S0_000 a len r:
+  S0 a len 0 (0>>0>>0>>r) =
+  S0 a (len+1) 0 r.
+Proof.
+  unfold S0.
+  do 3 f_equal.
+  do 2 rewrite Nat.sub_0_r.
+  unfold RC0.
+  rw_Bin; solve_pow2_lt.
+  st; trivial.
+Qed.
+
+Lemma OvIncss_b len n n1 r:
+  n1*3 = 2^len+1 ->
+  n+n1<=2^len ->
+  S0 ((1*2^len+n1)-1) len 0 r -->*
+  S0 (n*3+(1*2^len+n1)-1) len (n) ([0;0;1]^^n*>r).
+Proof.
+  intros.
+  induction n.
+  - finish.
+  - follow IHn.
+    1: lia.
+    follow (OvIncs_b'' len n (n+n1) ([0;0;1]^^n*>r)).
+    1-2: lia.
+    finish.
+Qed.
+
+Definition S' '(i,r) :=
+  S0 (2^(i*2)*80/3) (i*2+4) 0 r.
+
+Lemma init:
+  c0 -->*
+  S' (O,[0]^^14*>[1;0;0;1]*>0inf).
+Proof.
+  unfold S',S0.
+  esx.
+Qed.
+
+Ltac rw_pa := repeat rewrite Nat.pow_add_r in *.
+
+Ltac OvIncs :=
+  follow OvIncs;
+  [ rw_pa; lia
+  | rw_pa; lia
+  | rw_pa; lia
+  | esx
+  | ].
+
+Local Opaque Nat.div Nat.modulo.
+
+Lemma BigStep i r:
+  exists r',
+  S' (i,r) -->+
+  S' (S i,r').
+Proof.
+  remember (2^(i*2)*2^4) as w.
+  epose proof (OvIncss_a (i*2+4) ((w-1)/3) ((w*2+1)/3) _) as I.
+  epose proof (pow4_mod3 i).
+  epose proof (OvIncss_b (i*2+5) ((w*4-1)/3) ((w*2+1)/3) _) as I'.
+  eexists.
+  unfold S'.
+  rw_pa.
+  follow I.
+  1-3: lia.
+  clear I.
+  replace ((w-1)/3) with (S((w-4)/3)) by lia.
+  cbn[lpow]; rewrite Str_app_assoc.
+  remember ([1;0;1]^^((w-4)/3)*>r) as r0.
+  mid01 (S0 ((w-1)/3*2+(2*2^(i*2+4)+0)-1) (i * 2 + 4) ((w - 1) / 3) (1 >> 0 >> 1 >> r0)).
+  1: rw_pa; finish.
+  OvIncs.
+  mid01 (S0 ((w*8-2) / 3) (i * 2 + 4) 0 (0 >> 0 >> 0 >> 1 >> r0)).
+  1: rw_pa; finish.
+  rewrite S0_000.
+  rw_pa.
+  subst r0.
+  follow I'.
+  1-2: lia.
+  clear I'.
+  replace (2^(S i*2)*80/3) with ((w*20-2)/3) by (cbn - [Nat.div]; rw_pa; lia).
+  remember ([1;0;1]^^((w-4)/3)*>r) as r0.
+  remember ([0;0;1]^^((w*4-1)/3)*>1>>r0) as r1.
+  mid01 (S0 ((w * 4 - 1)/3*2 + (2 * (2 ^ (i*2+5)) + 0) - 1) (i * 2 + 5) ((w * 4 - 1) / 3) r1).
+  1: rw_pa; finish.
+  subst r0 r1.
+  eapply progress_evstep_trans.
+  1: apply OvIncs'.
+  1-3: rw_pa; lia.
+  1: esx.
+  replace ((w*4-1)/3) with (S((w*4-4)/3)) by lia.
+  cbn.
+  rewrite S0_000.
+  rw_pa.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_simple.
+  intros [i r].
+  destruct (BigStep i r) as [x I].
+  eexists (_,_).
+  apply I.
+Qed.
+
+End TM3.
+
+

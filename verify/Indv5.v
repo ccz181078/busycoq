@@ -10,13 +10,13 @@ Import Inductive62.
 Ltac solve_hlin_nonhalt_T T :=
   apply (decide_hlin_nonhalt_spec default_config T);
   [ apply Config_WF_simple; reflexivity
-  | vm_cast_no_check (eq_refl true)].
+  | native_cast_no_check (eq_refl true)].
 
 Ltac solve_hlin_nonhalt :=
   match goal with
   | |- ~halts (TM_from_str ?x) c0 =>
     idtac x;
-    (solve_hlin_nonhalt_T 3000000%N)
+    (solve_hlin_nonhalt_T 10000000%N)
   end.
 
 
@@ -148,4 +148,14 @@ Proof. solve_hlin_nonhalt. Time Qed.
 
 Lemma nonhalt43: ~halts (TM_from_str "1RB1LC_1LA0RC_1LD0RB_0LE0LC_1LB0LF_1LE---") c0.
 Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt44: ~halts (TM_from_str "1RB1LC_1LA1RD_1LA1LD_1RE0LA_1RC0RF_---0RA") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt45: ~halts (TM_from_str "1RB0LD_1LB0RC_---0RD_1RE1LF_1LD1RA_1LD1LA") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
+Lemma nonhalt46: ~halts (TM_from_str "1RB0RF_1LC1RE_1RB1LD_1LC1LE_1RA0LC_---0RC") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
+
 

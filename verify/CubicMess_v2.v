@@ -1632,6 +1632,425 @@ Time Qed.
 End TM5b.
 
 
+Module TM5c.
+
+Definition tm := Eval compute in (TM_from_str "1LB1LF_0RC1LC_1LD1RC_---0LE_1LA1RF_1LA0RE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c :=
+  0inf <* [1]^^a <{{F}} [1;1]^^(1+b) *> [0] *> [1;1;1;1]^^c *> 0inf.
+
+Lemma Inc1 a b c:
+  S1 (2+a) (1+b) c -->* S1 a b (1+c).
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c n:
+  S1 (n*2+a) (n+b) c -->* S1 a b (n+c).
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Ltac rem_sub x n :=
+  let x':=fresh "x" in
+  remember (x-n) as x';
+  replace x with (x'+n) in * by lia.
+
+Lemma MOv a c:
+  3<=a ->
+  S1 a 0 c -->*
+  S1 (a-3) (2+c*2) 0.
+Proof.
+  intros.
+  rem_sub a 3.
+  es.
+Qed.
+
+Lemma LOv_1 b c:
+  2<=b ->
+  S1 1 b c -->*
+  S1 (b*2-4) (4+c*2) 0.
+Proof.
+  intros.
+  replace (b*2-4) with ((b-2)*2) by lia.
+  rem_sub b 2.
+  es.
+Qed.
+
+Lemma LOv_0 b c:
+  S1 0 b c -->*
+  S1 (b*2) (2+c*2) 0.
+Proof.
+  es.
+Qed.
+
+Lemma init:
+  c0 -->*
+  S1 2 4 0.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma MOv_2 c:
+  S1 2 0 c -->*
+  S1 (5+c*4) 2 0.
+Proof.
+  es.
+Qed.
+
+Lemma MOv_1 c:
+  halts tm (S1 1 0 c).
+Proof.
+  esx.
+Qed.
+
+Lemma Incs1' a b c:
+  let n:=Nat.min (a/2) b in
+  S1 a b c -->*
+  S1 (a-n*2) (b-n) (c+n).
+Proof.
+  intros n.
+  follow (Incs1 (a-n*2) (b-n) c n).
+  finish.
+Qed.
+
+(* ~2e9 steps *)
+
+Require Uint63.
+Import Eqb.
+Notation "a + b" := (Uint63.add a b).
+Notation "a - b" := (Uint63.sub a b).
+Notation "a '-c' b" := (Uint63.subc a b) (at level 50).
+Notation "a * b" := (Uint63.mul a b).
+Notation "a / b" := (Uint63.div a b).
+Notation "a 'mod' b" := (Uint63.mod a b).
+Notation "a '=?' b" := (Uint63.eqb a b).
+Notation "a '<=?' b" := (Uint63.leb a b).
+Notation "'int'" := PrimInt63.int.
+
+Definition v0 := Eval compute in Uint63.of_Z 0.
+Definition v1 := Eval compute in Uint63.of_Z 1.
+Definition v2 := Eval compute in Uint63.of_Z 2.
+Definition v3 := Eval compute in Uint63.of_Z 3.
+Definition v4 := Eval compute in Uint63.of_Z 4.
+Definition v5 := Eval compute in Uint63.of_Z 5.
+
+
+Inductive Tp := t1 | t1x.
+
+Fixpoint steps(a b c:int)(T:nat)(tp:Tp) :=
+match T with
+| O => (a,b,c,tp)
+| S T =>
+  match tp with
+  | t1 =>
+    let n := Uint63.min (a/v2) b in
+    steps (a-n*v2) (b-n) (c+n) T t1x
+  | t1x =>
+    if a=?v0 then
+      steps (b*v2) (v2+c*v2) v0 T t1
+    else if a=?v1 then
+      if v2<=?b then
+        steps (b*v2-v4) (v4+c*v2) v0 T t1
+      else (a,b,c,tp)
+    else if b=?v0 then
+      if a=?v2 then
+        steps (v5+c*v4) v2 v0 T t1
+      else if v3<=?a then
+        steps (a-v3) (v2+c*v2) v0 T t1
+      else (a,b,c,tp)
+    else (a,b,c,tp)
+  end
+end.
+
+Definition S' a b c t :=
+match t with
+| t1 | t1x => S1 a b c
+end.
+
+Definition to_nat(x:int):nat := Z.to_nat (Uint63.to_Z x).
+
+Inductive WF: int->int->int->nat->Tp->Prop :=
+| WF_intro a b c T t
+  (Ha:c0 -->* S' (to_nat a) (to_nat b) (to_nat c) t)
+  (Hb:(to_nat a) + (to_nat b)*2 + (to_nat c)*4 + T*1000 < 2^60):
+  WF a b c T t.
+
+Lemma WF_mono a b c T0 T t:
+  WF a b c T0 t ->
+  T<=T0 ->
+  WF a b c T t.
+Proof.
+  intros.
+  inverts H.
+  econstructor; eauto; lia.
+Qed.
+
+Require Import ZifyN ZifyUint63 Zify.
+
+Lemma leb_to_nat a b:
+  (a <=? b) = (to_nat a <=? to_nat b)%nat.
+Proof.
+  rewrite leb_le.
+  unfold to_nat.
+  lia.
+Qed.
+
+Lemma eqb_to_nat a b:
+  (a =? b) = (to_nat a =? to_nat b)%nat.
+Proof.
+  rewrite eqb_eq.
+  unfold to_nat.
+  lia.
+Qed.
+
+Lemma add_to_nat a b:
+  to_nat a + to_nat b < 2^63 ->
+  to_nat (a+b) = (to_nat a + to_nat b)%nat.
+Proof.
+  unfold to_nat.
+  rewrite Uint63.add_spec.
+  unfold Uint63.wB.
+  unfold Uint63.size.
+  intros.
+  rewrite Z.mod_small; lia.
+Qed.
+
+Lemma mul_to_nat a b:
+  to_nat a * to_nat b < 2^63 ->
+  to_nat (a*b) = (to_nat a * to_nat b)%nat.
+Proof.
+  unfold to_nat.
+  rewrite Uint63.mul_spec.
+  unfold Uint63.wB.
+  unfold Uint63.size.
+  intros.
+  rewrite Z.mod_small; lia.
+Qed.
+
+Lemma div_to_nat a b:
+  to_nat (a/b) = (to_nat a / to_nat b)%nat.
+Proof.
+  unfold to_nat.
+  rewrite Uint63.div_spec.
+  rewrite Z2Nat.inj_div; lia.
+Qed.
+
+Lemma sub_to_nat a b:
+  to_nat b <= to_nat a ->
+  to_nat (a-b) = (to_nat a - to_nat b)%nat.
+Proof.
+  unfold to_nat.
+  rewrite Uint63.sub_spec.
+  unfold Uint63.wB.
+  unfold Uint63.size.
+  intros.
+  rewrite Z.mod_small; lia.
+Qed.
+
+Lemma min_to_nat a b:
+  to_nat (Uint63.min a b) = Nat.min (to_nat a) (to_nat b).
+Proof.
+  unfold to_nat.
+  rewrite Uint63.min_spec.
+  lia.
+Qed.
+
+Ltac rw_uint :=
+  repeat (
+  rewrite leb_to_nat in * ||
+  rewrite eqb_to_nat in * ||
+  rewrite div_to_nat in * ||
+  rewrite min_to_nat in *).
+
+Ltac rw_uint' :=
+  repeat (
+  rewrite add_to_nat in * ||
+  rewrite sub_to_nat in * ||
+  rewrite mul_to_nat in * ||
+  rewrite div_to_nat in * ||
+  rewrite min_to_nat in *).
+
+Ltac rw_uint'_in_goal :=
+  repeat (
+  rewrite add_to_nat ||
+  rewrite sub_to_nat ||
+  rewrite mul_to_nat).
+
+Ltac is_app x :=
+  match x with
+  | _ _ => idtac
+  end.
+
+Ltac simpl_to_nat_a a :=
+  tryif (is_var a)+(is_app a) then fail else
+  let E := fresh "E" in
+  eassert (to_nat a = _) as E by (vm_compute; reflexivity);
+  rewrite E in *;
+  clear E.
+
+Ltac simpl_to_nat :=
+  repeat
+  match goal with
+  | [ H: context[to_nat ?a] |- _] =>
+    simpl_to_nat_a a
+  | |- context[to_nat ?a] =>
+    simpl_to_nat_a a
+  end.
+
+Ltac solve_uint :=
+  rw_uint';
+  simpl_to_nat;
+  try lia.
+
+Ltac solve_uint_in_goal :=
+  rw_uint'_in_goal;
+  simpl_to_nat;
+  try lia.
+
+Ltac solve_v1 Ha Hx :=
+  econstructor;
+  [ follow Ha;
+    repeat
+    match goal with
+    | [H: to_nat ?a = _ |- _] =>
+      rewrite H;
+      clear H
+    end;
+    unfold S';
+    follow Hx; finish; f_equal; solve_uint
+  | solve_uint ].
+
+Ltac solve_v2 H0 :=
+  inverts H0;
+  eapply WF_mono; eauto; lia.
+
+Ltac leb_eqb_cases :=
+  rw_uint;
+  repeat
+  match goal with
+  | [H: (if (?a <=? ?b)%nat then _ else _) = _ |- _] =>
+    destruct (Nat.leb_spec a b)
+  | [H: (if (?a =? ?b)%nat then _ else _) = _ |- _] =>
+    destruct (Nat.eqb_spec a b)
+  end;
+  unfold v0,v1,v2,v3,v4,v5 in *.
+
+Lemma steps_spec a b c T T' tp a0 b0 c0 tp0:
+  WF a b c (T+T') tp ->
+  steps a b c T tp =
+  (a0,b0,c0,tp0) ->
+  WF a0 b0 c0 T' tp0.
+Proof.
+  gen a0 b0 c0 tp0.
+  gen a b c T' tp.
+  induction T; cbn[steps]; intros.
+  - inverts H0.
+    apply H.
+  - destruct tp.
+    + eapply IHT.
+      2: apply H0.
+      inverts H.
+      unfold v3 in *.
+      econstructor.
+      * follow Ha.
+        solve_uint.
+        2: pose proof (Nat.div_mod (to_nat a) 2); lia.
+        unfold S'.
+        apply Incs1'.
+      * solve_uint;
+        pose proof (Nat.div_mod (to_nat a) 2); lia.
+    + leb_eqb_cases.
+      * eapply IHT.
+        2: apply H0.
+        inverts H.
+        solve_v1 Ha LOv_0.
+      * eapply IHT.
+        2: apply H0.
+        inverts H.
+        solve_v1 Ha LOv_1.
+      * solve_v2 H0.
+      * eapply IHT.
+        2: apply H0.
+        inverts H.
+        solve_v1 Ha MOv_2.
+      * eapply IHT.
+        2: apply H0.
+        inverts H.
+        solve_v1 Ha MOv.
+      * solve_v2 H0.
+      * solve_v2 H0.
+Qed.
+
+Definition steps' s :=
+  let '(a,b,c,t,T):=s in
+  if (a=?v1) && (b=?v0) && (match t with t1x => true | _ => false end) then inr tt
+  else if (T=?0)%N then inl s
+  else inl (steps a b c 1000 t,(T-1)%N).
+
+Definition steps'' T :=
+N_iter_until steps' (inl (v2,v4,v0,t1,(10^12)%N)) T.
+
+Lemma steps''_spec T:
+  match steps'' T with
+  | inl (a,b,c,t,T0) =>
+    WF a b c (N.to_nat (T0*1000)) t
+  | inr _ => halts tm c0
+  end.
+Proof.
+  eapply N_iter_until_spec
+  with
+  (P:=fun s => 
+  let '(a,b,c,t,T0):=s in
+    WF a b c (N.to_nat (T0*1000)) t)
+  (P':=fun _ => halts tm c0).
+  - intros [[[[a b] c] t] T0] HWF.
+    unfold steps'.
+    destruct ((a=?v1)&&(b=?v0)&&(match t with t1x => true | _ => false end)) eqn:E.
+    + repeat rewrite and_true_iff in E.
+      destruct E as [[E1 E2] E3].
+      destruct t; try congruence.
+      rw_uint.
+      rewrite Nat.eqb_eq in *.
+      inverts HWF.
+      eapply halts_evstep.
+      2: apply Ha.
+      rewrite E1,E2.
+      apply MOv_1.
+    + destruct (N.eqb_spec T0 N0).
+      1: apply HWF.
+      destruct (steps a b c 1000 t) as [[[a0 b0] c1] t0] eqn:E'.
+      eapply steps_spec in E'.
+      1: apply E'.
+      applys_eq HWF; lia.
+  - econstructor.
+    + apply init.
+    + simpl_to_nat; lia.
+Qed.
+
+Lemma steps''_spec' T:
+  steps'' T = inr tt ->
+  halts tm c0.
+Proof.
+  intros H.
+  epose proof (steps''_spec T) as I.
+  rewrite H in I.
+  apply I.
+Qed.
+
+Lemma halt: halts tm c0.
+Proof.
+  apply (steps''_spec' (10^9)).
+  native_check_eq.
+Time Qed.
+
+End TM5c.
+
 Module TM6.
 Definition tm := Eval compute in (TM_from_str "1RB1LC_1LC1RF_0RD0LB_0RE1LE_1LA---_0RB0RC").
 

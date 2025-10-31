@@ -2408,6 +2408,78 @@ End CTLCtx.
 End CPS_LRU.
 
 
+Module RNGS_mod(Ctx:Ctx).
+
+Module SymHash := SymHash Ctx.
+Module Int2Hash := ProdHash Uint63_K Uint63_K.
+Module Int3Hash := ProdHash Int2Hash Uint63_K.
+Module ListInt3Hash := ListHash Int3Hash.
+Module ListIntHash := ListHash Uint63_K.
+Module ListInt11Hash := ProdHash ListIntHash ListIntHash.
+Module ListInt113Hash := ProdHash ListInt11Hash ListInt3Hash.
+
+Fixpoint find_del{A}(f:A->bool)(ls:list A) :=
+match ls with
+| [] => None
+| x::t => if f x then Some (x,t) else
+  match find_del f t with
+  | Some (x0,t0) => Some (x0,x::t0)
+  | None => None
+  end
+end.
+
+Definition is_nil{A}(ls:list A):bool :=
+match ls with
+| [] => true
+| _ => false
+end.
+
+Module CTLCtx <: CTLCtx ListInt113Hash Ctx.
+Module SymIdAlloc := IdAlloc SymHash.
+Module ListIntIdAlloc := IdAlloc ListIntHash.
+Record config := {
+  mnc: Uint63.int;
+  mod_: Uint63.int;
+  NG_n: nat;
+  len_h: nat;
+  bs_n: nat;
+  maxS: Uint63.int;
+  is_s0: Ctx.Sym->bool;
+}.
+Definition config_t:Type := config.
+Definition global_state_t:Type := config_t*SymIdAlloc.id_alloc_t*ListIntIdAlloc.id_alloc_t.
+Definition global_state_init cfg := (cfg,SymIdAlloc.id_alloc_make cfg.(maxS),ListIntIdAlloc.id_alloc_make cfg.(maxS)).
+Definition dfa_state_0:ListInt113Hash.K := ([],[],[]).
+
+Definition dfa_trans(x:ListInt113Hash.K)(y0:Ctx.Sym)(d:dir)(gs:global_state_t):ListInt113Hash.K*global_state_t :=
+let '(cfg,gs0,gs1):=gs in
+let '(x0,x2,x1):=x in
+if is_nil x0 && cfg.(is_s0) y0 then (x,gs) else
+match SymIdAlloc.get_or_alloc_id y0 gs0 with
+| None => (x,gs)
+| Some (y',gs0) =>
+  let x0:=firstn cfg.(NG_n) (y'::x0) in
+  match ListIntIdAlloc.get_or_alloc_id x0 gs1 with
+  | None => (x,gs)
+  | Some (y,gs1) =>
+    if length x2 =? cfg.(bs_n) then
+    let '(x2,y) := (removelast (y::x2),last (y::x2) y) in
+    let x1 :=
+    match find_del (fun '(a,_,_) => Uint63.eqb y a) x1 with
+    | Some ((w,n,m),x) =>
+      (w,Uint63.min cfg.(mnc) (Uint63.succ n),if Uint63.eqb cfg.(mod_) int0 then m else Uint63.mod (Uint63.succ m) cfg.(mod_))::x
+    | None => (y,int1,int1)::x1
+    end
+    in
+    ((x0,x2,firstn cfg.(len_h) x1),(cfg,gs0,gs1))
+    else ((x0,y::x2,x1),(cfg,gs0,gs1))
+  end
+end.
+End CTLCtx.
+
+End RNGS_mod.
+
+
 Module NGramCPS(Ctx:Ctx).
 
 Module SymHash := SymHash Ctx.
@@ -2501,6 +2573,14 @@ Module DHTMFromTM := DHTMFromTM Ctx.
 Module BlockTMFromDHTM := BlockTMFromDHTM DHTMFromTM.TMCtx.
 Module TapeHistoryImpl := TapeHistoryImpl DHTMFromTM.TMCtx.
 
+Module Ctx_RNGS_mod := RNGS_mod BlockTMFromDHTM.BlockTMCtx.
+Module CTL_RNGS_mod := CTL Ctx_RNGS_mod.ListInt113Hash BlockTMFromDHTM.BlockTMCtx Ctx_RNGS_mod.CTLCtx.
+Module Ctx_RNGS_mod_QSym := RNGS_mod TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx.
+Module CTL_RNGS_mod_QSym := CTL
+  Ctx_RNGS_mod_QSym.ListInt113Hash
+  TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx
+  Ctx_RNGS_mod_QSym.CTLCtx.
+
 Module Ctx_RWL_mod := RWL_mod BlockTMFromDHTM.BlockTMCtx.
 Module CTL_RWL_mod := CTL Ctx_RWL_mod.ListInt3Hash BlockTMFromDHTM.BlockTMCtx Ctx_RWL_mod.CTLCtx.
 
@@ -2526,6 +2606,8 @@ Inductive DeciderParameter :=
 | CPS_LRU(simT maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
 | NG(simT maxT maxS NG_n len1 len2 LRU_n:N)(asth:bool)
 | MITMDFA(maxT maxS:N)(ldfa rdfa:list N)(sym_id:Ctx.Sym->Uint63.int)(n_sym:Uint63.int)
+| RNGS_mod(simT maxT maxS bsz bmaxT mnc mod_ NG_n len_h bs_n:N)
+| RNGS_mod_QSym(simT maxT maxS len1 len2 LRU_n mnc mod_ NG_n len_h bs_n:N)
 .
 
 Section tm_ctx.
@@ -2604,6 +2686,45 @@ match arg with
         Ctx_MITMDFA.n_sym := n_sym;
       |} in
     CTL_MITMDFA.CTL_decide_nonhalt tm DHTMFromTM.DHTM.cc0 cfg (N_to_int maxS) (maxT*100)
+| RNGS_mod simT maxT maxS bsz bmaxT mnc mod_ NG_n len_h bs_n =>
+  match DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT with
+  | inl c =>
+    let bsz := N.max 1 bsz in
+    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (bmaxT) tm) in
+    let c1 := (BlockTMFromDHTM.inv_map_cconfig (N.to_nat bsz) c) in
+    let cfg :=
+      {|
+        Ctx_RNGS_mod.CTLCtx.mnc := N_to_int mnc;
+        Ctx_RNGS_mod.CTLCtx.mod_ := N_to_int mod_;
+        Ctx_RNGS_mod.CTLCtx.NG_n := N.to_nat NG_n;
+        Ctx_RNGS_mod.CTLCtx.len_h := N.to_nat len_h;
+        Ctx_RNGS_mod.CTLCtx.bs_n := N.to_nat bs_n;
+        Ctx_RNGS_mod.CTLCtx.maxS := N_to_int maxS;
+        Ctx_RNGS_mod.CTLCtx.is_s0 := fun ls => forallb (DHTMFromTM.TMCtx.sym_eqb DHTMFromTM.TMCtx.s0) ls;
+      |} in
+    (CTL_RNGS_mod.CTL_decide_nonhalt tm1 c1 cfg (N_to_int maxS) (maxT*100))
+  | inr c => false
+  end
+| RNGS_mod_QSym simT maxT maxS len1 len2 LRU_n mnc mod_ NG_n len_h bs_n =>
+  match DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT with
+  | inl c =>
+    let '(len1,len2,LRU_n):=(N.to_nat len1,N.to_nat len2,N.to_nat LRU_n) in
+      let upd := TapeHistoryImpl.QSym_history_upd len1 len2 LRU_n in
+      let tm1 := TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.map_TM tm upd in
+      let c1 := TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.inv_map_cconfig c in
+      let cfg :=
+        {|
+          Ctx_RNGS_mod_QSym.CTLCtx.mnc := N_to_int mnc;
+          Ctx_RNGS_mod_QSym.CTLCtx.mod_ := N_to_int mod_;
+          Ctx_RNGS_mod_QSym.CTLCtx.NG_n := N.to_nat NG_n;
+          Ctx_RNGS_mod_QSym.CTLCtx.len_h := N.to_nat len_h;
+          Ctx_RNGS_mod_QSym.CTLCtx.bs_n := N.to_nat bs_n;
+          Ctx_RNGS_mod_QSym.CTLCtx.maxS := N_to_int maxS;
+          Ctx_RNGS_mod_QSym.CTLCtx.is_s0 := fun '(a,b) => (DHTMFromTM.TMCtx.sym_eqb DHTMFromTM.TMCtx.s0 a) && (Ctx_RNGS_mod_QSym.is_nil b);
+        |} in
+      (CTL_RNGS_mod_QSym.CTL_decide_nonhalt tm1 c1 cfg (N_to_int maxS) (maxT*100))
+  | inr c => false
+  end
 end.
 
 Lemma decide_nonhalt_spec:
@@ -2655,6 +2776,27 @@ Proof.
     rewrite <-CTL_MITMDFA.TM.halts_halts'.
     epose proof (CTL_MITMDFA.CTL_decide_nonhalt_spec _ _ _ _ _ H) as H1.
     apply H1.
+  - apply DHTMFromTM.map_nonhalt.
+    pose proof (DHTMFromTM.DHTM.DH_cconfig_steps_spec tm DHTMFromTM.DHTM.cc0 simT) as H0.
+    destruct (DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT); try congruence.
+    rewrite <-DHTMFromTM.DHTM.halts_halts'.
+    eapply DHTMFromTM.DHTM.evstep_nonhalt; eauto. clear H0.
+    epose proof (CTL_RNGS_mod.CTL_decide_nonhalt_spec _ _ _ _ _ H) as H1.
+    rewrite DHTMFromTM.DHTM.halts_halts'.
+    rewrite CTL_RNGS_mod.TM.halts_halts' in H1.
+    eapply BlockTMFromDHTM.inv_map_nonhalt.
+    2: apply H1.
+    lia.
+  - apply DHTMFromTM.map_nonhalt.
+    pose proof (DHTMFromTM.DHTM.DH_cconfig_steps_spec tm DHTMFromTM.DHTM.cc0 simT) as H0.
+    destruct (DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT); try congruence.
+    rewrite <-DHTMFromTM.DHTM.halts_halts'.
+    eapply DHTMFromTM.DHTM.evstep_nonhalt; eauto. clear H0.
+      epose proof (CTL_RNGS_mod_QSym.CTL_decide_nonhalt_spec _ _ _ _ _ H) as H1.
+      rewrite DHTMFromTM.DHTM.halts_halts'.
+      rewrite CTL_RNGS_mod_QSym.TM.halts_halts' in H1.
+      eapply TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.inv_map_nonhalt.
+      apply H1.
 Qed.
 
 End tm_ctx.

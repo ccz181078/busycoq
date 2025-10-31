@@ -639,34 +639,32 @@ match goal with
   clear X
 end.
 
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac follow' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Ltac followh H :=
+  eapply Peq; [|apply H]; match_Nexpr.
+
 Lemma halt: halts tm c0.
-Proof.
+Proof with rw_all.
   eapply halts_evstep.
   2:{
   follow init.
-  follow Incs1s.
-  R_mod_c.
-  follow Ov_1.
-  R_mod.
-  follow Incs1s_1.
-  R_mod_c.
-  follow Ov_1.
-  R_mod.
-  follow Incs1s_1.
-  R_mod_c.
-  follow Ov_0.
-  R_mod.
-  follow Incs1s_1.
-  R_mod_c.
-  follow Ov_0.
-  R_mod.
-  follow Incs1s_1.
-  R_mod_c.
+  follow Incs1s...
+  follow' Ov_1...
+  follow' Incs1s_1...
+  follow' Ov_1...
+  follow' Incs1s_1...
+  follow' Ov_0...
+  follow' Incs1s_1...
+  follow' Ov_0...
+  follow' Incs1s_1...
   finish.
   }
-  apply Ov_2.
-  Unshelve.
-  all: solve_ge.
+  followh Ov_2.
 Qed.
 
 End TM4.
@@ -818,5 +816,1484 @@ Proof.
 Qed.
 
 End TM5.
+
+
+Module TM6.
+
+Definition tm := Eval compute in (TM_from_str "1RB---_0LC0LD_1LD1LC_1RE1LB_1RF1RD_0LD0RA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{C}} [0;1]^^a *> [1]^^b *> [0;1;0;0] *> [1;0]^^c *> r.
+
+Lemma Inc1 a b c r:
+  S1 a (1+b) c r -->*
+  S1 (2+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 (b*2+a) 0 c r.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma OvIncs1 a c r:
+  S1 a 0 (2+c) r -->*
+  S1 (a*4+12) 0 c r.
+Proof.
+  mid (S1 0 (6+a*2) c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Rst_0 a:
+  S1 a 0 0 0inf -->*
+  S1 4 0 (1+a) 0inf.
+Proof.
+  es.
+Qed.
+
+Notation rh1 := ([1;1;1]*>0inf).
+
+Lemma Rst_1 a:
+  S1 a 0 1 0inf -->*
+  S1 4 0 a rh1.
+Proof.
+  es.
+Qed.
+
+Lemma Incss1 n c r:
+  S1 4 0 (n*2+c) r -->*
+  S1 (4^n*8-4) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (2+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  finish.
+Qed.
+
+Lemma init:
+  c0 -->* S1 4 0 (1*2+0) 0inf.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma Rst1_0 a:
+  halts tm (S1 a 0 0 rh1).
+Proof.
+  esx.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac R_mod :=
+match goal with
+| |- S1 _ _ ?x _ -->* _ => R_mod'' x 2
+end.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+  follow init.
+
+  follow Incss1.
+  follow Rst_0.
+  simpl_small_nat 100.
+  R_mod.
+
+  follow Incss1.
+  follow Rst_1.
+  simpl_small_nat 100.
+  R_mod.
+
+  follow Incss1.
+  finish.
+  }
+  apply Rst1_0.
+  Unshelve.
+  all: solve_ge.
+Qed.
+
+End TM6.
+
+
+Module TM7.
+
+Definition tm := Eval compute in (TM_from_str "1LB1LF_1RC1LE_0RD1RB_1RA0LA_0LA0LB_---0LD").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{E}} [1;0]^^a *> [0] *> [1;0]^^b *> [1;1;1] *> [0;0;1]^^c *> r.
+
+Notation rh1 := ([0;1;1]*>0inf).
+
+Lemma Inc1 a b c r:
+  S1 a (1+b) c r -->*
+  S1 (4+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 (b*4+a) 0 c r.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma OvIncs1 a c r:
+  S1 a 0 (2+c) r -->*
+  S1 (a*4+47) 0 c r.
+Proof.
+  mid (S1 3 (11+a) c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Incss1 n c r:
+  S1 19 0 (n*2+c) r -->*
+  S1 ((4^n*104-47)/3) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (2+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  pose proof (pow4sub1_mod3 n).
+  finish.
+Qed.
+
+Lemma Rst_2_1 a:
+  S1 (2+a*3) 0 1 rh1 -->*
+  S1 19 0 (a*2+11) rh1.
+Proof.
+  mid (S1 3 4 (11+a*2) rh1).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Rst_0_1 a:
+  S1 (0+a*3) 0 1 rh1 -->*
+  S1 39 0 (a*2+9) rh1.
+Proof.
+  mid (S1 3 9 (9+a*2) rh1).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Incss1' n c r:
+  S1 39 0 (n*2+c) r -->*
+  S1 ((4^n*164-47)/3) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (2+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  pose proof (pow4sub1_mod3 n).
+  finish.
+Qed.
+
+Lemma Rst_1_1 a:
+  halts tm (S1 (1+a*3) 0 1 rh1).
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma init:
+  c0 -->* S1 19 0 (2*2+1) rh1.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac R_mod :=
+match goal with
+| |- S1 ?x _ _ _ -->* _ => R_mod' x 3
+end.
+
+Ltac R_mod_c :=
+match goal with
+| |- S1 _ _ ?x _ -->* _ => R_mod'' x 2
+end.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+  follow init.
+
+  follow Incss1.
+  R_mod.
+  follow Rst_2_1.
+  simpl_small_nat 100.
+  R_mod_c.
+
+  follow Incss1.
+  R_mod.
+  follow Rst_0_1.
+  R_mod_c.
+
+  follow Incss1'.
+  R_mod.
+  finish.
+  }
+  apply Rst_1_1.
+  Unshelve.
+  all: solve_ge.
+Qed.
+
+End TM7.
+
+
+Module TM8.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LA_1LC1LF_0LD0LC_0LE0LB_1RE0RA_---1LD").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{C}} [0]^^a *> [1]^^(1+b) *> [0;1;1]^^c *> r.
+
+Notation rh1 := ([0;0;0;1;0;1]*>0inf).
+
+Lemma Inc1 a b c r:
+  S1 a (1+b) c r -->*
+  S1 (4+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 (b*4+a) 0 c r.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma OvIncs1 a c r:
+  S1 a 0 (1+c) r -->*
+  S1 (a*4+19) 0 c r.
+Proof.
+  mid (S1 3 (4+a) c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Incss1_0 n c r:
+  S1 19 0 (n+c) r -->*
+  S1 ((4^n*76-19)/3) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (1+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  pose proof (pow4sub1_mod3 n).
+  finish.
+Qed.
+
+Lemma Incss1 c r:
+  S1 19 0 c r -->*
+  S1 ((4^c*76-19)/3) 0 0 r.
+Proof.
+  follow (Incss1_0 c 0 r).
+  finish.
+Qed.
+
+Notation rh2 := ([0;0;0;1;0;1;0;1]*>0inf).
+
+Lemma Rst1_1 a:
+  S1 (1+a*3) 0 0 rh1 -->*
+  S1 19 0 a rh2.
+Proof.
+  mid (S1 3 4 a rh2).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Notation rh3 := ([0;0;0;1;0;1;0;1;0;1]*>0inf).
+
+Lemma Rst2_0 a:
+  S1 (0+a*3) 0 0 rh2 -->*
+  S1 3 0 a rh3.
+Proof.
+  es.
+Qed.
+
+Lemma Incss2_0 n c r:
+  S1 3 0 (n+c) r -->*
+  S1 ((4^n*28-19)/3) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (1+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  pose proof (pow4sub1_mod3 n).
+  finish.
+Qed.
+
+Lemma Incss2 c r:
+  S1 3 0 c r -->*
+  S1 ((4^c*28-19)/3) 0 0 r.
+Proof.
+  follow (Incss2_0 c 0 r).
+  finish.
+Qed.
+
+Notation rh4 := ([0;0;0;1;0;1;0;1;0;1;0;1]*>0inf).
+
+Lemma Rst3_0 a:
+  S1 (0+a*3) 0 0 rh3 -->*
+  S1 3 0 a rh4.
+Proof.
+  es.
+Qed.
+
+Notation rh5 := ([0;0;0;1;0;1;0;1;0;1;0;1;0;1]*>0inf).
+
+Lemma Rst4_1 a:
+  S1 (1+a*3) 0 0 rh4 -->*
+  S1 19 0 a rh5.
+Proof.
+  mid (S1 3 4 a rh5).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Rst5_2 a:
+  halts tm (S1 (2+a*3) 0 0 rh5).
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma init:
+  c0 -->* S1 19 0 6 rh1.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac R_mod :=
+match goal with
+| |- S1 ?x _ _ _ -->* _ => R_mod' x 3
+end.
+
+Ltac R_mod_c :=
+match goal with
+| |- S1 _ _ ?x _ -->* _ => R_mod'' x 2
+end.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+  follow init.
+
+  follow Incss1.
+  R_mod.
+  follow Rst1_1.
+
+  follow Incss1.
+  R_mod.
+  follow Rst2_0.
+
+  follow Incss2.
+  R_mod.
+  follow Rst3_0.
+
+  follow Incss2.
+  R_mod.
+  follow Rst4_1.
+
+  follow Incss1.
+  R_mod.
+  finish.
+  }
+  apply Rst5_2.
+  Unshelve.
+  all: solve_ge.
+Qed.
+
+End TM8.
+
+
+Lemma pow3_mod2 a:
+  (3^a) mod 2 = 1%nat.
+Proof.
+  induction a; cbn[Nat.pow]; lia.
+Qed.
+
+Module TM9.
+
+Definition tm := Eval compute in (TM_from_str "1RB1LA_1LC0RF_1LD1LC_1LE0RE_0RB0LC_---1RA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{C}} [1]^^a *> [0;1;1;0;0] *> [1]^^b *> [0;1;1;1] *> [0]^^c *> r.
+
+Notation rh1 := ([1;1;1;0;0;1;1;1]*>0inf).
+
+Lemma Inc1 a b c r:
+  S1 (1+a) b c r -->*
+  S1 a (3+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 0 (a*3+b) c r.
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Lemma OvIncs1 b c r:
+  S1 0 b (2+c) r -->*
+  S1 0 (b*3+15) c r.
+Proof.
+  mid (S1 (5+b) 0 c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Incss1 n c r:
+  S1 0 6 (n*2+c) r -->*
+  S1 0 ((3^n*27-15)/2) c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (2+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  pose proof (pow3_mod2 n).
+  finish.
+Qed.
+
+Notation rh2 := (1 >> 1 >> 0 >> 1 >> 1 >> 0 >> 0 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0inf).
+
+Lemma Rst1_1 b:
+  S1 0 b 1 rh1 -->*
+  S1 0 6 b rh2.
+Proof.
+  es.
+Qed.
+
+Notation rh3 := (1 >> 1 >> 1 >> 1 >> 0 >> 1 >> 1 >> 0 >> 0 >> 1 >> 1 >> 1 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0inf).
+
+Lemma Rst2_0 b:
+  S1 0 b 0 rh2 -->*
+  S1 0 6 b rh3.
+Proof.
+  es.
+Qed.
+
+Notation rh4 := (1 >> 1 >> 0 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0inf).
+
+Lemma Rst3_1 b:
+  S1 0 b 1 rh3 -->*
+  S1 0 (b*3+15) 1 rh4.
+Proof.
+  mid (S1 (5+b) 0 1 rh4).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Notation rh5 := (1 >> 1 >> 0 >> 1 >> 1 >> 0 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0inf).
+
+Lemma Rst4_1 b:
+  S1 0 b 1 rh4 -->*
+  S1 0 6 b rh5.
+Proof.
+  es.
+Qed.
+
+Notation rh6 := (0 >> 1 >> 0 >> 1 >> 1 >> 0 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0 >> 1 >> 1 >> 1 >> 1 >> 1 >> 1 >> 0inf).
+
+Definition S2 a b :=
+  0inf <{{C}} [1]^^a *> [0;1;1;0;0] *> [1]^^b *> rh6.
+
+Lemma Inc2 a b:
+  S2 (1+a) b -->*
+  S2 a (3+b).
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 a b:
+  S2 a b -->*
+  S2 0 (a*3+b).
+Proof.
+  gen b.
+  ind a Inc2.
+Qed.
+
+Lemma Rst5_1 b:
+  halts tm (S1 0 b 1 rh5).
+Proof.
+  eapply halts_evstep.
+  2:{
+  mid (S2 (5+b) 0).
+  1: es.
+  follow Incs2.
+  finish.
+  }
+  esx.
+Qed.
+
+Lemma init:
+  c0 -->* S1 0 6 (16*2+1) rh1.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac R_mod_c :=
+match goal with
+| |- S1 _ _ ?x _ -->* _ => R_mod'' x 2
+end.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+  follow init.
+
+  follow Incss1.
+  follow Rst1_1.
+  R_mod_c.
+
+  follow Incss1.
+  follow Rst2_0.
+  R_mod_c.
+
+  follow Incss1.
+  follow Rst3_1.
+  follow Rst4_1.
+  R_mod_c.
+
+  follow Incss1.
+  finish.
+  }
+  apply Rst5_1.
+  Unshelve.
+  all: solve_ge.
+Qed.
+
+End TM9.
+
+
+Lemma pow9_mod4 a:
+  (9^a) mod 4 = 1%nat.
+Proof.
+  induction a; cbn[Nat.pow]; lia.
+Qed.
+
+Module TM10.
+
+Definition tm := Eval compute in (TM_from_str "1LB1RA_0LC1LD_1RC0RA_1RE0LB_0LD0LF_---0LE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{E}} [0;0]^^a *> [1;1] *> [0;1]^^b *> [1;1;1;1] *> [0;1]^^c *> r.
+
+Definition S2 a b c r :=
+  0inf <{{E}} [0;0]^^a *> [1;1] *> [0;1]^^b *> [1;1] *> [0;1]^^c *> r.
+
+Notation rh1 := ([1;1;0;1;0;1;1]*>0inf).
+
+Lemma Inc1 a b c r:
+  S1 a (1+b) c r -->*
+  S1 (3+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 (b*3+a) 0 c r.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma Inc2 a b c r:
+  S2 a (1+b) c r -->*
+  S2 (3+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 a b c r:
+  S2 a b c r -->*
+  S2 (b*3+a) 0 c r.
+Proof.
+  gen a.
+  ind b Inc2.
+Qed.
+
+Lemma Ov1Incs2 a c r:
+  S1 a 0 (2+c) r -->*
+  S2 (a*3+20) 0 c r.
+Proof.
+  mid (S2 2 (6+a) c r).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Lemma Ov2Incs1 a c r:
+  S2 a 0 (2+c) r -->*
+  S1 (a*3+14) 0 c r.
+Proof.
+  mid (S1 2 (4+a) c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma OvIncs21 a c r:
+  S2 a 0 (4+c) r -->*
+  S2 (a*9+62) 0 c r.
+Proof.
+  follow Ov2Incs1.
+  follow Ov1Incs2.
+  finish.
+Qed.
+
+Lemma Incss2 n c r:
+  S2 14 0 (n*4+c) r -->*
+  S2 ((9^n*87-31)/4) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (4+c)).
+  follow OvIncs21.
+  cbn[Nat.pow].
+  pose proof (pow9_mod4 n).
+  finish.
+Qed.
+
+Notation rh2 := (1>>0inf).
+
+Lemma Rst1_0 a:
+  S2 a 0 0 rh1 -->*
+  S2 (a*3+20) 0 0 rh2.
+Proof.
+  mid (S2 2 (6+a) 0 (1>>0inf)).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Notation rh3 := (1>>1>>0>>1>>1>>0inf).
+
+Lemma Rst2_0 a:
+  a>=2 ->
+  S2 a 0 0 rh2 -->*
+  S2 14 0 (a-2) rh3.
+Proof.
+  remember (a-2) as a'.
+  intros.
+  replace a with (2+a') by lia.
+  mid (S2 2 4 a' rh3).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Lemma Rst3_0 a:
+  S1 a 0 0 rh3 -->*
+  S1 (a*3+17) 0 0 rh2.
+Proof.
+  mid (S1 2 (5+a) 0 rh2).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Notation rh5 := (1>>1>>0>>1>>0>>1>>1>>0inf).
+
+Lemma Rst4_0 a:
+  a>=2 ->
+  S1 a 0 0 rh2 -->*
+  S2 14 0 (a-2) rh5.
+Proof.
+  remember (a-2) as a'.
+  intros.
+  replace a with (2+a') by lia.
+  mid (S2 2 4 a' rh5).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Lemma Rst5_1 a:
+  S1 a 0 1 rh5 -->*
+  S2 (a*3+23) 0 1 rh2.
+Proof.
+  mid (S2 2 (7+a) 1 rh2).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Lemma Rst6_0 a:
+  halts tm (S2 a 0 1 rh2).
+Proof.
+  esx.
+Qed.
+
+Lemma init:
+  c0 -->* S2 14 0 (3*4+0) rh1.
+Proof.
+  unfold S2.
+  esx.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac R_mod_c :=
+match goal with
+| |- S2 _ _ ?x _ -->* _ => R_mod'' x 4
+end.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+  follow init.
+
+  follow Incss2.
+  follow Rst1_0.
+  follow Rst2_0.
+  1: solve_ge.
+  R_mod_c.
+
+  follow Incss2.
+  follow Ov2Incs1.
+  follow Rst3_0.
+  eapply evstep_trans; [apply Rst4_0|].
+  1: solve_ge.
+  R_mod_c.
+
+  follow Incss2.
+  follow Ov2Incs1.
+  follow Rst5_1.
+
+  finish.
+  }
+  apply Rst6_0.
+  Unshelve.
+  all: solve_ge.
+Qed.
+
+End TM10.
+
+
+Module TM11.
+
+Definition tm := Eval compute in (TM_from_str "1RB0RF_1LC1LB_0RE0LD_0LC0LB_0RA1RE_0RD---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{B}} [1]^^a *> [0;0;1] *> [1]^^b *> [0;0;1;1;1;1]^^c *> r.
+
+Notation rh1 := ([0;0;0;0;1;1;0;1;0;1]*>0inf).
+
+Lemma Inc1 a b c r:
+  S1 (1+a) b c r -->*
+  S1 a (2+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 0 (a*2+b) c r.
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Lemma OvIncs1 b c r:
+  S1 0 b (1+c) r -->*
+  S1 0 (b*2+11) c r.
+Proof.
+  mid (S1 (4+b) 3 c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Incss1_0 n c r:
+  S1 0 5 (n+c) r -->*
+  S1 0 (2^n*16-11) c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (1+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  finish.
+Qed.
+
+Lemma Incss1 c r:
+  S1 0 5 c r -->*
+  S1 0 (2^c*16-11) 0 r.
+Proof.
+  follow (Incss1_0 c 0 r).
+  finish.
+Qed.
+
+Definition S2 a b r :=
+  0inf <{{B}} [1]^^a *> [0;0;0] *> [0;1]^^b *> r.
+
+Lemma Inc2 a b r:
+  S2 (1+a) b r -->*
+  S2 a (1+b) r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 a b r:
+  S2 a b r -->*
+  S2 0 (a+b) r.
+Proof.
+  gen b.
+  ind a Inc2.
+Qed.
+
+Lemma Rst_000 b r:
+  S1 0 b 0 (0>>0>>0>>r) -->*
+  S2 0 (4+b) r.
+Proof.
+  mid (S2 (4+b) 0 r).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Notation rh2 := (1 >> 0 >> 0 >> 1 >> 1 >> 0 >> 0 >> 0 >> 0 >> 0 >> 0 >> 1 >> 0 >> 1 >> 0 >> 1 >> 0inf).
+
+Lemma Rst_001 b r:
+  S1 0 b 0 (0>>0>>1>>r) -->*
+  S1 0 (b*2+8) 0 r.
+Proof.
+  mid (S1 (4+b) 0 0 r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Rst_1 b r:
+  S1 0 b 0 (1>>r) -->*
+  S1 0 (b+1) 0 r.
+Proof.
+  es.
+Qed.
+
+
+Lemma Rst1_0 b:
+  S1 0 (0+b*3) 0 rh1 -->*
+  S1 0 5 (b+1) rh2.
+Proof.
+  cbn[Str_app].
+  follow Rst_000.
+  es.
+Qed.
+
+
+Notation rh3 := (0 >> 0 >> 0 >> 0 >> 0 >> 0 >> 1 >> 0 >> 1 >> 0 >> 1 >> 0inf).
+
+Lemma Rst2 b:
+  S1 0 b 0 rh2 -->*
+  S1 0 (b*2+11) 0 rh3.
+Proof.
+  follow Rst_1.
+  follow Rst_001.
+  follow Rst_1.
+  finish.
+Qed.
+
+Notation rh4 := ([0;0;1;1;0;0;1;1;1;1]*>rh3).
+
+Lemma Rst3_0 b:
+  S1 0 (0+b*3) 0 rh3 -->*
+  S1 0 5 b rh4.
+Proof.
+  follow Rst_000.
+  es.
+Qed.
+
+Notation rh5 := ([0;0;0;0;1;1;1;1;1;1]*>rh3).
+
+Lemma Rst3_2 b:
+  S1 0 (2+b*3) 0 rh3 -->*
+  S1 0 5 (b+1) rh5.
+Proof.
+  follow Rst_000.
+  es.
+Qed.
+
+Lemma Rst5_2 b:
+  halts tm (S1 0 (2+b*3) 0 rh5).
+Proof.
+  cbn[Str_app].
+  eapply halts_evstep.
+  2: apply Rst_000.
+  unfold S2.
+  esx.
+Qed.
+
+Lemma init:
+  c0 -->* S1 0 5 39 rh1.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Ltac R_mod :=
+match goal with
+| |- S1 _ ?x _ _ -->* _ => R_mod' x 3
+end.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+  follow init.
+
+  follow Incss1.
+  R_mod.
+  follow Rst1_0.
+
+  follow Incss1.
+  follow Rst2.
+  R_mod.
+  follow Rst3_0.
+
+  follow Incss1.
+  cbn[Str_app].
+  follow Rst_001.
+  follow Rst_1.
+  follow Rst_001.
+  do 3 follow Rst_1.
+  R_mod.
+  follow Rst3_2.
+
+  follow Incss1.
+  R_mod.
+  finish.
+  }
+  apply Rst5_2.
+  Unshelve.
+  all: solve_ge.
+Qed.
+
+End TM11.
+
+
+Module TM12.
+Definition tm := Eval compute in (TM_from_str "1LB1RB_1RC1RF_1LD1RC_0RA1LE_1LC0LD_---0RD").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <{{D}} [1;1;1;0]^^(a*2+1) *> [1;1] *> [1;1;1;0]^^b *> [1;1;1;1] *> [1;0]^^c *> r.
+
+Lemma Inc1 a b c r:
+  S1 a (1+b) c r -->*
+  S1 (1+a) b c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c r:
+  S1 a b c r -->*
+  S1 (b+a) 0 c r.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma OvIncs1 a c r:
+  S1 a 0 (5+c) r -->*
+  S1 (a*2+5) 0 c r.
+Proof.
+  mid (S1 1 (a*2+4) c r).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Notation rh1 := ([1;1;1;0;1;1]*>0inf).
+
+Lemma init:
+  c0 -->*
+  S1 11 0 54 rh1.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma Incss1 n c r:
+  S1 11 0 (n*5+c) r -->*
+  S1 (2^n*16-5) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (5+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  finish.
+Qed.
+
+Lemma Rst1_4 a:
+  S1 a 0 4 rh1 -->*
+  S1 (a*2+6) 0 0 0inf.
+Proof.
+  mid (S1 1 (a*2+5) 0 0inf).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Notation rh2 := ([1;1;1;1]*>0inf).
+
+Ltac stepn' n0 :=
+  eapply without_counter with (n:=N.to_nat n0);
+  eapply multistep_c_spec; vm_compute; try reflexivity.
+
+Lemma Rst0_0 a:
+  S1 (2+a) 0 0 0inf -->*
+  S1 11 0 (a*4+2) rh2.
+Proof.
+  unfold S1.
+  st.
+  do 4 (er; sr).
+  stepn' 3704%N.
+Qed.
+
+Notation rh3 := ([1;1;1;0;1;0;1;1]*>0inf).
+
+Lemma Rst2_0 a:
+  S1 (2+a) 0 0 rh2 -->*
+  S1 11 0 (a*4+2) rh3.
+Proof.
+  unfold S1.
+  st.
+  do 4 (er; sr).
+  stepn' 3704%N.
+Qed.
+
+Definition S2 a b r :=
+  0inf <{{D}} [1;1;1;0]^^(a*2+1) *> [1;1] *> [1;1;1;0]^^b *> r.
+
+Lemma Inc2 a b r:
+  S2 a (1+b) r -->*
+  S2 (1+a) b r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 a b r:
+  S2 a b r -->*
+  S2 (b+a) 0 r.
+Proof.
+  gen a.
+  ind b Inc2.
+Qed.
+
+Notation rh4 := ([1;0;1;1;1;1]*>0inf).
+
+Lemma Rst3_0 a:
+  S1 a 0 0 rh3 -->*
+  S2 (a*2+4) 0 rh4.
+Proof.
+  mid (S2 1 (a*2+3) rh4).
+  1: es.
+  follow Incs2.
+  finish.
+Qed.
+
+Notation rh5 := ([1;1]*>0inf).
+
+Lemma Rst4 a:
+  S2 (1+a) 0 rh4 -->*
+  S1 5 0 (a*4+3) rh5.
+Proof.
+  unfold S2,S1.
+  st.
+  do 4 (er; sr).
+  stepn' 917%N.
+Qed.
+
+Lemma Incss1' n c r:
+  S1 5 0 (n*5+c) r -->*
+  S1 (2^n*10-5) 0 c r.
+Proof.
+  gen c.
+  induction n; intros.
+  1: finish.
+  follow (IHn (5+c)).
+  follow OvIncs1.
+  cbn[Nat.pow].
+  finish.
+Qed.
+
+Lemma Rst5_2 a:
+  S1 a 0 2 rh5 -->*
+  S1 5 0 (a*4+5) rh5.
+Proof.
+  unfold S1.
+  st.
+  do 8 (er; sr).
+  stepn' 917%N.
+Qed.
+
+Notation rh6 := ([1;1;1;0;1;1]*>0inf).
+
+Lemma Rst5_0 a:
+  S1 (2+a) 0 0 rh5 -->*
+  S1 11 0 (a*4+2) rh6.
+Proof.
+  unfold S1.
+  st.
+  do 4 (er; sr).
+  stepn' 3704%N.
+Qed.
+
+Lemma Rst6_4 a:
+  S1 a 0 4 rh6 -->*
+  S1 (a*2+6) 0 0 0inf.
+Proof.
+  mid (S1 1 (a*2+5) 0 0inf).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Import NatMod_v2.
+Import NatModTactics.
+
+Open Scope nat.
+
+Lemma ge_sub c m:
+  m>=c ->
+  c+(m-c)=m.
+Proof.
+  lia.
+Qed.
+
+Ltac R_sub c :=
+match goal with
+| |- S1 ?m _ _ _ -->+ _ => replace m with (c+(m-c)) by (apply ge_sub; shelve)
+| |- S1 ?m _ _ _ -->* _ => replace m with (c+(m-c)) by (apply ge_sub; shelve)
+| |- S2 ?m _ _ -->* _ => replace m with (c+(m-c)) by (apply ge_sub; shelve)
+end.
+
+Ltac R_mod m :=
+match goal with
+| |- S1 _ _ ?x _ -->+ _ => R_mod'' x m
+| |- S1 _ _ ?x _ -->* _ => R_mod'' x m
+end.
+
+Lemma Rst2_0' a:
+  S1 (2+a) 0 0 rh2 -->+
+  S1 11 0 (a*4+2) rh3.
+Proof.
+  unfold S1.
+  st.
+  do 4 (er; sr).
+  stepn' 3704%N.
+Qed.
+
+Definition S' n :=
+  S1 11 0 (n*160+10) rh2.
+
+Definition P n := n>=1.
+
+Lemma mul_mod_distr_r' a b c v1 v2 v3:
+  c mod b = 0 ->
+  c / b = v2 ->
+  a mod v2 = v1 ->
+  v1*b = v3 ->
+  (a * b) mod c = v3.
+Proof.
+  intros.
+  replace c with (c/b*b) by lia.
+  rewrite Nat.Div0.mul_mod_distr_r.
+  subst.
+  reflexivity.
+Qed.
+
+Ltac rw_mod_1 ::=
+
+match goal with
+| |- ?G => idtac "rw_mod_1"; idtac G
+end;
+match goal with
+| |- (_ = _) = _ =>
+  apply feq2; rw_mod_0
+| |- (?a + ?b) mod ?c = _ =>
+  is_nat_const c;
+  etransitivity; [ apply Nat.Div0.add_mod | ];
+  rw_mod_rec
+| |- (?a - ?b) mod ?c = _ =>
+  is_nat_const c;
+  etransitivity; [ apply sub_mod; [ shelve | congruence ] | ];
+  rw_mod_rec
+| |- (?a * ?b) mod ?c = _ =>
+  is_nat_const c;
+  (is_nat_const b; eapply mul_mod_distr_r'; [crefl|crefl| | ]; [solve[rw_mod_0] | ]; crefl) +
+  (etransitivity; [ apply Nat.Div0.mul_mod | ];
+  rw_mod_rec)
+| |- (?a / ?b) mod ?c = _ =>
+  (*idtac "div_mod_comm";*)
+  is_nat_const b;
+  is_nat_const c;
+  etransitivity; [ eapply div_mod_comm; [ crefl | congruence ] | ];
+  rw_mod_rec
+| |- (?a ^ ?b) mod ?c = _ =>
+  is_nat_const a;
+  is_nat_const c;
+  (
+  (is_nat_const b; (*idtac "pow_mod_1";*) rw_mod_2) +
+  ( (*idtac "pow_mod_2";
+       idtac a; idtac b; idtac c;*)
+    etransitivity;
+    [ eapply pow_mod;
+      [ crefl | | | | | | | | ];
+      [ congruence | congruence | | | | | | ];
+      [ rw_mod_0 | | | | | ];
+      [ rw_mod_0 | | | | ];
+      [ rw_mod_0 | | | ];
+      [ rw_mod_0 | | ];
+      [ shelve | rw_mod_0 ]
+    | ];
+    rw_mod_rec)
+  )
+| |- (_ + _ = _) =>
+  rw_mod_rec
+| |- (_ - _ = _) =>
+  rw_mod_rec
+| |- (_ * _ = _) =>
+  rw_mod_rec
+| |- (_ / _ = _) =>
+  rw_mod_rec
+| |- (_ mod _ = _) =>
+  rw_mod_rec
+| |- (_ ^ _ = _) =>
+  rw_mod_rec
+| _ => rw_mod_2
+end
+with
+rw_mod_0 := rw_mod_1
+with
+rw_mod_rec :=
+
+match goal with
+| |- ?G => idtac "rw_mod_rec"; idtac G
+end;
+etransitivity; [ (apply feq2; rw_mod_0) + reflexivity | ]; rw_mod_2
+with
+rw_mod_2 :=
+
+match goal with
+| |- ?G => idtac "rw_mod_2"; idtac G
+end;
+etransitivity;
+[
+match goal with
+| |- (_ * 0 = _) =>
+  eapply Nat.mul_0_r
+| |- (0 * _ = _) =>
+  eapply Nat.mul_0_l
+| |- (?a * ?b = _) =>
+  reflexivity
+| |- (?a ^ ?b = _) =>
+  reflexivity
+| |- ((?a * ?b) mod ?c = _) =>
+  no_var a; no_var b; no_var c;
+  eapply mul_mod_c; crefl
+| |- ((?a ^ ?b) mod ?c = _) =>
+  no_var a; no_var b; no_var c;
+  eapply pow_mod_c; crefl
+| |- (?e = _) =>
+  no_var e; crefl
+| _ =>
+  reflexivity
+end
+| 
+  match goal with
+  | |- ?x = _ => idtac "rw_mod_2 ret"; idtac x
+  end;
+  reflexivity
+].
+
+Lemma addc_ge' a b c:
+  b>=c ->
+  a+b>=c.
+Proof.
+  lia.
+Qed.
+
+Ltac solve_ge ::=
+match goal with
+| |- ?a + ?b >= ?c =>
+  no_var b; no_var c;
+  (eapply addc_ge'; lia) +
+  (eapply addc_ge; [ crefl | lia | ];
+  solve_ge)
+| |- ?a - ?b >= ?c =>
+  no_var b; no_var c;
+  eapply subc_ge; [ crefl | ];
+  solve_ge
+| |- ?a * ?b >= ?c =>
+  is_nat_const b; no_var c;
+  eapply (mul_ge (div_up c b) b); [ crefl | crefl | | | lia ];
+  solve_ge
+| |- ?a * ?b >= ?c =>
+  is_nat_const a; no_var c;
+  eapply (mul_ge a (div_up c a)); [ crefl | crefl | | | lia ];
+  solve_ge
+| |- ?a * ?b >= ?c =>
+  no_var c;
+  eapply (mul_ge (Nat.sqrt c) (sqrt_up c)); [ crefl | crefl | | | lia ];
+  solve_ge
+| |- ?a / ?b >= ?c =>
+  no_var b; no_var c;
+  eapply divc_ge; [ crefl | congruence | ];
+  solve_ge
+| |- ?a ^ ?b >= ?c =>
+  no_var a; no_var c;
+  eapply powc_ge; [ crefl | lia | ];
+  solve_ge
+| _ => try lia
+end.
+
+Lemma BigStep n:
+  P n ->
+  exists n',
+  S' n -->+
+  S' n' /\ P n'.
+Proof.
+  unfold P,S'.
+  intros HP.
+  eexists; split.
+  1:{
+  R_mod 5.
+  follow Incss1.
+  R_sub 2.
+  follow10 Rst2_0'.
+  R_mod 5.
+  follow Incss1.
+  follow Rst3_0.
+  R_sub 1%nat.
+  follow Rst4.
+  R_mod 5.
+  follow Incss1'.
+  follow Rst5_2.
+  R_mod 5.
+  follow Incss1'.
+  R_sub 2.
+  follow Rst5_0.
+  R_mod 5.
+  follow Incss1.
+  follow Rst6_4.
+  R_sub 2.
+  follow Rst0_0.
+  all: solve_ge.
+  R_mod 160.
+  finish.
+  Unshelve.
+  all: solve_ge.
+  }
+  solve_ge.
+Qed.
+
+Ltac follow' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Lemma nonhalt: ~halts tm c0.
+Proof with rw_all.
+  eapply multistep_nonhalt with (c':=S' _).
+  1:{
+  follow' init...
+
+  follow' Incss1...
+  follow' Rst1_4...
+  follow' Rst0_0...
+
+  R_mod_v2 mp (Nvar 0) 160.
+  unfold S'.
+  finish.
+  }
+  eapply progress_nonhalt_cond with (P:=P).
+  2: unfold P; solve_Nexpr_ge.
+  intro n.
+  apply BigStep.
+Qed.
+
+End TM12.
 
 

@@ -664,4 +664,296 @@ Ltac solve_v2 :=
 
 End PairIter.
 
+Lemma div_mod'' a b c:
+  a mod b = c ->
+  a = a/b*b + c.
+Proof. lia. Qed.
+
+Module NatModTactics.
+
+Lemma Nexpr_div_mod_v2 max_lb mp (a:Nexpr)(b c:nat):
+  Nmod'' max_lb a mp b = Some c ->
+  (mp .[ a ])%Nexpr = (mp .[ a ])%Nexpr / b * b + c.
+Proof.
+  intros.
+  apply div_mod''.
+  epose proof (Nmod''_spec _ _ _ _) as I1.
+  rewrite H in I1.
+  apply I1.
+Qed.
+
+Lemma Nexpr_div_mod_v1 max_lb mp (a:Nexpr)(b c:nat):
+  Nmod'' max_lb a mp b = Some c ->
+  (mp .[ a ])%Nexpr = c + (mp .[ a ])%Nexpr / b * b.
+Proof.
+  intros.
+  apply div_mod'.
+  epose proof (Nmod''_spec _ _ _ _) as I1.
+  rewrite H in I1.
+  apply I1.
+Qed.
+
+Lemma Nexpr_sub_v1 max_lb mp (a:Nexpr)(c:nat) a':
+  Nsubge max_lb a mp c = Some a' ->
+  (mp .[ a ])%Nexpr = c + (mp .[ a' ])%Nexpr.
+Proof.
+  intros.
+  epose proof (Nsubge_spec _ _ _ _) as I1.
+  rewrite H in I1.
+  lia.
+Qed.
+
+Lemma Nexpr_sub_v2 max_lb mp (a:Nexpr)(c:nat) a':
+  Nsubge max_lb a mp c = Some a' ->
+  (mp .[ a ])%Nexpr = (mp .[ a' ])%Nexpr + c.
+Proof.
+  intros.
+  epose proof (Nsubge_spec _ _ _ _) as I1.
+  rewrite H in I1.
+  lia.
+Qed.
+
+Lemma Nexpr_div_mod_v1' max_lb mp a b c a':
+  Nsubge max_lb a mp c = Some a' ->
+  Nmod'' max_lb a' mp b = Some O ->
+  (mp .[ a ])%Nexpr = (c + (mp .[ a'])%Nexpr / b * b).
+Proof.
+  intros I1 I2.
+  apply Nexpr_sub_v1 in I1.
+  apply Nexpr_div_mod_v1 in I2.
+  lia.
+Qed.
+
+Lemma Nexpr_div_mod_v2' max_lb mp a b c a':
+  Nsubge max_lb a mp c = Some a' ->
+  Nmod'' max_lb a' mp b = Some O ->
+  (mp .[ a ])%Nexpr = ((mp .[ a'])%Nexpr / b * b + c).
+Proof.
+  intros I1 I2.
+  apply Nexpr_sub_v2 in I1.
+  apply Nexpr_div_mod_v2 in I2.
+  lia.
+Qed.
+
+Ltac get_max_lb := constr:((2^30)%N).
+
+Ltac R_mod_v1 mp a b :=
+  let max_lb := get_max_lb in
+  erewrite (Nexpr_div_mod_v1 max_lb mp a b) by crefl.
+
+Ltac R_mod_v2 mp a b :=
+  let max_lb := get_max_lb in
+  erewrite (Nexpr_div_mod_v2 max_lb mp a b) by crefl.
+
+Lemma feq{A B}(f g:A->B)(x y:A):
+  f=g ->
+  x=y ->
+  f x = g y.
+Proof.
+  congruence.
+Qed.
+
+Lemma Peq(P Q:Prop):
+  Q=P -> P -> Q.
+Proof.
+  congruence.
+Qed.
+
+Open Scope Nexpr.
+
+Lemma Nconst_eq mp n n0:
+  N.of_nat n = n0 ->
+  n = mp .[ Nconst n0].
+Proof.
+  cbn; lia.
+Qed.
+
+Lemma Nadd_eq mp a b a0 b0:
+  a = mp.[a0] ->
+  b = mp.[b0] ->
+  Nat.add a b = mp.[a0+b0].
+Proof.
+  cbn; lia.
+Qed.
+
+Lemma Nsub_eq mp a b a0 b0:
+  a = mp.[a0] ->
+  N.of_nat b = b0 ->
+  Nat.sub a b = mp.[a0-b0].
+Proof.
+  cbn; lia.
+Qed.
+
+Lemma Nmul_eq mp a b a0 b0:
+  a = mp.[a0] ->
+  b = mp.[b0] ->
+  Nat.mul a b = mp.[a0*b0].
+Proof.
+  cbn; lia.
+Qed.
+
+Lemma Ndiv_eq mp a b a0 b0:
+  a = mp.[a0] ->
+  N.of_nat b = b0 ->
+  Nat.div a b = mp.[a0/b0].
+Proof.
+  cbn.
+  intros; subst.
+  lia.
+Qed.
+
+Lemma Npow_eq mp a b a0 b0:
+  N.of_nat a = a0 ->
+  b = mp.[b0] ->
+  Nat.pow a b = mp.[a0^b0].
+Proof.
+  cbn.
+  intros; subst.
+  lia.
+Qed.
+
+Lemma mp_cons mp x:
+  mp.[x] = (x::mp).[ Nvar 0].
+Proof.
+  reflexivity.
+Qed.
+
+Lemma lift_cons mp x y y':
+  lift 1 y = y' ->
+  mp.[y] = (x::mp).[y'].
+Proof.
+  intros; subst.
+  induction y; cbn in *; congruence.
+Qed.
+
+Ltac get_mp :=
+match goal with
+| [ mp := _ |- _] => mp
+| [ mp : list Nexpr |- _] => mp
+end.
+
+Ltac rw_Nexpr :=
+match goal with
+| |- @eq nat ?a ?a' =>
+  match a with
+  | ?mp .[ ?x ] => reflexivity
+  | Nat.add _ _ => eapply Nadd_eq; [rw_Nexpr|rw_Nexpr]
+  | Nat.sub _ _ => eapply Nsub_eq; [rw_Nexpr|crefl]
+  | Nat.mul _ _ => eapply Nmul_eq; [rw_Nexpr|rw_Nexpr]
+  | Nat.div _ _ => eapply Ndiv_eq; [rw_Nexpr|crefl]
+  | Nat.pow _ _ => eapply Npow_eq; [crefl|rw_Nexpr]
+  | _ =>
+    let mp:=get_mp in
+    is_nat_const a;
+    eapply (Nconst_eq mp); crefl
+  end
+| |- ?a = _ =>
+  match a with
+  | _ _ => eapply feq; rw_Nexpr
+  | _ => reflexivity
+  end
+| _ => eapply Peq; [rw_Nexpr|]
+end.
+
+Ltac match_Nexpr :=
+match goal with
+| |- @eq nat ?a ?a' =>
+  match a with
+  | ?mp .[ ?x ] =>
+    match a' with
+    | Neval _ _ => reflexivity
+    | (?a + ?b * ?c)%nat =>
+        idtac mp x a b c;
+      is_nat_const c;
+      let max_lb := get_max_lb in
+      (is_nat_const a; eapply (Nexpr_div_mod_v1' max_lb mp x c); [crefl|]; crefl) +
+      (apply (Nexpr_div_mod_v1 max_lb mp x c); crefl)
+    | (?b * ?c + ?a)%nat =>
+        idtac mp x a b c;
+      is_nat_const c;
+      let max_lb := get_max_lb in
+      (is_nat_const a; eapply (Nexpr_div_mod_v2' max_lb mp x c); [crefl|]; crefl) +
+      (apply (Nexpr_div_mod_v2 max_lb mp x c); crefl)
+    | (?a + ?b)%nat =>
+        idtac mp x a b;
+      is_nat_const a;
+      let max_lb := get_max_lb in
+      apply (Nexpr_sub_v1 max_lb mp x a); crefl
+    | (?b + ?a)%nat =>
+        idtac mp x a b;
+      is_nat_const a;
+      let max_lb := get_max_lb in
+      apply (Nexpr_sub_v2 max_lb mp x a); crefl
+    | ?e => is_evar e; reflexivity
+    | ?e =>
+      is_nat_const e;
+      match x with
+      | Nconst _ => symmetry; apply Nconst_eq; crefl
+      end
+    end
+  end
+| |- ?a = _ =>
+  match a with
+  | _ _ => eapply feq; match_Nexpr
+  | _ => reflexivity
+  end
+| _ => idtac
+end.
+
+
+
+Ltac rw_lift_1 :=
+  progress
+multimatch goal with
+| |- context[ ?mp .[ ?x ] ] =>
+  match x with
+  | Nvar _ => idtac
+  | Nconst _ => idtac
+  | _ =>
+    rewrite (mp_cons mp x);
+    repeat erewrite (lift_cons mp x) by crefl;
+    let mp0:=fresh "mp" in
+    set (mp0:=x::mp);
+    subst mp;
+    rename mp0 into mp
+  end
+end.
+
+Ltac rw_lift := repeat rw_lift_1.
+
+Ltac arg1 a := idtac.
+
+Ltac rw_all :=
+  (tryif (arg1 get_mp) then idtac else (set (mp:=@nil Nexpr)));
+  rw_Nexpr;
+  rw_lift.
+
+Lemma Nexpr_ge max_lb mp x c x':
+  Nsubge max_lb x mp c = Some x' ->
+  mp.[x] >= c.
+Proof.
+  intros.
+  apply Nexpr_sub_v1 in H.
+  lia.
+Qed.
+
+Ltac solve_Nexpr_ge :=
+  eapply Peq;[eapply feq;[rw_Nexpr|reflexivity]|];
+  let max_lb := get_max_lb in
+  match goal with
+  | |- ?mp .[ ?x ] >= ?c =>
+    eapply (Nexpr_ge max_lb mp x c); crefl
+  end.
+
+Ltac R_mod'' a b :=
+  eassert (X:_) by (eapply (div_mod'' a b _); rw_mod_1);
+  rewrite X in *;
+  clear X.
+
+Ltac R_mod' a b :=
+  eassert (X:_) by (eapply (div_mod' a b _); rw_mod_1);
+  rewrite X in *;
+  clear X.
+
+End NatModTactics.
 
