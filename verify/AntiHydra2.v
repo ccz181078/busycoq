@@ -27,6 +27,7 @@ Proof.
   ind k LInc.
 Qed.
 
+(* S0 n m := 0^inf C> 01011 01^n 1 01^m 0^inf *)
 Definition S0 n m :=
   const 0 {{C}}> [0;1]^^2 *> [1] *> [0;1]^^n *> [1] *> [0;1]^^m *> const 0.
 
