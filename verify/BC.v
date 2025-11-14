@@ -3,6 +3,7 @@ Require Import Lia.
 Require Import ZArith.
 Require Import String.
 From BusyCoq Require Import SimplTape.
+From BusyCoq Require Import Longitudinal.
 
 Open Scope list.
 
@@ -38,6 +39,7 @@ Ltac simpl_nat :=
   repeat rewrite Nat.add_succ_r;
   repeat rewrite <-Nat.mul_add_distr_l;
   repeat rewrite <-Nat.mul_succ_r.
+
 
 Module TM1.
 
@@ -1017,4 +1019,148 @@ Proof.
 Qed.
 
 End TM10.
+
+
+Module TM11.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1RC0RB_0LD1LC_1RA1LE_1LF0LA_1LB---").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD := D0 | D1 | Dw.
+
+Fixpoint Lmp ls :=
+match ls with
+| [] => 0inf
+| D0::t => Lmp t <* <[0;0]
+| D1::t => Lmp t <* <[1;1]
+| Dw::t => Lmp t <* <[0;1;1;0]
+end.
+
+Fixpoint Lnxt ls :=
+match ls with
+| [] => [D1]
+| D0::t => D1::t
+| D1::t => D0::Lnxt t
+| Dw::t => Dw::Lnxt t
+end.
+
+Notation hL := (C,[1]).
+Notation hR := (B,[0]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+
+Definition tm' := flip tm.
+
+Lemma LInc ls:
+  sideRLs tm' hLR (Lmp ls) (Lmp (Lnxt ls)).
+Proof.
+  induction ls as [|[] t]; cbn[Lnxt]; cbn[Lmp].
+  - esx.
+  - esx.
+  - eapply segRLs_sideRLs_concat.
+    2: apply IHt.
+    esx.
+  - eapply segRLs_sideRLs_concat.
+    2: apply IHt.
+    esx.
+Qed.
+
+Lemma LIncs n ls:
+  exists ls',
+  sideRLs tm' (hLR^^n) (Lmp ls) (Lmp ls').
+Proof.
+  induction n.
+  - exists ls.
+    esx.
+  - destruct IHn as [ls' I1].
+    exists (Lnxt ls').
+    replace (S n) with (n+1) by lia.
+    rewrite lpow_add.
+    eapply sideRLs_trans.
+    1: apply I1.
+    apply LInc.
+Qed.
+
+Notation rh0 := (1>>1>>0>>1>>1>>1>>0>>1>>1>>1>>0>>1>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>1>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>0>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>0>>0>>0>>1>>0>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>0inf).
+
+Ltac stepn n0 :=
+  eapply without_counter with (n:=N.to_nat n0);
+  eapply multistep_c_spec; vm_compute; simpl_tape; try reflexivity.
+
+Ltac solve_sideRLs_S T :=
+  eapply sideRLseq_S; [
+  unfold sideRL; intros;
+  step1;
+  stepn (T-1)%N | ].
+
+Lemma RInc:
+  sideRLs tm (hRL^^29) (rh0) ([1;1;0;1]*>rh0).
+Proof.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3062%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3288%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3062%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3080%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3046%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3236%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 2890%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3046%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 2734%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 3254%N.
+  solve_sideRLs_S 2560%N.
+  solve_sideRLs_S 2578%N.
+  solve_sideRLs_S 2544%N.
+  solve_sideRLs_S 3030%N.
+  solve_sideRLs_S 2122%N.
+  solve_sideRLs_S 204%N.
+  solve_sideRLs_S 64098%N.
+  solve_sideRLs_S 6716%N.
+  solve_sideRLs_S 3254%N.
+  eapply sideRLseq_O.
+Qed.
+
+Definition RC n := [1;1;0;1]^^n *> rh0.
+
+Lemma RInc' n:
+  sideRLs tm (hRL^^29) (RC n) (RC (S n)).
+Proof.
+  unfold RC.
+  replace (S n) with (n+1) by lia.
+  rewrite <-lpow_add'.
+  eapply segRLs_sideRLs_concat.
+  2: apply RInc.
+  eapply segRLs_wall''; esx.
+Qed.
+
+Definition S' '(a,b) := Lmp a {{{ (hL,L) }}} RC b.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' ([Dw;D1;Dw;Dw;D1;D1;D1;D1;D0;D0;D0;D0;D1;D1;D1;D1;D0;Dw;D1],O)).
+  1: stepn 1432841%N.
+  eapply progress_nonhalt_simple.
+  intros [ls n].
+  epose proof (LIncs 29 _) as [ls' I1].
+  eexists (_,S n).
+  unfold S'.
+  eapply sideRLs_concat_v2_L.
+  4: apply RInc'.
+  3: apply I1.
+  2: cbn; congruence.
+  reflexivity.
+Qed.
+
+End TM11.
+
 

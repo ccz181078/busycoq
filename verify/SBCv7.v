@@ -4,6 +4,10 @@ Require Import ZArith.
 Require Import String.
 Require Import List.
 From BusyCoq Require Import Longitudinal.
+From BusyCoq Require ES_v2.
+
+Ltac es_v2 := ES_v2.es.
+
 
 Open Scope list.
 
@@ -70,6 +74,17 @@ end.
 
 Ltac ss :=
   try ss1.
+
+Lemma sideRLs_wall tm h n l l' w:
+  segRLs tm h h w w ->
+  sideRLs tm (h^^n) l l' ->
+  sideRLs tm (h^^n) (l<*w) (l'<*w).
+Proof.
+  intros.
+  eapply segRLs_sideRLs_concat.
+  2: apply H0.
+  apply segRLs_wall'',H.
+Qed.
 
 
 
@@ -5837,5 +5852,1015 @@ Proof.
 Qed.
 
 End TM30.
+
+
+Module TM31.
+
+Definition tm := Eval compute in (TM_from_str "1RB1RF_0LC1RE_0RA0LD_1LB0RE_1RC0LA_0RD---").
+Definition tm' := flip tm.
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (A,<[1;0]).
+Notation hL := (D,[0;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Notation d0 := <[1;0;1;0;0;0].
+Notation d1 := <[1;0;1;0;1;1].
+Notation d2 := <[1;0;1;0;1;0].
+Notation dh0 := (0inf <* <[1;1]).
+Notation dh1 := (0inf <* <[1;0]).
+
+Lemma LIncs n:
+  sideRLs tm' (hLR^^(3^n*2-1)) (dh0<*d0^^n) (dh1<*d2^^n).
+Proof.
+  induction n.
+  1: esx.
+  cbn[lpow].
+  do 2 rewrite Str_app_assoc.
+  replace (3^S n*2-1) with ((3^n*2-1)*3+2) by (cbn[Nat.pow]; lia).
+  eapply segRLs_sideRLs_concat.
+  2: apply IHn.
+  apply segRLs_addmul''; esx.
+Qed.
+
+Definition RC0 a b := [1;0;1;0;0]^^a *> [1;0;0] *> [1;0;1;0;0]^^b *> 0inf.
+
+Lemma RIncs0 a b:
+  sideRLs tm (hRL^^(b*2)) (RC0 a b) (RC0 (a+b) 0).
+Proof.
+  unfold RC0.
+  rewrite lpow_mul.
+  gen a.
+  induction b; intros.
+  1: esx.
+  replace (S b) with (1+b) by lia.
+  eapply sideRLs_trans_add.
+  2: applys_eq (IHb (1+a)); flia.
+  esx.
+Qed.
+
+Definition RC n := [1;0;1;0;0]^^n *> 0inf.
+
+Lemma RIncs1 k n:
+  sideRLs tm (hRL^^(k*2)) (RC n) (RC (k+n)).
+Proof.
+  unfold RC.
+  rewrite lpow_mul.
+  sideRLs_ind k.
+Qed.
+
+Lemma RIncs n m:
+  sideRLs tm (hRL^^(n*2+(1+m*2))) (RC0 0 n) (RC (m+(n+1))).
+Proof.
+  eapply sideRLs_trans_add.
+  1: apply RIncs0.
+  eapply sideRLs_trans_add.
+  2: apply RIncs1.
+  unfold RC0,RC.
+  esx.
+Qed.
+
+Definition S1 l a b :=
+  l <* <[1;0;1;1;0]^^a {{{ (hL,L) }}} RC0 0 b.
+
+Lemma Inc1 l a b:
+  S1 l (2+a) b -->*
+  S1 l a (3+b).
+Proof.
+  unfold S1,RC0.
+  es.
+Qed.
+
+Lemma Incs1 l a b:
+  S1 l (a*2) b -->*
+  S1 l 0 (a*3+b).
+Proof.
+  gen b.
+  ind a Inc1.
+Qed.
+
+Definition S' '(a,b) := dh1 <* d2^^a {{{ (hL,L) }}} RC b.
+
+Lemma BigStep a b c:
+  (3^(1+a)*2-1 = (b*3+0)*2+(1+c*2)) ->
+  S' (a,1+b*2) -->+
+  S' (1+a,c+b*3+1).
+Proof.
+  intros Hc.
+  unfold S',RC.
+  mid10 (S1 (dh0<*d0^^(1+a)) (b*2) 0).
+  1: unfold S1,RC0; es.
+  follow Incs1.
+  unfold S1.
+  epose proof (RIncs (b*3+0) c) as I1.
+  rewrite <-Hc in I1.
+  epose proof (sideRLs_concat_1L I1 (LIncs (1+a))) as I.
+  follow I.
+  unfold RC.
+  finish.
+Qed.
+
+Definition S0 n := S' (n,3^n).
+
+Lemma pow3_mod2 n:
+  3^n mod 2 = 1%nat.
+Proof.
+  induction n; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S0 O).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros i.
+  exists (S i).
+  unfold S0.
+  cbn[Nat.pow].
+  pose proof (pow3_mod2 i).
+  applys_eq (BigStep i (3^i/2) (3^i/2*3+2));
+  repeat rewrite Nat.pow_add_r; flia.
+Qed.
+
+End TM31.
+
+
+Module TM32.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LD_1RC1RD_1LB1RA_0RC1LE_---0LF_0LD1LB").
+Definition tm' := flip tm.
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (D,<[1;1]).
+Notation hL := (F,[0;1]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Notation d0 := <[1;1;0;1].
+Notation d1 := <[1;1;1;1].
+Notation dx := <[1;1;0;1;1;1;1].
+Notation w0 := (d0 <+ dx).
+Notation w1 := (d1 <+ dx).
+Notation dh := (0inf <* <[1;1]).
+
+Notation "l <| r" := (l <{{F}} [0;1] *> r) (at level 30).
+Notation "l |> r" := (l {{A}}> r) (at level 30).
+
+Definition LOv l l' := forall r, l <| r -->* l' |> r.
+
+Fixpoint LC0 ls n d :=
+match ls with
+| (a,b)::t =>
+  LC0 t n d <* w0^^b <* d <* w1^^a <* d0 <* w1 <* dx
+| [] => dh <* d^^n <* d0 <* w0 <* dx
+end.
+
+Fixpoint LC1 ls n d :=
+match ls with
+| (a,b)::t =>
+  LC1 t n d <* w1^^b <* w0^^a <* d <* w0 <* w1
+| [] => dh <* d^^n <* d1 <* w1 <* dx
+end.
+
+Lemma LC0_Ov ls n:
+  LOv (LC0 ls n d1) (LC1 ls (1+n) d0).
+Proof.
+  unfold LOv.
+  induction ls as [|[a b] ls]; cbn[LC0]; cbn[LC1].
+  - es.
+  - es; er.
+    follow.
+    es.
+Qed.
+
+Lemma LC1_Ov ls n:
+  LOv (LC1 ls n d1) (LC0 ls n d0 <* d0).
+Proof.
+  unfold LOv.
+  induction ls as [|[a b] ls]; cbn[LC0]; cbn[LC1].
+  - es.
+  - es; er.
+    follow.
+    es.
+Qed.
+
+Lemma LIncs_d0 n l l':
+  sideRLs tm' (hLR^^n) l l' ->
+  sideRLs tm' (hLR^^(n*2+1)) (l<*d0) (l'<*d1).
+Proof.
+  intros.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  eapply segRLs_addmul''; esx.
+Qed.
+
+Lemma LIncs_d0s n l:
+  sideRLs tm' (hLR^^(2^n-1)) (l<*d0^^n) (l<*d1^^n).
+Proof.
+  induction n.
+  - esx.
+  - cbn[Nat.pow].
+    apply LIncs_d0 in IHn.
+    applys_eq IHn; flia.
+Qed.
+
+Lemma wall3 n l l' a b c d e f:
+  sideRLs tm' (hLR^^n) (l<*(a<+b<+c)) (l'<*(d<+e<+f)) ->
+  sideRLs tm' (hLR^^n) (l<*a<*b<*c) (l'<*d<*e<*f).
+Proof.
+  st.
+  tauto.
+Qed.
+
+Lemma LIncs0 ls n:
+  sideRLs tm' (hLR^^(2^(length ls+n)-1)) (LC0 ls n d0) (LC0 ls n d1).
+Proof.
+  induction ls as [|[a b] ls]; cbn[length]; cbn[LC0].
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply LIncs_d0s.
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    replace (2^(S(length ls)+n)-1) with ((2^(length ls+n)-1)*2+1) by (cbn; lia).
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply IHls.
+Qed.
+
+Lemma LIncs1 ls n:
+  sideRLs tm' (hLR^^(2^(length ls+n)-1)) (LC1 ls n d0) (LC1 ls n d1).
+Proof.
+  induction ls as [|[a b] ls]; cbn[length]; cbn[LC1].
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply LIncs_d0s.
+  - apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    replace (2^(S(length ls)+n)-1) with ((2^(length ls+n)-1)*2+1) by (cbn; lia).
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    apply IHls.
+Qed.
+
+Notation d1' := [0;1;0;1].
+Notation w0' := [0;1;0;1;0;1;0;0;1;0;1].
+Notation w1' := [0;1;0;1;0;0;1;0;1;0;1].
+
+Definition RC3 n := w0'^^n *> [0;1;0;1;0;0;1;0;1] *> 0inf.
+Definition RC0 n m := w0'^^n *> d1' *> w1'^^m *> [0;0;1;0;1] *> 0inf.
+
+Definition RC1 k n := w1'^^k *> w0'^^n *> d1' *> w0' *> [0;1] *> 0inf.
+Definition RC2 k n m := w1'^^k *> w0'^^n *> d1' *> w0' *> w1'^^m *> [0;1;0;0;1] *> 0inf.
+
+Lemma RIncs0 n m:
+  sideRLs tm (hRL^^(m*3)) (RC3 n) (RC0 n (m*2)).
+Proof.
+  unfold RC0,RC3.
+  rewrite lpow_mul.
+  sideRLs_ind m.
+Qed.
+
+Lemma RIncs2 k n m:
+  sideRLs tm (hRL^^(1+m*3)) (RC1 k n) (RC2 k n (m*2)).
+Proof.
+  unfold RC1,RC2.
+  eapply sideRLs_trans_add.
+  1: esx.
+  rewrite lpow_mul.
+  sideRLs_ind m.
+Qed.
+
+Lemma LC0_Ov_1 ls n n0 n1:
+  LC0 ls n d1 <| RC0 n0 n1 -->*
+  LC1 ls (1+n) d0 <| RC1 n0 n1.
+Proof.
+  unfold RC0,RC1.
+  es; er.
+  follow LC0_Ov.
+  es.
+Qed.
+
+Lemma lpow_unrotate_11 n (a a0 a1 a2 a3 a4 a5 a6 a7 a8 a9:Sym) r:
+  a >> [a0;a1;a2;a3;a4;a5;a6;a7;a8;a9;a]^^n *> r =
+  [a;a0;a1;a2;a3;a4;a5;a6;a7;a8;a9]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Local Ltac ES_v2.rw_unrotate_0 ::=
+  rewrite lpow_unrotate_11.
+
+Lemma LC1_Ov_1 ls n n0 n1 n2:
+  LC1 ls n d1 <| RC2 n0 n1 (1+n2) -->+
+  LC0 ((n1,n0)::ls) n d0 <| RC3 n2.
+Proof.
+  unfold RC2,RC3.
+  es; er.
+  follow LC1_Ov.
+  do 3 (er; sr).
+  es_v2.
+Qed.
+
+Lemma pow4_mod3 i:
+  2^(i*2) mod 3 = 1%nat.
+Proof.
+  induction i; cbn - [Nat.modulo]; lia.
+Qed.
+
+Definition S' '(ls,n,n0,n1) :=
+  LC0 ls n d1 <| RC0 n0 n1.
+
+Lemma init:
+  c0 -->*
+  S' ([(3,O)],3,3,10).
+Proof.
+  esx.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=fun '(ls,n,n0,n1) => ((length ls)+n) mod 2 = O /\ (length ls)+n >= 2).
+  2: cbn; lia.
+  intros [[[ls n] n0] n1] HP.
+  eexists (_,_,_,_); split.
+  - unfold S'.
+    follow LC0_Ov_1.
+    epose proof (LIncs1 ls (1+n)) as I1.
+    remember (length ls) as len.
+    replace ((len+(1+n))) with (S((len+n)/2*2)) in I1 by lia.
+    cbn[Nat.pow] in I1.
+    pose proof (pow4_mod3 ((len+n)/2)) as Hm.
+    remember (2 * 2 ^ ((len + n) / 2 * 2) - 1) as v1.
+    replace v1 with (1+v1/3*3) in I1 by lia.
+    epose proof (sideRLs_concat_1L (RIncs2 _ _ _) I1) as I.
+    follow I.
+    unfold to_DH_config.
+    epose proof (Nat.pow_le_mono_r 2 2 ((len+n)/2*2)).
+    replace (v1/3*2) with (1+(v1/3*2-1)) by lia.
+    follow10 LC1_Ov_1.
+    epose proof (LIncs0 ((n1,n0)::ls) (1+n)) as I2.
+    cbn[length] in I2.
+    replace (S(length ls)+(1+n)) with (S(S(((len+n)/2)*2))) in I2 by lia.
+    cbn[Nat.pow] in I2.
+    remember (2 * (2 * 2 ^ ((len + n) / 2 * 2)) - 1) as v2.
+    replace v2 with (v2/3*3) in I2 by lia.
+    epose proof (sideRLs_concat_1L (RIncs0 _ _) I2) as I'.
+    unfold to_DH_config in I'.
+    follow I'.
+    subst.
+    finish.
+  - cbn[length]; lia.
+Qed.
+
+End TM32.
+
+
+Module TM33.
+
+Definition tm := Eval compute in (TM_from_str "1LB1RC_1RA1RD_1RB0LD_0RA1LE_---0LF_0LD1LB").
+Definition tm' := flip tm.
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (D,<[1;1]).
+Notation hL := (F,[0;1]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Notation d0 := <[1;1;0;1].
+Notation d1 := <[1;1;1;1].
+Notation dx := <[1;1;0;1;1;1;1].
+Notation w0 := (d0 <+ dx).
+Notation w1 := (d1 <+ dx).
+Notation dh := (0inf <* <[1;1]).
+
+Notation "l <| r" := (l <{{F}} [0;1] *> r) (at level 30).
+Notation "l |> r" := (l {{C}}> r) (at level 30).
+
+Definition LOv l l' := forall r, l <| r -->* l' |> r.
+
+Fixpoint LC0 ls n d :=
+match ls with
+| (a,b)::t =>
+  LC0 t n d <* w0^^b <* d <* w1^^a <* d0 <* w1 <* dx
+| [] => dh <* d^^n <* d0^^2 <* w1 <* dx <* w0^^3 <* dx <* w1^^2 <* d0 <* w1 <* dx
+end.
+
+Fixpoint LC1 ls n d :=
+match ls with
+| (a,b)::t =>
+  LC1 t n d <* w1^^b <* w0^^a <* d <* w0 <* w1
+| [] => dh <* d^^n <* d0 <* d1 <* w0 <* w1^^4 <* dx^^2 <* w0 <* d <* w0 <* w1
+end.
+
+Lemma LC0_Ov ls n:
+  LOv (LC0 ls n d1) (LC1 ls n d0).
+Proof.
+  unfold LOv.
+  induction ls as [|[a b] ls]; cbn[LC0]; cbn[LC1].
+  - es.
+  - es; er.
+    follow.
+    es.
+Qed.
+
+Lemma LC1_Ov ls n:
+  LOv (LC1 ls n d1) (LC0 ls (1+n) d0 <* d0).
+Proof.
+  unfold LOv.
+  induction ls as [|[a b] ls]; cbn[LC0]; cbn[LC1].
+  - es.
+  - es; er.
+    follow.
+    es.
+Qed.
+
+Lemma LIncs_d0 n l l':
+  sideRLs tm' (hLR^^n) l l' ->
+  sideRLs tm' (hLR^^(n*2+1)) (l<*d0) (l'<*d1).
+Proof.
+  intros.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  eapply segRLs_addmul''; esx.
+Qed.
+
+Lemma LIncs_d0s n l:
+  sideRLs tm' (hLR^^(2^n-1)) (l<*d0^^n) (l<*d1^^n).
+Proof.
+  induction n.
+  - esx.
+  - cbn[Nat.pow].
+    apply LIncs_d0 in IHn.
+    applys_eq IHn; flia.
+Qed.
+
+Lemma wall3 n l l' a b c d e f:
+  sideRLs tm' (hLR^^n) (l<*(a<+b<+c)) (l'<*(d<+e<+f)) ->
+  sideRLs tm' (hLR^^n) (l<*a<*b<*c) (l'<*d<*e<*f).
+Proof.
+  st.
+  tauto.
+Qed.
+
+Lemma LIncs0 ls n:
+  sideRLs tm' (hLR^^(2^(length ls+n)-1)) (LC0 ls n d0) (LC0 ls n d1).
+Proof.
+  induction ls as [|[a b] ls]; cbn[length]; cbn[LC0].
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    apply wall3.
+    apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply LIncs_d0s.
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    replace (2^(S(length ls)+n)-1) with ((2^(length ls+n)-1)*2+1) by (cbn; lia).
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply IHls.
+Qed.
+
+Lemma LIncs1 ls n:
+  sideRLs tm' (hLR^^(2^(length ls+(1+n))-1)) (LC1 ls n d0) (LC1 ls n d1).
+Proof.
+  induction ls as [|[a b] ls]; cbn[length]; cbn[LC1].
+  - apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    cbn[Nat.add].
+    cbn[Nat.pow].
+    replace (2*2^n-1) with ((2^n-1)*2+1) by lia.
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply wall3.
+    apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply LIncs_d0s.
+  - apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    replace (2^(S(length ls)+(1+n))-1) with ((2^(length ls+(1+n))-1)*2+1) by (cbn; lia).
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    apply IHls.
+Qed.
+
+Notation d1' := [0;1;0;1].
+Notation w0' := [0;1;0;1;0;1;0;0;1;0;1].
+Notation w1' := [0;1;0;1;0;0;1;0;1;0;1].
+
+Definition RC3 n := w0'^^n *> [0;1;0;1;0;0;1;0;1] *> 0inf.
+Definition RC0 n m := w0'^^n *> d1' *> w1'^^m *> [0;0;1;0;1] *> 0inf.
+
+Definition RC1 k n := w1'^^k *> w0'^^n *> d1' *> w0' *> [0;1] *> 0inf.
+Definition RC2 k n m := w1'^^k *> w0'^^n *> d1' *> w0' *> w1'^^m *> [0;1;0;0;1] *> 0inf.
+
+Lemma RIncs0 n m:
+  sideRLs tm (hRL^^(m*3)) (RC3 n) (RC0 n (m*2)).
+Proof.
+  unfold RC0,RC3.
+  rewrite lpow_mul.
+  sideRLs_ind m.
+Qed.
+
+Lemma RIncs2 k n m:
+  sideRLs tm (hRL^^(1+m*3)) (RC1 k n) (RC2 k n (m*2)).
+Proof.
+  unfold RC1,RC2.
+  eapply sideRLs_trans_add.
+  1: esx.
+  rewrite lpow_mul.
+  sideRLs_ind m.
+Qed.
+
+Lemma LC0_Ov_1 ls n n0 n1:
+  LC0 ls n d1 <| RC0 n0 n1 -->*
+  LC1 ls n d0 <| RC1 n0 n1.
+Proof.
+  unfold RC0,RC1.
+  es; er.
+  follow LC0_Ov.
+  es.
+Qed.
+
+Lemma lpow_unrotate_11 n (a a0 a1 a2 a3 a4 a5 a6 a7 a8 a9:Sym) r:
+  a >> [a0;a1;a2;a3;a4;a5;a6;a7;a8;a9;a]^^n *> r =
+  [a;a0;a1;a2;a3;a4;a5;a6;a7;a8;a9]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Local Ltac ES_v2.rw_unrotate_0 ::=
+  rewrite lpow_unrotate_11.
+
+Lemma LC1_Ov_1 ls n n0 n1 n2:
+  LC1 ls n d1 <| RC2 n0 n1 (1+n2) -->+
+  LC0 ((n1,n0)::ls) (1+n) d0 <| RC3 n2.
+Proof.
+  unfold RC2,RC3.
+  es; er.
+  follow LC1_Ov.
+  do 3 (er; sr).
+  es_v2.
+Qed.
+
+Lemma pow4_mod3 i:
+  2^(i*2) mod 3 = 1%nat.
+Proof.
+  induction i; cbn - [Nat.modulo]; lia.
+Qed.
+
+Definition S' '(ls,n,n0,n1) :=
+  LC0 ls n d1 <| RC0 n0 n1.
+
+Lemma init:
+  c0 -->*
+  S' ([],4,3,10).
+Proof.
+  esx.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=fun '(ls,n,n0,n1) => ((length ls)+n) mod 2 = O /\ (length ls)+n >= 2).
+  2: cbn; lia.
+  intros [[[ls n] n0] n1] HP.
+  eexists (_,_,_,_); split.
+  - unfold S'.
+    follow LC0_Ov_1.
+    epose proof (LIncs1 ls n) as I1.
+    remember (length ls) as len.
+    replace ((len+(1+n))) with (S((len+n)/2*2)) in I1 by lia.
+    cbn[Nat.pow] in I1.
+    pose proof (pow4_mod3 ((len+n)/2)) as Hm.
+    remember (2 * 2 ^ ((len + n) / 2 * 2) - 1) as v1.
+    replace v1 with (1+v1/3*3) in I1 by lia.
+    epose proof (sideRLs_concat_1L (RIncs2 _ _ _) I1) as I.
+    follow I.
+    unfold to_DH_config.
+    epose proof (Nat.pow_le_mono_r 2 2 ((len+n)/2*2)).
+    replace (v1/3*2) with (1+(v1/3*2-1)) by lia.
+    follow10 LC1_Ov_1.
+    epose proof (LIncs0 ((n1,n0)::ls) (1+n)) as I2.
+    cbn[length] in I2.
+    replace (S(length ls)+(1+n)) with (S(S(((len+n)/2)*2))) in I2 by lia.
+    cbn[Nat.pow] in I2.
+    remember (2 * (2 * 2 ^ ((len + n) / 2 * 2)) - 1) as v2.
+    replace v2 with (v2/3*3) in I2 by lia.
+    epose proof (sideRLs_concat_1L (RIncs0 _ _) I2) as I'.
+    unfold to_DH_config in I'.
+    follow I'.
+    subst.
+    finish.
+  - cbn[length]; lia.
+Qed.
+
+End TM33.
+
+
+Module TM34.
+
+Definition tm := Eval compute in (TM_from_str "1RB0RF_1LC1RC_0LE0LD_0LB0RD_1RA1RE_0RB---").
+Definition tm' := flip tm.
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (F,<[1;1;0]).
+Notation hL := (C,[1;0;1]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Notation d0 := <[1;1;0;0].
+Notation d1 := <[1;1;1;1].
+Notation dx := <[1;1;0;0;1;1;1].
+Notation w0 := (d0 <+ dx).
+Notation w1 := (d1 <+ dx).
+Notation dh := (0inf <* <[1;1]).
+
+Notation "l <| r" := (l <{{C}} [1;0;1] *> r) (at level 30).
+Notation "l |> r" := (l <* [1] {{C}}> r) (at level 30).
+
+Definition LOv l l' := forall r, l <| r -->* l' |> r.
+
+Fixpoint LC0 ls n d :=
+match ls with
+| (a,b)::t =>
+  LC0 t n d <* w0^^b <* d <* w1^^a <* d0 <* w1 <* dx
+| [] => dh <* d^^n <* d0 <* w0 <* dx
+end.
+
+Fixpoint LC1 ls n d :=
+match ls with
+| (a,b)::t =>
+  LC1 t n d <* w1^^b <* w0^^a <* d <* w0 <* w1
+| [] => dh <* d^^n <* d1 <* w1 <* dx
+end.
+
+Local Ltac use_shift_rule ::= use_shift_rule'.
+
+Lemma LC0_Ov ls n:
+  LOv (LC0 ls n d1) (LC1 ls (1+n) d0).
+Proof.
+  unfold LOv.
+  induction ls as [|[a b] ls]; cbn[LC0]; cbn[LC1].
+  - es.
+  - es; er.
+    follow.
+    es.
+Qed.
+
+Lemma LC1_Ov ls n:
+  LOv (LC1 ls n d1) (LC0 ls n d0 <* d0).
+Proof.
+  unfold LOv.
+  induction ls as [|[a b] ls]; cbn[LC0]; cbn[LC1].
+  - es.
+  - es; er.
+    follow.
+    es.
+Qed.
+
+Lemma LIncs_d0 n l l':
+  sideRLs tm' (hLR^^n) l l' ->
+  sideRLs tm' (hLR^^(n*2+1)) (l<*d0) (l'<*d1).
+Proof.
+  intros.
+  eapply segRLs_sideRLs_concat.
+  2: apply H.
+  eapply segRLs_addmul''; esx.
+Qed.
+
+Lemma LIncs_d0s n l:
+  sideRLs tm' (hLR^^(2^n-1)) (l<*d0^^n) (l<*d1^^n).
+Proof.
+  induction n.
+  - esx.
+  - cbn[Nat.pow].
+    apply LIncs_d0 in IHn.
+    applys_eq IHn; flia.
+Qed.
+
+Lemma wall3 n l l' a b c d e f:
+  sideRLs tm' (hLR^^n) (l<*(a<+b<+c)) (l'<*(d<+e<+f)) ->
+  sideRLs tm' (hLR^^n) (l<*a<*b<*c) (l'<*d<*e<*f).
+Proof.
+  st.
+  tauto.
+Qed.
+
+Lemma LIncs0 ls n:
+  sideRLs tm' (hLR^^(2^(length ls+n)-1)) (LC0 ls n d0) (LC0 ls n d1).
+Proof.
+  induction ls as [|[a b] ls]; cbn[length]; cbn[LC0].
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply LIncs_d0s.
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    replace (2^(S(length ls)+n)-1) with ((2^(length ls+n)-1)*2+1) by (cbn; lia).
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply IHls.
+Qed.
+
+Lemma LIncs1 ls n:
+  sideRLs tm' (hLR^^(2^(length ls+n)-1)) (LC1 ls n d0) (LC1 ls n d1).
+Proof.
+  induction ls as [|[a b] ls]; cbn[length]; cbn[LC1].
+  - apply wall3.
+    apply sideRLs_wall.
+    1: esx.
+    apply LIncs_d0s.
+  - apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    replace (2^(S(length ls)+n)-1) with ((2^(length ls+n)-1)*2+1) by (cbn; lia).
+    apply LIncs_d0.
+    apply sideRLs_wall.
+    1: esx.
+    apply sideRLs_wall.
+    1: esx.
+    apply IHls.
+Qed.
+
+Notation d1' := [0;1;0;1].
+Notation w0' := [0;1;0;1;0;1;0;0;1;0;1].
+Notation w1' := [0;1;0;1;0;0;1;0;1;0;1].
+
+Definition RC3 n := w0'^^n *> [0;1;0;1;0;0;1;0;1] *> 0inf.
+Definition RC0 n m := w0'^^n *> d1' *> w1'^^m *> [0;0;1;0;1] *> 0inf.
+
+Definition RC1 k n := w1'^^k *> w0'^^n *> d1' *> w0' *> [0;1] *> 0inf.
+Definition RC2 k n m := w1'^^k *> w0'^^n *> d1' *> w0' *> w1'^^m *> [0;1;0;0;1] *> 0inf.
+
+Lemma RIncs0 n m:
+  sideRLs tm (hRL^^(m*3)) (RC3 n) (RC0 n (m*2)).
+Proof.
+  unfold RC0,RC3.
+  rewrite lpow_mul.
+  sideRLs_ind m.
+Qed.
+
+Lemma RIncs2 k n m:
+  sideRLs tm (hRL^^(1+m*3)) (RC1 k n) (RC2 k n (m*2)).
+Proof.
+  unfold RC1,RC2.
+  eapply sideRLs_trans_add.
+  1: esx.
+  rewrite lpow_mul.
+  sideRLs_ind m.
+Qed.
+
+Lemma LC0_Ov_1 ls n n0 n1:
+  LC0 ls n d1 <| RC0 n0 n1 -->*
+  LC1 ls (1+n) d0 <| RC1 n0 n1.
+Proof.
+  unfold RC0,RC1.
+  es; er.
+  follow LC0_Ov.
+  es.
+Qed.
+
+Lemma lpow_unrotate_11 n (a a0 a1 a2 a3 a4 a5 a6 a7 a8 a9:Sym) r:
+  a >> [a0;a1;a2;a3;a4;a5;a6;a7;a8;a9;a]^^n *> r =
+  [a;a0;a1;a2;a3;a4;a5;a6;a7;a8;a9]^^n *> a >> r.
+Proof.
+  simpl_rotate.
+  reflexivity.
+Qed.
+
+Local Ltac ES_v2.rw_unrotate_0 ::=
+  rewrite lpow_unrotate_11.
+
+Lemma LC1_Ov_1 ls n n0 n1 n2:
+  LC1 ls n d1 <| RC2 n0 n1 (1+n2) -->+
+  LC0 ((n1,n0)::ls) n d0 <| RC3 n2.
+Proof.
+  unfold RC2,RC3.
+  es; er.
+  follow LC1_Ov.
+  do 3 (er; sr).
+  es_v2.
+Qed.
+
+Lemma pow4_mod3 i:
+  2^(i*2) mod 3 = 1%nat.
+Proof.
+  induction i; cbn - [Nat.modulo]; lia.
+Qed.
+
+Definition S' '(ls,n,n0,n1) :=
+  LC0 ls n d1 <| RC0 n0 n1.
+
+Lemma init:
+  c0 -->*
+  S' ([(3,O)],3,3,10).
+Proof.
+  esx.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=fun '(ls,n,n0,n1) => ((length ls)+n) mod 2 = O /\ (length ls)+n >= 2).
+  2: cbn; lia.
+  intros [[[ls n] n0] n1] HP.
+  eexists (_,_,_,_); split.
+  - unfold S'.
+    follow LC0_Ov_1.
+    epose proof (LIncs1 ls (1+n)) as I1.
+    remember (length ls) as len.
+    replace ((len+(1+n))) with (S((len+n)/2*2)) in I1 by lia.
+    cbn[Nat.pow] in I1.
+    pose proof (pow4_mod3 ((len+n)/2)) as Hm.
+    remember (2 * 2 ^ ((len + n) / 2 * 2) - 1) as v1.
+    replace v1 with (1+v1/3*3) in I1 by lia.
+    epose proof (sideRLs_concat_1L (RIncs2 _ _ _) I1) as I.
+    follow I.
+    unfold to_DH_config.
+    epose proof (Nat.pow_le_mono_r 2 2 ((len+n)/2*2)).
+    replace (v1/3*2) with (1+(v1/3*2-1)) by lia.
+    follow10 LC1_Ov_1.
+    epose proof (LIncs0 ((n1,n0)::ls) (1+n)) as I2.
+    cbn[length] in I2.
+    replace (S(length ls)+(1+n)) with (S(S(((len+n)/2)*2))) in I2 by lia.
+    cbn[Nat.pow] in I2.
+    remember (2 * (2 * 2 ^ ((len + n) / 2 * 2)) - 1) as v2.
+    replace v2 with (v2/3*3) in I2 by lia.
+    epose proof (sideRLs_concat_1L (RIncs0 _ _) I2) as I'.
+    unfold to_DH_config in I'.
+    follow I'.
+    subst.
+    finish.
+  - cbn[length]; lia.
+Qed.
+
+End TM34.
+
+
+Module TM35.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LF_1LB0RC_0RD1RC_1LE0LA_1LD---_1LA1LF").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR' := (C,<[1;0]).
+Notation hR := (C,[1]).
+Notation hL := (F,[]).
+Notation hRL := [(hR,hL)].
+Notation hLR' := [(hL,hR')].
+Notation hLR := [(hL,hR)].
+Notation w0 := <[1;0].
+Notation w1 := <[1].
+
+Definition tm' := flip tm.
+
+Definition RC n m := [1]^^n *> [0;0] *> [1;1]^^m *> 0inf.
+
+Lemma RIncs n m:
+  sideRLs tm (hRL^^n) (RC n m) (RC 0 (n+m)).
+Proof.
+  unfold RC.
+  gen m.
+  induction n; intros.
+  1: esx.
+  replace (S n) with (1+n) by lia.
+  eapply sideRLs_trans_add.
+  2: applys_eq (IHn (S m)); flia.
+  esx.
+Qed.
+
+Definition LC i := 0inf <* w0^^i.
+
+Lemma pow2_ge i:
+  2^i >= i+1.
+Proof.
+  induction i; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma LIncs i:
+  sideRLs tm' (hLR^^i++hLR'++hLR^^(2^i*2-2-i)) (LC i) (LC i).
+Proof.
+  induction i.
+  1: esx.
+  pose proof (pow2_ge i).
+  cbn[Nat.pow].
+  remember (2^i*2-2-i) as j.
+  replace (2*2^i*2-2-S i) with (j+(i+1+j)) by lia.
+  rewrite lpow_add.
+  change (LC (S i)) with (w0*>LC i).
+  do 2 rewrite app_assoc.
+  eapply sideRLs_trans.
+  2:{
+    eapply @segRLs_sideRLs_concat with (w1:=w1).
+    2: apply IHi.
+    do 2 rewrite lpow_add.
+    rewrite <-app_assoc.
+    eapply segRLs_trans.
+    1: apply segRLs_wall''; esx.
+    eapply segRLs_trans.
+    2: apply segRLs_wall''; esx.
+    esx.
+  }
+  eapply segRLs_sideRLs_concat.
+  2: apply IHi.
+  replace (S i) with (i+1) by lia.
+  rewrite lpow_add.
+  do 2 rewrite <-app_assoc.
+  eapply segRLs_trans.
+  1: apply segRLs_wall''; esx.
+  rewrite app_assoc.
+  eapply segRLs_trans.
+  2: apply segRLs_wall''; esx.
+  esx.
+Qed.
+
+Lemma LIncs' i:
+  sideRLs tm' (hLR^^(2^i*2-1)) (LC i <* w1) (LC (S i)).
+Proof.
+  change (LC (S i)) with (w0*>LC i).
+  epose proof (LIncs i) as I1.
+  epose proof (pow2_ge i).
+  remember (2^i*2-2-i) as j.
+  replace (2^i*2-1) with (i+1+j) by lia.
+  do 2 rewrite lpow_add.
+  rewrite <-app_assoc.
+  eapply segRLs_sideRLs_concat.
+  2: apply I1.
+  eapply segRLs_trans.
+  1: apply segRLs_wall''; esx.
+  eapply segRLs_trans.
+  2: apply segRLs_wall''; esx.
+  esx.
+Qed.
+
+Definition S' i := LC i <* w1 {{{ (hR,R) }}} RC (2^i*2-1) 0.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 0).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros i.
+  exists (S i).
+  unfold S'.
+  epose proof (sideRLs_concat_1 (RIncs _ _) (LIncs' _)) as I1.
+  follow I1. clear I1.
+  cbn[Nat.pow].
+  remember (2^i*2-1) as v1.
+  replace (2*2^i*2-1) with (v1*2+1) by lia.
+  unfold LC,RC.
+  es.
+Qed.
+
+End TM35.
 
 
