@@ -11,22 +11,6 @@ Ltac flia :=
   lia || (f_equal; flia).
 
 
-Ltac solve_steps :=
-repeat rewrite <-Str_app_assoc;
-repeat rewrite simpl_directed_head_l;
-repeat rewrite simpl_directed_head_r;
-repeat rewrite l_const0_app_nil;
-repeat rewrite r_const0_app_nil;
-repeat rewrite config_to_cconfig;
-repeat rewrite simpl_directed_head_l;
-repeat rewrite simpl_directed_head_r;
-repeat rewrite l_const0_app_nil;
-repeat rewrite r_const0_app_nil;
-repeat rewrite config_to_cconfig;
-apply cconfig_evstep_dec_spec with (n:=1000000);
-vm_compute;
-reflexivity.
-
 
 Module TM1.
 Definition tm := Eval compute in (TM_from_str "1LB0LE_0RC0LD_0RE1RA_0LB1LA_1RC1RF_0RA---").
@@ -4177,5 +4161,450 @@ Proof.
 Qed.
 
 End TM33.
+
+
+From BusyCoq Require Import ES_v3.
+
+Module TM34.
+Definition tm := Eval compute in (TM_from_str "1RB1RA_1LC0RE_1RE0LD_0LC0LB_1RA0RF_1RC---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1]^^a <* <[0] <* <[0;1;1]^^b {{B}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,b) -->+
+  S' (430+b,6).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (3+b,6).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2 b:
+  S' (2,b) -->+
+  S' (5+b,2).
+Proof.
+  es.
+Qed.
+
+Lemma Ov3 b:
+  S' (3,b) -->+
+  S' (O,8+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (4+a,b) -->+
+  S' (a,7+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,3)).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros [a b].
+  destruct a as [|[|[|[|]]]]; eexists.
+  - apply Ov0.
+  - apply Ov1.
+  - apply Ov2.
+  - apply Ov3.
+  - apply Inc.
+Qed.
+
+End TM34.
+
+
+Module TM35.
+Definition tm := Eval compute in (TM_from_str "1RB0RF_1RC1RB_1LD0RA_1RA0LE_0LD0LC_1RD---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1]^^a <* <[0] <* <[0;1;1]^^b {{C}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,b) -->+
+  S' (430+b,6).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (3+b,6).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2 b:
+  S' (2,b) -->+
+  S' (5+b,2).
+Proof.
+  es.
+Qed.
+
+Lemma Ov3 b:
+  S' (3,b) -->+
+  S' (O,8+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (4+a,b) -->+
+  S' (a,7+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,1%nat)).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros [a b].
+  destruct a as [|[|[|[|]]]]; eexists.
+  - apply Ov0.
+  - apply Ov1.
+  - apply Ov2.
+  - apply Ov3.
+  - apply Inc.
+Qed.
+
+End TM35.
+
+
+Module TM36.
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1RC0RF_1RD1RC_1LA0RB_0LA0LD_1RA---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1]^^a <* <[0] <* <[0;1;1]^^b {{D}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,b) -->+
+  S' (430+b,6).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (3+b,6).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2 b:
+  S' (2,b) -->+
+  S' (5+b,2).
+Proof.
+  es.
+Qed.
+
+Lemma Ov3 b:
+  S' (3,b) -->+
+  S' (O,8+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (4+a,b) -->+
+  S' (a,7+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,2)).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros [a b].
+  destruct a as [|[|[|[|]]]]; eexists.
+  - apply Ov0.
+  - apply Ov1.
+  - apply Ov2.
+  - apply Ov3.
+  - apply Inc.
+Qed.
+
+End TM36.
+
+
+Module TM37.
+Definition tm := Eval compute in (TM_from_str "1LB0RC_1RC0LF_1RE0RD_1RB---_1RA1RE_0LB0LA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1]^^a <* <[0] <* <[0;1;1]^^b {{A}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,b) -->+
+  S' (430+b,6).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (3+b,6).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2 b:
+  S' (2,b) -->+
+  S' (5+b,2).
+Proof.
+  es.
+Qed.
+
+Lemma Ov3 b:
+  S' (3,b) -->+
+  S' (O,8+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (4+a,b) -->+
+  S' (a,7+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,O)).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros [a b].
+  destruct a as [|[|[|[|]]]]; eexists.
+  - apply Ov0.
+  - apply Ov1.
+  - apply Ov2.
+  - apply Ov3.
+  - apply Inc.
+Qed.
+
+End TM37.
+
+
+Module TM38.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC0LF_1RD0RA_1RE1RD_1LB0RC_0LB0LE").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1]^^a <* <[0] <* <[0;1;1]^^b {{E}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,b) -->+
+  S' (430+b,6).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (3+b,6).
+Proof.
+  es.
+Qed.
+
+Lemma Ov2 b:
+  S' (2,b) -->+
+  S' (5+b,2).
+Proof.
+  es.
+Qed.
+
+Lemma Ov3 b:
+  S' (3,b) -->+
+  S' (O,8+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (4+a,b) -->+
+  S' (a,7+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,5)).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros [a b].
+  destruct a as [|[|[|[|]]]]; eexists.
+  - apply Ov0.
+  - apply Ov1.
+  - apply Ov2.
+  - apply Ov3.
+  - apply Inc.
+Qed.
+
+End TM38.
+
+
+Module TM39.
+Definition tm := Eval compute in (TM_from_str "1LB---_1RC0RF_1LD0RB_0LE0LC_0RA1LF_0RD0LA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1;0]^^a <* <[0;1;0;1]^^b {{C}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,6+b) -->+
+  S' (b,125).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (O,2+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (2+a,b) -->+
+  S' (a,3+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,7)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b) => a+b>=6).
+  2: lia.
+  intros [a b] HP.
+  destruct a as [|[|]]; eexists; (split; [|shelve]).
+  - applys_eq (Ov0 (b-6)); flia.
+  - apply Ov1.
+  - apply Inc.
+  Unshelve.
+  all: lia.
+Qed.
+
+End TM39.
+
+
+Module TM40.
+Definition tm := Eval compute in (TM_from_str "1LB0RE_0LC0LA_0RD1LF_1LE---_1RA0RF_0RB0LD").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S' '(a,b) := 0inf <* <[0;1;1;0]^^a <* <[0;1;0;1]^^b {{A}}> 0inf.
+
+Open Scope string.
+
+Lemma Ov0 b:
+  S' (O,6+b) -->+
+  S' (b,125).
+Proof.
+  unfold S'.
+  pose (fun (s:string) =>
+  if s=?"b" then b else
+  O) as nmp.
+  es_v3.
+  Unshelve.
+  apply (fun _ => 0inf).
+Qed.
+
+Lemma Ov1 b:
+  S' (1%nat,b) -->+
+  S' (O,2+b).
+Proof.
+  es.
+Qed.
+
+Lemma Inc a b:
+  S' (2+a,b) -->+
+  S' (a,3+b).
+Proof.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (O,14)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b) => a+b>=6).
+  2: lia.
+  intros [a b] HP.
+  destruct a as [|[|]]; eexists; (split; [|shelve]).
+  - applys_eq (Ov0 (b-6)); flia.
+  - apply Ov1.
+  - apply Inc.
+  Unshelve.
+  all: lia.
+Qed.
+
+End TM40.
 
 

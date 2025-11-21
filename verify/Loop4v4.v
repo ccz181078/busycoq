@@ -3,7 +3,7 @@ Require Import ZifyNat Lia.
 Require Import ZArith.
 Require Import String.
 Require Import List.
-From BusyCoq Require ES_v2.
+From BusyCoq Require ES_v2 ES_v3.
 
 Ltac es_v2 := ES_v2.es.
 Ltac flia := repeat (lia || f_equal).
@@ -3679,5 +3679,164 @@ Proof.
 Qed.
 
 End TM24.
+
+
+Module TM25.
+Import ES_v3.
+
+Definition tm := Eval compute in (TM_from_str "1RB1LC_1LA0RD_0LB0LF_1RE0RE_1RB0RB_1LC---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c :=
+  0inf <* <[1;0;1;1] <* <[0;0;1]^^a <* <[0] <* <[0;0;1]^^b <* <[0;0;0;1;1] <* <[0;0;1]^^(1+c) <* <[0] {{D}}> 0inf.
+
+Open Scope string.
+
+Ltac es' nmp' :=
+  pose nmp' as nmp;
+  unshelve es_v3; (apply (fun _ => 0inf)).
+
+Lemma Inc1 a b c:
+  S1 (1+a) (3+b) (c) -->*
+  S1 a (b) (12+c).
+Proof.
+  unfold S1.
+  es' (fun (s:string) =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  O).
+Qed.
+
+Lemma Incs1 n a b c:
+  S1 (n+a) (n*3+b) c -->*
+  S1 a b (n*12+c).
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Ov1 a c:
+  S1 (1+a) 1 c -->*
+  S1 a (9+c) 4.
+Proof.
+  unfold S1.
+  es' (fun (s:string) =>
+  if s=?"a" then a else
+  if s=?"c" then c else
+  O).
+Qed.
+
+Definition S2 b c :=
+  0inf <* <[1;0;1] <* <[0;0;1]^^b <* <[0;0;0;1;1] <* <[0;0;1]^^(1+c) <* <[0] {{D}}> 0inf.
+
+Lemma Ov1a b c:
+  S1 0 (5+b) c -->*
+  S2 b (20+c).
+Proof.
+  unfold S1,S2.
+  es' (fun (s:string) =>
+  if s=?"b" then b else
+  if s=?"c" then c else
+  O).
+Qed.
+
+Lemma Inc2 b c:
+  S2 (2+b) (c) -->*
+  S2 (b) (8+c).
+Proof.
+  unfold S2.
+  es' (fun (s:string) =>
+  if s=?"b" then b else
+  if s=?"c" then c else
+  O).
+Qed.
+
+Lemma Incs2 n b c:
+  S2 (n*2+b) c -->*
+  S2 b (n*8+c).
+Proof.
+  gen b c.
+  ind n Inc2.
+Qed.
+
+Lemma Ov2 c:
+  S2 1 c -->+
+  S1 (12+c) 1 4.
+Proof.
+  unfold S2,S1.
+  es' (fun (s:string) =>
+  if s=?"c" then c else
+  O).
+Qed.
+
+Lemma pow4_ge i:
+  4^i >= i+1.
+Proof.
+  induction i; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma pow4_mod9 i:
+  (4^i*4-i*3-4) mod 9 = O.
+Proof.
+  induction i; cbn[Nat.pow].
+  1: lia.
+  pose proof (pow4_ge i).
+  lia.
+Qed.
+
+Lemma P_n i:
+  forall a,
+  S1 (a+(4^i*4-i*3-4)/9) 1 4 -->*
+  S1 a (4^i*4-3) 4.
+Proof.
+  induction i; intros.
+  1: finish.
+  cbn[Nat.pow].
+  pose proof (pow4_ge i).
+  pose proof (pow4_mod9 i).
+  follow (IHi (a+(4^i*4-1)/3)).
+  follow (Incs1 ((4^i*4-4)/3) (1+a) 1 4).
+  follow Ov1.
+  finish.
+Qed.
+
+Definition S' i := S1 (4^(i*2+3)) 1 4.
+
+Lemma pow4_mod6 i:
+  4^(i*2+3) mod 6 = 4.
+Proof.
+  induction i;
+  cbn[Nat.mul]; cbn[Nat.add]; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma BigStep i:
+  S' i -->+
+  S' (S i).
+Proof.
+  unfold S'.
+  cbn[Nat.mul]; cbn[Nat.add]; cbn[Nat.pow].
+  pose proof (pow4_mod6 i).
+  remember (i*2+3) as i'.
+  pose proof (pow4_ge i').
+  pose proof (pow4_mod9 i').
+  follow (P_n i' ((4^i'*5+i'*3+4)/9)).
+  follow (Incs1 ((4^i'*5+i'*3+4)/9) 0 ((4^i'*7-i'*3-13)/3) 4).
+  follow (Ov1a ((4^i'*7-i'*3-28)/3) ((4^i'*20+i'*12+28)/3)).
+  follow (Incs2 ((4^i'*7-i'*3-31)/6) 1 (20+(4^i'*20+i'*12+28)/3)).
+  follow10 Ov2.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 0).
+  1: unfold S',S1; esx.
+  eapply progress_nonhalt_simple.
+  intros i; eexists; apply BigStep.
+Qed.
+
+End TM25.
 
 
