@@ -7,9 +7,6 @@ Require Import ZifyNat.
 Open Scope list.
 
 
-Ltac flia :=
-  lia || (f_equal; flia).
-
 
 
 Module TM1.
@@ -4179,12 +4176,7 @@ Lemma Ov0 b:
   S' (430+b,6).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4246,12 +4238,7 @@ Lemma Ov0 b:
   S' (430+b,6).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4313,12 +4300,7 @@ Lemma Ov0 b:
   S' (430+b,6).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4380,12 +4362,7 @@ Lemma Ov0 b:
   S' (430+b,6).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4447,12 +4424,7 @@ Lemma Ov0 b:
   S' (430+b,6).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4514,12 +4486,7 @@ Lemma Ov0 b:
   S' (b,125).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4568,12 +4535,7 @@ Lemma Ov0 b:
   S' (b,125).
 Proof.
   unfold S'.
-  pose (fun (s:string) =>
-  if s=?"b" then b else
-  O) as nmp.
-  es_v3.
-  Unshelve.
-  apply (fun _ => 0inf).
+  es' b.
 Qed.
 
 Lemma Ov1 b:
@@ -4606,5 +4568,145 @@ Proof.
 Qed.
 
 End TM40.
+
+
+Module TM41.
+Definition tm := Eval compute in (TM_from_str "1RB0RB_0RC0LF_0RD0RA_0LE---_1LE0LA_1LF1RA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (C,[]).
+Notation hL := (F,[]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+
+Lemma RIncs n r:
+  sideRLs tm (hRL^^(2^n-1)) ([1;1;1]^^n*>r) ([1;1;0]^^n*>r).
+Proof.
+  induction n.
+  1: esx.
+  cbn[Nat.pow].
+  cbn[lpow].
+  repeat rewrite Str_app_assoc.
+  eapply segRLs_sideRLs_concat.
+  2: apply IHn.
+  applys_eq (segRLs_addmul_v2 2 1 (2^n-1) 1 0); unfold DH0.
+  1,2: flia.
+  1,2: esx.
+Qed.
+
+Lemma LIncs l n:
+  sideRLs (flip tm) (hLR^^n) (l<*<[1;0;0]) (l<*<[1;0;0]).
+Proof.
+  eapply sideRLs_wall; esx.
+Qed.
+
+Lemma LIncs_1 l n:
+  sideRLs (flip tm) (hLR^^n) (l<*<[1;0;0;0;0;0]) (l<*<[1;0;0;0;0;0]).
+Proof.
+  eapply sideRLs_wall; esx.
+Qed.
+
+Lemma Incs l n r:
+  l <* <[1;0;0] {{C}}> [1;1;1]^^n *> r -->*
+  l <* <[1;0;0] {{C}}> [1;1;0]^^n *> r.
+Proof.
+  apply (sideRLs_concat_1 (RIncs n r) (LIncs l _)).
+Qed.
+
+Definition S1 l m n :=
+  l <* [0] <* [1]^^m <* <[1;0;0] {{C}}> [1;1;1]^^n *> 0inf.
+
+Lemma Inc1 l m n:
+  S1 l (2+m) n -->*
+  S1 l m (1+n).
+Proof.
+  unfold S1.
+  follow Incs.
+  es.
+Qed.
+
+Lemma Incs1 l m n m0:
+  S1 l (m*2+m0) n -->*
+  S1 l m0 (m+n).
+Proof.
+  gen n m0.
+  ind m Inc1.
+Qed.
+
+Lemma init:
+  c0 -->*
+  S1 (0inf<<1<<1<<0<<0<<1<<0<<0) 23 2.
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Ltac follow'_0 H :=
+  let I1:=fresh "I" in
+  epose proof H as I1;
+  (eapply evstep_progress_trans || eapply evstep_trans); [| follow I1; clear I1]; [es | ].
+
+Tactic Notation "follow'" uconstr(H) := follow'_0 H.
+
+Lemma Ov_0100_1 l n:
+  S1 (l<<0<<1<<0<<0) 1 n -->*
+  S1 (l<<1<<0<<0) (n*3+2) 2.
+Proof.
+  unfold S1.
+  follow Incs.
+  follow' (sideRLs_concat_1 (RIncs (1+n) 0inf) (LIncs_1 _ _)).
+  es.
+Qed.
+
+Lemma Ov_0_0 l n:
+  S1 (l<<0) 0 (2+n) -->*
+  S1 (l<<0<<1<<0<<0) (n*3+2) 2.
+Proof.
+  unfold S1.
+  follow Incs.
+  es.
+Qed.
+
+Lemma Ov_101100_1 l n:
+  halts tm (S1 (l<<1<<0<<1<<1<<0<<0) 1 n).
+Proof.
+  eapply halts_evstep.
+  2:{
+  unfold S1.
+  follow Incs.
+  follow' (sideRLs_concat_1 (RIncs (1+n) 0inf) (LIncs_1 _ _)).
+  finish.
+  }
+  esx.
+Qed.
+
+From BusyCoq Require Import NatMod_v2.
+
+Import NatModTactics.
+
+Ltac follow'' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Ltac mstep :=
+  follow'' Incs1; rw_all;
+  match goal with
+  | |- S1 (_<<0<<1<<0<<0) (_ .[Nconst 1]) _ -->* _ => follow'' Ov_0100_1
+  | |- S1 (_<<0) (_ .[Nconst 0]) _ -->* _ => follow'' Ov_0_0
+  end; rw_all.
+
+Lemma halt: halts tm c0.
+Proof with rw_all.
+  eapply halts_evstep.
+  2:{
+    follow init...
+    repeat mstep.
+    follow'' Incs1.
+    finish.
+  }
+  apply Ov_101100_1.
+Time Qed.
+
+End TM41.
 
 

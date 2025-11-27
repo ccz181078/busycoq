@@ -5,30 +5,9 @@ Require Import ZArith.
 Require Import String.
 Require Import List.
 From BusyCoq Require Import BinaryCounter_v2 NatMod Longitudinal NatMod_v2.
+From BusyCoq Require DivModCases.
 
 
-Lemma segRLs_addmul_v2 a a' x b b' tm h w1 w2:
-  segRLs tm (h^^b) (h^^b') w1 w2 ->
-  segRLs tm (h^^a) (h^^a') w2 w2 ->
-  segRLs tm (h^^(x*a+b)) (h^^(x*a'+b')) w1 w2.
-Proof.
-  intros.
-  rewrite (Nat.add_comm _ b).
-  rewrite (Nat.add_comm _ b').
-  do 2 rewrite lpow_add.
-  eapply segRLs_trans.
-  1: apply H.
-  induction x; cbn[Nat.mul].
-  - cbn.
-    constructor.
-  - cbn[lpow].
-    do 2 rewrite lpow_add.
-    eapply segRLs_trans.
-    2: apply IHx.
-    apply H0.
-Qed.
-
-Ltac flia := repeat (lia||f_equal).
 
 Lemma lpow_add'_x1{T} (a:list T) n r:
   a^^n *> a *> r = a^^(n+1) *> r.
@@ -4825,5 +4804,143 @@ Proof.
 Qed.
 
 End TM19.
+
+
+Module TM20.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_0LB1LC_1LD1LF_1RE0LA_---0RA_1RA0RD").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Import DivModCases.
+
+Ltac follow' H :=
+  let I1:=fresh "I" in
+  epose proof H as I1;
+  (eapply evstep_progress_trans || eapply evstep_trans); [| follow I1; clear I1]; [es | ].
+
+Definition P1 n a :=
+  forall l a0,
+  l <* <[1;1;1;0]^^n <{{F}} [1;1;0;1;0;1;1;0] *> [1;0]^^a0 *> 0inf -->*
+  l <{{F}} [1;1;0;1;0] *> [1;0;1;0]^^n *> [1;1;0] *> [1;0]^^(a+a0) *> 0inf.
+
+Definition P2 n a :=
+  forall l a0,
+  l <* <[1;1;1;0]^^n <{{F}} [1;1;0;1;0;1;0;1;1;0] *> [1;0]^^a0 *> 0inf -->*
+  l <{{F}} [1;1;0;1;0;1;0] *> [1;0;1;0]^^n *> [1;1;0] *> [1;0]^^(a+a0) *> 0inf.
+
+Lemma P1_S n a a1:
+  P1 n a ->
+  P2 n a1 ->
+  P1 (1+n) (a+a1).
+Proof.
+  unfold P1,P2.
+  intros HP1 HP2 l a0.
+  replace (a+a1+a0) with (a1+a+a0) by lia.
+  follow' (HP1 (l<*<[1;1;1;0]) a0).
+  follow' (HP2 (l<*<[1;1]) (a+a0)).
+  es.
+Qed.
+
+Lemma P2_S n a a1:
+  P2 n a ->
+  P1 (1+n) a1 ->
+  P2 (1+n) (1+a+a1).
+Proof.
+  unfold P1,P2.
+  intros HP2 HP1 l a0.
+  replace (1+a+a1+a0) with (1+a1+a+a0) by lia.
+  follow' (HP2 (l<*<[1;1;1;0]) a0).
+  follow' (HP1 (l<*<[1;1]) (1+a+a0)).
+  es.
+Qed.
+
+Lemma P1_O: P1 0 0.
+Proof.
+  unfold P1; es.
+Qed.
+
+Lemma P2_O: P2 0 0.
+Proof.
+  unfold P2; es.
+Qed.
+
+Lemma init:
+  c0 -->*
+  0inf <* <[1;0] <* <[1]^^26 <* <[1;1;1;0]^^72 <{{F}} [1;1;0;1;0;1;1;0] *> 0inf.
+Proof.
+  esx.
+Qed.
+
+Lemma BigStep [n a n0 a0 a1]:
+  P1 n a ->
+  P1 (n+n0+1) a0 ->
+  P2 (n0+n) a1 ->
+  0inf <* <[1;0] <* <[1]^^(2+n0*4) <* <[1;1;1;0]^^n <{{F}} [1;1;0;1;0;1;1;0] *> 0inf -->*
+  0inf <* [1] <{{F}} [1;1;0;1;0] *> [1;0;1;0]^^(n+n0+1) *> [1;1;0] *> [1;0]^^(2+a0*2+a1+a) *> 0inf.
+Proof.
+  unfold P1,P2.
+  intros HP1 HP1' HP2.
+  follow' (HP1 (0inf<*<[1;0]<*<[1]^^(2+n0*4)) O).
+  follow' (HP1' 0inf (1+a)).
+  follow' (HP2 (0inf<*<[1;1;0]) (1+a0+a)).
+  follow' (HP1' (0inf<*[1]) (2+a1+a0+a)).
+  finish.
+Qed.
+
+Lemma Halt x y:
+  halts tm (0inf <* [1] <{{F}} [1;1;0;1;0] *> [1;0;1;0]^^x *> [1;1;0] *> [1;0]^^(y*2) *> 0inf).
+Proof.
+  esx.
+Qed.
+
+Close Scope sym.
+
+Lemma P_n n:
+  exists a1 a2,
+  P1 n a1 /\ P2 n a2 /\
+  match mod3 n with
+  | mod3eq0 a => a1 mod 2 = 0 /\ a2 mod 2 = 0
+  | mod3eq1 a => a1 mod 2 = 0 /\ a2 mod 2 = 1
+  | mod3eq2 a => a1 mod 2 = 1 /\ a2 mod 2 = 1
+  end.
+Proof.
+  induction n.
+  - exists 0,0; repeat split.
+    + apply P1_O.
+    + apply P2_O.
+  - destruct IHn as [a1 [a2 [HP1 [HP2 I1]]]].
+    exists (a1+a2),(1+a2+(a1+a2)); repeat split.
+    1,2: auto using P1_S,P2_S.
+    destruct (mod3 n),(mod3 (S n)); lia.
+Qed.
+
+Ltac c_in x H:=
+  eassert (E:x=_) by (vm_compute; reflexivity);
+  rewrite E in H;
+  clear E.
+
+
+Lemma halt: halts tm c0.
+Proof.
+  epose proof (P_n 72) as [a1 [a2 [HP1 [HP2 I1]]]].
+  epose proof (P_n (72+6+1)) as [a3 [a4 [HP1' [HP2' I2]]]].
+  epose proof (P_n (6+72)) as [a5 [a6 [HP1'' [HP2'' I3]]]].
+  c_in (mod3 72) I1.
+  c_in (mod3 (72+6+1)) I2.
+  c_in (mod3 (6+72)) I3.
+  destruct (mod2 a6); try lia.
+  destruct (mod2 a1); try lia.
+  subst.
+  eapply halts_evstep.
+  2:{
+    follow init.
+    follow (BigStep HP1 HP1' HP2'').
+    finish.
+  }
+  clear.
+  applys_eq (Halt 79 (1+a3+a+a0)); flia.
+Qed.
+
+End TM20.
 
 

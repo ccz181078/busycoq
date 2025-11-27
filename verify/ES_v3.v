@@ -789,5 +789,78 @@ Ltac es_v3 :=
   apply vconfig_es_spec with (T:=N.to_nat (10^6));
   time vm_compute; reflexivity.
 
+Ltac es_v3_nmp nmp' :=
+  pose nmp' as nmp;
+  unshelve es_v3; apply (fun _ => 0inf).
+
+Ltac es_v3_nmp_smp nmp' smp' :=
+  pose nmp' as nmp;
+  pose smp' as smp;
+  es_v3.
+
+Tactic Notation "es'" constr(a) :=
+  (es_v3_nmp (fun s =>
+  if s=?"a" then a else
+  O)).
+
+Tactic Notation "es'" constr(a) constr(b) :=
+  (es_v3_nmp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  O)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) :=
+  (es_v3_nmp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  O)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) :=
+  (es_v3_nmp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  if s=?"d" then d else
+  O)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) :=
+  (es_v3_nmp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  if s=?"d" then d else
+  if s=?"e" then e else
+  O)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) constr(f) :=
+  (es_v3_nmp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  if s=?"d" then d else
+  if s=?"e" then e else
+  if s=?"f" then f else
+  O)).
+
+Tactic Notation "es'" constr(a) constr(b) "&" constr(c) :=
+  (es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  O)
+  (fun s =>
+  if s=?"c" then c else
+  0inf)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) "&" constr(d) :=
+  (es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  O)
+  (fun s =>
+  if s=?"d" then d else
+  0inf)).
+
 Close Scope string.
 

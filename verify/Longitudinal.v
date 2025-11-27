@@ -309,6 +309,68 @@ Proof.
   apply H.
 Qed.
 
+Lemma segRLs_trans_add tm h h' n1 n2 n1' n2' w1 w2 w3:
+  segRLs tm (h^^n1) (h'^^n1') w1 w3 ->
+  segRLs tm (h^^n2) (h'^^n2') w3 w2 ->
+  segRLs tm (h^^(n1+n2)) (h'^^(n1'+n2')) w1 w2.
+Proof.
+  intros.
+  do 2 rewrite lpow_add.
+  eapply segRLs_trans; eassumption.
+Qed.
+
+Lemma sideRLs_trans_add tm h n1 n2 w1 w2 w3:
+  sideRLs tm (h^^n1) w1 w3 ->
+  sideRLs tm (h^^n2) w3 w2 ->
+  sideRLs tm (h^^(n1+n2)) w1 w2.
+Proof.
+  intros.
+  rewrite lpow_add.
+  eapply sideRLs_trans; eassumption.
+Qed.
+
+Lemma sideRLs_trans_S tm h n w1 w2 w3:
+  sideRLs tm (h^^n) w1 w3 ->
+  sideRLs tm h w3 w2 ->
+  sideRLs tm (h^^(S n)) w1 w2.
+Proof.
+  intros.
+  replace (S n) with (n+1) by lia.
+  eapply sideRLs_trans_add.
+  - apply H.
+  - cbn.
+    rewrite app_nil_r.
+    apply H0.
+Qed.
+
+Ltac sideRLs_ind k :=
+  induction k;
+  [ try esx |
+    eapply sideRLs_trans_S;
+    [ eassumption | ];
+    try esx ].
+
+Lemma segRLs_addmul_v2 a a' x b b' tm h w1 w2:
+  segRLs tm (h^^b) (h^^b') w1 w2 ->
+  segRLs tm (h^^a) (h^^a') w2 w2 ->
+  segRLs tm (h^^(x*a+b)) (h^^(x*a'+b')) w1 w2.
+Proof.
+  intros.
+  rewrite (Nat.add_comm _ b).
+  rewrite (Nat.add_comm _ b').
+  do 2 rewrite lpow_add.
+  eapply segRLs_trans.
+  1: apply H.
+  induction x; cbn[Nat.mul].
+  - cbn.
+    constructor.
+  - cbn[lpow].
+    do 2 rewrite lpow_add.
+    eapply segRLs_trans.
+    2: apply IHx.
+    apply H0.
+Qed.
+
 
 Module UC2.
 Section UnaryCounter2.

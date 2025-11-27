@@ -1570,6 +1570,1803 @@ End tm_ctx.
 End CTL.
 
 
+Module FAR(K:HashableType)(Ctx:Ctx)(CTLCtx:CTLCtx K Ctx).
+
+Module TM := DHTM Ctx. Export TM.
+Export Ctx.
+Export CTLCtx.
+
+Definition h2:Type := Q*K.
+Definition h2b:Type := Q*K.
+Definition h3:Type := Sym*h2.
+Definition Trans:Type := Sym*K.
+
+Inductive Event :=
+| h2s(a:h2)
+| h3s(a:h3)
+| ret2(a:h2)(b:h2b)
+| ret3(a:h3)(b:h2b)
+| retL(b:h2b)
+| pre23(a:h2)(w:Sym)
+| pre32(a:h3)(b:h2)
+| pre33(a:h3)(b:h3)
+| pre3L(a:h3)
+| dfa_trans(a:K)(e:Trans)
+.
+
+Instance Q_Hash: HashConcat.Hash Q := (ltac: (esplit; apply q_hash)).
+Instance Sym_Hash: HashConcat.Hash Sym := (ltac: (esplit; apply sym_hash)).
+Instance K_Hash: HashConcat.Hash K := (ltac: (esplit; apply K_hash)).
+Instance Q_Eqb: Eqb Q := (ltac: (esplit; apply q_eqb_spec)).
+Instance Sym_Eqb: Eqb Sym := (ltac: (esplit; apply sym_eqb_spec)).
+Instance K_Eqb: Eqb K := (ltac: (esplit; apply K_eq_spec)).
+
+Module EventHash <: HashableType.
+Import HashConcat.
+Definition K := Event.
+Definition K_hash := fun x =>
+match x with
+| h2s a => hv1 ## hash a
+| h3s a => hv2 ## hash a
+| ret2 a b => hv3 ## hash a ## hash b
+| ret3 a b => hv4 ## hash a ## hash b
+| retL b => hv5 ## hash b
+| pre23 a w => hv6 ## hash a ## hash w
+| pre32 a b => hv7 ## hash a ## hash b
+| pre33 a b => hv8 ## hash a ## hash b
+| pre3L a => hv9 ## hash a
+| dfa_trans a e => hv10 ## hash a ## hash e
+end.
+Import Eqb.
+Definition K_eq x y :=
+match x,y with
+| h2s a,h2s a0 => eqb a a0
+| h3s a,h3s a0 => eqb a a0
+| ret2 a b,ret2 a0 b0 => eqb a a0 && eqb b b0
+| ret3 a b,ret3 a0 b0 => eqb a a0 && eqb b b0
+| retL a,retL a0 => eqb a a0
+| pre23 a b,pre23 a0 b0 => eqb a a0 && eqb b b0
+| pre32 a b,pre32 a0 b0 => eqb a a0 && eqb b b0
+| pre33 a b,pre33 a0 b0 => eqb a a0 && eqb b b0
+| pre3L a,pre3L a0 => eqb a a0
+| dfa_trans a b,dfa_trans a0 b0 => eqb a a0 && eqb b b0
+| _,_ => false
+end.
+Lemma K_eq_spec a b: Bool.reflect (a=b) (K_eq a b).
+Proof with solve_Bool_reflect.
+  destruct a,b...
+  all: cbn[K_eq].
+  - destruct (eqb_spec a a0)...
+  - destruct (eqb_spec a a0)...
+  - destruct (eqb_spec a a0)...
+    subst.
+    destruct (eqb_spec b0 b)...
+  - destruct (eqb_spec a a0)...
+    subst.
+    destruct (eqb_spec b0 b)...
+  - destruct (eqb_spec b0 b)...
+  - destruct (eqb_spec a a0)...
+    subst.
+    destruct (eqb_spec w w0)...
+  - destruct (eqb_spec a a0)...
+    subst.
+    destruct (eqb_spec b0 b)...
+  - destruct (eqb_spec a a0)...
+    subst.
+    destruct (eqb_spec b0 b)...
+  - destruct (eqb_spec a a0)...
+  - destruct (eqb_spec a a0)...
+    subst.
+    destruct (eqb_spec e e0)...
+Qed.
+End EventHash.
+
+Module Bool_V <: ValueType.
+Definition V := bool.
+End Bool_V.
+
+Module H2b_V <: ValueType.
+Definition V := h2b.
+End H2b_V.
+
+Module H2_V <: ValueType.
+Definition V := h2.
+End H2_V.
+
+Module H3_V <: ValueType.
+Definition V := h3.
+End H3_V.
+
+Module K_V <: ValueType.
+Definition V := K.
+End K_V.
+
+Module Q_V <: ValueType.
+Definition V := Q.
+End Q_V.
+
+Module Sym_V <: ValueType.
+Definition V := Sym.
+End Sym_V.
+
+Module Trans_V <: ValueType.
+Definition V := Trans.
+End Trans_V.
+
+Module H2_K <: HashableType.
+Import HashConcat.
+Definition K := h2.
+Definition K_hash := @hash K _.
+Definition K_eq := @eqb K _.
+Definition K_eq_spec := @eqb_spec K _.
+End H2_K.
+
+Module H3_K <: HashableType.
+Import HashConcat.
+Definition K := h3.
+Definition K_hash := @hash K _.
+Definition K_eq := @eqb K _.
+Definition K_eq_spec := @eqb_spec K _.
+End H3_K.
+
+Module EventSet := HashMap EventHash Bool_V.
+Module Ret2Map := HashMultimap H2_K H2b_V. 
+Module Ret3Map := HashMultimap H3_K H2b_V. 
+Module Pre23Map := HashMultimap H2_K Sym_V. 
+Module Pre32Map := HashMultimap H3_K H2_V. 
+Module Pre33Map := HashMultimap H3_K H3_V. 
+Module DFATransMap := HashMultimap K Trans_V.
+Module RSMap := HashMultimap K Q_V.
+
+Section tm_sec.
+
+Hypothesis tm: TM.
+
+Section P_sec.
+Hypothesis P:Event->Prop.
+
+Inductive DFA_match: K->side->Prop :=
+| DFA_match_O: DFA_match dfa_state_0 (const s0)
+| DFA_match_S w r r0 r':
+  DFA_match r r' ->
+  P (dfa_trans r0 (w,r)) ->
+  DFA_match r0 (w>>r')
+.
+
+Inductive Closed: Prop :=
+| Closed_intro
+    (Hinit: P (pre3L (s0,(q0,dfa_state_0))))
+    (Hdfa_0: P (dfa_trans dfa_state_0 (s0,dfa_state_0)))
+    (Hh2s_pre23: forall a b, P (pre23 a b) -> P (h2s a))
+    (Hh3s_pre32: forall a b, P (pre32 a b) -> P (h3s a))
+    (Hh3s_pre33: forall a b, P (pre33 a b) -> P (h3s a))
+    (Hh3s_pre3L: forall a, P (pre3L a) -> P (h3s a))
+    (Hh2s: forall q r w r0,
+    P (h2s (q,r)) ->
+    P (dfa_trans r (w,r0)) ->
+    match tm (q,w) with
+    | Some (w0,L,q0) =>
+      exists r1,
+      P (dfa_trans r1 (w0,r0)) /\
+      P (ret2 (q,r) (q0,r1))
+    | Some (w0,R,q0) =>
+      P (pre32 (w0,(q0,r0)) (q,r))
+    | None => False
+    end)
+    (Hh3s: forall q r w,
+    P (h3s (w,(q,r))) ->
+    P (pre23 (q,r) w))
+    (Hpre23': forall a w r q,
+    P (pre23 a w) ->
+    P (ret2 a (q,r)) ->
+    match tm (q,w) with
+    | Some (w0,L,q0) =>
+      exists r0,
+      P (dfa_trans r0 (w0,r)) /\
+      P (ret3 (w,a) (q0,r0))
+    | Some (w0,R,q0) =>
+      P (pre33 (w0,(q0,r)) (w,a))
+    | None => False
+    end)
+    (HretL: forall r q,
+    P (retL (q,r)) ->
+    match tm (q,s0) with
+    | Some (w0,L,q0) =>
+      exists r0,
+      P (dfa_trans r0 (w0,r)) /\
+      P (retL (q0,r0))
+    | Some (w0,R,q0) =>
+      P (pre3L (w0,(q0,r)))
+    | None => False
+    end)
+    (Hpre32': forall a a0 b, P (pre32 a a0) -> P (ret3 a b) -> P (ret2 a0 b))
+    (Hpre33': forall a a0 b, P (pre33 a a0) -> P (ret3 a b) -> P (ret3 a0 b))
+    (Hpre3L: forall a b, P (pre3L a) -> P (ret3 a b) -> P (retL b))
+    :
+  Closed
+.
+
+Lemma DFA_match_S'(HClosed:Closed) r r':
+  DFA_match r r' ->
+  exists w r0 r'0,
+  DFA_match r0 r'0 /\
+  r' = w>>r'0 /\
+  P (dfa_trans r (w,r0)).
+Proof.
+  inverts HClosed.
+  intros H.
+  inverts H.
+  - exists s0.
+    repeat eexists.
+    2: rewrite const_unfold; reflexivity.
+    2: eauto 1.
+    econstructor.
+  - repeat eexists; eauto 1.
+Qed.
+
+Inductive coevstep: nat->DH_config->(DH_config->Prop)->Prop :=
+| coevstep_1 n c p c':
+  c -[ tm ]->> n / c' ->
+  coevstep n c p
+| coevstep_2 n n1 c p c':
+  n1<=n ->
+  c -[ tm ]->> n1 / c' ->
+  p c' ->
+  coevstep n c p.
+
+Lemma coevstep_O c1 p:
+  coevstep 0 c1 p.
+Proof.
+  eapply coevstep_1.
+  eauto.
+Qed.
+
+Lemma coevstep_base n c p:
+  p c ->
+  coevstep n c p.
+Proof.
+  intros.
+  eapply coevstep_2 with (n1:=O); eauto; lia.
+Qed.
+
+Lemma coevstep_step n c1 c2 p:
+  coevstep n c2 p ->
+  c1 -[ tm ]-> c2 ->
+  coevstep (S n) c1 p.
+Proof.
+  intros.
+  inverts H.
+  - econstructor; eauto.
+  - eapply coevstep_2 with (n1:=S n1); eauto; lia.
+Qed.
+
+Lemma multistep_split n1 n2 c1 c3:
+  c1 -[ tm ]->> (n1+n2) / c3 ->
+  exists c2,
+  c1 -[ tm ]->> n1 / c2 /\
+  c2 -[ tm ]->> n2 / c3.
+Proof.
+  gen n2 c1 c3.
+  induction n1; intros.
+  - eauto.
+  - inverts H.
+    apply IHn1 in H2.
+    destruct H2 as [c2 [I1 I2]].
+    eauto.
+Qed.
+
+Lemma coevstep_trans n c p p':
+  coevstep n c p ->
+  (forall c', p c' -> coevstep n c' p') ->
+  coevstep n c p'.
+Proof.
+  intros.
+  inverts H.
+  1: econstructor; eauto.
+  apply H0 in H3.
+  inverts H3.
+  - eassert (I4:_) by (eapply multistep_trans; [ apply H2 | apply H ]).
+    rewrite Nat.add_comm in I4.
+    apply multistep_split in I4.
+    destruct I4 as [c2' [I4 _]].
+    econstructor; eauto.
+  - destruct (Nat.leb_spec (n1+n2) n) as [E|E].
+    + econstructor 2; eauto using multistep_trans.
+    + eassert (I5:_) by (eapply multistep_trans; [ apply H2 | apply H4 ]).
+      replace (n1+n2) with (n+(n1+n2-n)) in I5 by lia.
+      apply multistep_split in I5.
+      destruct I5 as [c2' [I5 _]].
+      econstructor; eauto.
+Qed.
+
+
+Section closed_sec.
+Hypothesis HClosed:Closed.
+
+Definition P2 n :=
+  forall q r,
+  P (h2s (q,r)) ->
+  forall l r',
+  DFA_match r r' ->
+  coevstep n (l,r',q,R) (fun c => exists q0 r0 r0',
+  P (ret2 (q,r) (q0,r0)) /\
+  DFA_match r0 r0' /\
+  c=(r0',l,q0,L)).
+
+Definition P3 n :=
+  forall w q r,
+  P (h3s (w,(q,r))) ->
+  forall l r',
+  DFA_match r r' ->
+  coevstep n (l<<w,r',q,R) (fun c => exists q0 r0 r0',
+  P (ret3 (w,(q,r)) (q0,r0)) /\
+  DFA_match r0 r0' /\
+  c=(r0',l,q0,L)).
+
+Lemma P23_n n:
+  P2 n /\ P3 n.
+Proof.
+  unfold P2,P3.
+  induction n.
+  1: split; intros; apply coevstep_O.
+  destruct IHn as [HP2 HP3].
+  epose proof (DFA_match_S' HClosed) as HS'.
+  epose proof (HClosed) as HClosed'.
+  inversion HClosed'; subst.
+  assert (HP2':P2 (S n)). {
+    introv HP Hr.
+    eapply HS' in Hr.
+    destruct Hr as [w [r0 [r'0 [X1 [X2 X3]]]]].
+    subst r'.
+    epose proof (Hh2s _ _ _ _ HP X3) as I1.
+    destruct (tm (q,w)) as [[[w0 []] q0]|] eqn:E.
+    + destruct I1 as [r1 [I1 I2]].
+      eapply coevstep_step.
+      2: eapply step_back,E.
+      eapply coevstep_base.
+      repeat eexists.
+      1: apply I2.
+      eapply DFA_match_S; eauto 1.
+    + eapply coevstep_step.
+      2: eapply step_through,E.
+      eapply coevstep_trans.
+      1: eapply HP3; eauto 2.
+      intros c' [q1 [r1 [r0' [P1 [P2 P3]]]]].
+      eapply coevstep_base.
+      repeat eexists; eauto 2.
+    + tauto.
+  }
+  split.
+  1: apply HP2'.
+  {
+    introv HP Hr.
+    epose proof Hr as Hr0.
+    eapply HS' in Hr0.
+    destruct Hr0 as [w0 [r0 [r'0 [X1 [X2 X3]]]]].
+    subst r'.
+    eapply coevstep_trans.
+    1: eapply HP2'; eauto 3.
+    intros c' [q0' [r0' [r0'' [P1 [P2 P3]]]]].
+    subst c'.
+    epose proof (Hh3s _ _ _ HP) as HP1.
+    epose proof (Hh2s_pre23 _ _ HP1) as HP2a.
+    epose proof (Hpre23' _ _ _ _ HP1 P1) as HP3a.
+    destruct (tm (q0',w)) as [[[w1' []] q1']|] eqn:E'.
+    3: tauto.
+    + destruct HP3a as [r1 [P4 P5]].
+      eapply coevstep_step.
+      2: eapply step_through,E'.
+      eapply coevstep_base.
+      repeat eexists; eauto 2 using DFA_match_S.
+    + eapply coevstep_step.
+      2: eapply step_back,E'.
+      epose proof (Hh3s_pre33 _ _ HP3a) as HP4.
+      eapply coevstep_trans.
+      1: apply (HP3 _ _ _ HP4 l _ P2).
+      intros c'0 [q2' [r1' [r1'' [P7 [P8 P9]]]]].
+      eapply coevstep_base.
+      repeat eexists; eauto 2.
+    }
+Qed.
+
+Definition PR n :=
+  forall w q r r',
+  P (pre3L (w,(q,r))) ->
+  DFA_match r r' ->
+  exists c, (const s0<<w,r',q,R) -[ tm ]->> n / c.
+
+Definition PL n :=
+  forall q r r',
+  P (retL (q,r)) ->
+  DFA_match r r' ->
+  exists c, (r',const s0,q,L) -[ tm ]->> n / c.
+
+Lemma PLR_n n:
+  PL n /\ PR n.
+Proof.
+  unfold PL,PR.
+  induction n.
+  1: eauto.
+  destruct IHn as [HPL HPR].
+  split.
+  - introv HP Hr.
+    inverts HClosed.
+    eapply HretL in HP.
+    destruct (tm (q,s0)) as [[[w0 []] q0]|] eqn:E.
+    3: tauto.
+    + destruct HP as [r0 [I1 I2]].
+      eapply HPL in I2.
+      2: econstructor; eauto.
+      destruct I2 as [c I2].
+      eexists.
+      econstructor.
+      * rewrite const_unfold.
+        eapply step_through,E.
+      * eauto 1.
+    + eapply HPR in HP.
+      2: eauto 1.
+      destruct HP as [c I2].
+      eexists.
+      econstructor.
+      * rewrite const_unfold.
+        eapply step_back,E.
+      * eauto 1.
+  - introv HP Hr.
+    epose proof (P23_n (S n)) as [_ HP3].
+    inverts HClosed.
+    eassert (I1:_). {
+      eapply HP3 with (l:=const s0).
+      - eapply Hh3s_pre3L,HP.
+      - eauto 1.
+    }
+    inverts I1.
+    1: eauto 2.
+    destruct H1 as [q1 [r0 [r0' [I1 [I2 I3]]]]].
+    subst c'.
+    eapply Hpre3L in I1.
+    eapply HretL in I1.
+    2: eauto 1.
+    destruct (tm (q1,s0)) as [[[w0 []] q2]|] eqn:E.
+    3: tauto.
+    * destruct I1 as [r1 [I1 I1a]].
+      eapply HPL in I1a.
+      2: econstructor; eauto.
+      destruct I1a as [c I1a].
+      eassert (I:_). {
+        eapply multistep_trans.
+        1: apply H0.
+        econstructor 2.
+        1: rewrite const_unfold; apply step_through,E.
+        apply I1a.
+      }
+      rewrite Nat.add_comm in I.
+      apply multistep_split in I.
+      destruct I as [c2 [I I']].
+      eauto.
+    * eapply HPR in I1.
+      2: eauto.
+      destruct I1 as [c I1a].
+      eassert (I:_). {
+        eapply multistep_trans.
+        1: apply H0.
+        econstructor 2.
+        1: rewrite const_unfold; apply step_back,E.
+        apply I1a.
+      }
+      rewrite Nat.add_comm in I.
+      apply multistep_split in I.
+      destruct I as [c2 [I I']].
+      eauto.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  rewrite nonhalt_iff.
+  intro n.
+  epose proof (PLR_n n) as [_ HPR].
+  inverts HClosed.
+  eapply HPR in Hinit.
+  epose proof Hinit as [c I1].
+  1: constructor.
+  rewrite <-const_unfold in I1.
+  eauto.
+Qed.
+
+End closed_sec.
+End P_sec.
+
+
+Inductive Closed'(P P':Event->Prop): Prop :=
+| Closed'_intro
+    (HPP': forall e, P e -> P' e)
+    (Hinit: P' (pre3L (s0,(q0,dfa_state_0))))
+    (Hdfa_0: P' (dfa_trans dfa_state_0 (s0,dfa_state_0)))
+    (Hh2s_pre23: forall a b, P (pre23 a b) -> P' (h2s a))
+    (Hh3s_pre32: forall a b, P (pre32 a b) -> P' (h3s a))
+    (Hh3s_pre33: forall a b, P (pre33 a b) -> P' (h3s a))
+    (Hh3s_pre3L: forall a, P (pre3L a) -> P' (h3s a))
+    (Hh2s: forall q r w r0,
+    P (h2s (q,r)) ->
+    P (dfa_trans r (w,r0)) ->
+    match tm (q,w) with
+    | Some (w0,L,q0) =>
+      exists r1,
+      P' (dfa_trans r1 (w0,r0)) /\
+      P' (ret2 (q,r) (q0,r1))
+    | Some (w0,R,q0) =>
+      P' (pre32 (w0,(q0,r0)) (q,r))
+    | None => False
+    end)
+    (Hh3s: forall q r w,
+    P (h3s (w,(q,r))) ->
+    P' (pre23 (q,r) w))
+    (Hpre23': forall a w r q,
+    P (pre23 a w) ->
+    P (ret2 a (q,r)) ->
+    match tm (q,w) with
+    | Some (w0,L,q0) =>
+      exists r0,
+      P' (dfa_trans r0 (w0,r)) /\
+      P' (ret3 (w,a) (q0,r0))
+    | Some (w0,R,q0) =>
+      P' (pre33 (w0,(q0,r)) (w,a))
+    | None => False
+    end)
+    (HretL: forall r q,
+    P (retL (q,r)) ->
+    match tm (q,s0) with
+    | Some (w0,L,q0) =>
+      exists r0,
+      P' (dfa_trans r0 (w0,r)) /\
+      P' (retL (q0,r0))
+    | Some (w0,R,q0) =>
+      P' (pre3L (w0,(q0,r)))
+    | None => False
+    end)
+    (Hpre32': forall a a0 b, P (pre32 a a0) -> P (ret3 a b) -> P' (ret2 a0 b))
+    (Hpre33': forall a a0 b, P (pre33 a a0) -> P (ret3 a b) -> P' (ret3 a0 b))
+    (Hpre3L: forall a b, P (pre3L a) -> P (ret3 a b) -> P' (retL b))
+    :
+  Closed' P P'
+.
+
+
+Lemma Closed'_Closed P P':
+  Closed' P P' ->
+  (forall x, P' x -> P x) ->
+  Closed P.
+Proof.
+  intros H Heq.
+  inverts H.
+  assert (Heq':forall x, P' x <-> P x) by intuition.
+  constructor; intros.
+  all: eauto.
+  - eassert (I:_) by (eapply Hh2s; eauto 1).
+    destruct (tm (q,w)) as [[[w0 []] q0]|].
+    1: destruct I as [r1 [I1 I2]].
+    all: eauto.
+  - eassert (I:_) by (eapply Hpre23'; eauto 2).
+    destruct (tm (q,w)) as [[[w0 []] q0]|].
+    1: destruct I as [r1 [I1 I2]].
+    all: eauto.
+  - eassert (I:_) by (eapply HretL; eauto 1).
+    destruct (tm (q,s0)) as [[[w0 []] q0]|].
+    1: destruct I as [r1 [I1 I2]].
+    all: eauto.
+Qed.
+
+Inductive Ins :=
+| ins_1(e:Event)
+| ins_all{T}(p:T->Prop)(f:T->Event)
+| ins_all'{T}(p:T->Prop)(f:T->global_state_t->option ((list Event)*global_state_t))
+.
+
+Definition on_H2_pop(a:h2)(e:Trans)(gs:global_state_t): option ((list Event)*global_state_t) :=
+let '(q,r):=a in
+let '(w,r0):=e in
+match tm (q,w) with
+| Some (w0,L,q0) =>
+  let '(r1,gs):=CTLCtx.dfa_trans r0 w0 R gs in
+  Some ([dfa_trans r1 (w0,r0);(ret2 (q,r) (q0,r1))],gs)
+| Some (w0,R,q0) =>
+  Some ([pre32 (w0,(q0,r0)) (q,r)],gs)
+| None => None
+end.
+
+Definition on_H3_back(a':h3)(b:h2b)(gs:global_state_t): option ((list Event)*global_state_t) :=
+let '(w,a):=a' in
+let '(q,r):=b in
+match tm (q,w) with
+| Some (w0,L,q0) =>
+  let '(r0,gs):=CTLCtx.dfa_trans r w0 R gs in
+  Some ([(dfa_trans r0 (w0,r));
+  (ret3 (w,a) (q0,r0))],gs)
+| Some (w0,R,q0) =>
+  Some ([(pre33 (w0,(q0,r)) (w,a))],gs)
+| None => None
+end.
+
+Definition on_retL(b:h2b)(gs:global_state_t): option ((list Event)*global_state_t) :=
+let '(q,r):=b in
+match tm (q,s0) with
+| Some (w0,L,q0) =>
+  let '(r0,gs):=CTLCtx.dfa_trans r w0 R gs in
+  Some ([(dfa_trans r0 (w0,r));
+  (retL (q0,r0))],gs)
+| Some (w0,R,q0) =>
+  Some ([(pre3L (w0,(q0,r)))],gs)
+| None => None
+end.
+
+Definition delta(P P':Event->Prop)(x:Event):list Ins :=
+match x with
+| h2s a =>
+  [(ins_all' (fun e => P (dfa_trans (snd a) e)) (on_H2_pop a))]
+| h3s a => 
+  [(ins_1 (pre23 (snd a) (fst a)))]
+| ret2 a b =>
+  [(ins_all' (fun w => P (pre23 a w)) (fun w => on_H3_back (w,a) b))]
+| ret3 a b =>
+  [(ins_all' (fun (_:unit) => P (pre3L a)) (fun _ gs => Some ([retL b],gs)));
+  (ins_all (fun a0 => P (pre33 a a0)) (fun a0 => ret3 a0 b));
+  (ins_all (fun a0 => P (pre32 a a0)) (fun a0 => ret2 a0 b))]
+| retL b =>
+  [(ins_all' (fun (_:unit) => True) (fun _ => on_retL b))]
+| pre23 a w =>
+  [(ins_1 (h2s a));
+  (ins_all' (fun b => P (ret2 a b)) (on_H3_back (w,a)))]
+| pre32 a a0 =>
+  [(ins_1 (h3s a));
+  (ins_all (fun b => P (ret3 a b)) (ret2 a0))]
+| pre33 a a0 =>
+  [(ins_1 (h3s a));
+  (ins_all (fun b => P (ret3 a b)) (ret3 a0))]
+| pre3L a =>
+  [(ins_1 (h3s a));
+  (ins_all (fun b => P (ret3 a b)) (retL))]
+| dfa_trans a e =>
+  [(ins_all' (fun s => P (h2s (s,a))) (fun s => on_H2_pop (s,a) e))]
+end.
+
+Fixpoint ins_all'_rec {T}(f:T->global_state_t->option ((list Event)*_)) ls gs :=
+match ls with
+| [] => Some ([],gs)
+| h::t =>
+  ins_all'_rec f t gs &&& (fun '(res,gs) =>
+  f h gs &&& (fun '(res0,gs) =>
+  Some (res0++res,gs)))
+end.
+
+Lemma ins_all'_rec_spec {T} {f:T->_} {ls gs x res gs'}:
+  ins_all'_rec f ls gs = Some (res,gs') ->
+  In x ls ->
+  exists gs'0 res' gs'1, f x gs'0 = Some (res',gs'1) /\ List.incl res' res.
+Proof.
+  gen gs res gs'.
+  induction ls; intros.
+  1: destruct H0.
+  cbn in H.
+  unfold if_Some in H.
+  destruct (ins_all'_rec f ls gs) as [[res0 gs0]|] eqn:E.
+  2: congruence.
+  destruct (f a gs0) as [[res1 gs1]|] eqn:E0.
+  2: congruence.
+  inverts H.
+  destruct H0.
+  2:{
+    epose proof (IHls _ _ _ E H) as [gs'0 [res' [I1 [I2 I3]]]].
+    repeat eexists.
+    1: apply I2.
+    apply incl_appr,I3.
+  }
+  subst a.
+  repeat eexists.
+  1: apply E0.
+  apply incl_appl,incl_refl.
+Qed.
+
+Inductive Ins_WF: (Ins)->(Event->Prop)->(Event->Prop)->Prop :=
+| Ins_1_WF x P P0
+  (Hins:P0 x)
+  (Hmono:forall x0, P x0 -> P0 x0):
+  Ins_WF (ins_1 x) P P0
+| Ins_all_WF {T} (p:T->Prop) f ls P P0
+  (Hls:forall x1, p x1 -> In x1 ls)
+  (Hins:forall x0, In x0 (List.map f ls) -> P0 x0)
+  (Hmono:forall x0, P x0 -> P0 x0):
+  Ins_WF (ins_all p f) P P0
+| Ins_all'_WF {T} (p:T->Prop) f ls gs res gs' P P0
+  (Hls:forall x1, p x1 -> In x1 ls)
+  (Hres:ins_all'_rec f ls gs = Some (res,gs'))
+  (Hins:forall x0, In x0 res -> P0 x0)
+  (Hmono:forall x0, P x0 -> P0 x0):
+  Ins_WF (ins_all' p f) P P0
+.
+
+Inductive Inss_WF: (list Ins)->(Event->Prop)->(Event->Prop)->Prop :=
+| Inss_WF_O P P' (Hincl: forall x, P x -> P' x): Inss_WF [] P P'
+| Inss_WF_S h t P P0 P1: Inss_WF t P P0 -> Ins_WF h P0 P1 -> Inss_WF (h::t) P P1
+.
+
+Lemma Inss_mono ls P P0:
+  Inss_WF ls P P0 ->
+  forall x,
+  P x -> P0 x.
+Proof.
+  intros H.
+  induction H.
+  1: eauto.
+  inverts H0; eauto.
+Qed.
+
+Ltac inv :=
+repeat
+match goal with
+| [H: Ins_WF _ _ _ |- _] => inverts H
+| [H: Inss_WF _ _ _ |- _] => inverts H
+end;
+match goal with
+| [H: Closed' _ _ |- _] => inverts H
+end.
+
+Ltac rw1 HIns P :=
+repeat
+match goal with
+| [H: P _ |- _] => rewrite HIns in H; try (destruct H; [|congruence])
+end.
+
+Ltac des1 I0 x :=
+  let w0:=fresh "w" in
+  let q1:=fresh "q" in
+  let r1:=fresh "r" in
+  destruct (tm x) as [[[w0 []] q1]|];
+  [ destruct I0 as [r1 [I1 I2]]; eauto 12 | eauto 12 | tauto].
+
+Lemma delta_spec P P' x:
+  Closed' P P' ->
+  P' x ->
+  let ls := delta P P' x in
+  forall P0 P'0,
+  (forall x0, P0 x0 <-> (P x0 \/ x0=x)) ->
+  Inss_WF ls P' P'0 ->
+  Closed' P0 P'0.
+Proof.
+  introv HC Hx HIns HInss.
+  assert (X1:forall x, P0 x -> P'0 x). {
+    epose proof (Inss_mono _ _ _ HInss).
+    intros.
+    apply H.
+    rewrite HIns in H0.
+    inverts HC.
+    destruct H0; subst; eauto.
+  }
+  destruct x.
+  - inv.
+    unfold fst,snd in *.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + destruct H.
+      * epose proof (Hh2s _ _ _ _ H H0) as I0.
+        des1 I0 (q,w).
+      * inverts H.
+        apply Hls in H0.
+        epose proof (ins_all'_rec_spec Hres H0) as [gs'0 [res' [gs'1 [I1 I2]]]].
+        unfold on_H2_pop in I1.
+        destruct (tm (q,w)) as [[[w' []] q']|].
+        3: congruence.
+        {
+          destruct (CTLCtx.dfa_trans r0 w' R gs'0) as [r1 gs'2].
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          exists r1; eauto 9.
+        }
+        {
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          eauto.
+        }
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+  - inv.
+    destruct a.
+    unfold fst,snd in *.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + destruct H0.
+      * epose proof (Hpre23' _ _ _ _ H H0) as I0.
+        des1 I0 (q,w).
+      * inverts H0.
+        apply Hls in H.
+        epose proof (ins_all'_rec_spec Hres H) as [gs'0 [res' [gs'1 [I1 I2]]]].
+        unfold on_H3_back in I1.
+        destruct (tm (q,w)) as [[[w' []] q']|].
+        3: congruence.
+        {
+          destruct (CTLCtx.dfa_trans r w' R gs'0) as [r1 gs'2].
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          exists r1; eauto 9.
+        }
+        {
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          eauto.
+        }
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto 10.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+    + destruct H0.
+      1: eauto 10.
+      inverts H0.
+      apply Hls1 in H.
+      epose proof (Hins1 (_ a1) (in_map _ _ _ H)) as I1.
+      cbn in I1.
+      eauto.
+    + destruct H0.
+      1: eauto 10.
+      inverts H0.
+      apply Hls0 in H.
+      epose proof (Hins0 (_ a1) (in_map _ _ _ H)) as I1.
+      cbn in I1.
+      eauto.
+    + destruct H0.
+      1: eauto 10.
+      inverts H0.
+      apply (Hls tt) in H.
+      epose proof (ins_all'_rec_spec Hres H) as [gs'0 [res' [gs'1 [I1 I2]]]].
+      inverts I1.
+      unfold incl in I2; cbn in I2.
+      eauto.
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + destruct H.
+      * epose proof (HretL _ _ H) as I0.
+        des1 I0 (q,s0).
+      * inverts H.
+        epose proof (Hls tt I) as H.
+        epose proof (ins_all'_rec_spec Hres H) as [gs'0 [res' [gs'1 [I1 I2]]]].
+        unfold on_retL in I1.
+        destruct (tm (q,s0)) as [[[w' []] q']|].
+        3: congruence.
+        {
+          destruct (CTLCtx.dfa_trans r w' R gs'0) as [r1 gs'2].
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          exists r1; eauto 9.
+        }
+        {
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          eauto.
+        }
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w0).
+    + destruct H.
+      * epose proof (Hpre23' _ _ _ _ H H0) as I0.
+        des1 I0 (q,w0).
+      * inverts H.
+        apply Hls in H0.
+        epose proof (ins_all'_rec_spec Hres H0) as [gs'0 [res' [gs'1 [I1 I2]]]].
+        unfold on_H3_back in I1.
+        destruct (tm (q,w)) as [[[w' []] q']|].
+        3: congruence.
+        {
+          destruct (CTLCtx.dfa_trans r w' R gs'0) as [r1 gs'2].
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          exists r1; eauto 11.
+        }
+        {
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          eauto.
+        }
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+    + destruct H; eauto.
+      inverts H.
+      eapply Hls in H0.
+      epose proof (Hins0 (_ b0) (in_map _ _ _ H0)) as I1.
+      eauto.
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+    + destruct H; eauto.
+      inverts H.
+      eapply Hls in H0.
+      epose proof (Hins0 (_ b0) (in_map _ _ _ H0)) as I1.
+      eauto.
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + epose proof (Hh2s _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+    + destruct H; eauto.
+      inverts H.
+      eapply Hls in H0.
+      epose proof (Hins0 (_ b) (in_map _ _ _ H0)) as I1.
+      eauto.
+  - inv.
+    econstructor.
+    1: exact X1.
+    all: intros; rw1 HIns P0; eauto.
+    + destruct H0.
+      * epose proof (Hh2s _ _ _ _ H H0) as I0.
+        des1 I0 (q,w).
+      * inverts H0.
+        apply Hls in H.
+        epose proof (ins_all'_rec_spec Hres H) as [gs'0 [res' [gs'1 [I1 I2]]]].
+        unfold on_H2_pop in I1.
+        destruct (tm (q,w)) as [[[w' []] q']|].
+        3: congruence.
+        {
+          destruct (CTLCtx.dfa_trans r0 w' R gs'0) as [r1 gs'2].
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          exists r1; eauto 9.
+        }
+        {
+          inverts I1.
+          unfold incl in I2; cbn in I2.
+          eauto.
+        }
+    + epose proof (Hpre23' _ _ _ _ H H0) as I0.
+      des1 I0 (q,w).
+    + epose proof (HretL _ _ H) as I0.
+      des1 I0 (q,s0).
+Qed.
+
+Record FAR_state_t := {
+  events: EventSet.hmap_t;
+  events_todo: list Event;
+
+  ret2': Ret2Map.hmap_t;
+  ret3': Ret3Map.hmap_t;
+
+  pre23': Pre23Map.hmap_t;
+  pre32': Pre32Map.hmap_t;
+  pre33': Pre33Map.hmap_t;
+
+  dfa_trans': DFATransMap.hmap_t;
+  rs': RSMap.hmap_t;
+
+  rest_T: Uint63.int;
+}.
+
+Definition Px x k :=
+  EventSet.hmap_get k x = Some true.
+
+Definition Px' x k :=
+  EventSet.hmap_get k x <> None.
+
+
+Inductive FAR_state_WF: FAR_state_t->Prop :=
+| FAR_state_WF_intro x
+  (Hevents_WF: EventSet.hmap_WF x.(events))
+  (Hret2'WF: Ret2Map.hmap_WF x.(ret2'))
+  (Hret3'WF: Ret3Map.hmap_WF x.(ret3'))
+  (Hpre23'WF: Pre23Map.hmap_WF x.(pre23'))
+  (Hpre32'WF: Pre32Map.hmap_WF x.(pre32'))
+  (Hpre33'WF: Pre33Map.hmap_WF x.(pre33'))
+  (Hdfa_trans'WF: DFATransMap.hmap_WF x.(dfa_trans'))
+  (Hrs'WF: RSMap.hmap_WF x.(rs'))
+  (Hevents_todo:
+  forall k, Px' x.(events) k -> (~Px x.(events) k) -> In k x.(events_todo))
+  (Hret2': forall a b, Px x.(events) (ret2 a b) -> In b (Ret2Map.hmap_get a x.(ret2')))
+  (Hret3': forall a b, Px x.(events) (ret3 a b) -> In b (Ret3Map.hmap_get a x.(ret3')))
+  (Hpre23': forall a b, Px x.(events) (pre23 a b) -> In b (Pre23Map.hmap_get a x.(pre23')))
+  (Hpre32': forall a b, Px x.(events) (pre32 a b) -> In b (Pre32Map.hmap_get a x.(pre32')))
+  (Hpre33': forall a b, Px x.(events) (pre33 a b) -> In b (Pre33Map.hmap_get a x.(pre33')))
+  (Hdfa_trans': forall a b, Px x.(events) (dfa_trans a b) -> In b (DFATransMap.hmap_get a x.(dfa_trans')))
+  (Hrs': forall a b, Px x.(events) (h2s (b,a)) -> In b (RSMap.hmap_get a x.(rs')))
+  (Hevents':Closed' (Px x.(events)) (Px' x.(events)))
+    :
+  FAR_state_WF x
+.
+
+Fixpoint batch_ins2 x ls :=
+match ls with
+| [] => (x,[])
+| h::t =>
+  let '(x',ls'):=batch_ins2 x t in
+  EventSet.hmap_upd2 h
+  (fun a =>
+  match a with
+  | None => (false,h::ls')
+  | Some a0 => (a0,ls')
+  end) x'
+end.
+
+Fixpoint batch_ins x ls :=
+match ls with
+| [] => x
+| h::t => EventSet.hmap_upd h
+  (fun a =>
+  match a with
+  | None => false
+  | Some a0 => a0
+  end) (batch_ins x t)
+end.
+
+Lemma batch_ins2_spec x ls:
+  (fst (batch_ins2 x ls)) = batch_ins x ls.
+Proof.
+  unfold fst.
+  induction ls; cbn[batch_ins2]; cbn[batch_ins].
+  1: trivial.
+  rewrite EventSet.hmap_upd_spec.
+  destruct (batch_ins2 x ls) as [x' ls'].
+  subst x'.
+  rewrite EventSet.hmap_upd2_spec.
+  destruct (EventSet.hmap_get a (batch_ins x ls)); trivial.
+Qed.
+
+Definition ins_all'_c{T}(ls:list T) f gs :=
+  ins_all'_rec f ls gs.
+
+Definition ins_1_c(e:Event)(gs:global_state_t):=
+  Some ([e],gs).
+
+Definition ins_all_c{T}(ls:list T)(f:T->Event)(gs:global_state_t):=
+  Some (List.map f ls,gs).
+
+Definition delta' x' (x:Event) gs :=
+let P := Px x'.(events) in
+match x with
+| h2s a =>
+  ins_all'_c (DFATransMap.hmap_get (snd a) x'.(dfa_trans')) (on_H2_pop a) gs
+| h3s a =>
+  ins_1_c (pre23 (snd a) (fst a)) gs
+| ret2 a b =>
+  ins_all'_c (Pre23Map.hmap_get a x'.(pre23')) (fun w => on_H3_back (w,a) b) gs
+| ret3 a b =>
+  ins_all'_c (match EventSet.hmap_get (pre3L a) x'.(events) with
+             | Some true => [tt]
+             | _ => []
+             end) (fun _ gs => Some ([retL b],gs)) gs &&& (fun '(ls0,gs) =>
+  ins_all_c (Pre33Map.hmap_get a x'.(pre33')) (fun a0 => ret3 a0 b) gs &&& (fun '(ls1,gs) =>
+  ins_all_c (Pre32Map.hmap_get a x'.(pre32')) (fun a0 => ret2 a0 b) gs &&& (fun '(ls2,gs) =>
+  Some (ls0++ls1++ls2,gs))))
+| retL b =>
+  ins_all'_c [tt] (fun _ => on_retL b) gs
+| pre23 a w =>
+  ins_1_c (h2s a) gs &&& (fun '(ls0,gs) =>
+  ins_all'_c (Ret2Map.hmap_get a x'.(ret2')) (on_H3_back (w,a)) gs &&& (fun '(ls1,gs) =>
+  Some (ls0++ls1,gs)))
+| pre32 a a0 =>
+  ins_1_c (h3s a) gs &&& (fun '(ls0,gs) =>
+  ins_all_c (Ret3Map.hmap_get a x'.(ret3')) (ret2 a0) gs &&& (fun '(ls1,gs) =>
+  Some (ls0++ls1,gs)))
+| pre33 a a0 =>
+  ins_1_c (h3s a) gs &&& (fun '(ls0,gs) =>
+  ins_all_c (Ret3Map.hmap_get a x'.(ret3')) (ret3 a0) gs &&& (fun '(ls1,gs) =>
+  Some (ls0++ls1,gs)))
+| pre3L a =>
+  ins_1_c (h3s a) gs &&& (fun '(ls0,gs) =>
+  ins_all_c (Ret3Map.hmap_get a x'.(ret3')) (retL) gs &&& (fun '(ls1,gs) =>
+  Some (ls0++ls1,gs)))
+| dfa_trans a e =>
+  ins_all'_c (RSMap.hmap_get a x'.(rs')) (fun s => on_H2_pop (s,a) e) gs
+end.
+
+Fixpoint len_int{T}(ls:list T)(s:Uint63.int):Uint63.int :=
+match ls with
+| [] => s
+| h::t => len_int t (Uint63.succ s)
+end.
+
+Definition upd x gs :=
+match x.(events_todo) with
+| x0::t => delta' x x0 gs
+&&& (fun '(dt,gs) =>
+  let len:=len_int dt int0 in
+  if Uint63.ltb x.(rest_T) len then None else
+  let (w0,w1) := EventSet.hmap_upd2 x0 (fun v => (true,
+  match v with
+  | Some false => false
+  | _ => true
+  end)) x.(events) in
+  if w1 then None else
+  let w:=batch_ins2 w0 dt in
+  Some (inl ({|
+  events := fst w;
+  events_todo := snd w++t;
+  ret2' :=
+    match x0 with
+    | ret2 a b => Ret2Map.hmap_add a b x.(ret2')
+    | _ => x.(ret2')
+    end;
+  ret3' :=
+    match x0 with
+    | ret3 a b => Ret3Map.hmap_add a b x.(ret3')
+    | _ => x.(ret3')
+    end;
+  pre23' :=
+    match x0 with
+    | pre23 a b => Pre23Map.hmap_add a b x.(pre23')
+    | _ => x.(pre23')
+    end;
+  pre32' := 
+    match x0 with
+    | pre32 a b => Pre32Map.hmap_add a b x.(pre32')
+    | _ => x.(pre32')
+    end;
+  pre33' := 
+    match x0 with
+    | pre33 a b => Pre33Map.hmap_add a b x.(pre33')
+    | _ => x.(pre33')
+    end;
+  dfa_trans' :=
+    match x0 with
+    | dfa_trans a b => DFATransMap.hmap_add a b x.(dfa_trans')
+    | _ => x.(dfa_trans')
+    end;
+  rs' :=
+    match x0 with
+    | h2s (b,a) => RSMap.hmap_add a b x.(rs')
+    | _ => x.(rs')
+    end;
+  rest_T := Uint63.sub x.(rest_T) len;
+|},gs)))
+| [] => Some (inr tt)
+end.
+
+Lemma batch_ins_WF x ls:
+  EventSet.hmap_WF x ->
+  EventSet.hmap_WF (batch_ins x ls).
+Proof.
+  intros HWF.
+  induction ls.
+  1: apply HWF.
+  cbn[batch_ins].
+  rewrite EventSet.hmap_upd_spec.
+  apply EventSet.hmap_set_WF,IHls.
+Qed.
+
+Lemma Px_batch_ins x ls a:
+  EventSet.hmap_WF x ->
+  Px (batch_ins x ls) a <-> Px x a.
+Proof.
+  intros HWF.
+  induction ls.
+  1: reflexivity.
+  rewrite <-IHls.
+  cbn[batch_ins].
+  unfold Px.
+  rewrite EventSet.hmap_upd_spec.
+  destruct (EventHash.K_eq_spec a a0).
+  - subst.
+    rewrite EventSet.hmap_get_set_same by (apply batch_ins_WF,HWF).
+    destruct (EventSet.hmap_get a0 (batch_ins x ls)) as [[]|]; split; intro; solve[tauto|congruence].
+  - rewrite EventSet.hmap_get_set_other.
+    2: apply batch_ins_WF,HWF.
+    2: auto 1.
+    reflexivity.
+Qed.
+
+Lemma Px_ins x a a':
+  EventSet.hmap_WF x ->
+  Px (EventSet.hmap_set a true x) a' ->
+  Px x a' /\ a'<>a \/ a'=a.
+Proof.
+  unfold Px.
+  intros H.
+  destruct (EventHash.K_eq_spec a' a).
+  - subst.
+    tauto.
+  - left.
+    split; auto 1.
+    rewrite EventSet.hmap_get_set_other in H0; auto 1.
+Qed.
+
+
+Lemma Px'_batch_ins x res:
+  EventSet.hmap_WF x ->
+  (forall x0 : Event, (In x0 res \/ Px' x x0) -> Px' (batch_ins x res) x0).
+Proof.
+  intros.
+  induction res; cbn[batch_ins].
+  - destruct H0 as [[]|H0].
+    tauto.
+  - rewrite EventSet.hmap_upd_spec.
+    unfold Px' in *.
+    destruct (EventHash.K_eq_spec x0 a).
+    + subst x0.
+      rewrite EventSet.hmap_get_set_same.
+      2: apply batch_ins_WF,H.
+      congruence.
+    + cbn[In] in H0.
+      rewrite EventSet.hmap_get_set_other.
+      2: apply batch_ins_WF,H.
+      2: congruence.
+      destruct H0 as [[H0|H0]|H0]; solve[tauto|congruence].
+Qed.
+
+Lemma Px'_set_true x x0 x1:
+  EventSet.hmap_WF x ->
+  Px' x x0 ->
+  Px' (EventSet.hmap_set x1 true x) x0.
+Proof.
+  unfold Px'.
+  intros.
+  destruct (EventHash.K_eq_spec x0 x1).
+  + subst x0.
+    rewrite EventSet.hmap_get_set_same by auto 1.
+    congruence.
+  + cbn[In] in H0.
+    rewrite EventSet.hmap_get_set_other; auto 1.
+Qed.
+
+Lemma ins_1_c_spec e gs x dt gs0:
+  ins_1_c e gs = Some (dt,gs0) ->
+  EventSet.hmap_WF x ->
+  Ins_WF (ins_1 e) (Px' x) (Px' (batch_ins x dt)).
+Proof.
+  intros H HWF.
+  inverts H.
+  econstructor.
+  - apply Px'_batch_ins; cbn[In]; tauto.
+  - intros.
+    apply Px'_batch_ins; tauto.
+Qed.
+
+Lemma ins_all_c_spec{T}(ls:list T) f gs p x dt gs0:
+  (forall x1, p x1 -> In x1 ls) ->
+  ins_all_c ls f gs = Some (dt,gs0) ->
+  EventSet.hmap_WF x ->
+  Ins_WF (ins_all p f) (Px' x) (Px' (batch_ins x dt)).
+Proof.
+  unfold ins_all_c.
+  intros H H0 HWF.
+  inverts H0.
+  econstructor.
+  - apply H.
+  - intros.
+    apply Px'_batch_ins; tauto.
+  - intros.
+    apply Px'_batch_ins; tauto.
+Qed.
+
+Lemma ins_all'_c_spec{T}(ls:list T) f gs p x dt gs0:
+  (forall x1, p x1 -> In x1 ls) ->
+  ins_all'_c ls f gs = Some (dt,gs0) ->
+  EventSet.hmap_WF x ->
+  Ins_WF (ins_all' p f) (Px' x) (Px' (batch_ins x dt)).
+Proof.
+  unfold ins_all'_c.
+  intros H H0 HWF.
+  gen p gs gs0 dt.
+  induction ls; cbn[ins_all'_rec]; intros.
+  - inverts H0.
+    cbn[batch_ins].
+    econstructor.
+    + apply H.
+    + reflexivity.
+    + cbn[In]; tauto.
+    + tauto.
+  - pose proof H0 as H0'.
+    unfold if_Some in H0.
+    destruct (ins_all'_rec f ls gs) as [[res' gs']|] eqn:E.
+    2: congruence.
+    pose proof E as E'.
+    destruct (f a gs') as [[res'0 gs'0]|] eqn:E0.
+    2: congruence.
+    inverts H0.
+    eapply (IHls (fun x1 => In x1 ls) (fun x y => y)) in E.
+    inverts E.
+    econstructor.
+    + apply H.
+    + cbn[ins_all'_rec].
+      rewrite E'.
+      apply H0'.
+    + intros.
+      apply Px'_batch_ins; tauto.
+    + intros.
+      apply Px'_batch_ins; tauto.
+  Unshelve.
+  apply gs0.
+Qed.
+
+Lemma batch_ins_trans x ls ls0 :
+  batch_ins x (ls++ls0) =
+  batch_ins (batch_ins x ls0) ls.
+Proof.
+  induction ls; trivial.
+  cbn[app].
+  cbn[batch_ins].
+  congruence.
+Qed.
+
+Ltac des2 H :=
+  try (destruct H as [[H Hne]|H]; [auto 2|congruence]).
+
+Ltac des3 H x0 :=
+  rewrite Px_batch_ins in H;
+  [| apply EventSet.hmap_set_WF; solve[auto 1]];
+  apply Px_ins in H; [|solve[auto 1]];
+  destruct x0; des2 H.
+
+Ltac des4 H b b0 :=
+  cbn[In];
+  destruct (eqb_spec b b0);
+  [ subst; tauto
+  | right; des2 H ].
+
+Ltac des5 H :=
+  unfold if_Some in H;
+  (repeat
+  match type of H with
+  | match ?e with _ => _ end = _ =>
+    let ls:=fresh "dt" in
+    let gs:=fresh "gs" in
+    let E:=fresh "E" in
+    destruct e as [[ls gs]|] eqn:E; [|congruence]
+  end);
+  inverts H;
+  repeat rewrite batch_ins_trans.
+
+Ltac solve_S :=
+  econstructor; [|(eapply ins_1_c_spec || eapply ins_all_c_spec || eapply ins_all'_c_spec); eauto using EventSet.hmap_set_WF,batch_ins_WF].
+
+Ltac solve_O :=
+  econstructor;
+  intro x0;
+  apply Px'_set_true; auto 1.
+
+Ltac ec_WF :=
+  econstructor;
+  cbn[events]; cbn[events_todo]; cbn[ret2']; cbn[ret3'];
+  cbn[pre23']; cbn[pre32']; cbn[pre33']; cbn[dfa_trans']; cbn[rs'].
+
+Lemma upd_spec x gs:
+FAR_state_WF x ->
+match upd x gs with
+| Some (inl (x',gs')) => FAR_state_WF x'
+| Some (inr tt) => ~halts tm c0
+| _ => True
+end.
+Proof.
+  intros HWF.
+  unfold upd.
+  destruct x.(events_todo) as [|x0 t] eqn:E.
+  1:{
+    inverts HWF.
+    eapply nonhalt.
+    eapply Closed'_Closed.
+    1: eapply Hevents'.
+    intros.
+    epose proof (Hevents_todo _ H) as I.
+    rewrite E in I.
+    cbn in I.
+    unfold Px.
+    unfold Px in I.
+    destruct (EventSet.hmap_get x0 x.(events)) as [[]|].
+    - trivial.
+    - destruct I; congruence.
+    - destruct I; congruence.
+  }
+  unfold if_Some.
+  destruct (delta' x x0 gs) as [[dt gs0]|] eqn:Edt.
+  2: trivial.
+  destruct (PrimInt63.ltb (rest_T x) (len_int dt int0)); trivial.
+  rewrite EventSet.hmap_upd2_spec.
+  destruct (EventSet.hmap_get x0 (events x)) as [[]|] eqn:E'; trivial.
+  rewrite batch_ins2_spec.
+  inverts HWF.
+  ec_WF.
+  - apply batch_ins_WF.
+    apply EventSet.hmap_set_WF; auto 1.
+  - destruct x0; auto 1.
+    apply Ret2Map.hmap_add_WF; auto 1.
+  - destruct x0; auto 1.
+    apply Ret3Map.hmap_add_WF; auto 1.
+  - destruct x0; auto 1.
+    apply Pre23Map.hmap_add_WF; auto 1.
+  - destruct x0; auto 1.
+    apply Pre32Map.hmap_add_WF; auto 1.
+  - destruct x0; auto 1.
+    apply Pre33Map.hmap_add_WF; auto 1.
+  - destruct x0; auto 1.
+    apply DFATransMap.hmap_add_WF; auto 1.
+  - destruct x0; auto 1.
+    destruct a.
+    apply RSMap.hmap_add_WF; auto 1.
+  - intros k.
+    epose proof (Hevents_todo k).
+    clear Edt.
+    induction dt; cbn[batch_ins]; cbn[batch_ins2].
+    + unfold snd.
+      rewrite E in H.
+      cbn[In] in H.
+      cbn[app].
+      intros.
+      unfold Px',Px in H,H0,H1.
+      destruct (EventHash.K_eq_spec k x0).
+      * subst.
+        rewrite EventSet.hmap_get_set_same in H1 by auto 1.
+        contradiction.
+      * rewrite EventSet.hmap_get_set_other in H0,H1 by auto 1.
+        destruct H; solve[tauto|congruence].
+    + remember ((EventSet.hmap_set x0 true (events x))) as v1.
+      destruct (batch_ins2 v1 dt) as [x' ls'] eqn:E0.
+      assert (x'=fst (batch_ins2 v1 dt)) as E1 by (rewrite E0; trivial).
+      rewrite batch_ins2_spec in E1.
+      subst x'.
+      clear E0.
+      unfold snd in IHdt.
+      remember (batch_ins v1 dt) as v2.
+      assert (EventSet.hmap_WF v2) as HWFv2. {
+        subst v2.
+        apply batch_ins_WF.
+        subst v1.
+        apply EventSet.hmap_set_WF; auto 1.
+      }
+      rewrite EventSet.hmap_upd_spec.
+      rewrite EventSet.hmap_upd2_spec.
+      destruct (EventSet.hmap_get a v2) as [a0|] eqn:E0.
+      { unfold snd.
+        intros.
+        unfold Px',Px in IHdt,H0,H1.
+        destruct (EventHash.K_eq_spec k a).
+        * subst k.
+          rewrite EventSet.hmap_get_set_same in H0,H1 by auto 1.
+          rewrite E0 in IHdt.
+          apply IHdt; auto 1.
+        * rewrite EventSet.hmap_get_set_other in H0,H1 by auto 1.
+          apply IHdt; auto 1. }
+      { unfold snd.
+        intros.
+        unfold Px',Px in IHdt,H0,H1.
+        destruct (EventHash.K_eq_spec k a).
+        * subst k.
+          left; trivial.
+        * rewrite EventSet.hmap_get_set_other in H0,H1 by auto 1.
+          right.
+          apply IHdt; auto 1.
+      }
+  - intros.
+    des3 H x0.
+    destruct (eqb_spec a a0).
+    + subst.
+      rewrite Ret2Map.hmap_get_add_same by auto 1.
+      des4 H b b0.
+    + rewrite Ret2Map.hmap_get_add_other by auto 1.
+      des2 H.
+  - intros.
+    des3 H x0.
+    destruct (eqb_spec a a0).
+    + subst.
+      rewrite Ret3Map.hmap_get_add_same by auto 1.
+      des4 H b b0.
+    + rewrite Ret3Map.hmap_get_add_other by auto 1.
+      des2 H.
+  - intros.
+    des3 H x0.
+    destruct (eqb_spec a a0).
+    + subst.
+      rewrite Pre23Map.hmap_get_add_same by auto 1.
+      des4 H b w.
+    + rewrite Pre23Map.hmap_get_add_other by auto 1.
+      des2 H.
+  - intros.
+    des3 H x0.
+    destruct (eqb_spec a a0).
+    + subst.
+      rewrite Pre32Map.hmap_get_add_same by auto 1.
+      des4 H b b0.
+    + rewrite Pre32Map.hmap_get_add_other by auto 1.
+      des2 H.
+  - intros.
+    des3 H x0.
+    destruct (eqb_spec a a0).
+    + subst.
+      rewrite Pre33Map.hmap_get_add_same by auto 1.
+      des4 H b b0.
+    + rewrite Pre33Map.hmap_get_add_other by auto 1.
+      des2 H.
+  - intros.
+    des3 H x0.
+    destruct (eqb_spec a a0).
+    + subst.
+      rewrite DFATransMap.hmap_get_add_same by auto 1.
+      des4 H b e.
+    + rewrite DFATransMap.hmap_get_add_other by auto 1.
+      des2 H.
+  - intros.
+    des3 H x0.
+    destruct a0 as [a0 a1].
+    destruct (eqb_spec a a1).
+    + subst.
+      rewrite RSMap.hmap_get_add_same by auto 1.
+      des4 H b a0.
+    + rewrite RSMap.hmap_get_add_other by auto 1.
+      des2 H.
+  - eapply delta_spec with (x:=x0).
+    + apply Hevents'.
+    + unfold Px'.
+      congruence.
+    + intros.
+      rewrite Px_batch_ins.
+      2: apply EventSet.hmap_set_WF; auto 1.
+      unfold Px.
+      destruct (EventHash.K_eq_spec x0 x1).
+      * subst x0.
+        rewrite EventSet.hmap_get_set_same by auto 1.
+        tauto.
+      * rewrite EventSet.hmap_get_set_other by auto 1.
+        split; intros.
+        1: tauto.
+        destruct H; solve[tauto|congruence].
+    + unfold delta.
+      unfold delta' in Edt.
+      destruct x0.
+      {
+        solve_S.
+        solve_O.
+      }
+      {
+        solve_S.
+        solve_O.
+      }
+      {
+        solve_S.
+        solve_O.
+      }
+      {
+        des5 Edt.
+        solve_S.
+        2:{
+          intros.
+          unfold Px in H.
+          rewrite H.
+          destruct x1; cbn[In]; tauto.
+        }
+        solve_S.
+        solve_S.
+        solve_O.
+      }
+      {
+        solve_S.
+        2: intro X; destruct X; cbn; tauto.
+        solve_O.
+      }
+      {
+        des5 Edt.
+        solve_S.
+        solve_S.
+        solve_O.
+      }
+      {
+        des5 Edt.
+        solve_S.
+        solve_S.
+        solve_O.
+      }
+      {
+        des5 Edt.
+        solve_S.
+        solve_S.
+        solve_O.
+      }
+      {
+        des5 Edt.
+        solve_S.
+        solve_S.
+        solve_O.
+      }
+      {
+        solve_S.
+        solve_O.
+      }
+Qed.
+
+Definition init maxS maxT :=
+let v1:=pre3L (s0,(q0,dfa_state_0)) in
+let v2:=dfa_trans dfa_state_0 (s0,dfa_state_0) in
+{| 
+  events :=
+  EventSet.hmap_set v2 false (EventSet.hmap_set v1 false (EventSet.hmap_make maxS));
+  events_todo := [v2;v1];
+  ret2' := Ret2Map.hmap_make maxS;
+  ret3' := Ret3Map.hmap_make maxS;
+  pre23' := Pre23Map.hmap_make maxS;
+  pre32' := Pre32Map.hmap_make maxS;
+  pre33' := Pre33Map.hmap_make maxS;
+  dfa_trans' := DFATransMap.hmap_add dfa_state_0 (s0,dfa_state_0) (DFATransMap.hmap_make maxS);
+  rs' := RSMap.hmap_make maxS;
+  rest_T := maxT;
+|}.
+
+Ltac gso H :=
+  (rewrite EventSet.hmap_get_set_other in H;
+  [
+  | auto using EventSet.hmap_set_WF,EventSet.hmap_make_WF
+  | congruence]) ||
+  (rewrite EventSet.hmap_get_set_same in H;
+  [
+  | auto using EventSet.hmap_set_WF,EventSet.hmap_make_WF]) ||
+  rewrite EventSet.hmap_get_make in H.
+
+Ltac gso' :=
+  (rewrite EventSet.hmap_get_set_other;
+  [
+  | auto using EventSet.hmap_set_WF,EventSet.hmap_make_WF
+  | congruence]) ||
+  (rewrite EventSet.hmap_get_set_same;
+  [
+  | auto using EventSet.hmap_set_WF,EventSet.hmap_make_WF]) ||
+  rewrite EventSet.hmap_get_make.
+
+Ltac gso'' :=
+repeat
+(intros || congruence ||
+match goal with
+| [H:_ |- _] => gso H
+end).
+
+Lemma init_WF maxS maxT:
+  FAR_state_WF (init maxS maxT).
+Proof.
+  unfold init.
+  ec_WF;
+  unfold Px,Px' in *.
+  - auto using EventSet.hmap_set_WF,EventSet.hmap_make_WF.
+  - apply Ret2Map.hmap_make_WF.
+  - apply Ret3Map.hmap_make_WF.
+  - apply Pre23Map.hmap_make_WF.
+  - apply Pre32Map.hmap_make_WF.
+  - apply Pre33Map.hmap_make_WF.
+  - apply DFATransMap.hmap_add_WF.
+    apply DFATransMap.hmap_make_WF.
+  - apply RSMap.hmap_make_WF.
+  - introv H H0.
+    destruct k.
+    all: try solve[gso''].
+    + destruct (eqb_spec a (s0,(q0,dfa_state_0))).
+      1: subst.
+      all: gso''.
+      cbn[In]; tauto.
+    + destruct (eqb_spec a dfa_state_0).
+      1: subst.
+      1: destruct (eqb_spec e (s0,dfa_state_0)); subst.
+      all: gso''.
+      cbn[In]; tauto.
+  - gso''.
+  - gso''.
+  - gso''.
+  - gso''.
+  - gso''.
+  - introv H.
+    destruct (eqb_spec a dfa_state_0).
+    1: subst.
+    1: destruct (eqb_spec b (s0,dfa_state_0)); subst.
+    all: gso''.
+  - gso''.
+  - econstructor.
+    + gso''.
+    + do 2 gso'.
+      congruence.
+    + gso'.
+      congruence.
+    + gso''.
+    + gso''.
+    + gso''.
+    + introv H.
+      gso H.
+      destruct (eqb_spec a (s0,(q0,dfa_state_0))).
+      1: subst.
+      all: gso''.
+    + gso''.
+    + gso''.
+    + gso''.
+    + gso''.
+    + gso''.
+    + gso''.
+    + gso''.
+Qed.
+
+Definition FAR_step '(x,gs) :=
+match upd x gs with
+| Some (inl v) => inl v
+| Some (inr tt) => inr true
+| None => inr false
+end.
+
+Definition decide cfg maxS maxT T :=
+N_iter_until FAR_step (inl (init (Uint63.of_Z (Z.of_N maxS)) (Uint63.of_Z (Z.of_N maxT)),global_state_init cfg)) T.
+
+Lemma decide_spec cfg maxS maxT T:
+match decide cfg maxS maxT T with
+| inl (x,gs) => FAR_state_WF x
+| inr true => ~halts tm c0
+| inr false => True
+end.
+Proof.
+  unfold decide.
+  apply N_iter_until_spec.
+  2: apply init_WF.
+  intros [x gs] HWF.
+  unfold FAR_step.
+  epose proof (upd_spec _ gs HWF) as I1.
+  destruct (upd x gs) as [[[x' gs']|[]]|]; trivial.
+Qed.
+
+Definition FAR_decide_nonhalt cfg maxS maxT T :=
+match decide cfg maxS maxT T with
+| inr true => true
+| _ => false
+end.
+
+Lemma FAR_decide_nonhalt_spec cfg maxS maxT T:
+FAR_decide_nonhalt cfg maxS maxT T = true ->
+~halts tm c0.
+Proof.
+  unfold FAR_decide_nonhalt.
+  pose proof (decide_spec cfg maxS maxT T).
+  destruct (decide cfg maxS maxT T) as [|[]]; try congruence.
+Qed.
+
+End tm_sec.
+
+End FAR.
+
 
 
 
@@ -2072,6 +3869,18 @@ Proof.
   intros H1.
   rewrite <-H0.
   apply (map_nonhalt _ _ H1 H).
+Qed.
+
+Lemma inv_map_nonhalt_c0:
+  ~BlockTM.halts' map_TM (BlockTM.c0) ->
+  ~DHTM.halts' tm (DHTM.c0).
+Proof.
+  epose proof (map_nonhalt ([],[],BlockTMCtx.q0,R) ([],[],Ctx.q0,R)) as H.
+  cbn in H.
+  intros.
+  apply H.
+  1: apply H0.
+  econstructor; eauto.
 Qed.
 
 End BlockSize.
@@ -2583,9 +4392,11 @@ Module CTL_RNGS_mod_QSym := CTL
 
 Module Ctx_RWL_mod := RWL_mod BlockTMFromDHTM.BlockTMCtx.
 Module CTL_RWL_mod := CTL Ctx_RWL_mod.ListInt3Hash BlockTMFromDHTM.BlockTMCtx Ctx_RWL_mod.CTLCtx.
+Module FAR_RWL_mod := FAR Ctx_RWL_mod.ListInt3Hash BlockTMFromDHTM.BlockTMCtx Ctx_RWL_mod.CTLCtx.
 
 Module Ctx_CPS_LRU := CPS_LRU BlockTMFromDHTM.BlockTMCtx.
 Module CTL_CPS_LRU := CTL Ctx_CPS_LRU.List2IntHash BlockTMFromDHTM.BlockTMCtx Ctx_CPS_LRU.CTLCtx.
+Module FAR_CPS_LRU := FAR Ctx_CPS_LRU.List2IntHash BlockTMFromDHTM.BlockTMCtx Ctx_CPS_LRU.CTLCtx.
 
 Module Ctx_NG_Sym := NGramCPS TapeHistoryImpl.ListSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx.
 Module Ctx_NG_QSym := NGramCPS TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx.
@@ -2602,6 +4413,8 @@ Module Ctx_MITMDFA := MITMDFA Ctx.
 Module CTL_MITMDFA := CTL Ctx_MITMDFA.DFAStateHash DHTMFromTM.TMCtx Ctx_MITMDFA.CTLCtx.
 
 Inductive DeciderParameter :=
+| RWL_mod_FAR(maxT maxS bsz bmaxT mnc mod_ len1 len2:N)
+| CPS_LRU_FAR(maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
 | RWL_mod(simT maxT maxS bsz bmaxT mnc mod_ len1 len2:N)
 | CPS_LRU(simT maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
 | NG(simT maxT maxS NG_n len1 len2 LRU_n:N)(asth:bool)
@@ -2615,6 +4428,33 @@ Hypothesis tm:DHTMFromTM.TM.TM.
 Hypothesis arg:DeciderParameter.
 Definition decide_nonhalt:bool :=
 match arg with
+| RWL_mod_FAR maxT maxS bsz bmaxT mnc mod_ len1 len2 =>
+  let c:=DHTMFromTM.DHTM.cc0 in
+    let bsz := N.max 1 bsz in
+    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (bmaxT) tm) in
+    let cfg :=
+      {|
+        Ctx_RWL_mod.CTLCtx.mnc := N_to_int mnc;
+        Ctx_RWL_mod.CTLCtx.mod_ := N_to_int mod_;
+        Ctx_RWL_mod.CTLCtx.len1 := N.to_nat len1;
+        Ctx_RWL_mod.CTLCtx.len2 := N.to_nat len2;
+        Ctx_RWL_mod.CTLCtx.maxS := N_to_int maxS;
+        Ctx_RWL_mod.CTLCtx.is_s0 := fun ls => forallb (DHTMFromTM.TMCtx.sym_eqb DHTMFromTM.TMCtx.s0) ls;
+      |} in
+    (FAR_RWL_mod.FAR_decide_nonhalt tm1 cfg (maxS) (maxT) maxT)
+| CPS_LRU_FAR maxT maxS bsz bmaxT len1 len2 len3 LRU_n =>
+    let bsz := N.max 1 bsz in
+    let tm1 := (BlockTMFromDHTM.map_TM (N.to_nat bsz) (bmaxT) tm) in
+    let cfg := 
+      {|
+        Ctx_CPS_LRU.CTLCtx.len1 := N.to_nat len1;
+        Ctx_CPS_LRU.CTLCtx.len2 := N.to_nat len2;
+        Ctx_CPS_LRU.CTLCtx.len3 := N.to_nat len3;
+        Ctx_CPS_LRU.CTLCtx.LRU_n := N.to_nat LRU_n;
+        Ctx_CPS_LRU.CTLCtx.maxS := N_to_int maxS;
+        Ctx_CPS_LRU.CTLCtx.is_s0 := fun ls => forallb (DHTMFromTM.TMCtx.sym_eqb DHTMFromTM.TMCtx.s0) ls;
+      |} in
+    (FAR_CPS_LRU.FAR_decide_nonhalt tm1 cfg (maxS) (maxT) maxT)
 | RWL_mod simT maxT maxS bsz bmaxT mnc mod_ len1 len2 =>
   match DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT with
   | inl c =>
@@ -2734,6 +4574,22 @@ Proof.
   unfold decide_nonhalt.
   intros H.
   destruct arg.
+  - apply DHTMFromTM.map_nonhalt.
+    rewrite <-DHTMFromTM.DHTM.halts_halts'.
+    epose proof (FAR_RWL_mod.FAR_decide_nonhalt_spec _ _ _ _ _ H) as H1.
+    rewrite DHTMFromTM.DHTM.halts_halts'.
+    rewrite FAR_RWL_mod.TM.halts_halts' in H1.
+    eapply BlockTMFromDHTM.inv_map_nonhalt_c0.
+    2: apply H1.
+    lia.
+  - apply DHTMFromTM.map_nonhalt.
+    rewrite <-DHTMFromTM.DHTM.halts_halts'.
+    epose proof (FAR_CPS_LRU.FAR_decide_nonhalt_spec _ _ _ _ _ H) as H1.
+    rewrite DHTMFromTM.DHTM.halts_halts'.
+    rewrite FAR_CPS_LRU.TM.halts_halts' in H1.
+    eapply BlockTMFromDHTM.inv_map_nonhalt_c0.
+    2: apply H1.
+    lia.
   - apply DHTMFromTM.map_nonhalt.
     pose proof (DHTMFromTM.DHTM.DH_cconfig_steps_spec tm DHTMFromTM.DHTM.cc0 simT) as H0.
     destruct (DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT); try congruence.

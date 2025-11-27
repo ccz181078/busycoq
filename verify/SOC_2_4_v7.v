@@ -6,8 +6,6 @@ From BusyCoq Require Import Longitudinal.
 From BusyCoq Require Import BinaryCounter_v2.
 
 
-Ltac flia := repeat (lia || f_equal).
-
 Module TM1.
 
 Definition tm := Eval compute in (TM_from_str "1LB1RD_1LC0LE_0RA0LC_1RE1LE_1RC0RF_---1RA").

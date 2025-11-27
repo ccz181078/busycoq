@@ -6,7 +6,6 @@ Require Import List.
 From BusyCoq Require ES_v2 ES_v3.
 
 Ltac es_v2 := ES_v2.es.
-Ltac flia := repeat (lia || f_equal).
 
 Module TM1.
 Definition tm := Eval compute in (TM_from_str "1LB0RF_1LC1LA_1RD0LE_1RB1RD_---1LC_1LC1RA").
@@ -3693,20 +3692,12 @@ Definition S1 a b c :=
 
 Open Scope string.
 
-Ltac es' nmp' :=
-  pose nmp' as nmp;
-  unshelve es_v3; (apply (fun _ => 0inf)).
-
 Lemma Inc1 a b c:
   S1 (1+a) (3+b) (c) -->*
   S1 a (b) (12+c).
 Proof.
   unfold S1.
-  es' (fun (s:string) =>
-  if s=?"a" then a else
-  if s=?"b" then b else
-  if s=?"c" then c else
-  O).
+  es' a b c.
 Qed.
 
 Lemma Incs1 n a b c:
@@ -3722,10 +3713,7 @@ Lemma Ov1 a c:
   S1 a (9+c) 4.
 Proof.
   unfold S1.
-  es' (fun (s:string) =>
-  if s=?"a" then a else
-  if s=?"c" then c else
-  O).
+  es' a c.
 Qed.
 
 Definition S2 b c :=
@@ -3736,10 +3724,7 @@ Lemma Ov1a b c:
   S2 b (20+c).
 Proof.
   unfold S1,S2.
-  es' (fun (s:string) =>
-  if s=?"b" then b else
-  if s=?"c" then c else
-  O).
+  es' b c.
 Qed.
 
 Lemma Inc2 b c:
@@ -3747,10 +3732,7 @@ Lemma Inc2 b c:
   S2 (b) (8+c).
 Proof.
   unfold S2.
-  es' (fun (s:string) =>
-  if s=?"b" then b else
-  if s=?"c" then c else
-  O).
+  es' b c.
 Qed.
 
 Lemma Incs2 n b c:
@@ -3766,9 +3748,7 @@ Lemma Ov2 c:
   S1 (12+c) 1 4.
 Proof.
   unfold S2,S1.
-  es' (fun (s:string) =>
-  if s=?"c" then c else
-  O).
+  es' c.
 Qed.
 
 Lemma pow4_ge i:

@@ -13,7 +13,7 @@ From Coq Require Import ZifyBool.
 From BusyCoq Require Import Individual62.
 Set Default Goal Selector "!".
 
-Definition tm : TM := Eval compute in (TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------").
+Definition tm : TM := Eval compute in (TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_0RF1LE_---1RC").
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
@@ -1678,3 +1678,6 @@ Proof.
   rewrite <-H0.
   apply doit_result_spec.
 Qed.
+
+
+

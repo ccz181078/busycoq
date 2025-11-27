@@ -6,7 +6,7 @@ From Coq Require Import String List. Import ListNotations.
 From Coq Require Import PeanoNat. Import Nat.
 Set Default Goal Selector "!".
 
-Definition tm : TM := TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------".
+Definition tm : TM := Eval compute in (TM_from_str "1RB---_0LC1RE_0LD1LC_1RA1LB_0RB0RA_------").
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).

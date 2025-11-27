@@ -13,12 +13,12 @@ From Coq Require Import ZifyBool.
 From BusyCoq Require Import Individual62.
 Set Default Goal Selector "!".
 
-Definition tm : TM := Eval compute in (TM_from_str "1RB1RD_1LC0RC_1RA1LD_0RE0LB_---1RC_------").
+Definition tm : TM := Eval compute in (TM_from_str "1RB1RF_1RC0RE_0LD1RE_---1LE_1RA1LF_0RC0LB").
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-Notation "l <| r" := (l <{{C}} 1 >> 0 >> r)  (at level 30).
+Notation "l <| r" := (l <{{E}} 1 >> 0 >> r)  (at level 30).
 Notation "l |> r" := (l {{A}}> r)  (at level 30).
 
 Fixpoint run (n : nat) :=
@@ -1678,3 +1678,4 @@ Proof.
   rewrite <-H0.
   apply doit_result_spec.
 Qed.
+

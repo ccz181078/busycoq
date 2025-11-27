@@ -7,46 +7,6 @@ From BusyCoq Require Import DivModCases.
 From BusyCoq Require Import BinaryCounter_v2.
 
 
-Ltac native_check_eq :=
-match goal with
-| |- _ = ?a => native_cast_no_check (eq_refl a)
-end.
-
-
-Ltac flia := repeat (lia || f_equal).
-
-
-Lemma sideRLs_trans_add tm h n1 n2 w1 w2 w3:
-  sideRLs tm (h^^n1) w1 w3 ->
-  sideRLs tm (h^^n2) w3 w2 ->
-  sideRLs tm (h^^(n1+n2)) w1 w2.
-Proof.
-  intros.
-  rewrite lpow_add.
-  eapply sideRLs_trans; eassumption.
-Qed.
-
-Lemma segRLs_addmul_v2 a a' x b b' tm h w1 w2:
-  segRLs tm (h^^b) (h^^b') w1 w2 ->
-  segRLs tm (h^^a) (h^^a') w2 w2 ->
-  segRLs tm (h^^(x*a+b)) (h^^(x*a'+b')) w1 w2.
-Proof.
-  intros.
-  rewrite (Nat.add_comm _ b).
-  rewrite (Nat.add_comm _ b').
-  do 2 rewrite lpow_add.
-  eapply segRLs_trans.
-  1: apply H.
-  induction x; cbn[Nat.mul].
-  - cbn.
-    constructor.
-  - cbn[lpow].
-    do 2 rewrite lpow_add.
-    eapply segRLs_trans.
-    2: apply IHx.
-    apply H0.
-Qed.
-
 Notation ld := [0;1;1;0].
 Notation rd0 := [0;0].
 Notation rd1 := [0;1].

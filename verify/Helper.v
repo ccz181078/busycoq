@@ -308,3 +308,15 @@ Inductive iter_halts{A}(f:A->option A):A->Prop :=
   f x = Some y -> iter_halts f y -> iter_halts f x
 .
 
+Ltac flia := repeat (lia || f_equal).
+
+Ltac native_check_eq :=
+match goal with
+| |- _ = ?a => native_cast_no_check (Logic.eq_refl a)
+end.
+
+Ltac vm_check_eq :=
+match goal with
+| |- _ = ?a => vm_cast_no_check (Logic.eq_refl a)
+end.
+

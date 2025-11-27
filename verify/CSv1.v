@@ -4,7 +4,6 @@ Require Import ZArith.
 Require Import String.
 Require Import List.
 
-Ltac flia := repeat (lia || f_equal).
 
 Module TM1.
 Definition tm := Eval compute in (TM_from_str "1RB1LA_1LC0RD_---1RA_1LE1RD_0LE1LF_1LC0LA").
@@ -12689,5 +12688,968 @@ Proof.
 Qed.
 
 End TM20.
+
+
+Module TM21.
+Definition tm := Eval compute in (TM_from_str "1RB0RB_1LB0LC_1RD1LC_1RE0RA_1RF0RB_---1LB").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c :=
+  0inf <* [1]^^a <* [0] <{{C}} [1]^^b *> [0;1] *> [1]^^c *> 0inf.
+
+Definition S1_1 a b c :=
+  S1 a (1+b*2) c.
+
+Definition S1_0 a b c :=
+  S1 a (2+b*2) c.
+
+Lemma Inc1_0 a b c:
+  S1_0 a (2+b) c -->*
+  S1_0 (2+a) b (2+c).
+Proof.
+  unfold S1_0,S1.
+  es.
+Qed.
+
+Lemma Incs1_0 n a b c:
+  S1_0 a (n*2+b) c -->*
+  S1_0 (n*2+a) b (n*2+c).
+Proof.
+  gen a b c.
+  ind n Inc1_0.
+Qed.
+
+Lemma Inc1_1 a b c:
+  S1_1 a (2+b) c -->*
+  S1_1 (2+a) b (2+c).
+Proof.
+  unfold S1_1,S1.
+  es.
+Qed.
+
+Lemma Incs1_1 n a b c:
+  S1_1 a (n*2+b) c -->*
+  S1_1 (n*2+a) b (n*2+c).
+Proof.
+  gen a b c.
+  ind n Inc1_1.
+Qed.
+
+Lemma LL_2 n c:
+  S1 0 (n*4+2) c -->*
+  S1 0 (n*2) (3+n*2+c).
+Proof.
+  epose proof (Incs1_0 n 0 0 c) as I1.
+  unfold S1_0 in I1.
+  follow I1.
+  es.
+Qed.
+
+Lemma LL_4 n c:
+  S1 0 (n*4+4) c -->*
+  S1 0 (6+n*4+c) 1.
+Proof.
+  epose proof (Incs1_0 n 0 1 c) as I1.
+  unfold S1_0 in I1.
+  follow I1.
+  mid (S1 0 (6+n*2+n*2+c) 1).
+  1: es.
+  finish.
+Qed.
+
+Lemma LL_1 n c:
+  S1 0 (n*4+1) c -->*
+  S1 0 (3+n*4+c) 1.
+Proof.
+  epose proof (Incs1_1 n 0 0 c) as I1.
+  unfold S1_1 in I1.
+  follow I1.
+  mid (S1 0 (3+n*2+n*2+c) 1).
+  1: es.
+  finish.
+Qed.
+
+Lemma LL_3 n c:
+  S1 0 (n*4+3) c -->*
+  S1 0 (1+n*2) (3+n*2+c).
+Proof.
+  epose proof (Incs1_1 n 0 1 c) as I1.
+  unfold S1_1 in I1.
+  follow I1.
+  es.
+Qed.
+
+Lemma LL_0_1 c:
+  halts tm (S1 0 0 (c*2+1)).
+Proof.
+  unfold S1.
+  esx.
+Qed.
+
+Lemma LL_0_0 c:
+  S1 0 0 (c*2) -->*
+  S1 0 (1+c*2) 1.
+Proof.
+  es.
+Qed.
+
+Inductive v2: nat->nat->Prop :=
+| v2_0 x: v2 (x*2+2) 0
+| v2_1 x i: v2 x i -> v2 (x*2+1) (S i)
+.
+
+Lemma LLs_1 n i c:
+  v2 n i ->
+  S1 0 (n*2+1) c -->*
+  S1 0 (2+i+c+(n*2+1)) 1.
+Proof.
+  gen n c.
+  induction i; intros.
+  - inverts H.
+    follow (LL_1 (x+1) c).
+    finish.
+  - inverts H.
+    follow (LL_3 x c).
+    epose proof (IHi _ _ H2) as I1.
+    follow I1. clear I1.
+    finish.
+Qed.
+
+Lemma LLs_1' i c:
+  S1 0 ((2^i-1)*2+1) c -->*
+  S1 0 (2+i+c+((2^i-1)*2+1)) 1.
+Proof.
+  gen c.
+  induction i; intros.
+  - follow (LL_1 0 c).
+    finish.
+  - cbn[Nat.pow].
+    follow (LL_3 (2^i-1) c).
+    epose proof (IHi _) as I1.
+    follow I1. clear I1.
+    finish.
+Qed.
+
+Lemma LLs_0 n i c:
+  v2 n i ->
+  S1 0 (n*2) c -->*
+  S1 0 (2+i+c+(n*2)) 1.
+Proof.
+  gen n c.
+  induction i; intros.
+  - inverts H.
+    follow (LL_4 x c).
+    finish.
+  - inverts H.
+    follow (LL_2 x c).
+    epose proof (IHi _ _ H2) as I1.
+    follow I1. clear I1.
+    finish.
+Qed.
+
+Close Scope sym.
+
+Ltac solve_v2 :=
+match goal with
+| |- v2 ?n (S ?i) => applys_eq (v2_1 (n/2) i); solve_v2
+| |- v2 ?n O => applys_eq (v2_0 (n/2-1)); solve_v2
+| _ => try lia
+end.
+
+Lemma v2_spec x i:
+  v2 ((x*2+3)*2^i-1) i.
+Proof.
+  induction i; intros.
+  1: solve_v2.
+  cbn[Nat.pow].
+  solve_v2.
+  applys_eq IHi; flia.
+Qed.
+
+Lemma pow2_ge i:
+  1+i<=2^i.
+Proof.
+  induction i; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma P_n i n x:
+  3<=i ->
+  1<=n ->
+  x<2^i ->
+  x<>2^i-2 ->
+  x<>2^i-3 ->
+  x<>2^i-6 ->
+  S1 0 (n*2^i+x) 1 -->*
+  S1 0 (n*2^i+2^i-1) 1.
+Proof.
+  gen n x.
+  induction i; intros.
+  1: lia.
+  destruct i as [|i].
+  1: lia.
+  destruct i as [|i].
+  1: lia.
+  destruct i as [|i].
+  {
+    cbn.
+    intros.
+    assert (I4:S1 0 (n*8+4) 1 -->* S1 0 (n*8+8-1) 1).
+    {
+      follow (LLs_0 (n*4+2) 0 1).
+      1: solve_v2.
+      finish.
+    }
+    assert (I3:S1 0 (n*8+3) 1 -->* S1 0 (n*8+8-1) 1).
+    {
+      follow (LLs_1 (n*4+1) 1 1).
+      1: solve_v2.
+      finish.
+    }
+    assert (I1:S1 0 (n*8+1) 1 -->* S1 0 (n*8+8-1) 1).
+    {
+      follow (LLs_1 (n*4) 0 1).
+      1: solve_v2.
+      follow I4.
+      finish.
+    }
+    assert (I0:S1 0 (n*8+0) 1 -->* S1 0 (n*8+8-1) 1).
+    {
+      follow (LLs_0 (n*4) 0 1).
+      1: solve_v2.
+      follow I3.
+      finish.
+    }
+    destruct x.
+    1: follow I0; finish.
+    destruct x.
+    1: follow I1; finish.
+    destruct x.
+    1: lia.
+    destruct x.
+    1: follow I3; finish.
+    destruct x.
+    1: follow I4; finish.
+    destruct x.
+    1: lia.
+    destruct x.
+    1: lia.
+    finish.
+  }
+  cbn[Nat.pow] in *.
+  assert (I2:S1 0 (n*2^i*16+2^i*8-2) 1 -->* S1 0 (n*2^i*16+2^i*16-1) 1). {
+    epose proof (LLs_0 _ _ 1 (v2_spec (n-1) (S(S i)))) as I.
+    cbn[Nat.pow] in I.
+    replace ((n-1)*2+3) with (n*2+1) in I by lia.
+    follow I.
+    pose proof (pow2_ge i).
+    follow (IHi (n*2+1) (3+i)).
+    1-6: lia.
+    finish.
+  }
+  destruct (Nat.ltb_spec x (2^i*8)) as [E|E].
+  {
+    destruct (Nat.eqb_spec x (2^i*8-6)) as [E0|E0].
+    {
+      follow (LLs_0 (n*2^i*8+2^i*4-3) 1 1).
+      1: solve_v2.
+      follow I2.
+      finish.
+    }
+    destruct (Nat.eqb_spec x (2^i*8-3)) as [E1|E1].
+    {
+      follow (LLs_1 (n*2^i*8+2^i*4-2) 0 1).
+      1: solve_v2.
+      follow (IHi (n*2+1) 0).
+      1-6: lia.
+      finish.
+    }
+    destruct (Nat.eqb_spec x (2^i*8-2)) as [E2|E2].
+    1: follow I2; finish.
+    follow (IHi (n*2) x).
+    1-6: lia.
+    epose proof (LLs_1 _ _ 1 (v2_spec (n-1) (S(S i)))) as I.
+    cbn[Nat.pow] in I.
+    replace ((n-1)*2+3) with (n*2+1) in I by lia.
+    follow I.
+    pose proof (pow2_ge i).
+    follow (IHi (n*2+1) (4+i)).
+    1-6: lia.
+    finish.
+  }
+  {
+    follow (IHi (n*2+1) (x-2^i*8)).
+    1-6: lia.
+    finish.
+  }
+Time Qed.
+
+Definition S' i := S1 0 (2^i*8-1) 1.
+
+Lemma BigStep' i:
+  c0 -->* S' i.
+Proof.
+  induction i.
+  1: unfold S',S1; esx.
+  follow IHi.
+  unfold S'.
+  cbn[Nat.pow].
+  epose proof (LLs_1' (S(S i)) 1) as I.
+  cbn[Nat.pow] in I.
+  follow I. clear I.
+  epose proof (P_n (S(S(S i))) 1 (4+i)) as I.
+  cbn[Nat.pow] in I.
+  pose proof (pow2_ge i).
+  follow I.
+  1-5: lia.
+  finish.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply sigma_score_unbounded_nonhalt.
+  intros n.
+  eexists _,_; split.
+  1: apply (BigStep' n).
+  split.
+  1: unfold S',S1; solve_sigma_score.
+  pose proof (pow2_ge n).
+  lia.
+Qed.
+
+End TM21.
+
+
+Module TM22.
+Definition tm := Eval compute in (TM_from_str "1RB0RF_0RC0RF_1RD---_1LE0RB_0LB0LE_1LD1RA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <* <[1;0]^^a <{{B}} [0] *> [1;1]^^b *> [0] *> [1]^^c *> r.
+
+Lemma Inc1 a b c r:
+  S1 a (2+b) c r -->*
+  S1 (1+a) b (2+c) r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n a b c r:
+  S1 a (n*2+b) c r -->*
+  S1 (n+a) b (n*2+c) r.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma LL_0 n c r:
+  S1 0 (n*2+0) c r -->*
+  S1 0 n (1+n*2+c) r.
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Lemma LL_0' n c r:
+  S1 1 (n*2+0) c r -->*
+  S1 0 (n+1) (1+n*2+c) r.
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Definition S2 n r :=
+  0inf <{{B}} [0] *> [1]^^n *> r.
+
+Lemma LL_1 n c r:
+  S1 0 (n*2+1) c r -->*
+  S2 (4+n*2+n*2+c) r.
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Lemma LL_1' n c r:
+  S1 1 (n*2+1) c r -->*
+  S2 (6+n*2+n*2+c) r.
+Proof.
+  follow Incs1.
+  es.
+Qed.
+
+Inductive v2: nat->nat->Prop :=
+| v2_0 x: v2 (x*2+1) 0
+| v2_1 x i: v2 x i -> v2 (x*2+0) (S i)
+.
+
+Lemma LLs n i c r:
+  v2 n i ->
+  S1 0 n c r -->*
+  S2 (2+i+n*2+c) r.
+Proof.
+  intros.
+  gen n c.
+  induction i; intros.
+  - inverts H.
+    follow LL_1.
+    finish.
+  - inverts H.
+    follow LL_0.
+    follow IHi.
+    finish.
+Qed.
+
+Lemma LLs_1 n i c r:
+  v2 (n+2) i ->
+  S1 1 n c r -->*
+  S2 (4+i+n*2+c) r.
+Proof.
+  intros.
+  inverts H.
+  - replace n with ((x-1)*2+1) by lia.
+    follow LL_1'.
+    finish.
+  - replace n with ((x-1)*2+0) by lia.
+    follow LL_0'.
+    eapply LLs in H1.
+    follow H1.
+    finish.
+Qed.
+
+Notation rh1 := (0>>1>>0inf).
+Notation rh2 := (0>>1>>1>>0inf).
+Notation rh3 := (0>>1>>1>>0>>1>>0inf).
+Notation rh4 := (0>>rh2).
+
+Inductive RH := RH0|RH1|RH2|RH3|RH4.
+Inductive Tp := t0|t1.
+
+Lemma Rst_4_0 n i:
+  v2 (n+2) i ->
+  S2 (n*2+4) 0inf -->+
+  S2 (2+i+(n+2)*2) 0inf.
+Proof.
+  intros.
+  mid10 (S1 1 n 2 0inf).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_3_0 n i:
+  v2 (n+2) i ->
+  S2 (n*2+3) 0inf -->+
+  S2 (2+i+(n+2)*2) rh1.
+Proof.
+  intros.
+  mid10 (S1 1 n 2 rh1).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_4_1 n i:
+  v2 (n+2) i ->
+  S2 (n*2+4) rh1 -->+
+  S2 (3+i+(n+2)*2) 0inf.
+Proof.
+  intros.
+  mid10 (S1 1 n 3 0inf).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_3_1 n i:
+  v2 (n+2) i ->
+  S2 (n*2+3) rh1 -->+
+  S2 (0+i+(n+2)*2) rh2.
+Proof.
+  intros.
+  mid10 (S1 1 n 0 rh2).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_4_2 n i:
+  v2 (n+2) i ->
+  S2 (n*2+4) rh2 -->+
+  S2 (4+i+(n+2)*2) 0inf.
+Proof.
+  intros.
+  mid10 (S1 1 n 4 0inf).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_3_2 n i:
+  v2 (n+2) i ->
+  S2 (n*2+3) rh2 -->+
+  S2 (2+i+(n+2)*2) rh3.
+Proof.
+  intros.
+  mid10 (S1 1 n 2 rh3).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_4_3 n i:
+  v2 (n+2) i ->
+  S2 (n*2+4) rh3 -->+
+  S2 (4+i+(n+2)*2) rh1.
+Proof.
+  intros.
+  mid10 (S1 1 n 4 rh1).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_3_3 n i:
+  v2 (n+2) i ->
+  S2 (n*2+3) rh3 -->+
+  S2 (2+i+(n+2)*2) rh4.
+Proof.
+  intros.
+  mid10 (S1 1 n 2 rh4).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_4_4 n i:
+  v2 (n+2) i ->
+  S2 (n*2+4) rh4 -->+
+  S2 (2+i+(n+2)*2) rh2.
+Proof.
+  intros.
+  mid10 (S1 1 n 2 rh2).
+  1: es.
+  follow LLs_1.
+  finish.
+Qed.
+
+Lemma Rst_3_4 n:
+  halts tm (S2 (n*2+3) rh4).
+Proof.
+  unfold S2.
+  esx.
+Qed.
+
+Definition S3 n tp r :=
+  S2 (n*2-
+   match tp with
+   | t0 => 0
+   | t1 => 1
+   end)
+  (match r with
+   | RH0 => 0inf
+   | RH1 => rh1
+   | RH2 => rh2
+   | RH3 => rh3
+   | RH4 => rh4
+   end).
+
+Close Scope sym.
+
+From BusyCoq Require Import DivModCases.
+
+Definition nxt i tp r :=
+match mod2 i with
+| mod2eq0 i =>
+  match tp with
+  | t0 =>
+    match r with
+    | RH0 => Some (i+1,t0,RH0)
+    | RH1 => Some (i+2,t1,RH0)
+    | RH2 => Some (i+2,t0,RH0)
+    | RH3 => Some (i+2,t0,RH1)
+    | RH4 => Some (i+1,t0,RH2)
+    end
+  | t1 =>
+    match r with
+    | RH0 => Some (i+1,t0,RH1)
+    | RH1 => Some (i+0,t0,RH2)
+    | RH2 => Some (i+1,t0,RH3)
+    | RH3 => Some (i+1,t0,RH4)
+    | RH4 => None
+    end
+  end
+| mod2eq1 i =>
+  match tp with
+  | t0 =>
+    match r with
+    | RH0 => Some (i+2,t1,RH0)
+    | RH1 => Some (i+2,t0,RH0)
+    | RH2 => Some (i+3,t1,RH0)
+    | RH3 => Some (i+3,t1,RH1)
+    | RH4 => Some (i+2,t1,RH2)
+    end
+  | t1 =>
+    match r with
+    | RH0 => Some (i+2,t1,RH1)
+    | RH1 => Some (i+1,t1,RH2)
+    | RH2 => Some (i+2,t1,RH3)
+    | RH3 => Some (i+2,t1,RH4)
+    | RH4 => None
+    end
+  end
+end.
+
+Lemma nxt_spec n i tp r:
+  n>=2 ->
+  v2 n i ->
+  match nxt i tp r with
+  | Some (dn,tp',r') => S3 n tp r -->+ S3 (n+dn) tp' r'
+  | None => halts tm (S3 n tp r)
+  end.
+Proof.
+  intros.
+  unfold nxt.
+  remember (n-2) as n'.
+  replace n with (n'+2) in * by lia.
+  unfold S3.
+  destruct (mod2 i); subst;
+  destruct tp,r.
+  - applys_eq (Rst_4_0 _ _ H0); flia.
+  - applys_eq (Rst_4_1 _ _ H0); flia.
+  - applys_eq (Rst_4_2 _ _ H0); flia.
+  - applys_eq (Rst_4_3 _ _ H0); flia.
+  - applys_eq (Rst_4_4 _ _ H0); flia.
+  - applys_eq (Rst_3_0 _ _ H0); flia.
+  - applys_eq (Rst_3_1 _ _ H0); flia.
+  - applys_eq (Rst_3_2 _ _ H0); flia.
+  - applys_eq (Rst_3_3 _ _ H0); flia.
+  - applys_eq (Rst_3_4 n'); flia.
+  - applys_eq (Rst_4_0 _ _ H0); flia.
+  - applys_eq (Rst_4_1 _ _ H0); flia.
+  - applys_eq (Rst_4_2 _ _ H0); flia.
+  - applys_eq (Rst_4_3 _ _ H0); flia.
+  - applys_eq (Rst_4_4 _ _ H0); flia.
+  - applys_eq (Rst_3_0 _ _ H0); flia.
+  - applys_eq (Rst_3_1 _ _ H0); flia.
+  - applys_eq (Rst_3_2 _ _ H0); flia.
+  - applys_eq (Rst_3_3 _ _ H0); flia.
+  - applys_eq (Rst_3_4 n'); flia.
+Qed.
+
+Ltac solve_v2 :=
+match goal with
+| |- v2 ?n (S ?i) => applys_eq (v2_1 (n/2) i); solve_v2
+| |- v2 ?n O => applys_eq (v2_0 (n/2)); solve_v2
+| _ => try lia
+end.
+
+Fixpoint v2_c x :=
+match x with
+| xO x0 => S (v2_c x0)
+| _ => O
+end.
+
+Lemma v2_c_spec x:
+  v2 (Pos.to_nat x) (v2_c x).
+Proof.
+  induction x; cbn; solve_v2.
+  applys_eq IHx; flia.
+Qed.
+
+Lemma v2_spec x i:
+  v2 ((x*2+1)*2^i) i.
+Proof.
+  induction i; intros.
+  1: solve_v2.
+  cbn[Nat.pow].
+  solve_v2.
+  applys_eq IHi; flia.
+Qed.
+
+Lemma v2_inv x i:
+  v2 x i ->
+  exists x0, x=(x0*2+1)*2^i.
+Proof.
+  intros H.
+  induction H.
+  - exists x; lia.
+  - destruct IHv2 as [x0 I].
+    exists x0; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma v2_eq n i x j:
+  1<=x<2^i ->
+  v2 x j ->
+  v2 (n*2^i+x) j.
+Proof.
+  intros.
+  apply v2_inv in H0.
+  destruct H0 as [x0 I1].
+  subst.
+  epose proof (Nat.pow_lt_mono_r_iff 2 j i).
+  replace i with (i-j-1+j+1) by lia.
+  repeat rewrite Nat.pow_add_r.
+  applys_eq (v2_spec (x0+n*2^(i-j-1)) j); lia.
+Qed.
+
+Fixpoint nxts x tp r m T :=
+match T with
+| O => None
+| S T =>
+  if Pos.ltb x m then
+    match nxt (v2_c x) tp r with
+    | Some (dn,tp',r') =>
+      nxts ((N.of_nat dn) :+ x) tp' r' m T
+    | None => Some false
+    end
+  else if Pos.eqb x m then
+    match tp,r with
+    | t0,RH1 => Some true
+    | _,_ => None
+    end
+  else None
+end.
+
+Require Import ZifyN.
+
+Lemma nxts_spec x tp r m T i n:
+Pos.to_nat m = 2^i ->
+1 <= Pos.to_nat x <= 2^i ->
+1 <= n ->
+match nxts x tp r m T with
+| None => True
+| Some true => S3 (n*2^i+(Pos.to_nat x)) tp r -->* S3 (n*2^i+2^i) t0 RH1
+| Some false => halts tm (S3 (n*2^i+(Pos.to_nat x)) tp r)
+end.
+Proof.
+  intros.
+  gen x tp r.
+  induction T; cbn[nxts]; intros; trivial.
+  destruct (Pos.ltb_spec x m).
+  - unshelve epose proof (nxt_spec (n*2^i+(Pos.to_nat x)) (v2_c x) tp r _ _).
+    1: lia.
+    1: apply v2_eq; [lia|apply v2_c_spec].
+    destruct (nxt (v2_c x) tp r) as [[[dn tp'] r']|].
+    2: assumption.
+    destruct (nxts (N.of_nat dn :+ x) tp' r' m T) as [[]|] eqn:E; trivial.
+    + unshelve (epose proof (IHT _ _ _ _) as I; rewrite E in I).
+      1:{
+        destruct T; cbn in E.
+        1: congruence.
+        destruct (Pos.ltb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        destruct (Pos.eqb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        congruence.
+      }
+      follow100 H3.
+      follow I.
+      finish.
+    + unshelve (epose proof (IHT _ _ _ _) as I; rewrite E in I).
+      1:{
+        destruct T; cbn in E.
+        1: congruence.
+        destruct (Pos.ltb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        destruct (Pos.eqb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        congruence.
+      }
+      eapply halts_evstep.
+      2: follow100 H3; finish.
+      applys_eq I; flia.
+  - destruct (Pos.eqb_spec x m); trivial.
+    destruct tp,r; trivial.
+    finish.
+Qed.
+
+Lemma nxts_spec' x tp r m T i n:
+Pos.to_nat m = 2^i ->
+2 <= Pos.to_nat x <= 2^i ->
+match nxts x tp r m T with
+| None => True
+| Some true => S3 (n*2^i+(Pos.to_nat x)) tp r -->* S3 (n*2^i+2^i) t0 RH1
+| Some false => halts tm (S3 (n*2^i+(Pos.to_nat x)) tp r)
+end.
+Proof.
+  intros.
+  gen x tp r.
+  induction T; cbn[nxts]; intros; trivial.
+  destruct (Pos.ltb_spec x m).
+  - unshelve epose proof (nxt_spec (n*2^i+(Pos.to_nat x)) (v2_c x) tp r _ _).
+    1: lia.
+    1: apply v2_eq; [lia|apply v2_c_spec].
+    destruct (nxt (v2_c x) tp r) as [[[dn tp'] r']|].
+    2: assumption.
+    destruct (nxts (N.of_nat dn :+ x) tp' r' m T) as [[]|] eqn:E; trivial.
+    + unshelve (epose proof (IHT _ _ _ _) as I; rewrite E in I).
+      1:{
+        destruct T; cbn in E.
+        1: congruence.
+        destruct (Pos.ltb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        destruct (Pos.eqb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        congruence.
+      }
+      follow100 H2.
+      follow I.
+      finish.
+    + unshelve (epose proof (IHT _ _ _ _) as I; rewrite E in I).
+      1:{
+        destruct T; cbn in E.
+        1: congruence.
+        destruct (Pos.ltb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        destruct (Pos.eqb_spec (N.of_nat dn :+ x) m).
+        1: lia.
+        congruence.
+      }
+      eapply halts_evstep.
+      2: follow100 H2; finish.
+      applys_eq I; flia.
+  - destruct (Pos.eqb_spec x m); trivial.
+    destruct tp,r; trivial.
+    finish.
+Qed.
+
+Fixpoint nxtss tp r m T maxT :=
+match T with
+| O => true
+| S T =>
+  match nxts (Pos.of_succ_nat T) tp r m maxT with
+  | Some true => nxtss tp r m T maxT
+  | _ => false
+  end
+end.
+
+Lemma nxtss_spec i tp r m T maxT:
+  Pos.to_nat m = 2^i ->
+  T < 2^i ->
+  nxtss tp r m T maxT = true ->
+  forall n x,
+  1<=n ->
+  1<=x<=T ->
+  S3 (n*2^i+x) tp r -->* S3 (n*2^i+2^i) t0 RH1.
+Proof.
+  intro Hm.
+  induction T; intros.
+  1: lia.
+  cbn[nxtss] in H0.
+  destruct (nxts (Pos.of_succ_nat T) tp r m maxT) eqn:E.
+  2: congruence.
+  destruct b.
+  2: congruence.
+  assert (x<=T\/x=S T) as [E0|E0] by lia.
+  - apply IHT; solve[assumption|lia].
+  - unshelve (epose proof (nxts_spec _ _ _ _ _ _ n Hm _ _) as I; rewrite E in I).
+    1,2: lia.
+    follow I.
+    finish.
+Qed.
+
+Lemma Step n x tp:
+  1<=n ->
+  1<=x<=501 ->
+  S3 (n*2^10+x) tp RH0 -->* S3 (n*2^10+2^10) t0 RH1.
+Proof.
+  intros.
+  apply nxtss_spec with (maxT:=1000) (m:=(2^10)%positive) (T:=501); try lia.
+  destruct tp; native_check_eq.
+Time Qed.
+
+From BusyCoq Require Import BinaryCounter_v2.
+
+Lemma v2_ex n:
+  1<=n ->
+  exists x i, v2 n i /\ n=(x*2+1)*2^i.
+Proof.
+  intros.
+  lowbit_cases n.
+  1: lia.
+  exists x i; split.
+  1: apply v2_spec.
+  trivial.
+Qed.
+
+Lemma Step' n:
+  1<=n ->
+  n<2^990 ->
+  S3 (n*2^10) t0 RH1 -->* S3 ((n+1)*2^10) t0 RH1.
+Proof.
+  intros.
+  unshelve epose proof (v2_ex (n*2^10) _) as [x [i [I1 I2]]].
+  1: lia.
+  unshelve epose proof (nxt_spec (n*2^10) _ t0 RH1 _ I1) as I3.
+  1: lia.
+  assert (Hi:i<1000). {
+    epose proof (Nat.pow_lt_mono_r_iff 2 i 1000).
+    lia.
+  }
+  unfold nxt in I3.
+  destruct (mod2 i); subst i.
+  - follow100 I3.
+    follow Step.
+    1: lia.
+    finish.
+  - follow100 I3.
+    follow Step.
+    1: lia.
+    finish.
+Qed.
+
+Lemma Halt n:
+  n<2^990 ->
+  halts tm (S3 ((2^990-n)*2^10) t0 RH1).
+Proof.
+  intros.
+  induction n.
+  - remember (2^1000) as v1.
+    unshelve epose proof (nxt_spec v1 1000 t0 RH1 _ _).
+    1: lia.
+    1: applys_eq (v2_spec 0 1000); flia.
+    unfold nxt in H0.
+    destruct (mod2 1000).
+    2: lia.
+    replace a with 500 in * by lia.
+    eapply halts_evstep.
+    2:{
+    replace ((2^990-0)*2^10) with v1 by lia.
+    follow100 H0.
+    finish.
+    }
+    unshelve epose proof (nxts_spec 502 t1 RH0 (2^10) 1000 10 (2^990) _ _ _) as I1.
+    1-3: lia.
+    replace (nxts 502 t1 RH0 (2 ^ 10) 1000) with (Some false) in I1 by (vm_compute; reflexivity).
+    applys_eq I1; flia.
+  - eapply halts_evstep.
+    1: apply IHn; lia.
+    follow (Step').
+    1,2: lia.
+    finish.
+Qed.
+
+Lemma init:
+  c0 -->* S3 3 t1 RH0.
+Proof.
+  unfold S3,S2.
+  esx.
+Qed.
+
+Lemma halt: halts tm c0.
+Proof.
+  eapply halts_evstep.
+  1: apply (Halt (2^990-1)); lia.
+  follow init.
+  unshelve epose proof (nxts_spec' 3 t1 RH0 (2^10) 1000 10 0 _ _).
+  1,2: lia.
+  replace (nxts 3 t1 RH0 (2 ^ 10) 1000) with (Some true) in H by (vm_compute; reflexivity).
+  remember (2^990) as v1.
+  follow H.
+  finish.
+Qed.
+
+End TM22.
 
 
