@@ -8,7 +8,7 @@ First, there are some proven correct [deciders](https://wiki.bbchallenge.org/wik
 
 Then, for the rest of the TMs, we can write individual proof for them. If a TM (up to equivalence) haven't been proven, it becomes a holdout.
 
-For BB(6), there're about 1600 holdouts, while about 80 TMs (decided by various informal deciders that are believed to be correct) haven't been translated to Rocq.
+For BB(6), there're about 1400 holdouts, while about 40 TMs (decided by various informal deciders that are believed to be correct) haven't been translated to Rocq.
 
 For BB(2,5), there're about 70 holdouts, while about 10 individual proofs haven't been translated to Rocq.
 
@@ -70,18 +70,19 @@ This part is relatively stable, and no new decider has been proposed recently.
 
   implemented in `Inductive.v`
 
-### MitMCTL deciders: 
+### CTL deciders: 
 
 see also [CTL](https://wiki.bbchallenge.org/wiki/Closed_Tape_Language_(CTL)) section "regular CTL"
 
 - n-gram cps with fixed length or k-LRU history
 - RWL_mod
 - CPS_LRU
+- RNGS_mod
 - certs from FAR
 
 implemented in `CTL.v`
 
-## Individual proofs (about 2000 TMs):
+## Individual proofs (about 3000 TMs):
 
 This part is under active development, but the basic definitions are stable.
 
@@ -145,6 +146,7 @@ This part is under active development, but the basic definitions are stable.
 The basic method (`Eqv_v2.v`): two TMs are in the same equivalence class iff they (after state/direction permutation) reach the same configuration and have the same transition table.
 
 A stronger method (mainly in `Eqv_v3.v`) is to do the back-symbol transform on TMs first, then simplify the transition table by removing unreachable transitions using CTL, and use the basic method to check equivalence.
+There're also several individual proofs of equivalence.
 
 If any TM in the equivalence class is decided, all TMs in this class are also decided.
 
