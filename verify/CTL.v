@@ -4074,6 +4074,16 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma inv_map_nonhalt_c0:
+  ~TapeHistoryTM.halts' map_TM (TapeHistoryTM.c0) ->
+  ~DHTM.halts' tm (DHTM.c0).
+Proof.
+  epose proof (map_nonhalt ([],[],TapeHistoryTMCtx.q0,R)) as H.
+  rewrite DHTM.halts_halts' in H.
+  rewrite TapeHistoryTM.halts_halts' in H.
+  exact H.
+Qed.
+
 End map_ctx.
 
 End TapeHistoryTMFromDHTM.
@@ -4389,6 +4399,10 @@ Module CTL_RNGS_mod_QSym := CTL
   Ctx_RNGS_mod_QSym.ListInt113Hash
   TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx
   Ctx_RNGS_mod_QSym.CTLCtx.
+Module FAR_RNGS_mod_QSym := FAR
+  Ctx_RNGS_mod_QSym.ListInt113Hash
+  TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.TapeHistoryTMCtx
+  Ctx_RNGS_mod_QSym.CTLCtx.
 
 Module Ctx_RWL_mod := RWL_mod BlockTMFromDHTM.BlockTMCtx.
 Module CTL_RWL_mod := CTL Ctx_RWL_mod.ListInt3Hash BlockTMFromDHTM.BlockTMCtx Ctx_RWL_mod.CTLCtx.
@@ -4415,6 +4429,7 @@ Module CTL_MITMDFA := CTL Ctx_MITMDFA.DFAStateHash DHTMFromTM.TMCtx Ctx_MITMDFA.
 Inductive DeciderParameter :=
 | RWL_mod_FAR(maxT maxS bsz bmaxT mnc mod_ len1 len2:N)
 | CPS_LRU_FAR(maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
+| RNGS_mod_QSym_FAR(maxT maxS len1 len2 LRU_n mnc mod_ NG_n len_h bs_n:N)
 | RWL_mod(simT maxT maxS bsz bmaxT mnc mod_ len1 len2:N)
 | CPS_LRU(simT maxT maxS bsz bmaxT len1 len2 len3 LRU_n:N)
 | NG(simT maxT maxS NG_n len1 len2 LRU_n:N)(asth:bool)
@@ -4455,6 +4470,21 @@ match arg with
         Ctx_CPS_LRU.CTLCtx.is_s0 := fun ls => forallb (DHTMFromTM.TMCtx.sym_eqb DHTMFromTM.TMCtx.s0) ls;
       |} in
     (FAR_CPS_LRU.FAR_decide_nonhalt tm1 cfg (maxS) (maxT) maxT)
+| RNGS_mod_QSym_FAR maxT maxS len1 len2 LRU_n mnc mod_ NG_n len_h bs_n =>
+    let '(len1,len2,LRU_n):=(N.to_nat len1,N.to_nat len2,N.to_nat LRU_n) in
+      let upd := TapeHistoryImpl.QSym_history_upd len1 len2 LRU_n in
+      let tm1 := TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.map_TM tm upd in
+      let cfg :=
+        {|
+          Ctx_RNGS_mod_QSym.CTLCtx.mnc := N_to_int mnc;
+          Ctx_RNGS_mod_QSym.CTLCtx.mod_ := N_to_int mod_;
+          Ctx_RNGS_mod_QSym.CTLCtx.NG_n := N.to_nat NG_n;
+          Ctx_RNGS_mod_QSym.CTLCtx.len_h := N.to_nat len_h;
+          Ctx_RNGS_mod_QSym.CTLCtx.bs_n := N.to_nat bs_n;
+          Ctx_RNGS_mod_QSym.CTLCtx.maxS := N_to_int maxS;
+          Ctx_RNGS_mod_QSym.CTLCtx.is_s0 := fun '(a,b) => (DHTMFromTM.TMCtx.sym_eqb DHTMFromTM.TMCtx.s0 a) && (Ctx_RNGS_mod_QSym.is_nil b);
+        |} in
+      (FAR_RNGS_mod_QSym.FAR_decide_nonhalt tm1 cfg (maxS) (maxT) maxT)
 | RWL_mod simT maxT maxS bsz bmaxT mnc mod_ len1 len2 =>
   match DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT with
   | inl c =>
@@ -4590,6 +4620,13 @@ Proof.
     eapply BlockTMFromDHTM.inv_map_nonhalt_c0.
     2: apply H1.
     lia.
+  - apply DHTMFromTM.map_nonhalt.
+    rewrite <-DHTMFromTM.DHTM.halts_halts'.
+    epose proof (FAR_RNGS_mod_QSym.FAR_decide_nonhalt_spec _ _ _ _ _ H) as H1.
+    rewrite DHTMFromTM.DHTM.halts_halts'.
+    rewrite FAR_RNGS_mod_QSym.TM.halts_halts' in H1.
+    eapply TapeHistoryImpl.ListQSymTapeHistoryTMFromDHTM.inv_map_nonhalt_c0.
+    apply H1.
   - apply DHTMFromTM.map_nonhalt.
     pose proof (DHTMFromTM.DHTM.DH_cconfig_steps_spec tm DHTMFromTM.DHTM.cc0 simT) as H0.
     destruct (DHTMFromTM.DHTM.DH_cconfig_steps tm DHTMFromTM.DHTM.cc0 simT); try congruence.

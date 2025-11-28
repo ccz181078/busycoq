@@ -203,3 +203,66 @@ Proof. solve_cert (RWL_mod_FAR 2000000 1000000 8 3200 2 2 6 0). Time Qed.
 Lemma nonhalt67: ~halts (TM_from_str "1LB0RF_1LC0LA_1RD0RE_---1RC_1RA1RE_1LA1LC") c0.
 Proof. solve_cert (RWL_mod_FAR 2000000 1000000 2 3200 2 1 6 0). Time Qed.
 
+Lemma nonhalt68: ~halts (TM_from_str "1RB0RE_1RC---_1RD1RA_1RE1RD_0LF1RA_0LA1LF") c0.
+Proof. solve_cert (RWL_mod_FAR 200000 100000 2 3200 50 1 16 0). Time Qed.
+
+Lemma nonhalt69: ~halts (TM_from_str "1RB---_1RC1RF_1RD1RC_0LE1RF_0LF1LE_1RA0RD") c0.
+Proof. solve_cert (RWL_mod_FAR 200000 100000 2 3200 50 1 16 0). Time Qed.
+
+Lemma nonhalt70: ~halts (TM_from_str "1LB0RC_1LC0LA_1RA0RD_1RE0LB_0LD1RF_0RA---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt71: ~halts (TM_from_str "1RB0RD_1LC0RA_0LD0LB_1RE0LD_0RA1RF_0RB---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 10 24 1). Time Qed.
+
+Lemma nonhalt72: ~halts (TM_from_str "1RB0RD_1LC0RA_1LA0LB_1RE0LC_0LD1RF_0RB---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 10 24 1). Time Qed.
+
+Lemma nonhalt73: ~halts (TM_from_str "1RB0LA_0RC1RF_1RD0RA_1LE0RC_0LA0LD_0RD---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt74: ~halts (TM_from_str "1LB1LA_1RC0RD_---1RD_0RE1LE_0LA1RF_0RB1RF") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt75: ~halts (TM_from_str "1RB0RD_1LC0RA_1LA0LB_1RE0LC_0RA1RF_0RB---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt76: ~halts (TM_from_str "1RB0LC_0LA1RF_1LD0LE_1RE0RA_1LC0RD_0RE---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt77: ~halts (TM_from_str "1LB0RC_1LC0LA_1RA0RD_1RE0LB_0RC1RF_0RA---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt78: ~halts (TM_from_str "1LB0RE_0LC0LA_1RD0LC_0RE1RF_1RA0RC_0RA---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt79: ~halts (TM_from_str "1LB0LC_1RC0RD_1LA0RB_1RE0LA_0RB1RF_0RC---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 4 3 12 2). Time Qed.
+
+Lemma nonhalt80: ~halts (TM_from_str "1LB0LF_1LC1RB_1RD0LA_1LA0RE_0RD0RC_1LD---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 9 24 2). Time Qed.
+
+Lemma nonhalt81: ~halts (TM_from_str "1LB1RA_1RC0LE_1LE0RD_0RC0RB_1LA0LF_1LC---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 9 24 2). Time Qed.
+
+Lemma nonhalt82: ~halts (TM_from_str "1LB---_1LC0RF_1LD0LA_1LE1RD_1RB0LC_0RB0RE") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 9 24 2). Time Qed.
+
+Lemma nonhalt83: ~halts (TM_from_str "1LB0RE_1LC0LF_1LD1RC_1RA0LB_0RA0RD_1LA---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 9 24 2). Time Qed.
+
+Lemma nonhalt84: ~halts (TM_from_str "1RB0LC_1LC0RF_1LE0LD_1LB---_1LA1RE_0RB0RA") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 0 0 0 1 2 9 24 2). Time Qed.
+
+Lemma nonhalt85: ~halts (TM_from_str "1LB0LF_1LC0RD_1LD0LA_1RB1RE_0RB0LE_1LC---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 600000 300000 0 0 0 1 2 8 24 2). Time Qed.
+
+Lemma nonhalt86: ~halts (TM_from_str "1RB1RE_1LC0RA_1LA0LD_1LB0LF_0RB0LE_1LC---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 600000 300000 0 0 0 1 2 8 24 2). Time Qed.
+
+Lemma nonhalt87: ~halts (TM_from_str "1LB0LA_1RC0LD_1LA0RD_0LE1RF_0RB1RC_0RC---") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 2 0 0 1 1 1 24 0). Time Qed.
+
+Lemma nonhalt88: ~halts (TM_from_str "1RB1RA_1LC0RD_1RF1LD_0RE1LC_---0LC_1RE0RA") c0.
+Proof. solve_cert (RNGS_mod_QSym_FAR 200000 100000 1 0 0 1 2 1 24 2). Time Qed.
+
