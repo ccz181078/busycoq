@@ -10327,3 +10327,124 @@ Qed.
 End TM32.
 
 
+Module TM33.
+
+Definition tm := Eval compute in (TM_from_str "1LB0RF_0RC0LE_1RA1RD_0RB---_0LF1LB_1RB1LF").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR' := (B,<[0;1]).
+Notation hR := (A,[]).
+Notation hL := (B,[]).
+Notation hRL' := [(hR',hL)].
+Notation hRL := [(hR,hL)].
+Notation d := [1;0;1;0;0;1;0;0;0].
+Notation w := [1;0;0;0].
+
+Lemma Incs_d n:
+  segRLs tm (hRL^^n++hRL'++hRL) (hRL^^(n*2+2)++hRL'++hRL) d d.
+Proof.
+  rewrite lpow_add,<-app_assoc.
+  eapply segRLs_trans.
+  1: applys_eq (segRLs_addmul_v2 1 2 n 0 0); unfold DH0.
+  1,2: flia.
+  all: esx.
+Qed.
+
+Lemma LIncs n:
+  segRLs tm hRL' (hRL^^(2^n*2-2)++hRL'++hRL) (d++[1;0]++d^^n) (d++[1;0]++d^^n).
+Proof.
+  induction n.
+  1: esx.
+  cbn[Nat.pow].
+  rewrite <-(Nat.add_1_r n).
+  rewrite lpow_add.
+  repeat rewrite app_assoc in *.
+  eapply segRLs_concat.
+  1: apply IHn.
+  repeat rewrite <-app_assoc.
+  applys_eq (Incs_d (2^n*2-2)); flia.
+Qed.
+
+Definition RC a b := w^^a *> [0] *> w^^b *> 0inf.
+
+Lemma RIncs0 a b:
+  sideRLs tm (hRL^^(b*2)) (RC a b) (RC (b+a) 0).
+Proof.
+  unfold RC.
+  gen a.
+  rewrite lpow_mul.
+  induction b; intros.
+  1: esx.
+  cbn[lpow].
+  eapply sideRLs_trans.
+  2: applys_eq (IHb (S a)); flia.
+  esx.
+Qed.
+
+Lemma RIncs1 k a:
+  sideRLs tm (hRL^^k) (RC a 0) (RC (k+a) 0).
+Proof.
+  unfold RC.
+  sideRLs_ind k.
+Qed.
+
+Lemma RIncs b k:
+  sideRLs tm (hRL^^((2+b)*2+k)++hRL'++hRL) (RC 1 (2+b)) (d *> RC 1 (k+b)).
+Proof.
+  eapply sideRLs_trans.
+  1: eapply sideRLs_trans_add.
+  1: apply RIncs0.
+  1: apply RIncs1.
+  unfold RC.
+  esx.
+Qed.
+
+Definition RC' i b := (d++[1;0]++d^^i) *> RC 1 b.
+
+Lemma RIncs' i b:
+  2<=b<=2^i-1 ->
+  sideRLs tm (hRL'++[]) (RC' i b) (RC' (i+1) (2^i*2-4-b)).
+Proof.
+  intros Hb.
+  unfold RC'.
+  eapply sideRLs_trans.
+  1: eapply segRLs_sideRLs_concat.
+  1: apply LIncs.
+  1: applys_eq (RIncs (b-2) (2^i*2-2-b*2)); flia.
+  st.
+  applys_eq sideRLseq_O; flia.
+Qed.
+
+Definition S' '(i,b) := 0inf <* <[1;1;0;1] {{{ (hR',R) }}} RC' i b.
+
+Lemma BigStep i b:
+  2<=b<=2^i-1 ->
+  S' (i,b) -->+
+  S' (i+1,2^i*2-4-b).
+Proof.
+  intros.
+  eapply RIncs',sideRLs_1 in H.
+  unfold S'.
+  follow10 H.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (4,9)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(i,b) => 2<=b<=2^i-3).
+  2: lia.
+  intros [i b] HP.
+  eexists; split.
+  1: apply BigStep; lia.
+  cbn.
+  rewrite Nat.pow_add_r.
+  lia.
+Qed.
+
+End TM33.
+
+

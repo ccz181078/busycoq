@@ -122,6 +122,7 @@ match x,y with
 | _,_ => false
 end.
 
+
 Lemma vside_eqb_spec x y:
   Bool.reflect (x=y) (vside_eqb x y).
 Proof with solve_Bool_reflect.
@@ -168,6 +169,33 @@ Instance vconfig_Eqb: Eqb vconfig.
 econstructor.
 apply vconfig_eqb_spec.
 Defined.
+
+Fixpoint vside_match_evar x y :=
+match x,y with
+| vside_cons h t,vside_cons h' t' => vside_match_evar t t'
+| vside_app h n t,vside_app h' n' t' => vside_match_evar t t'
+| vside_0inf,vside_0inf => None
+| vside_var i,_ =>
+  if (i=?"")%string then Some y else None
+| _,_ => None
+end.
+
+Definition vside2_match_evar '(x0,x1) '(y0,y1) :=
+match vside_match_evar x0 x1 with
+| Some w => Some w
+| None => vside_match_evar y0 y1
+end.
+
+Definition vconfig_match_evar x y :=
+match x,y with
+| vconfig_L l r q,vconfig_L l' r' q' =>
+  vside2_match_evar (l,l') (r,r')
+| vconfig_R l r q,vconfig_R l' r' q' =>
+  vside2_match_evar (l,l') (r,r')
+| vconfig_mid l r m q,vconfig_mid l' r' m' q' =>
+  vside2_match_evar (l,l') (r,r')
+| _,_ => None
+end.
 
 Fixpoint vconfig_step1s x y b T :=
 match T with
@@ -266,11 +294,78 @@ match T with
   end
 end.
 
+Definition vconfig_halted x :=
+match x with
+| vconfig_mid l r m q =>
+  match tm (q,m) with
+  | None => Some tt
+  | _ => None
+  end
+| _ => None
+end.
 
 Definition vconfig_es x y b T :=
 let y0 := rw_lpow_rotate y in
 let y1 := rw_vconfig_LR y0 in
 vconfig_er_sr x y1 b T.
+
+Definition vconfig_es_match_evar x y b T :=
+vconfig_es x y b T &&& (fun '(x0,y0,b0) =>
+vconfig_match_evar y0 x0).
+
+Definition vconfig_es_halt x T :=
+vconfig_es x (vconfig_R (vside_var "") (vside_var "") q0) false T &&& (fun '(x0,y0,b0) =>
+vconfig_halted x0 &&& (fun _ =>
+match vconfig_es x x0 false T with
+| None => Some tt
+| _ => None
+end)).
+
+
+Section no_occur_sec.
+
+Hypothesis s:string.
+
+Fixpoint vside_no_occur x :=
+match x with
+| vside_cons h t => vside_no_occur t
+| vside_app h n t => vside_no_occur t
+| vside_0inf => true
+| vside_var i => negb (i=?s)%string
+end.
+
+Fixpoint vconfig_no_occur x :=
+match x with
+| vconfig_L l r q => vside_no_occur l && vside_no_occur r
+| vconfig_R l r q => vside_no_occur l && vside_no_occur r
+| vconfig_mid l r m q => vside_no_occur l && vside_no_occur r
+end.
+
+End no_occur_sec.
+
+Definition vsideRL_es '(QR,qR) '(QL,qL) x y T v :=
+match vconfig_es (vconfig_R (vside_app_seg qR (vside_var v)) x QR) (vconfig_L (vside_var v) (vside_app_seg qL y) QL) true T with
+| None =>
+  vside_no_occur v x &&
+  vside_no_occur v y
+| _ => false
+end.
+
+Definition vsideRL_es_match_evar '(QR,qR) '(QL,qL) x T v :=
+vconfig_es_match_evar (vconfig_R (vside_app_seg qR (vside_var v)) x QR) (vconfig_L (vside_var v) (vside_app_seg qL (vside_var "")) QL) true T.
+
+Fixpoint vsideRLs_es ls x y T v :=
+match ls with
+| [] => false
+| (hR,hL)::[] =>
+  vsideRL_es hR hL x y T v
+| (hR,hL)::t =>
+  match vsideRL_es_match_evar hR hL x T v with
+  | Some y0 =>
+    vsideRL_es hR hL x y0 T v && vsideRLs_es t y0 y T v
+  | None => false
+  end
+end.
 
 Section vside_to_side.
 Hypothesis nat_mp: string->nat.
@@ -632,16 +727,143 @@ Proof.
   apply H.
 Qed.
 
+Lemma vconfig_halted_spec x:
+  vconfig_halted x = Some tt ->
+  halted tm (to_config x).
+Proof.
+  destruct x; cbn; try congruence.
+  destruct (tm (q,m)) eqn:E; try congruence; tauto.
+Qed.
+
+Lemma vconfig_es_halt_spec x T:
+  vconfig_es_halt x T = Some tt ->
+  halts tm (to_config x).
+Proof with (try congruence).
+  unfold vconfig_es_halt.
+  unfold if_Some.
+  intros H.
+  destruct (vconfig_es x (vconfig_R (vside_var "") (vside_var "") q0) false T) as [[[x0 y0] b0]|]...
+  destruct (vconfig_halted x0) as [[]|] eqn:E...
+  apply vconfig_halted_spec in E.
+  destruct (vconfig_es x x0 false T) eqn:E0...
+  apply vconfig_es_spec in E0.
+  eapply halts_evstep; eauto 1.
+Qed.
+
 End vside_to_side.
+
+Lemma vside_no_occur_spec nmp smp x v v':
+  vside_no_occur v x = true ->
+  to_side nmp (fun s => if (s=?v)%string then v' else smp s) x = to_side nmp smp x.
+Proof.
+  induction x; cbn[vside_no_occur]; cbn[to_side].
+  - intro H.
+    rewrite IHx by auto 1; trivial.
+  - intro H.
+    rewrite IHx by auto 1; trivial.
+  - trivial.
+  - destruct (String.eqb_spec i v); unfold negb; trivial; congruence.
+Qed.
+
+Lemma vconfig_no_occur_spec nmp smp x v v':
+  vconfig_no_occur v x = true ->
+  to_config nmp (fun s => if (s=?v)%string then v' else smp s) x = to_config nmp smp x.
+Proof.
+  unfold vconfig_no_occur,to_config.
+  destruct x.
+  all: rewrite and_true_iff; intros [I1 I2]; eapply vside_no_occur_spec in I1,I2; rewrite I1,I2; trivial.
+Qed.
+
+
+Lemma multistep'_sideRL nmp smp QR qR QL qL r1 r2 v:
+  (forall l,
+  let smp' := (fun s => if (s=?v)%string then l else smp s) in
+  multistep' tm true (to_config nmp smp' (vconfig_R (vside_app_seg qR (vside_var v)) r1 QR)) (to_config nmp smp' (vconfig_L (vside_var v) (vside_app_seg qL r2) QL))) ->
+  vside_no_occur v r1 = true ->
+  vside_no_occur v r2 = true ->
+  sideRL tm (QR,qR) (QL,qL) (to_side nmp smp r1) (to_side nmp smp r2).
+Proof.
+  cbn[to_config].
+  unfold multistep',sideRL.
+  intros.
+  specialize (H l).
+  do 2 rewrite vside_app_seg_spec in H.
+  eapply vside_no_occur_spec in H0,H1.
+  rewrite H0,H1 in H.
+  cbn in H.
+  rewrite String.eqb_refl in H.
+  unfold to_DH_config.
+  apply H.
+Qed.
+
+Lemma vsideRL_es_spec nmp smp hR hL r1 r2 T v:
+  vsideRL_es hR hL r1 r2 T v = true ->
+  sideRL tm hR hL (to_side nmp smp r1) (to_side nmp smp r2).
+Proof.
+  unfold vsideRL_es.
+  destruct hR as [QR qR].
+  destruct hL as [QL qL].
+  intros H.
+  match type of H with
+  | (match ?x with _ => _ end = _) => destruct x eqn:E; try congruence
+  end.
+  rewrite and_true_iff in H.
+  eapply multistep'_sideRL.
+  - intros l.
+    eapply vconfig_es_spec in E.
+    apply E.
+  - apply H.
+  - apply H.
+Qed.
+
+Lemma vsideRLs_es_spec nmp smp ls r1 r2 T v:
+  vsideRLs_es ls r1 r2 T v = true ->
+  sideRLs tm ls (to_side nmp smp r1) (to_side nmp smp r2).
+Proof.
+  gen r1.
+  induction ls; cbn[vsideRLs_es]; intros.
+  - inverts H.
+  - destruct a as [hR hL].
+    destruct ls as [|h t].
+    + econstructor.
+      2: econstructor.
+      eapply vsideRL_es_spec in H.
+      apply H.
+    + destruct (vsideRL_es_match_evar hR hL r1 T v) eqn:E.
+      2: congruence.
+      rewrite and_true_iff in H.
+      econstructor.
+      2: apply IHls,H.
+      destruct H as [H _].
+      eapply vsideRL_es_spec in H.
+      apply H.
+Qed.
 
 End tm_sec.
 
+
+Lemma rw_sideRLs tm h r1 r2 r1' r2':
+  r1 = r1' ->
+  r2 = r2' ->
+  sideRLs tm h r1 r2 =
+  sideRLs tm h r1' r2'.
+Proof.
+  intros; subst; reflexivity.
+Qed.
 
 Lemma rw_progress tm c1 c2 c1' c2':
   c1 = c1' ->
   c2 = c2' ->
   c1 -[ tm ]->+ c2 = 
   multistep' tm true c1' c2'.
+Proof.
+  intros; subst; reflexivity.
+Qed.
+
+Lemma rw_halts tm c1 c1':
+  c1 = c1' ->
+  halts tm c1 =
+  halts tm c1'.
 Proof.
   intros; subst; reflexivity.
 Qed.
@@ -721,9 +943,21 @@ Proof.
   tauto.
 Qed.
 
+Lemma rw_side_lpow_mul (h:list sym) a b c t y:
+  h^^b = c ->
+  c^^a *> t = y ->
+  h^^(a*b) *> t = y.
+Proof.
+  intros Hc.
+  subst c.
+  rewrite lpow_mul.
+  tauto.
+Qed.
+
 Ltac rw_side :=
 match goal with
 | |- (_ ^^ (_ + _)) *> _ = _ => eapply rw_side_lpow_add; rw_side
+| |- (_ ^^ (_ * _)) *> _ = _ => eapply rw_side_lpow_mul; [ vm_compute; reflexivity | rw_side ]
 | |- (_ ^^ (_ _)) *> _ = _ => eapply rw_side_app; rw_side
 | |- (_) *> _ = _ => eapply rw_side_app_seg; rw_side
 | |- _ >> _ = _ => eapply rw_side_cons; rw_side
@@ -783,11 +1017,26 @@ Ltac rw_mp' :=
 Ltac rw_mp :=
   repeat rw_mp'.
 
+Ltac es_v3_TL :=
+  constr:(N.to_nat (10^6)).
+
 Ltac es_v3 :=
+  let TL := es_v3_TL in
   rw_mp;
-  rw_multistep';
-  apply vconfig_es_spec with (T:=N.to_nat (10^6));
-  time vm_compute; reflexivity.
+  lazymatch goal with
+  | |- sideRLs _ _ _ _ =>
+    erewrite rw_sideRLs; [| rw_side | rw_side];
+    apply vsideRLs_es_spec with (T:=TL) (v:="$l"%string);
+    time vm_compute; reflexivity
+  | |- halts _ _ =>
+    erewrite rw_halts; [| rw_config];
+    apply vconfig_es_halt_spec with (T:=TL);
+    time vm_compute; reflexivity
+  | _ =>
+    rw_multistep';
+    apply vconfig_es_spec with (T:=TL);
+    time vm_compute; reflexivity
+  end.
 
 Ltac es_v3_nmp nmp' :=
   pose nmp' as nmp;
@@ -798,26 +1047,32 @@ Ltac es_v3_nmp_smp nmp' smp' :=
   pose smp' as smp;
   es_v3.
 
+Ltac es_v3_pre := idtac.
+
 Tactic Notation "es'" constr(a) :=
-  (es_v3_nmp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp (fun s =>
   if s=?"a" then a else
   O)).
 
 Tactic Notation "es'" constr(a) constr(b) :=
-  (es_v3_nmp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   O)).
 
 Tactic Notation "es'" constr(a) constr(b) constr(c) :=
-  (es_v3_nmp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   if s=?"c" then c else
   O)).
 
 Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) :=
-  (es_v3_nmp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   if s=?"c" then c else
@@ -825,7 +1080,8 @@ Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) :=
   O)).
 
 Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) :=
-  (es_v3_nmp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   if s=?"c" then c else
@@ -834,7 +1090,8 @@ Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) :=
   O)).
 
 Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) constr(f) :=
-  (es_v3_nmp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   if s=?"c" then c else
@@ -843,8 +1100,33 @@ Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) constr(f
   if s=?"f" then f else
   O)).
 
+Tactic Notation "es'" :=
+  (es_v3_pre;
+  unshelve es_v3_nmp_smp (fun (s:string) =>
+  O)
+  (fun (s:string) =>
+  0inf); try assumption).
+
+Tactic Notation "es'" "&" constr(a) :=
+  (es_v3_pre;
+  unshelve es_v3_nmp_smp (fun (s:string) =>
+  O)
+  (fun s =>
+  if s=?"a" then a else
+  0inf); try assumption).
+
+Tactic Notation "es'" constr(a) "&" constr(b) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  O)
+  (fun s =>
+  if s=?"b" then b else
+  0inf)).
+
 Tactic Notation "es'" constr(a) constr(b) "&" constr(c) :=
-  (es_v3_nmp_smp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   O)
@@ -853,7 +1135,8 @@ Tactic Notation "es'" constr(a) constr(b) "&" constr(c) :=
   0inf)).
 
 Tactic Notation "es'" constr(a) constr(b) constr(c) "&" constr(d) :=
-  (es_v3_nmp_smp (fun s =>
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
   if s=?"a" then a else
   if s=?"b" then b else
   if s=?"c" then c else

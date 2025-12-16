@@ -1835,3 +1835,968 @@ Qed.
 End TM14.
 
 
+From BusyCoq Require Import Longitudinal.
+
+Tactic Notation "efollow" uconstr(H) :=
+  (let I1:=fresh "I" in
+  epose proof H as I1;
+  try (follow I1; clear I1)).
+
+Module TM15.
+Definition tm := Eval compute in (TM_from_str "1RB1LD_0RC---_0LD0RF_1LE1LD_0LA0LB_1RC0RC").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (E,[]).
+Notation hR := (C,<[0;1]).
+Notation hR' := (C,<[]).
+Notation hR'' := (C,<[1;0]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+Notation hLR' := [(hL,hR')].
+Notation hLR'' := [(hL,hR'')].
+
+Definition tm' := flip tm.
+
+Fixpoint f n :=
+match n with
+| O => O
+| S n0 => (f n0)*3+1
+end.
+
+Definition P1 n :=
+  sideRLs tm' (hLR^^((f n)*2)) (0inf<*<[0;1]^^n<*<[0]) (0inf<*<[0;1]^^n<*<[0;0;0]).
+
+Definition P2 n :=
+  sideRLs tm' (hLR^^((f n)*3)) (0inf<*<[0;1]^^n) (0inf<*<[0;1]^^n<*<[0;0;0]).
+
+Lemma lrcons_hRL n:
+  lrcons hL (hRL^^n) hR'' ++ [] = hLR^^n++hLR''.
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn; trivial.
+Qed.
+
+Lemma Incs110 n a:
+  segLRs tm' (hRL^^n) ([1;1;0]++[1;0]^^a) ([1;1;0]++[1;0]^^(n+a)).
+Proof.
+  gen a.
+  induction n; intros.
+  1: constructor.
+  cbn[lpow].
+  econstructor.
+  2: applys_eq (IHn (S a)); flia.
+  solve_seg.
+Qed.
+
+Lemma Incs010 n:
+  segRLs tm' (hLR) (hLR^^n++hLR'') (<[0;1;0]) (<[1;1;0]<+<[0;1]^^n).
+Proof.
+  rewrite <-lrcons_hRL.
+  eapply segRLs_lrcons.
+  1: solve_seg.
+  3: constructor.
+  2: apply (Incs110 n 0).
+  solve_seg.
+Qed.
+
+Lemma Incs0110 n a:
+  segRLs tm' (hLR^^(n*2)) (hLR^^n) (<[0;1;1;0]<+<[0;1]^^(n+a)) (<[0;1;1;0]<+<[0;1]^^a).
+Proof.
+  rewrite lpow_mul.
+  induction n.
+  1: esx.
+  cbn[lpow].
+  eapply segRLs_trans.
+  2: apply IHn.
+  esx.
+Qed.
+
+Lemma Incs01 n:
+  segRLs tm' (hLR^^n) (hLR^^n) (<[0;1]) (<[0;1]).
+Proof.
+  apply segRLs_wall''.
+  esx.
+Qed.
+
+Lemma P_n n:
+  P1 n /\ P2 n.
+Proof.
+  induction n.
+  - split.
+    + unfold P1; esx.
+    + unfold P2; esx.
+  - destruct IHn as [HP1 HP2].
+    assert (HP1': P1 (S n)). {
+      unfold P1,P2 in *; cbn[f].
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      rewrite <-Str_app_assoc.
+      replace ((f n*3+1)*2) with (1+((f n)*6+1)) by lia.
+      eapply sideRLs_trans_add.
+      {
+        eapply segRLs_sideRLs_concat.
+        1: apply Incs010.
+        eapply sideRLs_trans.
+        1: apply HP2.
+        esx.
+      }
+      eapply sideRLs_trans_add.
+      {
+        rewrite Str_cons_def,<-Str_app_assoc,<-app_assoc.
+        eapply segRLs_sideRLs_concat.
+        2: apply HP2.
+        applys_eq (Incs0110 ((f n)*3) O); flia.
+      }
+      esx.
+    }
+    assert (HP2': P2 (S n)). {
+      unfold P1,P2 in *; cbn[f] in *.
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      replace ((f n*3+1)*3) with ((f n)*3+(1+((f n)*3+1)*2)) by lia.
+      eapply sideRLs_trans_add.
+      {
+        eapply segRLs_sideRLs_concat.
+        2: apply HP2.
+        apply Incs01.
+      }
+      eapply sideRLs_trans_add.
+      1: esx.
+      apply HP1'.
+    }
+    split; auto 1.
+Qed.
+
+Definition RC b c :=
+  [1;0]^^b *> [1;1;0] *> [1;0]^^c *> 0inf.
+
+Lemma RIncs n b c:
+  sideRLs tm (hRL^^n) (RC b c) (RC b (n+c)).
+Proof.
+  unfold RC.
+  sideRLs_ind n.
+Qed.
+
+Definition S1 a b c :=
+  0inf <* <[0;1]^^a <* <[0] {{{ (hL,L) }}} RC b c.
+
+Lemma BigStep a b c:
+  S1 a (1+b) c -->+
+  S1 (1+a) b (1+(f a)*2+c).
+Proof.
+  unfold S1.
+  epose proof (P_n a) as [HP1 _].
+  unfold P1 in HP1.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (HP1)).
+  unfold RC.
+  es.
+Qed.
+
+Lemma Ov_0 a c:
+  sideRLs tm' (hLR^^((f a)*3*2+(2+(2+(0))))) (0inf<*<[0;1]^^(S a)<*(<[0;1;1;0]<+<[0;1]^^((f a)*3+(1+(1+c)))))
+  (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(f a*3))<*(<[0;1;1;0]<+<[0;1]^^c)).
+Proof.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1,P2 in *.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    2:{
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      eapply segRLs_sideRLs_concat.
+      2: apply HP2.
+      apply Incs01.
+    }
+    apply Incs0110.
+  }
+  eapply sideRLs_trans_add with (w3:=0inf<*<[0;1]^^a<*<[0;1;0]<*(<[0;1;1;0]<+<[0;1]^^(1+c))).
+  1: esx.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    2:{
+      eapply segRLs_sideRLs_concat.
+      1: apply Incs010.
+      eapply sideRLs_trans.
+      1: apply HP2.
+      esx.
+    }
+    esx.
+  }
+  esx.
+Qed.
+
+Lemma Ov_1 a c:
+  S1 a 0 c -->*
+  0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(c+(f a)*2)) {{{ (hL,L) }}} RC 0 0.
+Proof.
+  unfold S1.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1 in HP1.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (HP1)).
+  unfold RC; es.
+Qed.
+
+Definition RC0 a b := [1;1;1;0] *> RC a b.
+
+Lemma RIncs0 n a b:
+  sideRLs tm (hRL^^n) (RC0 (n+a) b) (RC0 a (n*2+b)).
+Proof.
+  unfold RC0,RC.
+  gen a b.
+  induction n; intros.
+  1: esx.
+  cbn[lpow].
+  eapply sideRLs_trans.
+  2: applys_eq (IHn a (2+b)); flia.
+  esx.
+Qed.
+
+Definition RC1 a b := [1;0;1;1;0] *> RC a b.
+
+Lemma RIncs1 b n:
+  sideRLs tm (hRL^^(2+n)) (RC0 0 b) (RC1 (1+n+b) 1).
+Proof.
+  unfold RC0,RC1,RC.
+  eapply sideRLs_trans_add.
+  1: esx.
+  sideRLs_ind n.
+Qed.
+
+Lemma Incs010_P1 a:
+  sideRLs tm' (hLR^^(1+0)) (0inf<*<[0;1]^^a<*<[0]<*<[0;1;0])
+  (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(f a*2))).
+Proof.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1,P2 in *.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: apply Incs010.
+    eapply sideRLs_trans.
+    1: apply HP1.
+    esx.
+  }
+  esx.
+Qed.
+
+Lemma BigStep' a c:
+  c+2<=f a*3 ->
+  S1 (S a) 0 c -->+
+  S1 (4+a) (c+f(a)*6) (4+f(2+a)*6).
+Proof.
+  intros Hc.
+  follow Ov_1.
+  cbn[f].
+  replace (c+(f a*3+1)*2) with (f a*3+(1+(1+(c+f a*3)))) by lia.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (Ov_0 _ _)).
+  remember (c+f a*3) as v1.
+  remember (f a*3) as v2.
+  cbn[Nat.add].
+  remember (v2*2+4) as v3.
+  mid10 (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^v2) {{{ (hL,L) }}} RC0 v1 v3).
+  1: unfold RC0,RC; es.
+  subst.
+  epose proof (P_n a) as [_ HP2].
+  unfold P1,P2 in *.
+  eassert (I1:_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HP2.
+    apply (Incs0110 _ O).
+  }
+  eassert (I2:_). {
+    eapply sideRLs_trans_add.
+    1: apply (RIncs0 (c+f a*3) 0 (f a*6+4)).
+    eapply (RIncs1 _ (f a*3-(c+2))).
+  }
+  unshelve epose proof (sideRLs_concat_1L _ I1) as I.
+  3: applys_eq I2; flia.
+  clear I1 I2.
+  follow I; clear I.
+  match goal with
+  | |- context[RC1 ?a _] => remember a as v1
+  end.
+  mid (0inf<*<[0;1]^^(2+a)<*<[0]<*<[0;1;0] {{{ (hL,L) }}} RC (2+v1) 1).
+  1: unfold RC1,RC; es.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (Incs010_P1 (2+a))).
+  remember (f(2+a)*2) as v2.
+  mid (0inf<*<[0;1]^^(2+a) {{{ (hL,L) }}} RC0 (2+v2+v1) 2).
+  1: unfold RC0,RC; es.
+  clear HP2.
+  epose proof (P_n (2+a)) as [_ HP2].
+  unfold P1,P2 in *.
+  replace (2+v2+v1) with (f (2+a)*3+(c+f a*6+1)) by (cbn in *; lia).
+  subst.
+  efollow (sideRLs_concat_1L (RIncs0 _ _ _) HP2).
+  remember (c+f a*6) as v1.
+  remember (f (2+a)*3*2) as v2.
+  mid (S1 (4+a) v1 (4+v2)).
+  unfold S1,RC0,RC; es.
+  cbn[Nat.add] in Heqv2.
+  finish.
+Qed.
+
+Definition S' '(a,b,c) := S1 (S a) b c.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (4,9,82)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b,c) => c+2<=f a*3).
+  2: cbn; lia.
+  unfold S'.
+  intros [[a b] c] HP.
+  destruct b.
+  - eexists (_,_,_); split.
+    1: apply BigStep'; auto 1.
+    cbn; lia.
+  - eexists (_,_,_); split.
+    1: apply BigStep.
+    cbn; lia.
+Qed.
+
+End TM15.
+
+
+Module TM16.
+Definition tm := Eval compute in (TM_from_str "1RB0RB_0LC0RA_1LD1LC_0LE0LF_1RF1RB_0RB---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (D,[]).
+Notation hR := (B,<[0;1]).
+Notation hR' := (B,<[]).
+Notation hR'' := (B,<[1;0]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+Notation hLR' := [(hL,hR')].
+Notation hLR'' := [(hL,hR'')].
+
+Definition tm' := flip tm.
+
+Fixpoint f n :=
+match n with
+| O => O
+| S n0 => (f n0)*3+1
+end.
+
+Definition P1 n :=
+  sideRLs tm' (hLR^^((f n)*2)) (0inf<*<[0;1]^^n<*<[0]) (0inf<*<[0;1]^^n<*<[0;0;0]).
+
+Definition P2 n :=
+  sideRLs tm' (hLR^^((f n)*3)) (0inf<*<[0;1]^^n) (0inf<*<[0;1]^^n<*<[0;0;0]).
+
+Lemma lrcons_hRL n:
+  lrcons hL (hRL^^n) hR'' ++ [] = hLR^^n++hLR''.
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn; trivial.
+Qed.
+
+Lemma Incs110 n a:
+  segLRs tm' (hRL^^n) ([1;1;0]++[1;0]^^a) ([1;1;0]++[1;0]^^(n+a)).
+Proof.
+  gen a.
+  induction n; intros.
+  1: constructor.
+  cbn[lpow].
+  econstructor.
+  2: applys_eq (IHn (S a)); flia.
+  solve_seg.
+Qed.
+
+Lemma Incs010 n:
+  segRLs tm' (hLR) (hLR^^n++hLR'') (<[0;1;0]) (<[1;1;0]<+<[0;1]^^n).
+Proof.
+  rewrite <-lrcons_hRL.
+  eapply segRLs_lrcons.
+  1: solve_seg.
+  3: constructor.
+  2: apply (Incs110 n 0).
+  solve_seg.
+Qed.
+
+Lemma Incs0110 n a:
+  segRLs tm' (hLR^^(n*2)) (hLR^^n) (<[0;1;1;0]<+<[0;1]^^(n+a)) (<[0;1;1;0]<+<[0;1]^^a).
+Proof.
+  rewrite lpow_mul.
+  induction n.
+  1: esx.
+  cbn[lpow].
+  eapply segRLs_trans.
+  2: apply IHn.
+  esx.
+Qed.
+
+Lemma Incs01 n:
+  segRLs tm' (hLR^^n) (hLR^^n) (<[0;1]) (<[0;1]).
+Proof.
+  apply segRLs_wall''.
+  esx.
+Qed.
+
+Lemma P_n n:
+  P1 n /\ P2 n.
+Proof.
+  induction n.
+  - split.
+    + unfold P1; esx.
+    + unfold P2; esx.
+  - destruct IHn as [HP1 HP2].
+    assert (HP1': P1 (S n)). {
+      unfold P1,P2 in *; cbn[f].
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      rewrite <-Str_app_assoc.
+      replace ((f n*3+1)*2) with (1+((f n)*6+1)) by lia.
+      eapply sideRLs_trans_add.
+      {
+        eapply segRLs_sideRLs_concat.
+        1: apply Incs010.
+        eapply sideRLs_trans.
+        1: apply HP2.
+        esx.
+      }
+      eapply sideRLs_trans_add.
+      {
+        rewrite Str_cons_def,<-Str_app_assoc,<-app_assoc.
+        eapply segRLs_sideRLs_concat.
+        2: apply HP2.
+        applys_eq (Incs0110 ((f n)*3) O); flia.
+      }
+      esx.
+    }
+    assert (HP2': P2 (S n)). {
+      unfold P1,P2 in *; cbn[f] in *.
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      replace ((f n*3+1)*3) with ((f n)*3+(1+((f n)*3+1)*2)) by lia.
+      eapply sideRLs_trans_add.
+      {
+        eapply segRLs_sideRLs_concat.
+        2: apply HP2.
+        apply Incs01.
+      }
+      eapply sideRLs_trans_add.
+      1: esx.
+      apply HP1'.
+    }
+    split; auto 1.
+Qed.
+
+Definition RC b c :=
+  [1;0]^^b *> [1;1;0] *> [1;0]^^c *> 0inf.
+
+Lemma RIncs n b c:
+  sideRLs tm (hRL^^n) (RC b c) (RC b (n+c)).
+Proof.
+  unfold RC.
+  sideRLs_ind n.
+Qed.
+
+Definition S1 a b c :=
+  0inf <* <[0;1]^^a <* <[0] {{{ (hL,L) }}} RC b c.
+
+Lemma BigStep a b c:
+  S1 a (1+b) c -->+
+  S1 (1+a) b (1+(f a)*2+c).
+Proof.
+  unfold S1.
+  epose proof (P_n a) as [HP1 _].
+  unfold P1 in HP1.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (HP1)).
+  unfold RC.
+  es.
+Qed.
+
+Lemma Ov_0 a c:
+  sideRLs tm' (hLR^^((f a)*3*2+(2+(2+(0))))) (0inf<*<[0;1]^^(S a)<*(<[0;1;1;0]<+<[0;1]^^((f a)*3+(1+(1+c)))))
+  (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(f a*3))<*(<[0;1;1;0]<+<[0;1]^^c)).
+Proof.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1,P2 in *.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    2:{
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      eapply segRLs_sideRLs_concat.
+      2: apply HP2.
+      apply Incs01.
+    }
+    apply Incs0110.
+  }
+  eapply sideRLs_trans_add with (w3:=0inf<*<[0;1]^^a<*<[0;1;0]<*(<[0;1;1;0]<+<[0;1]^^(1+c))).
+  1: esx.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    2:{
+      eapply segRLs_sideRLs_concat.
+      1: apply Incs010.
+      eapply sideRLs_trans.
+      1: apply HP2.
+      esx.
+    }
+    esx.
+  }
+  esx.
+Qed.
+
+Lemma Ov_1 a c:
+  S1 a 0 c -->*
+  0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(c+(f a)*2)) {{{ (hL,L) }}} RC 0 0.
+Proof.
+  unfold S1.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1 in HP1.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (HP1)).
+  unfold RC; es.
+Qed.
+
+Definition RC0 a b := [1;1;1;0] *> RC a b.
+
+Lemma RIncs0 n a b:
+  sideRLs tm (hRL^^n) (RC0 (n+a) b) (RC0 a (n*2+b)).
+Proof.
+  unfold RC0,RC.
+  gen a b.
+  induction n; intros.
+  1: esx.
+  cbn[lpow].
+  eapply sideRLs_trans.
+  2: applys_eq (IHn a (2+b)); flia.
+  esx.
+Qed.
+
+Definition RC1 a b := [1;0;1;1;0] *> RC a b.
+
+Lemma RIncs1 b n:
+  sideRLs tm (hRL^^(2+n)) (RC0 0 b) (RC1 (1+n+b) 1).
+Proof.
+  unfold RC0,RC1,RC.
+  eapply sideRLs_trans_add.
+  1: esx.
+  sideRLs_ind n.
+Qed.
+
+Lemma Incs010_P1 a:
+  sideRLs tm' (hLR^^(1+0)) (0inf<*<[0;1]^^a<*<[0]<*<[0;1;0])
+  (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(f a*2))).
+Proof.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1,P2 in *.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: apply Incs010.
+    eapply sideRLs_trans.
+    1: apply HP1.
+    esx.
+  }
+  esx.
+Qed.
+
+Lemma BigStep' a c:
+  c+2<=f a*3 ->
+  S1 (S a) 0 c -->+
+  S1 (4+a) (c+f(a)*6) (4+f(2+a)*6).
+Proof.
+  intros Hc.
+  follow Ov_1.
+  cbn[f].
+  replace (c+(f a*3+1)*2) with (f a*3+(1+(1+(c+f a*3)))) by lia.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (Ov_0 _ _)).
+  remember (c+f a*3) as v1.
+  remember (f a*3) as v2.
+  cbn[Nat.add].
+  remember (v2*2+4) as v3.
+  mid10 (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^v2) {{{ (hL,L) }}} RC0 v1 v3).
+  1: unfold RC0,RC; es.
+  subst.
+  epose proof (P_n a) as [_ HP2].
+  unfold P1,P2 in *.
+  eassert (I1:_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HP2.
+    apply (Incs0110 _ O).
+  }
+  eassert (I2:_). {
+    eapply sideRLs_trans_add.
+    1: apply (RIncs0 (c+f a*3) 0 (f a*6+4)).
+    eapply (RIncs1 _ (f a*3-(c+2))).
+  }
+  unshelve epose proof (sideRLs_concat_1L _ I1) as I.
+  3: applys_eq I2; flia.
+  clear I1 I2.
+  follow I; clear I.
+  match goal with
+  | |- context[RC1 ?a _] => remember a as v1
+  end.
+  mid (0inf<*<[0;1]^^(2+a)<*<[0]<*<[0;1;0] {{{ (hL,L) }}} RC (2+v1) 1).
+  1: unfold RC1,RC; es.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (Incs010_P1 (2+a))).
+  remember (f(2+a)*2) as v2.
+  mid (0inf<*<[0;1]^^(2+a) {{{ (hL,L) }}} RC0 (2+v2+v1) 2).
+  1: unfold RC0,RC; es.
+  clear HP2.
+  epose proof (P_n (2+a)) as [_ HP2].
+  unfold P1,P2 in *.
+  replace (2+v2+v1) with (f (2+a)*3+(c+f a*6+1)) by (cbn in *; lia).
+  subst.
+  efollow (sideRLs_concat_1L (RIncs0 _ _ _) HP2).
+  remember (c+f a*6) as v1.
+  remember (f (2+a)*3*2) as v2.
+  mid (S1 (4+a) v1 (4+v2)).
+  unfold S1,RC0,RC; es.
+  cbn[Nat.add] in Heqv2.
+  finish.
+Qed.
+
+Definition S' '(a,b,c) := S1 (S a) b c.
+
+Ltac stepn n0 :=
+  eapply without_counter with (n:=n0);
+  eapply multistep_c_spec; vm_compute; simpl_tape; try reflexivity.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (5,25,244)).
+  1: stepn 173001.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b,c) => c+2<=f a*3).
+  2: cbn; lia.
+  unfold S'.
+  intros [[a b] c] HP.
+  destruct b.
+  - eexists (_,_,_); split.
+    1: apply BigStep'; auto 1.
+    cbn; lia.
+  - eexists (_,_,_); split.
+    1: apply BigStep.
+    cbn; lia.
+Qed.
+
+End TM16.
+
+
+Module TM17.
+Definition tm := Eval compute in (TM_from_str "1LB1LA_0LC0LD_1RD1RE_0RE---_0LA0RF_1RE0RE").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (B,[]).
+Notation hR := (E,<[0;1]).
+Notation hR' := (E,<[]).
+Notation hR'' := (E,<[1;0]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+Notation hLR' := [(hL,hR')].
+Notation hLR'' := [(hL,hR'')].
+
+Definition tm' := flip tm.
+
+Fixpoint f n :=
+match n with
+| O => O
+| S n0 => (f n0)*3+1
+end.
+
+Definition P1 n :=
+  sideRLs tm' (hLR^^((f n)*2)) (0inf<*<[0;1]^^n<*<[0]) (0inf<*<[0;1]^^n<*<[0;0;0]).
+
+Definition P2 n :=
+  sideRLs tm' (hLR^^((f n)*3)) (0inf<*<[0;1]^^n) (0inf<*<[0;1]^^n<*<[0;0;0]).
+
+Lemma lrcons_hRL n:
+  lrcons hL (hRL^^n) hR'' ++ [] = hLR^^n++hLR''.
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn; trivial.
+Qed.
+
+Lemma Incs110 n a:
+  segLRs tm' (hRL^^n) ([1;1;0]++[1;0]^^a) ([1;1;0]++[1;0]^^(n+a)).
+Proof.
+  gen a.
+  induction n; intros.
+  1: constructor.
+  cbn[lpow].
+  econstructor.
+  2: applys_eq (IHn (S a)); flia.
+  solve_seg.
+Qed.
+
+Lemma Incs010 n:
+  segRLs tm' (hLR) (hLR^^n++hLR'') (<[0;1;0]) (<[1;1;0]<+<[0;1]^^n).
+Proof.
+  rewrite <-lrcons_hRL.
+  eapply segRLs_lrcons.
+  1: solve_seg.
+  3: constructor.
+  2: apply (Incs110 n 0).
+  solve_seg.
+Qed.
+
+Lemma Incs0110 n a:
+  segRLs tm' (hLR^^(n*2)) (hLR^^n) (<[0;1;1;0]<+<[0;1]^^(n+a)) (<[0;1;1;0]<+<[0;1]^^a).
+Proof.
+  rewrite lpow_mul.
+  induction n.
+  1: esx.
+  cbn[lpow].
+  eapply segRLs_trans.
+  2: apply IHn.
+  esx.
+Qed.
+
+Lemma Incs01 n:
+  segRLs tm' (hLR^^n) (hLR^^n) (<[0;1]) (<[0;1]).
+Proof.
+  apply segRLs_wall''.
+  esx.
+Qed.
+
+Lemma P_n n:
+  P1 n /\ P2 n.
+Proof.
+  induction n.
+  - split.
+    + unfold P1; esx.
+    + unfold P2; esx.
+  - destruct IHn as [HP1 HP2].
+    assert (HP1': P1 (S n)). {
+      unfold P1,P2 in *; cbn[f].
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      rewrite <-Str_app_assoc.
+      replace ((f n*3+1)*2) with (1+((f n)*6+1)) by lia.
+      eapply sideRLs_trans_add.
+      {
+        eapply segRLs_sideRLs_concat.
+        1: apply Incs010.
+        eapply sideRLs_trans.
+        1: apply HP2.
+        esx.
+      }
+      eapply sideRLs_trans_add.
+      {
+        rewrite Str_cons_def,<-Str_app_assoc,<-app_assoc.
+        eapply segRLs_sideRLs_concat.
+        2: apply HP2.
+        applys_eq (Incs0110 ((f n)*3) O); flia.
+      }
+      esx.
+    }
+    assert (HP2': P2 (S n)). {
+      unfold P1,P2 in *; cbn[f] in *.
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      replace ((f n*3+1)*3) with ((f n)*3+(1+((f n)*3+1)*2)) by lia.
+      eapply sideRLs_trans_add.
+      {
+        eapply segRLs_sideRLs_concat.
+        2: apply HP2.
+        apply Incs01.
+      }
+      eapply sideRLs_trans_add.
+      1: esx.
+      apply HP1'.
+    }
+    split; auto 1.
+Qed.
+
+Definition RC b c :=
+  [1;0]^^b *> [1;1;0] *> [1;0]^^c *> 0inf.
+
+Lemma RIncs n b c:
+  sideRLs tm (hRL^^n) (RC b c) (RC b (n+c)).
+Proof.
+  unfold RC.
+  sideRLs_ind n.
+Qed.
+
+Definition S1 a b c :=
+  0inf <* <[0;1]^^a <* <[0] {{{ (hL,L) }}} RC b c.
+
+Lemma BigStep a b c:
+  S1 a (1+b) c -->+
+  S1 (1+a) b (1+(f a)*2+c).
+Proof.
+  unfold S1.
+  epose proof (P_n a) as [HP1 _].
+  unfold P1 in HP1.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (HP1)).
+  unfold RC.
+  es.
+Qed.
+
+Lemma Ov_0 a c:
+  sideRLs tm' (hLR^^((f a)*3*2+(2+(2+(0))))) (0inf<*<[0;1]^^(S a)<*(<[0;1;1;0]<+<[0;1]^^((f a)*3+(1+(1+c)))))
+  (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(f a*3))<*(<[0;1;1;0]<+<[0;1]^^c)).
+Proof.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1,P2 in *.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    2:{
+      cbn[lpow].
+      rewrite Str_app_assoc.
+      eapply segRLs_sideRLs_concat.
+      2: apply HP2.
+      apply Incs01.
+    }
+    apply Incs0110.
+  }
+  eapply sideRLs_trans_add with (w3:=0inf<*<[0;1]^^a<*<[0;1;0]<*(<[0;1;1;0]<+<[0;1]^^(1+c))).
+  1: esx.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    2:{
+      eapply segRLs_sideRLs_concat.
+      1: apply Incs010.
+      eapply sideRLs_trans.
+      1: apply HP2.
+      esx.
+    }
+    esx.
+  }
+  esx.
+Qed.
+
+Lemma Ov_1 a c:
+  S1 a 0 c -->*
+  0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(c+(f a)*2)) {{{ (hL,L) }}} RC 0 0.
+Proof.
+  unfold S1.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1 in HP1.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (HP1)).
+  unfold RC; es.
+Qed.
+
+Definition RC0 a b := [1;1;1;0] *> RC a b.
+
+Lemma RIncs0 n a b:
+  sideRLs tm (hRL^^n) (RC0 (n+a) b) (RC0 a (n*2+b)).
+Proof.
+  unfold RC0,RC.
+  gen a b.
+  induction n; intros.
+  1: esx.
+  cbn[lpow].
+  eapply sideRLs_trans.
+  2: applys_eq (IHn a (2+b)); flia.
+  esx.
+Qed.
+
+Definition RC1 a b := [1;0;1;1;0] *> RC a b.
+
+Lemma RIncs1 b n:
+  sideRLs tm (hRL^^(2+n)) (RC0 0 b) (RC1 (1+n+b) 1).
+Proof.
+  unfold RC0,RC1,RC.
+  eapply sideRLs_trans_add.
+  1: esx.
+  sideRLs_ind n.
+Qed.
+
+Lemma Incs010_P1 a:
+  sideRLs tm' (hLR^^(1+0)) (0inf<*<[0;1]^^a<*<[0]<*<[0;1;0])
+  (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^(f a*2))).
+Proof.
+  epose proof (P_n a) as [HP1 HP2].
+  unfold P1,P2 in *.
+  eapply sideRLs_trans_add.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: apply Incs010.
+    eapply sideRLs_trans.
+    1: apply HP1.
+    esx.
+  }
+  esx.
+Qed.
+
+Lemma BigStep' a c:
+  c+2<=f a*3 ->
+  S1 (S a) 0 c -->+
+  S1 (4+a) (c+f(a)*6) (4+f(2+a)*6).
+Proof.
+  intros Hc.
+  follow Ov_1.
+  cbn[f].
+  replace (c+(f a*3+1)*2) with (f a*3+(1+(1+(c+f a*3)))) by lia.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (Ov_0 _ _)).
+  remember (c+f a*3) as v1.
+  remember (f a*3) as v2.
+  cbn[Nat.add].
+  remember (v2*2+4) as v3.
+  mid10 (0inf<*<[0;1]^^a<*(<[0;1;1;0]<+<[0;1]^^v2) {{{ (hL,L) }}} RC0 v1 v3).
+  1: unfold RC0,RC; es.
+  subst.
+  epose proof (P_n a) as [_ HP2].
+  unfold P1,P2 in *.
+  eassert (I1:_). {
+    eapply segRLs_sideRLs_concat.
+    2: apply HP2.
+    apply (Incs0110 _ O).
+  }
+  eassert (I2:_). {
+    eapply sideRLs_trans_add.
+    1: apply (RIncs0 (c+f a*3) 0 (f a*6+4)).
+    eapply (RIncs1 _ (f a*3-(c+2))).
+  }
+  unshelve epose proof (sideRLs_concat_1L _ I1) as I.
+  3: applys_eq I2; flia.
+  clear I1 I2.
+  follow I; clear I.
+  match goal with
+  | |- context[RC1 ?a _] => remember a as v1
+  end.
+  mid (0inf<*<[0;1]^^(2+a)<*<[0]<*<[0;1;0] {{{ (hL,L) }}} RC (2+v1) 1).
+  1: unfold RC1,RC; es.
+  efollow (sideRLs_concat_1L (RIncs _ _ _) (Incs010_P1 (2+a))).
+  remember (f(2+a)*2) as v2.
+  mid (0inf<*<[0;1]^^(2+a) {{{ (hL,L) }}} RC0 (2+v2+v1) 2).
+  1: unfold RC0,RC; es.
+  clear HP2.
+  epose proof (P_n (2+a)) as [_ HP2].
+  unfold P1,P2 in *.
+  replace (2+v2+v1) with (f (2+a)*3+(c+f a*6+1)) by (cbn in *; lia).
+  subst.
+  efollow (sideRLs_concat_1L (RIncs0 _ _ _) HP2).
+  remember (c+f a*6) as v1.
+  remember (f (2+a)*3*2) as v2.
+  mid (S1 (4+a) v1 (4+v2)).
+  unfold S1,RC0,RC; es.
+  cbn[Nat.add] in Heqv2.
+  finish.
+Qed.
+
+Definition S' '(a,b,c) := S1 (S a) b c.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (3,O,28)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b,c) => c+2<=f a*3).
+  2: cbn; lia.
+  unfold S'.
+  intros [[a b] c] HP.
+  destruct b.
+  - eexists (_,_,_); split.
+    1: apply BigStep'; auto 1.
+    cbn; lia.
+  - eexists (_,_,_); split.
+    1: apply BigStep.
+    cbn; lia.
+Qed.
+
+End TM17.
+
+

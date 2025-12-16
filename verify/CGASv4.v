@@ -4,6 +4,7 @@ Require Import ZArith.
 Require Import String.
 Require Import List.
 From BusyCoq Require Import BinaryCounter_v2.
+From BusyCoq Require Import Longitudinal.
 
 
 Module TM1.
@@ -659,5 +660,109 @@ Qed.
 
 End TM3.
 
+
+Module TM4.
+Definition tm := Eval compute in (TM_from_str "1RB---_1LC1RA_1LE0RD_1RC0RD_0LF0LC_0RA0LC").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (F,[0]).
+Notation hR := (D,<[0]).
+Notation hR' := (B,<[0;1]).
+Notation hLR := [(hL,hR)].
+Notation hLR' := [(hL,hR')].
+Notation hRL := [(hR,hL)].
+
+Definition tm' := flip tm.
+
+Definition LD a b := [1;0;1;0]^^a ++ [1;1;1;1]^^b ++ [0].
+
+Lemma LD_Incs a b:
+  segRLs tm' (hLR^^b) (hLR^^(0+0)) (LD a b) (LD (b+a) 0).
+Proof.
+  unfold LD.
+  gen a.
+  induction b; intros.
+  1: esx.
+  replace (S b) with (1+b) by lia.
+  eapply segRLs_trans_add.
+  2: applys_eq (IHb (1+a)); flia.
+  esx.
+Qed.
+
+Lemma LD_Ovs n a:
+  segRLs tm' (hLR^^(n)) (hLR^^(n*2)) (LD (1+a) 0) (LD (1+a) 0).
+Proof.
+  unfold LD.
+  applys_eq (segRLs_addmul_v2 1 2 n 0 0); unfold DH0.
+  1,2: flia.
+  1,2: esx.
+Qed.
+
+Fixpoint LC n :=
+match n with
+| O => 0inf
+| S n0 => LC n0 <* LD 0 n
+end.
+
+Lemma LIncs n:
+  sideRLs tm' (hLR^^(n*2)++hLR') (LC n) (LC n).
+Proof.
+  induction n; cbn[LC].
+  1: esx; es.
+  eapply segRLs_sideRLs_concat.
+  2: apply IHn.
+  eassert (I1:_). {
+    eapply segRLs_trans.
+    1: apply (LD_Incs 0 (S n)).
+    eapply (LD_Ovs n (n+0)).
+  }
+  do 2 rewrite <-lpow_add in I1.
+  replace (S n*2) with (S n+n+1) by lia.
+  rewrite lpow_add,<-app_assoc.
+  eapply segRLs_trans.
+  1: apply I1.
+  unfold LD; esx.
+Qed.
+
+Definition RC n := [1;0;1;0]^^(1+n) *> 0inf.
+
+Lemma RIncs n a:
+  sideRLs tm (hRL^^(n*2)) (RC a) (RC (n+a)).
+Proof.
+  unfold RC.
+  rewrite lpow_mul.
+  sideRLs_ind n.
+Qed.
+
+Definition S' n := LC n {{{ (hL,L) }}} RC 0.
+
+Lemma hRLs_lrcons n:
+  lrcons hL (hRL^^n) hR' = (hLR^^n++hLR').
+Proof.
+  induction n; cbn; trivial.
+  rewrite IHn; trivial.
+Qed.
+
+Lemma BigStep n:
+  S' n -->+ S' (S n).
+Proof.
+  unfold S'.
+  epose proof (sideRLs_concat_L) as I.
+  erewrite hRLs_lrcons in I.
+  specialize (I (LIncs n) (RIncs _ 0)).
+  follow10 I.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' 0).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intro n; eexists; apply BigStep.
+Qed.
+
+End TM4.
 
 

@@ -158,4 +158,6 @@ Proof. solve_hlin_nonhalt. Time Qed.
 Lemma nonhalt46: ~halts (TM_from_str "1RB0RF_1LC1RE_1RB1LD_1LC1LE_1RA0LC_---0RC") c0.
 Proof. solve_hlin_nonhalt. Time Qed.
 
+Lemma nonhalt47: ~halts (TM_from_str "1RB0LF_0RC1RA_1LD0RB_1LE---_0LD0LA_1LF0RE") c0.
+Proof. solve_hlin_nonhalt. Time Qed.
 

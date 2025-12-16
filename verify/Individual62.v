@@ -680,6 +680,52 @@ Ltac solve_sideRLs :=
     (repeat (er; try sr)) | ] ||
   eapply sideRLseq_O).
 
+Lemma feq{A B}(f g:A->B)(x y:A):
+  f=g ->
+  x=y ->
+  f x = g y.
+Proof.
+  congruence.
+Qed.
+
+Lemma Peq(P Q:Prop):
+  Q=P -> P -> Q.
+Proof.
+  congruence.
+Qed.
+
+Ltac ret_tape a :=
+match a with
+| _ -> ?b => ret_tape b
+| Q*tape => idtac
+| list Sym => idtac
+| list sym => idtac
+| side => idtac
+| Stream sym => idtac
+end.
+
+Ltac unfold_tape :=
+repeat (
+eapply Peq; [
+repeat
+match goal with
+| |- ?a = _ =>
+  match type of a with
+  | nat => reflexivity
+  end
+| |- _ _ = _ => eapply feq
+| |- const = _ => reflexivity
+| |- Str_app = _ => reflexivity
+| |- app = _ => reflexivity
+| |- lpow = _ => reflexivity
+| |- ?a = _ =>
+  let t:=type of a in
+  ret_tape t; unfold a
+| _ => reflexivity
+end | cbn ]).
+
+Ltac ut := unfold_tape.
+
 Lemma lpow_unrotate_1 n (a:Sym) r:
   a >> [a]^^n *> r =
   [a]^^n *> a >> r.

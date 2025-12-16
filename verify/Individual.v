@@ -930,4 +930,111 @@ Proof.
   apply H.
 Qed.
 
+Fixpoint sideRL_rec(tm:TM)(l:list Sym)(r:side)(q:Q)(T:nat) :=
+match T with
+| O => None
+| S T =>
+  match r with
+  | m>>r =>
+    match tm (q,m) with
+    | Some (m,L,q) =>
+      match l with
+      | m'::l => sideRL_rec tm l (m'>>m>>r) q T
+      | [] => Some (q,m>>r)
+      end
+    | Some (m,R,q) => sideRL_rec tm (m::l) r q T
+    | None => None
+    end
+  end
+end.
+
+Lemma sideRL_rec_spec tm l r q T q' r':
+  sideRL_rec tm l r q T = Some (q',r') ->
+  (forall l0, l0 <* l {{q}}> r -[tm]->+ l0 <{{q'}} r').
+Proof.
+  gen l r q q' r'.
+  induction T; cbn[sideRL_rec]; intros.
+  1: congruence.
+  destruct r as [m r].
+  destruct (tm (q,m)) as [[[m0 []] q0]|] eqn:E.
+  - destruct l as [|m' l].
+    + inverts H.
+      do 2 econstructor; apply E.
+    + eapply progress_step.
+      1: econstructor; apply E.
+      cbn.
+      eapply IHT in H.
+      apply H.
+  - eapply progress_step.
+    1: econstructor; apply E.
+    cbn.
+    eapply IHT in H.
+    apply H.
+  - congruence.
+Qed.
+
+Fixpoint Str_firstn{A}(n:nat)(r:Stream A) :=
+match n with
+| O => []
+| S n => Streams.hd r :: Str_firstn n (Streams.tl r)
+end.
+
+Lemma Str_firstn_spec{A} n (r:Stream A):
+  r = (Str_firstn n r) *> (Str_nth_tl n r).
+Proof.
+  gen r.
+  induction n; intros; cbn.
+  - trivial.
+  - rewrite <-(IHn (Streams.tl r)).
+    destruct r; trivial.
+Qed.
+
+Section eqb_sec.
+Import Eqb.
+
+Definition skip_prefix(r0:list Sym)(r:side) :=
+let len := List.length r0 in
+if Eqb.eqb r0 (Str_firstn len r) then Some (Str_nth_tl len r) else None.
+
+Lemma skip_prefix_spec r0 r r':
+  skip_prefix r0 r = Some r' ->
+  r = r0 *> r'.
+Proof.
+  unfold skip_prefix.
+  intros.
+  destruct (eqb_spec r0 (Str_firstn (List.length r0) r)).
+  2: congruence.
+  inverts H.
+  epose proof (Str_firstn_spec (List.length r0) r) as I1.
+  rewrite <-e in I1.
+  apply I1.
+Qed.
+
+Definition sideRL_c tm '(QR,qR) '(QL,qL) r T :=
+sideRL_rec tm qR r QR T &&& (fun '(q',r') =>
+if Eqb.eqb QL q' then
+skip_prefix qL r'
+else None
+).
+
+Lemma sideRL_c_spec tm hR hL r r' T:
+  sideRL_c tm hR hL r T = Some r' ->
+  sideRL tm hR hL r r'.
+Proof.
+  unfold sideRL_c,if_Some.
+  intros.
+  destruct hR as [QR qR].
+  destruct hL as [QL qL].
+  destruct (sideRL_rec tm qR r QR T) as [[q' r'0]|] eqn:E.
+  2: congruence.
+  destruct (eqb_spec QL q'); [subst|congruence].
+  apply skip_prefix_spec in H.
+  subst.
+  intro l.
+  unfold to_DH_config.
+  eapply sideRL_rec_spec in E.
+  apply E.
+Qed.
+End eqb_sec.
+
 End Individual.

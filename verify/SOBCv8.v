@@ -4166,4 +4166,1181 @@ Qed.
 
 End TM20.
 
+From BusyCoq Require Import ES_v3.
+
+Lemma lpow_add'_11{T} (a:list T) r:
+  a *> a *> r = a^^2 *> r.
+Proof.
+  cbn.
+  repeat rewrite Str_app_assoc.
+  reflexivity.
+Qed.
+
+Ltac rw_lpow_add ::=
+  repeat (
+  match goal with
+  | |- context[?a^^1 *> _] =>
+    rewrite (lpow_1 a)
+  | |- context[?a *> ?a^^?y *> ?r] =>
+    rewrite (lpow_add'_1x a y r)
+  | |- context[?a^^?x *> ?a *> ?r] =>
+    rewrite (lpow_add'_x1 a x r)
+  | |- context[?a *> ?a *> ?r] =>
+    rewrite (lpow_add'_11 a r)
+  end ||
+  rewrite lpow_add').
+
+
+Module TM21.
+Definition tm := Eval compute in (TM_from_str "1LB---_0LC1LA_0RD0LE_1LE0RE_0LF1LC_1RC1LB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (D,<[0]).
+Notation hL := (F,[0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+Notation d0 := [0;0;1;0].
+Notation d1 := [1;0;1;0].
+Notation dw := [1;1;0].
+
+
+Definition LC1 n := 0inf <* <[0;0;1]^^n.
+
+Definition tm' := flip tm.
+
+Lemma LIncs1 n a:
+  sideRLs tm' (hLR^^n) (LC1 a) (LC1 (n+a)).
+Proof.
+  unfold LC1.
+  induction n.
+  1: esx.
+  replace (S n) with (n+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply IHn.
+  esx.
+Qed.
+
+Ltac solve_v1 :=
+  intros H;
+  eapply segRLs_sideRLs_concat; [|apply H];
+  apply segRLs_addmul''; esx.
+
+Lemma RIncs_S0 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+1)) (d0*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S1 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+0)) (d1*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sw n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw*>r) (dw*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sws k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw^^k*>r) (dw^^k*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S0s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*(n+1)-1)) (d0^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S0 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_S1s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*n)) (d1^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S1 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_O r:
+  sideRLs tm (hRL^^0) r r.
+Proof.
+  esx.
+Qed.
+
+Notation "l |> r" := (l {{{ (hR,R) }}} r) (at level 30).
+
+Lemma Incs1 a n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  LC1 a |> r -->*
+  LC1 (n+a) |> r'.
+Proof.
+  intros.
+  epose proof (sideRLs_concat_1 H (LIncs1 _ _)) as I1.
+  apply I1.
+Qed.
+
+Definition rh1 := [1]*>0inf.
+
+Ltac stepn' n0 :=
+  eapply without_counter with (n:=N.to_nat n0);
+  eapply multistep_c_spec; vm_compute; try reflexivity.
+
+Lemma init:
+  c0 -->*
+  LC1 2 |> d1*>dw^^4*>d0*>dw*>d0*>d1^^2*>dw*>d0*>dw^^4*>d0*>dw^^4*>d0*>dw*>d1^^3*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>dw^^2*>d1*>dw*>d0*>dw^^7*>d0^^2*>d1^^2*>d0*>rh1.
+Proof.
+  stepn' 18107%N.
+  simpl_tape; reflexivity.
+Qed.
+
+Lemma RIncs_0 r:
+  sideRLs tm (hRL^^1) ([0]*>r) ([1]*>r).
+Proof.
+  esx.
+Qed.
+
+Definition da := (dw++d0++dw^^4++d0++dw^^4++d0++dw++d1^^3).
+Definition db := (dw++d1++dw^^4++d1++dw^^4++d1++dw++d1^^3).
+
+Lemma RIncs_Sa n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*64+7)) (da*>r) (db*>r').
+Proof.
+  unfold da,db.
+  intros.
+  repeat rewrite Str_app_assoc.
+  apply RIncs_S1s with (k:=3) in H.
+  apply RIncs_Sw in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sw in H.
+  applys_eq H; flia.
+Qed.
+
+Lemma pow64_mod9 a:
+  64^a mod 9 = 1%nat.
+Proof.
+  induction a; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma RIncs_Sas k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^((64^k*(n*9+1)-1)/9)) (da^^k*>r) (db^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_Sa in IHk.
+    cbn[Nat.pow].
+    pose proof (pow64_mod9 k).
+    applys_eq IHk; flia.
+Qed.
+
+
+Ltac solve_RIncs_1 :=
+match goal with
+| |- sideRLs _ _ ?r _ =>
+  match r with
+  | d0^^_ *> _ => apply RIncs_S0s
+  | d1^^_ *> _ => apply RIncs_S1s
+  | dw^^_ *> _ => apply RIncs_Sws
+  | da^^_ *> _ => apply RIncs_Sas
+  | d0 *> _ => apply RIncs_S0
+  | d1 *> _ => apply RIncs_S1
+  | dw *> _ => apply RIncs_Sw
+  | [0] *> _ => apply RIncs_0
+  | _ => apply RIncs_O
+  end
+end.
+
+Ltac solve_RIncs :=
+repeat solve_RIncs_1.
+
+Definition rh2 := 0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst1 a:
+  LC1 (10+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1*>dw^^2*>d1*>dw*>d1*>dw^^7*>d1^^5*>rh1 -->*
+  LC1 3 |> d0*>d1*>dw^^4*>d1*>dw*>d1*>d0*>d1*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>[0]*>rh2.
+Proof.
+  unfold LC1,rh1,rh2.
+  cbn.
+  es' a.
+Qed.
+
+Definition rh3 b := [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst2 a b:
+  LC1 (30+a*18) |> d1^^2*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>[1]*>rh2 -->*
+  LC1 6 |> d1*>dw^^4*>d1*>dw*>d0*>d1^^2*>da^^a*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>d0*>dw^^4*>d1*>dw^^2*>d0^^3*>1>>0>>1>>1>>1>>rh3 b.
+Proof.
+  unfold LC1,rh3,rh2.
+  cbn.
+  es' a b.
+Qed.
+
+Definition rh4 b r := [1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>r.
+
+Lemma Rst3 a b c:
+  LC1 (14+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1^^2*>dw^^4*>d1*>dw^^2*>d1^^3*>1>>0>>1>>1>>1>>rh3 (1+c) -->*
+  LC1 6 |> d1*>dw^^4*>d1*>dw*>d0*>d1^^2*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>
+  [0]*>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>
+  rh4 b (rh3 c).
+Proof.
+  unfold LC1,rh4,rh3.
+  cbn.
+  es' a b c.
+Qed.
+
+Definition rh5 b r :=
+  [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>r.
+
+Lemma Rst4 a b c r:
+  LC1 (16+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>
+  [1]*>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>
+  rh4 (1+c) r -->*
+  LC1 1 |> d0*>dw*>d1*>dw^^3*>d0*>dw^^4*>d0*>dw^^4*>d1*>dw*>d1^^3*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>
+  [0]*>0>>1>>1>>1>>
+  rh5 b (rh4 c r).
+Proof.
+  unfold LC1,rh5,rh4.
+  cbn.
+  es' a b c & r.
+Qed.
+
+Definition rh6 b r := [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>r.
+
+Lemma Rst5 a b c r:
+  LC1 (30+a*18) |> d1*>dw*>d1*>dw^^3*>d1*>dw^^4*>d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>
+  [1]*>0>>1>>1>>1>>
+  rh5 (1+c) r -->*
+  LC1 6 |> d1*>dw^^4*>d1*>dw*>d0*>d1^^2*>da^^a*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>dw^^2*>d1*>d0^^2*>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>
+  rh6 b (rh5 c r).
+Proof.
+  unfold LC1,rh6,rh5.
+  cbn.
+  es' a b c & r.
+Qed.
+
+Lemma Rst6 a b r:
+  halts tm (LC1 (16+a*18) |>
+  d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1*>dw^^2*>d1^^3*>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>r).
+Proof.
+  unfold LC1,rh6.
+  cbn.
+  es' a b & r.
+Qed.
+
+Import NatModTactics.
+
+Ltac follow' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Lemma halt: halts tm c0.
+Proof with rw_all.
+  eapply halts_evstep.
+  2:{
+  follow' init.
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst1...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst2...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst3...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst4...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst5...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  finish.
+  }
+  eapply Peq; [|apply Rst6].
+  match_Nexpr.
+Time Qed.
+
+End TM21.
+
+
+Module TM22.
+Definition tm := Eval compute in (TM_from_str "1RB---_1LC1LD_0LD0RD_1RF1LE_0LF1LA_0RB0LC").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (B,<[0]).
+Notation hL := (D,[0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+Notation d0 := [0;0;1;0].
+Notation d1 := [1;0;1;0].
+Notation dw := [1;1;0].
+
+
+Definition LC1 n := 0inf <* <[0;0;1]^^n.
+
+Definition tm' := flip tm.
+
+Lemma LIncs1 n a:
+  sideRLs tm' (hLR^^n) (LC1 a) (LC1 (n+a)).
+Proof.
+  unfold LC1.
+  induction n.
+  1: esx.
+  replace (S n) with (n+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply IHn.
+  esx.
+Qed.
+
+Ltac solve_v1 :=
+  intros H;
+  eapply segRLs_sideRLs_concat; [|apply H];
+  apply segRLs_addmul''; esx.
+
+Lemma RIncs_S0 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+1)) (d0*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S1 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+0)) (d1*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sw n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw*>r) (dw*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sws k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw^^k*>r) (dw^^k*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S0s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*(n+1)-1)) (d0^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S0 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_S1s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*n)) (d1^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S1 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_O r:
+  sideRLs tm (hRL^^0) r r.
+Proof.
+  esx.
+Qed.
+
+Notation "l |> r" := (l {{{ (hR,R) }}} r) (at level 30).
+
+Lemma Incs1 a n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  LC1 a |> r -->*
+  LC1 (n+a) |> r'.
+Proof.
+  intros.
+  epose proof (sideRLs_concat_1 H (LIncs1 _ _)) as I1.
+  apply I1.
+Qed.
+
+Definition rh1 := [1]*>0inf.
+
+Lemma init:
+  c0 -->*
+  LC1 2 |> d1*>dw^^4*>d0*>dw*>d0*>d1^^2*>dw*>d0*>dw^^4*>d0*>dw^^4*>d0*>dw*>d1^^3*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>dw^^2*>d1*>dw*>d0*>dw^^7*>d0^^2*>d1^^2*>d0*>rh1.
+Proof.
+  esx.
+Qed.
+
+Lemma RIncs_0 r:
+  sideRLs tm (hRL^^1) ([0]*>r) ([1]*>r).
+Proof.
+  esx.
+Qed.
+
+Definition da := (dw++d0++dw^^4++d0++dw^^4++d0++dw++d1^^3).
+Definition db := (dw++d1++dw^^4++d1++dw^^4++d1++dw++d1^^3).
+
+Lemma RIncs_Sa n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*64+7)) (da*>r) (db*>r').
+Proof.
+  unfold da,db.
+  intros.
+  repeat rewrite Str_app_assoc.
+  apply RIncs_S1s with (k:=3) in H.
+  apply RIncs_Sw in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sw in H.
+  applys_eq H; flia.
+Qed.
+
+Lemma pow64_mod9 a:
+  64^a mod 9 = 1%nat.
+Proof.
+  induction a; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma RIncs_Sas k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^((64^k*(n*9+1)-1)/9)) (da^^k*>r) (db^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_Sa in IHk.
+    cbn[Nat.pow].
+    pose proof (pow64_mod9 k).
+    applys_eq IHk; flia.
+Qed.
+
+
+Ltac solve_RIncs_1 :=
+match goal with
+| |- sideRLs _ _ ?r _ =>
+  match r with
+  | d0^^_ *> _ => apply RIncs_S0s
+  | d1^^_ *> _ => apply RIncs_S1s
+  | dw^^_ *> _ => apply RIncs_Sws
+  | da^^_ *> _ => apply RIncs_Sas
+  | d0 *> _ => apply RIncs_S0
+  | d1 *> _ => apply RIncs_S1
+  | dw *> _ => apply RIncs_Sw
+  | [0] *> _ => apply RIncs_0
+  | _ => apply RIncs_O
+  end
+end.
+
+Ltac solve_RIncs :=
+repeat solve_RIncs_1.
+
+Definition rh2 := 0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst1 a:
+  LC1 (10+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1*>dw^^2*>d1*>dw*>d1*>dw^^7*>d1^^5*>rh1 -->*
+  LC1 3 |> d0*>d1*>dw^^4*>d1*>dw*>d1*>d0*>d1*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>[0]*>rh2.
+Proof.
+  unfold LC1,rh1,rh2.
+  cbn.
+  es' a.
+Qed.
+
+Definition rh3 b := [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst2 a b:
+  LC1 (30+a*18) |> d1^^2*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>[1]*>rh2 -->*
+  LC1 1 |> d0*>dw^^3*>d0*>dw^^4*>d0*>dw*>d1^^3*>da^^a*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>d0*>dw^^4*>d1*>dw^^2*>d0^^3*>1>>0>>1>>1>>1>>
+  rh3 b.
+Proof.
+  unfold LC1,rh3,rh2.
+  cbn.
+  es' a b.
+Qed.
+
+Lemma Rst3 a b c:
+  halts tm (LC1 (34+a*18) |> d1*>dw^^3*>d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1^^2*>dw^^4*>d1*>dw^^2*>d1^^3*>1>>0>>1>>1>>1>>rh3 (1+c)).
+Proof.
+  unfold LC1,rh3.
+  cbn.
+  es' a b c.
+Qed.
+
+Import NatModTactics.
+
+Ltac follow' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Lemma halt: halts tm c0.
+Proof with rw_all.
+  eapply halts_evstep.
+  2:{
+  follow' init.
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst1...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst2...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  finish.
+  }
+  eapply Peq; [|apply Rst3].
+  match_Nexpr.
+Time Qed.
+
+End TM22.
+
+
+Module TM23.
+Definition tm := Eval compute in (TM_from_str "1LB---_0LC1LA_0RD0LE_1LE1RC_0LF0RF_1RC1LB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (D,<[0]).
+Notation hL := (F,[0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+Notation d0 := [0;0;1;0].
+Notation d1 := [1;0;1;0].
+Notation dw := [1;1;0].
+
+
+Definition LC1 n := 0inf <* <[0;0;1]^^n.
+
+Definition tm' := flip tm.
+
+Lemma LIncs1 n a:
+  sideRLs tm' (hLR^^n) (LC1 a) (LC1 (n+a)).
+Proof.
+  unfold LC1.
+  induction n.
+  1: esx.
+  replace (S n) with (n+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply IHn.
+  esx.
+Qed.
+
+Ltac solve_v1 :=
+  intros H;
+  eapply segRLs_sideRLs_concat; [|apply H];
+  apply segRLs_addmul''; esx.
+
+Lemma RIncs_S0 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+1)) (d0*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S1 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+0)) (d1*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sw n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw*>r) (dw*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sws k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw^^k*>r) (dw^^k*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S0s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*(n+1)-1)) (d0^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S0 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_S1s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*n)) (d1^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S1 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_O r:
+  sideRLs tm (hRL^^0) r r.
+Proof.
+  esx.
+Qed.
+
+Notation "l |> r" := (l {{{ (hR,R) }}} r) (at level 30).
+
+Lemma Incs1 a n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  LC1 a |> r -->*
+  LC1 (n+a) |> r'.
+Proof.
+  intros.
+  epose proof (sideRLs_concat_1 H (LIncs1 _ _)) as I1.
+  apply I1.
+Qed.
+
+Definition rh1 := [1]*>0inf.
+
+Lemma init:
+  c0 -->*
+  LC1 2 |> d1*>dw^^4*>d0*>dw*>d0*>d1^^2*>dw*>d0*>dw^^4*>d0*>dw^^4*>d0*>dw*>d1^^3*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>dw^^2*>d1*>dw*>d0*>dw^^7*>d0^^2*>d1^^2*>d0*>rh1.
+Proof.
+  esx.
+Qed.
+
+Lemma RIncs_0 r:
+  sideRLs tm (hRL^^1) ([0]*>r) ([1]*>r).
+Proof.
+  esx.
+Qed.
+
+Definition da := (dw++d0++dw^^4++d0++dw^^4++d0++dw++d1^^3).
+Definition db := (dw++d1++dw^^4++d1++dw^^4++d1++dw++d1^^3).
+
+Lemma RIncs_Sa n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*64+7)) (da*>r) (db*>r').
+Proof.
+  unfold da,db.
+  intros.
+  repeat rewrite Str_app_assoc.
+  apply RIncs_S1s with (k:=3) in H.
+  apply RIncs_Sw in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sw in H.
+  applys_eq H; flia.
+Qed.
+
+Lemma pow64_mod9 a:
+  64^a mod 9 = 1%nat.
+Proof.
+  induction a; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma RIncs_Sas k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^((64^k*(n*9+1)-1)/9)) (da^^k*>r) (db^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_Sa in IHk.
+    cbn[Nat.pow].
+    pose proof (pow64_mod9 k).
+    applys_eq IHk; flia.
+Qed.
+
+
+Ltac solve_RIncs_1 :=
+match goal with
+| |- sideRLs _ _ ?r _ =>
+  match r with
+  | d0^^_ *> _ => apply RIncs_S0s
+  | d1^^_ *> _ => apply RIncs_S1s
+  | dw^^_ *> _ => apply RIncs_Sws
+  | da^^_ *> _ => apply RIncs_Sas
+  | d0 *> _ => apply RIncs_S0
+  | d1 *> _ => apply RIncs_S1
+  | dw *> _ => apply RIncs_Sw
+  | [0] *> _ => apply RIncs_0
+  | _ => apply RIncs_O
+  end
+end.
+
+Ltac solve_RIncs :=
+repeat solve_RIncs_1.
+
+Definition rh2 := 0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst1 a:
+  LC1 (10+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1*>dw^^2*>d1*>dw*>d1*>dw^^7*>d1^^5*>rh1 -->*
+  LC1 3 |> d0*>d1*>dw^^4*>d1*>dw*>d1*>d0*>d1*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>[0]*>rh2.
+Proof.
+  unfold LC1,rh1,rh2.
+  cbn.
+  es' a.
+Qed.
+
+Definition rh3 b := [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst2 a b:
+  LC1 (30+a*18) |> d1^^2*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>[1]*>rh2 -->*
+  LC1 1 |> d0*>dw^^3*>d0*>dw^^4*>d0*>dw*>d1^^3*>da^^a*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>d0*>dw^^4*>d1*>dw^^2*>d0^^3*>1>>0>>1>>1>>1>>
+  rh3 b.
+Proof.
+  unfold LC1,rh3,rh2.
+  cbn.
+  es' a b.
+Qed.
+
+Lemma Rst3 a b c:
+  halts tm (LC1 (34+a*18) |> d1*>dw^^3*>d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1^^2*>dw^^4*>d1*>dw^^2*>d1^^3*>1>>0>>1>>1>>1>>rh3 (1+c)).
+Proof.
+  unfold LC1,rh3.
+  cbn.
+  es' a b c.
+Qed.
+
+Import NatModTactics.
+
+Ltac follow' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Lemma halt: halts tm c0.
+Proof with rw_all.
+  eapply halts_evstep.
+  2:{
+  follow' init.
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst1...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst2...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  finish.
+  }
+  eapply Peq; [|apply Rst3].
+  match_Nexpr.
+Time Qed.
+
+End TM23.
+
+
+Module TM24.
+Definition tm := Eval compute in (TM_from_str "1LB---_0LC1LA_0RD0LE_1LE0RE_0LF0RE_1RC1LB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (D,<[0]).
+Notation hL := (F,[0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+Notation d0 := [0;0;1;0].
+Notation d1 := [1;0;1;0].
+Notation dw := [1;1;0].
+
+
+Definition LC1 n := 0inf <* <[0;0;1]^^n.
+
+Definition tm' := flip tm.
+
+Lemma LIncs1 n a:
+  sideRLs tm' (hLR^^n) (LC1 a) (LC1 (n+a)).
+Proof.
+  unfold LC1.
+  induction n.
+  1: esx.
+  replace (S n) with (n+1) by lia.
+  rewrite lpow_add.
+  eapply sideRLs_trans.
+  1: apply IHn.
+  esx.
+Qed.
+
+Ltac solve_v1 :=
+  intros H;
+  eapply segRLs_sideRLs_concat; [|apply H];
+  apply segRLs_addmul''; esx.
+
+Lemma RIncs_S0 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+1)) (d0*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S1 n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*2+0)) (d1*>r) (d1*>r').
+Proof.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sw n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw*>r) (dw*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_Sws k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^n) (dw^^k*>r) (dw^^k*>r').
+Proof.
+  intro H.
+  replace n with (n*1+0) by lia.
+  gen H.
+  solve_v1.
+Qed.
+
+Lemma RIncs_S0s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*(n+1)-1)) (d0^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S0 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_S1s k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(2^k*n)) (d1^^k*>r) (d1^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_S1 in IHk.
+    cbn[Nat.pow].
+    applys_eq IHk; flia.
+Qed.
+
+Lemma RIncs_O r:
+  sideRLs tm (hRL^^0) r r.
+Proof.
+  esx.
+Qed.
+
+Notation "l |> r" := (l {{{ (hR,R) }}} r) (at level 30).
+
+Lemma Incs1 a n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  LC1 a |> r -->*
+  LC1 (n+a) |> r'.
+Proof.
+  intros.
+  epose proof (sideRLs_concat_1 H (LIncs1 _ _)) as I1.
+  apply I1.
+Qed.
+
+Definition rh1 := [1]*>0inf.
+
+Lemma init:
+  c0 -->*
+  LC1 2 |> d1*>dw^^4*>d0*>dw*>d0*>d1^^2*>dw*>d0*>dw^^4*>d0*>dw^^4*>d0*>dw*>d1^^3*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>dw^^2*>d1*>dw*>d0*>dw^^7*>d0^^2*>d1^^2*>d0*>rh1.
+Proof.
+  esx.
+Qed.
+
+Lemma RIncs_0 r:
+  sideRLs tm (hRL^^1) ([0]*>r) ([1]*>r).
+Proof.
+  esx.
+Qed.
+
+Definition da := (dw++d0++dw^^4++d0++dw^^4++d0++dw++d1^^3).
+Definition db := (dw++d1++dw^^4++d1++dw^^4++d1++dw++d1^^3).
+
+Lemma RIncs_Sa n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^(n*64+7)) (da*>r) (db*>r').
+Proof.
+  unfold da,db.
+  intros.
+  repeat rewrite Str_app_assoc.
+  apply RIncs_S1s with (k:=3) in H.
+  apply RIncs_Sw in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sws with (k:=4) in H.
+  apply RIncs_S0 in H.
+  apply RIncs_Sw in H.
+  applys_eq H; flia.
+Qed.
+
+Lemma pow64_mod9 a:
+  64^a mod 9 = 1%nat.
+Proof.
+  induction a; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma RIncs_Sas k n r r':
+  sideRLs tm (hRL^^n) r r' ->
+  sideRLs tm (hRL^^((64^k*(n*9+1)-1)/9)) (da^^k*>r) (db^^k*>r').
+Proof.
+  intros.
+  induction k; intros.
+  - applys_eq H; flia.
+  - cbn[lpow].
+    do 2 rewrite Str_app_assoc.
+    apply RIncs_Sa in IHk.
+    cbn[Nat.pow].
+    pose proof (pow64_mod9 k).
+    applys_eq IHk; flia.
+Qed.
+
+
+Ltac solve_RIncs_1 :=
+match goal with
+| |- sideRLs _ _ ?r _ =>
+  match r with
+  | d0^^_ *> _ => apply RIncs_S0s
+  | d1^^_ *> _ => apply RIncs_S1s
+  | dw^^_ *> _ => apply RIncs_Sws
+  | da^^_ *> _ => apply RIncs_Sas
+  | d0 *> _ => apply RIncs_S0
+  | d1 *> _ => apply RIncs_S1
+  | dw *> _ => apply RIncs_Sw
+  | [0] *> _ => apply RIncs_0
+  | _ => apply RIncs_O
+  end
+end.
+
+Ltac solve_RIncs :=
+repeat solve_RIncs_1.
+
+Definition rh2 := 0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst1 a:
+  LC1 (10+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^4*>d1*>dw*>d1^^3*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1*>dw^^2*>d1*>dw*>d1*>dw^^7*>d1^^5*>rh1 -->*
+  LC1 3 |> d0*>d1*>dw^^4*>d1*>dw*>d1*>d0*>d1*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>[0]*>rh2.
+Proof.
+  unfold LC1,rh1,rh2.
+  cbn.
+  es' a.
+Qed.
+
+Definition rh3 b := [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>0inf.
+
+Lemma Rst2 a b:
+  LC1 (30+a*18) |> d1^^2*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>[1]*>rh2 -->*
+  LC1 6 |> d1*>dw^^4*>d1*>dw*>d0*>d1^^2*>da^^a*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>d0*>dw^^4*>d1*>dw^^2*>d0^^3*>1>>0>>1>>1>>1>>rh3 b.
+Proof.
+  unfold LC1,rh3,rh2.
+  cbn.
+  es' a b.
+Qed.
+
+Definition rh4 b r := [1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>r.
+
+Lemma Rst3 a b c:
+  LC1 (14+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1^^2*>dw^^4*>d1*>dw^^2*>d1^^3*>1>>0>>1>>1>>1>>rh3 (1+c) -->*
+  LC1 6 |> d1*>dw^^4*>d1*>dw*>d0*>d1^^2*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>
+  [0]*>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>
+  rh4 b (rh3 c).
+Proof.
+  unfold LC1,rh4,rh3.
+  cbn.
+  es' a b c.
+Qed.
+
+Definition rh5 b r :=
+  [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>r.
+
+Lemma Rst4 a b c r:
+  LC1 (16+a*18) |> d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>
+  [1]*>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>1>>1>>1>>1>>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>1>>1>>
+  rh4 (1+c) r -->*
+  LC1 1 |> d0*>dw*>d1*>dw^^3*>d0*>dw^^4*>d0*>dw^^4*>d1*>dw*>d1^^3*>da^^a*>dw^^4*>d0*>dw^^2*>d1^^3*>
+  [0]*>0>>1>>1>>1>>
+  rh5 b (rh4 c r).
+Proof.
+  unfold LC1,rh5,rh4.
+  cbn.
+  es' a b c & r.
+Qed.
+
+Definition rh6 b r := [1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;1;1;0;1;0;1;1;1;1;1;1;1;0;1;0;1;0;0;0;1;0;0;0;1;0;0;0;1;1;1]^^b*>0>>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>r.
+
+Lemma Rst5 a b c r:
+  LC1 (30+a*18) |> d1*>dw*>d1*>dw^^3*>d1*>dw^^4*>d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw^^4*>d1*>dw^^2*>d1^^3*>
+  [1]*>0>>1>>1>>1>>
+  rh5 (1+c) r -->*
+  LC1 6 |> d1*>dw^^4*>d1*>dw*>d0*>d1^^2*>da^^a*>dw*>d0*>dw^^4*>d0*>dw^^7*>d1*>dw^^2*>d1*>d0^^2*>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>
+  rh6 b (rh5 c r).
+Proof.
+  unfold LC1,rh6,rh5.
+  cbn.
+  es' a b c & r.
+Qed.
+
+Lemma Rst6 a b r:
+  halts tm (LC1 (16+a*18) |>
+  d1*>dw^^4*>d1*>dw*>d1^^3*>db^^b*>dw*>d1*>dw^^4*>d1*>dw^^7*>d1*>dw^^2*>d1^^3*>1>>0>>1>>1>>1>>0>>1>>0>>1>>0>>0>>0>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>1>>1>>0>>0>>0>>1>>0>>1>>1>>0>>1>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>1>>0>>0>>0>>1>>1>>1>>r).
+Proof.
+  unfold LC1,rh6.
+  cbn.
+  es' a b & r.
+Qed.
+
+Import NatModTactics.
+
+Ltac follow' H :=
+  eapply evstep_trans; [eapply Peq; [|apply H]; match_Nexpr |].
+
+Lemma halt: halts tm c0.
+Proof with rw_all.
+  eapply halts_evstep.
+  2:{
+  follow' init.
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst1...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst2...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst3...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst4...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  follow' Rst5...
+
+  follow' Incs1.
+  1: solve_RIncs.
+  rw_lpow_add...
+  finish.
+  }
+  eapply Peq; [|apply Rst6].
+  match_Nexpr.
+Time Qed.
+
+End TM24.
+
 

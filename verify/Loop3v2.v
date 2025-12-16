@@ -8,7 +8,6 @@ Open Scope list.
 
 
 
-
 Module TM1.
 Definition tm := Eval compute in (TM_from_str "1LB0LE_0RC0LD_0RE1RA_0LB1LA_1RC1RF_0RA---").
 
@@ -4708,5 +4707,122 @@ Proof with rw_all.
 Time Qed.
 
 End TM41.
+
+
+Module TM42.
+Definition tm := Eval compute in (TM_from_str "1RB0RF_1RC1LE_1LD1LF_---1RE_1LB0LC_1RA0LB").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c d :=
+  0inf <{{F}} [1;0]^^a *> [1;1]^^b *> [0;1]^^c *> [1;1]^^d *> [0;1] *> 0inf.
+
+Lemma Inc1 a b c d:
+  S1 a (1+b) c d -->*
+  S1 (2+a) b c d.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 a b c d:
+  S1 a b c d -->*
+  S1 (b*2+a) 0 c d.
+Proof.
+  gen a.
+  ind b Inc1.
+Qed.
+
+Lemma Ov1 a c d:
+  S1 (1+a) 0 (1+c) (1+d) -->*
+  S1 (1+(2+a*2)) 0 (1+(2+c)) d.
+Proof.
+  mid (S1 1 (1+a) (3+c) d).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma Ov1s a c d:
+  S1 (1+a) 0 (1+c) d -->*
+  S1 (1+((a+2)*2^d-2)) 0 (1+(d*2+c)) 0.
+Proof.
+  gen a c.
+  induction d; intros.
+  - finish.
+  - follow Ov1.
+    follow IHd.
+    cbn[Nat.pow].
+    finish.
+Qed.
+
+Definition S2 a b c :=
+  0inf <* <[0;1]^^a <{{E}} [1] *> [0;1]^^b *> [1;1]^^c *> [0;1] *> 0inf.
+
+Lemma Inc2 a b c:
+  S2 (2+a) b (1+c) -->*
+  S2 a (3+b) c.
+Proof.
+  es.
+Qed.
+
+Lemma Incs2 n a b c:
+  S2 (n*2+a) b (n+c) -->*
+  S2 a (n*3+b) c.
+Proof.
+  gen a b c.
+  ind n Inc2.
+Qed.
+
+Lemma Ov1' a c:
+  8+c*2<=a ->
+  S1 a 0 c 0 -->+
+  S1 (1+(a*2-(c*4+14))) 0 (1+2) (c*3+8).
+Proof.
+  intro Hc.
+  mid10 (S2 a 0 (2+c)).
+  1: es.
+  follow (Incs2 (2+c) (4+(a-(c*2+8))) 0 0).
+  mid (S1 1 (1+(a-(c*2+8))) 3 (c*3+8)).
+  1: es.
+  follow Incs1.
+  finish.
+Qed.
+
+Lemma BigStep a d:
+  d*4+13<=((a+2)*2^d-2) ->
+  S1 (1+a) 0 3 d -->+
+  S1 (1+((1+((a+2)*2^d-2))-(d*4+13))*2) 0 3 (d*6+17).
+Proof.
+  intros H.
+  follow Ov1s.
+  applys_eq Ov1'; flia.
+Qed.
+
+Definition S' '(a,d) := S1 (1+a) 0 3 d.
+
+Lemma pow2_ge n:
+  2^n>=n+1.
+Proof.
+  induction n; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S'(76,8)).
+  1: unfold S',S1; esx.
+  eapply progress_nonhalt_cond with (P:=fun '(a,d) => d>=4).
+  2: lia.
+  intros [a d] HP.
+  unfold S'.
+  eexists (_,_); split.
+  - apply BigStep.
+    replace d with (4+(d-4)) by lia.
+    epose proof (pow2_ge (d-4)).
+    rewrite Nat.pow_add_r.
+    lia.
+  - lia.
+Qed.
+
+End TM42.
 
 
