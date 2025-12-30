@@ -628,9 +628,9 @@ Proof.
     epose proof (firstn_skipn (List.length l0) l0') as Hl0'.
     rewrite e2 in Hl0'.
     epose proof (E l r0) as E.
-    eapply RWLAcc62.TM.with_counter in E.
+    eapply with_counter in E.
     destruct E as [n0 E].
-    eapply RWLAcc62.TM.multistep_c_spec in E.
+    eapply multistep_c_spec in E.
     rewrite <-Hl0',Str_app_assoc in E.
     eapply without_counter.
     eapply multistep_c_spec.
@@ -645,9 +645,9 @@ Proof.
     epose proof (firstn_skipn (List.length l0) l0') as Hl0'.
     rewrite e2 in Hl0'.
     epose proof (E l r0) as E.
-    eapply RWLAcc62.TM.with_counter in E.
+    eapply with_counter in E.
     destruct E as [n0 E].
-    eapply RWLAcc62.TM.multistep_c_spec in E.
+    eapply multistep_c_spec in E.
     rewrite <-Hl0',Str_app_assoc in E.
     eapply without_counter.
     eapply multistep_c_spec.

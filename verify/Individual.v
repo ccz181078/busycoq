@@ -1010,6 +1010,23 @@ Proof.
   apply I1.
 Qed.
 
+Definition skip_prefix_list(r0 r:list Sym) :=
+let len := List.length r0 in
+if eqb r0 (firstn len r) then Some (skipn len r) else None.
+
+Lemma skip_prefix_list_spec r0 r r':
+  skip_prefix_list r0 r = Some r' ->
+  r = r0 ++ r'.
+Proof.
+  unfold skip_prefix_list.
+  intros.
+  destruct (eqb_spec r0 (firstn (List.length r0) r)).
+  2: congruence.
+  inverts H.
+  pose proof (firstn_skipn (length r0) r).
+  congruence.
+Qed.
+
 Definition sideRL_c tm '(QR,qR) '(QL,qL) r T :=
 sideRL_rec tm qR r QR T &&& (fun '(q',r') =>
 if Eqb.eqb QL q' then
@@ -1035,6 +1052,581 @@ Proof.
   eapply sideRL_rec_spec in E.
   apply E.
 Qed.
+
+Fixpoint sideRLs_c tm hs r T :=
+match hs with
+| [] => Some r
+| (hR,hL)::hs => sideRL_c tm hR hL r T &&& (fun r => sideRLs_c tm hs r T)
+end.
+
+Lemma sideRLs_c_spec tm hs r r' r'0 T:
+  sideRLs_c tm hs r T = Some r' ->
+  r'=r'0 ->
+  sideRLs tm hs r r'0.
+Proof.
+  gen r.
+  induction hs; cbn[sideRLs_c]; intros.
+  - inverts H.
+    subst.
+    constructor.
+  - destruct a as [hR hL].
+    subst.
+    unfold if_Some in H.
+    destruct (sideRL_c tm hR hL r T) eqn:E.
+    2: inverts H.
+    eapply sideRL_c_spec in E.
+    apply IHhs in H; trivial.
+    econstructor; eauto 1.
+Qed.
+
 End eqb_sec.
 
+Module BoundedConfig.
+
+Import Eqb.
+
+Ltac destruct_spec_expr e f :=
+match e with
+| match ?a with _ => _ end => destruct_spec_expr a f
+| if ?a then _ else _ => destruct_spec_expr a f
+| ?a ?arg1 ?arg2 ?arg3 ?arg4 ?arg5 ?arg6 ?arg7 =>
+  pose proof (f arg1 arg2 arg3 arg4 arg5 arg6 arg7);
+  destruct e
+| ?a ?arg1 ?arg2 ?arg3 ?arg4 ?arg5 ?arg6 =>
+  pose proof (f arg1 arg2 arg3 arg4 arg5 arg6);
+  destruct e
+| ?a ?arg1 ?arg2 ?arg3 ?arg4 ?arg5 =>
+  pose proof (f arg1 arg2 arg3 arg4 arg5);
+  destruct e
+| ?a ?arg1 ?arg2 ?arg3 ?arg4 =>
+  pose proof (f arg1 arg2 arg3 arg4);
+  destruct e
+| ?a ?arg1 ?arg2 ?arg3 =>
+  pose proof (f arg1 arg2 arg3);
+  destruct e
+| ?a ?arg1 ?arg2 =>
+  pose proof (f arg1 arg2);
+  destruct e
+| ?a ?arg1 =>
+  pose proof (f arg1);
+  destruct e
+end.
+
+Ltac destruct_spec f :=
+match goal with
+|- ?a => destruct_spec_expr a f
+end.
+
+Record T := {
+  l: list Sym;
+  r: list Sym;
+  s: Q;
+  sgn: dir;
+}.
+
+Definition to_config (x:T) (l0 r0:side) :=
+let (l,r,s,sgn):=x in
+match sgn with
+| L => l0 <* r <{{s}} l *> r0
+| R => l0 <* l {{s}}> r *> r0
+end.
+
+Section tm_ctx.
+Hypothesis tm:TM.
+
+Definition step(x:T):option T :=
+let (l,r,s,sgn):=x in
+match r with
+| nil => None
+| m::r0 =>
+  match tm (s,m) with
+  | None => None
+  | Some (m',sgn',s') =>
+    if dir_eqb sgn sgn' then
+      Some (Build_T (m'::l) r0 s' sgn')
+    else
+      Some (Build_T (m'::r0) l s' sgn')
+  end
+end.
+
+Fixpoint steps(n:nat)(x:T) :=
+match step x with
+| None => Some x
+| Some x =>
+  match n with
+  | O => None
+  | S n => steps n x
+  end
+end.
+
+Definition steps1 n x :=
+match step x with
+| None => Some (x,false)
+| Some x =>
+  steps n x &&& (fun x => Some (x,true))
+end.
+
+Definition step_r0inf(x:T):option T :=
+let (l,r,s,sgn):=x in
+match r with
+| nil =>
+  match sgn with
+  | R =>
+    match tm (s,s0) with
+    | None => None
+    | Some (m',sgn',s') =>
+      if dir_eqb sgn sgn' then
+        Some (Build_T (m'::l) nil s' sgn')
+      else
+        Some (Build_T (m'::nil) l s' sgn')
+    end
+  | _ => None
+  end
+| m::r0 =>
+  match tm (s,m) with
+  | None => None
+  | Some (m',sgn',s') =>
+    if dir_eqb sgn sgn' then
+      Some (Build_T (m'::l) r0 s' sgn')
+    else
+      Some (Build_T (m'::r0) l s' sgn')
+  end
+end.
+
+Fixpoint steps_r0inf(n:nat)(x:T) :=
+match step_r0inf x with
+| None => Some x
+| Some x =>
+  match n with
+  | O => None
+  | S n => steps_r0inf n x
+  end
+end.
+
+Definition steps1_r0inf n x :=
+match step_r0inf x with
+| None => None
+| Some x =>
+  steps_r0inf n x
+end.
+
+Lemma step_spec x:
+match step x with
+| Some x' =>
+  forall l0 r0,
+  to_config x l0 r0 -[ tm ]->
+  to_config x' l0 r0
+| None =>
+  True
+end.
+Proof.
+  destruct x as [l1 r1 s1 sgn1].
+  unfold step.
+  destruct r1 as [|m r1]; cbn; trivial.
+  destruct (tm (s1,m)) as [[[m2 sgn2] s2]|] eqn:E; trivial.
+    destruct sgn1,sgn2; cbn;
+    econstructor; eauto.
+Qed.
+
+Lemma step_r0inf_spec x:
+match step_r0inf x with
+| Some x' =>
+  forall l0,
+  to_config x l0 (const s0) -[ tm ]->
+  to_config x' l0 (const s0)
+| None =>
+  True
+end.
+Proof.
+  destruct x as [l1 r1 s1 sgn1].
+  unfold step_r0inf.
+  destruct r1 as [|m r1]; cbn; trivial.
+  - destruct sgn1; trivial.
+    destruct (tm (s1,s0)) as [[[m2 sgn2] s2]|] eqn:E; trivial.
+      destruct sgn2; cbn;
+      econstructor; eauto.
+  - destruct (tm (s1,m)) as [[[m2 sgn2] s2]|] eqn:E; trivial.
+      destruct sgn1,sgn2; cbn;
+      econstructor; eauto.
+Qed.
+
+Lemma steps_spec n x:
+match steps n x with
+| None => True
+| Some (x') =>
+  forall l0 r0,
+  to_config x l0 r0 -[ tm ]->*
+  to_config x' l0 r0
+end.
+Proof.
+  gen x.
+  induction n; intros.
+  - unfold steps.
+    destruct_spec (step_spec); trivial.
+  - cbn[steps].
+    destruct_spec (step_spec); trivial.
+    specialize (IHn t).
+    destruct_spec steps; trivial.
+    eauto.
+Qed.
+
+Lemma steps_r0inf_spec n x:
+match steps_r0inf n x with
+| None => True
+| Some (x') =>
+  forall l0,
+  to_config x l0 (const s0) -[ tm ]->*
+  to_config x' l0 (const s0)
+end.
+Proof.
+  gen x.
+  induction n; intros.
+  - unfold steps_r0inf.
+    destruct_spec (step_r0inf_spec); trivial.
+  - cbn[steps_r0inf].
+    destruct_spec (step_r0inf_spec); trivial.
+    specialize (IHn t).
+    destruct_spec steps_r0inf; trivial.
+    eauto.
+Qed.
+
+Lemma steps1_spec n x:
+match steps1 n x with
+| None => True
+| Some (x',false) =>
+  forall l0 r0,
+  to_config x l0 r0 -[ tm ]->*
+  to_config x' l0 r0
+| Some (x',true) =>
+  forall l0 r0,
+  to_config x l0 r0 -[ tm ]->+
+  to_config x' l0 r0
+end.
+Proof.
+  unfold steps1.
+  destruct_spec (step_spec); trivial.
+  unfold if_Some.
+  destruct_spec (steps_spec); trivial.
+  intros.
+  eapply progress_intro; eauto 1.
+Qed.
+
+Lemma steps1_r0inf_spec n x:
+  match steps1_r0inf n x with
+  | Some x' =>
+    forall l0,
+    to_config x l0 (const s0) -[ tm ]->+
+    to_config x' l0 (const s0)
+  | None => True
+  end.
+Proof.
+  unfold steps1_r0inf.
+  destruct_spec (step_r0inf_spec); trivial.
+  unfold if_Some.
+  destruct_spec (steps_r0inf_spec); trivial.
+  intros.
+  eapply progress_intro; eauto 1.
+Qed.
+
+Fixpoint all0(a:list Sym):bool :=
+match a with
+| a0::a1 => eqb a0 s0 && all0 a1
+| [] => true
+end.
+
+Lemma all0_spec a:
+  all0 a = true -> a*>const s0 = const s0.
+Proof.
+  induction a; cbn[all0]; intros; trivial.
+  destruct (eqb_spec a s0); [|inverts H].
+  apply IHa in H.
+  cbn.
+  subst.
+  rewrite H,<-const_unfold; trivial.
+Qed.
+
+Fixpoint eq_app_r0inf(a b:list Sym):bool :=
+match a,b with
+| a0::a1,b0::b1 => eqb a0 b0 && eq_app_r0inf a1 b1
+| a0::a1,[] => all0 a
+| [],_ => all0 b
+end.
+
+Lemma eq_app_r0inf_spec a b:
+  eq_app_r0inf a b = true ->
+  a*>const s0 = b*>const s0.
+Proof.
+  gen b.
+  induction a; cbn[eq_app_r0inf]; intros.
+  - apply all0_spec in H; cbn; congruence.
+  - destruct b.
+    + apply all0_spec in H.
+      apply H.
+    + destruct (eqb_spec a s2); [|inverts H].
+      subst.
+      apply IHa in H.
+      cbn; congruence.
+Qed.
+
+Definition skip_prefix_list_r0inf(r0 r:list Sym) :=
+let len := List.length r0 in
+if eqb r0 (firstn len r) then Some (skipn len r) else
+let len := List.length r in
+if eqb r (firstn len r0) then
+if all0 (skipn len r0) then Some [] else None
+else None.
+
+Lemma skip_prefix_list_r0inf_spec r0 r r':
+  skip_prefix_list_r0inf r0 r = Some r' ->
+  r*>const s0 = r0*>r'*>const s0.
+Proof.
+  unfold skip_prefix_list_r0inf.
+  intros.
+  destruct (eqb_spec r0 (firstn (length r0) r)); subst.
+  - inverts H.
+    pose proof (firstn_skipn (length r0) r).
+    remember (length r0) as v1.
+    clear Heqv1.
+    subst.
+    rewrite <-Str_app_assoc,H; trivial.
+  - destruct (eqb_spec r (firstn (length r) r0)); subst.
+    2: congruence.
+    destruct (all0 (skipn (length r) r0)) eqn:E; [|inverts H].
+    apply all0_spec in E.
+    inverts H.
+    pose proof (firstn_skipn (length r) r0).
+    remember (length r) as v1.
+    clear Heqv1.
+    subst.
+    remember (firstn v1 r0) as v2.
+    remember (skipn v1 r0) as v3.
+    clear Heqv2 Heqv3.
+    subst.
+    rewrite Str_app_assoc; cbn; congruence.
+Qed.
+
+Lemma steps1_spec' n x:
+match steps1 n x with
+| None => True
+| Some (x',_) =>
+  forall l0 r0,
+  to_config x l0 r0 -[ tm ]->*
+  to_config x' l0 r0
+end.
+Proof.
+  destruct_spec (steps1_spec); trivial.
+  destruct p,b; intros; auto 2 using progress_evstep.
+Qed.
+
+Fixpoint segRLs_c (ls1 ls2:list (DH0*DH0)) (w1 w2:list Sym) (T:nat) {struct T} :=
+match T with
+| O => false
+| S T =>
+match ls1 with
+| ((QR,qR),(QL,qL))::ls1 =>
+  match steps1 T (Build_T qR w1 QR R) with
+  | Some (Build_T l r q R,flag) =>
+    match ls2 with
+    | ((QR',qR'),hL')::ls2 =>
+      eqb r [] &&
+      eqb q QR' &&
+      match skip_prefix_list qR' l with
+      | Some w1 => segLLs_c (QL,qL) ls1 hL' ls2 w1 w2 T
+      | None => false
+      end
+    | [] => false
+    end
+  | Some (Build_T l r q L,true) =>
+    eqb r [] &&
+    eqb q QL &&
+    match skip_prefix_list qL l with
+    | Some w1 => segRLs_c ls1 ls2 w1 w2 T
+    | None => false
+    end
+  | _ => false
+  end
+| [] =>
+  eqb ls2 [] &&
+  eqb w1 w2
+end
+end
+with segLLs_c h1 ls1 h2 ls2 w1 w2 T {struct T} :=
+match T with
+| O => false
+| S T =>
+let '(QL,qL):=h2 in
+match steps1 T (Build_T qL w1 QL L) with
+| Some (Build_T l r q R,flag) =>
+  match ls2 with
+  | ((QR',qR'),hL')::ls2 =>
+    eqb r [] &&
+    eqb q QR' &&
+    match skip_prefix_list qR' l with
+    | Some w1 => segLLs_c h1 ls1 hL' ls2 w1 w2 T
+    | None => false
+    end
+  | _ => false
+  end
+| Some (Build_T l r q L,flag) =>
+  let '(QL0,qL0):=h1 in
+  eqb r [] &&
+  eqb q QL0 &&
+  match skip_prefix_list qL0 l with
+  | Some w1 => segRLs_c ls1 ls2 w1 w2 T
+  | None => false
+  end
+| _ => false
+end
+end.
+
+Lemma segRLs_LLs_c_spec T:
+  (forall ls1 ls2 w1 w2, if segRLs_c ls1 ls2 w1 w2 T then segRLs tm ls1 ls2 w1 w2 else True) /\
+  (forall h1 ls1 h2 ls2 w1 w2, if segLLs_c h1 ls1 h2 ls2 w1 w2 T then segLLs tm h1 ls1 h2 ls2 w1 w2 else True).
+Proof with trivial.
+  induction T; cbn[segRLs_c]; cbn[segLLs_c]; split; intros...
+  - destruct IHT as [I1 I2].
+    destruct ls1 as [|[[QR qR] [QL qL]] ls1].
+    { destruct (eqb_spec ls2 [])...
+      destruct (eqb_spec w1 w2)...
+      subst.
+      constructor. }
+    pose proof (steps1_spec' T0 (Build_T qR w1 QR R)) as I3.
+    destruct_spec steps1_spec...
+    destruct p as [[] flag]...
+    destruct sgn0.
+    {
+      destruct flag...
+      destruct (eqb_spec r0 [])...
+      destruct (eqb_spec s2 QL)...
+      destruct_spec skip_prefix_list_spec...
+      destruct (segRLs_c ls1 ls2 l1 w2 T0) eqn:E...
+      epose proof (I1 _ _ _ _) as I1.
+      rewrite E in I1.
+      econstructor; eauto.
+      unfold segRL; intros; cbn.
+      specialize (H l2 r1).
+      cbn in H.
+      specialize (H0 _ eq_refl).
+      subst.
+      rewrite Str_app_assoc in H.
+      apply H.
+    }
+    {
+      clear H.
+      rename I3 into H.
+      destruct ls2 as [|[[QR' qR'] hL'] ls2]...
+      destruct (eqb_spec r0 [])...
+      destruct (eqb_spec s2 QR')...
+      destruct_spec skip_prefix_list_spec...
+      destruct (segLLs_c (QL,qL) ls1 hL' ls2 l1 w2 T0) eqn:E...
+      epose proof (I2 _ _ _ _ _ _) as I2.
+      rewrite E in I2.
+      eapply segRLs_RR_LLs; eauto.
+      unfold segRR; intros; cbn.
+      specialize (H l2 r1).
+      cbn in H.
+      specialize (H0 _ eq_refl).
+      subst.
+      rewrite Str_app_assoc in H.
+      apply H.
+    }
+  - destruct IHT as [I1 I2].
+    destruct h2 as [QL qL].
+    destruct_spec steps1_spec'...
+    destruct p as [[] _].
+    destruct sgn0.
+    {
+      destruct h1 as [QL0 qL0].
+      destruct (eqb_spec r0 [])...
+      destruct (eqb_spec s2 QL0)...
+      destruct_spec skip_prefix_list_spec...
+      destruct (segRLs_c ls1 ls2 l1 w2 T0) eqn:E...
+      epose proof (I1 _ _ _ _) as I1.
+      rewrite E in I1.
+      eapply segLLs_LL_RLs; eauto.
+      unfold segLL; intros; cbn.
+      specialize (H l2 r1).
+      cbn in H.
+      specialize (H0 _ eq_refl).
+      subst.
+      rewrite Str_app_assoc in H.
+      apply H.
+    }
+    {
+      destruct ls2 as [|[[QR' qR'] hL'] ls2]...
+      destruct (eqb_spec r0 [])...
+      destruct (eqb_spec s2 QR')...
+      destruct_spec skip_prefix_list_spec...
+      destruct (segLLs_c h1 ls1 hL' ls2 l1 w2 T0) eqn:E...
+      epose proof (I2 _ _ _ _ _ _) as I2.
+      rewrite E in I2.
+      eapply segLLs_LR_LLs; eauto.
+      unfold segLR; intros; cbn.
+      specialize (H l2 r1).
+      cbn in H.
+      specialize (H0 _ eq_refl).
+      subst.
+      rewrite Str_app_assoc in H.
+      apply H.
+    }
+Qed.
+
+Fixpoint sideRLs_c hs r r' T :=
+match hs with
+| [] => eq_app_r0inf r r'
+| ((QR,qR),(QL,qL))::hs =>
+  match steps1_r0inf T (Build_T qR r QR R) with
+  | Some (Build_T l r QL' L) =>
+    eqb r [] &&
+    eqb QL QL' &&
+    match skip_prefix_list_r0inf qL l with
+    | Some r0 => sideRLs_c hs r0 r' T
+    | None => false
+    end
+  | _ => false
+  end
+end.
+
+Lemma sideRLs_c_spec hs r r' T:
+  sideRLs_c hs r r' T = true ->
+  sideRLs tm hs (r*>const s0) (r'*>const s0).
+Proof.
+  gen r.
+  induction hs; cbn[sideRLs_c]; intros.
+  - apply eq_app_r0inf_spec in H.
+    rewrite H.
+    constructor.
+  - destruct a as [[QR qR] [QL qL]].
+    epose proof (steps1_r0inf_spec T (Build_T qR r0 QR R)) as I1.
+    destruct (steps1_r0inf T (Build_T qR r0 QR R)) as [[l r QL' []]|].
+    2,3: congruence.
+    destruct (eqb_spec r []); [subst|inverts H].
+    destruct (eqb_spec QL QL'); [subst|inverts H].
+    destruct (skip_prefix_list_r0inf qL l) as [r0'|] eqn:E; [|inverts H].
+    apply skip_prefix_list_r0inf_spec in E.
+    apply IHhs in H.
+    econstructor; eauto.
+    unfold sideRL.
+    intro l0.
+    specialize (I1 l0).
+    cbn in I1; cbn.
+    congruence.
+Qed.
+
+Lemma segRLs_c_spec ls1 ls2 w1 w2 T:
+  segRLs_c ls1 ls2 w1 w2 T = true -> segRLs tm ls1 ls2 w1 w2.
+Proof.
+  epose proof (segRLs_LLs_c_spec T) as [I1 _].
+  epose proof (I1 _ _ _ _) as I1.
+  intros.
+  rewrite H in I1.
+  apply I1.
+Qed.
+
+End tm_ctx.
+
+End BoundedConfig.
+
 End Individual.
+
+

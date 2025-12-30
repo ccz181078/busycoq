@@ -5344,3 +5344,734 @@ Time Qed.
 End TM24.
 
 
+Module TM25.
+Definition tm := Eval compute in (TM_from_str "1RB0LF_0RC1RB_1LD0RB_1LE---_1RF1LA_0LC0LE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation hL := (A,[]).
+Notation hR := (B,[]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+
+Notation d1 := <[1;1;1].
+Notation w0 := <[1;1;1; 1;0;0].
+Notation w0' := <[1; 1;0;0; 1;1].
+Notation w1 := <[1;1;1; 1;0;1].
+Notation w1' := <[1; 1;0;1; 1;1].
+Notation w01 := <[1;1;1; 1;0;0; 1;0;1].
+Notation w01' := <[1; 1;0;0; 1;0;1; 1;1].
+Notation w11 := <[1;1;1; 1;0;1; 1;0;1].
+Notation w11' := <[1; 1;0;1; 1;0;1; 1;1].
+
+Ltac am := apply segRLs_addmul_v2; esx.
+
+Lemma d1_Incs n:
+  segRLs tm' (hLR^^(n*1+0)) (hLR^^(n*2+0)) d1 d1.
+Proof. am. Qed.
+
+Lemma w1_Incs n:
+  segRLs tm' (hLR^^(n*1+1)) (hLR^^(n*4+2)) w1' (d1^^2).
+Proof. am. Qed.
+
+Lemma w0_Incs1 n:
+  segRLs tm' (hLR^^(n*2+1)) (hLR^^(n*2+0)) w0' w0.
+Proof. am. Qed.
+
+Lemma w0_Incs2 n:
+  segRLs tm' (hLR^^(n*2+2)) (hLR^^(n*2+0)) w0' w1.
+Proof. am. Qed.
+
+Lemma w01_Incs n:
+  segRLs tm' (hLR^^(n*1+1)) (hLR^^(n*2+0)) w01' (w0<+d1).
+Proof. am. Qed.
+
+Lemma w11_Incs n:
+  segRLs tm' (hLR^^(n*1+1)) (hLR^^(n*8+2)) w11' (d1^^3).
+Proof. am. Qed.
+
+Lemma lh_Incs0 n:
+  sideRLs tm' (hLR^^(4+n*4)) (0inf<*<[1;1]) (0inf<*w0^^n<*w01).
+Proof.
+  eapply sideRLs_trans_add.
+  1: esx.
+  rewrite lpow_mul.
+  sideRLs_ind n.
+Qed.
+
+Lemma lh_Incs1 n:
+  sideRLs tm' (hLR^^(6+n*4)) (0inf<*<[1;1]) (0inf<*w0^^n<*w11).
+Proof.
+  eapply sideRLs_trans_add.
+  1: esx.
+  rewrite lpow_mul.
+  sideRLs_ind n.
+Qed.
+
+Lemma d1s_Incs k n:
+  segRLs tm' (hLR^^n) (hLR^^(n*2^k)) (d1^^k) (d1^^k).
+Proof.
+  gen n.
+  induction k; intros.
+  1: applys_eq @segRLs_nil; flia.
+  cbn[lpow].
+  eapply segRLs_concat.
+  2: applys_eq (IHk (n*2)); cbn[Nat.pow]; flia.
+  applys_eq (d1_Incs n); flia.
+Qed.
+
+Lemma pow4_mod3 k:
+  4^(k) mod 3 = 1%nat.
+Proof.
+  induction k; cbn - [Nat.modulo]; lia.
+Qed.
+
+Lemma w1s_Incs k n:
+  segRLs tm' (hLR^^(n+1)) (hLR^^(((n*3+1)*4^k+2)/3)) (w1'^^k) (d1^^(k*2)).
+Proof.
+  gen n.
+  induction k; intros.
+  1: applys_eq @segRLs_nil; flia.
+  cbn[Nat.mul].
+  cbn[lpow].
+  rewrite (lpow_add _ 2 (k*2)).
+  eapply segRLs_concat.
+  1: applys_eq (w1_Incs n); flia.
+  pose proof (pow4_mod3 k).
+  applys_eq (IHk (n*4+1)); cbn[Nat.pow]; flia.
+Qed.
+
+Lemma w0s_Incs k n:
+  segRLs tm' (hLR^^((n+k)*2)) (hLR^^(n*2)) (w0'^^k) (w1^^k).
+Proof.
+  gen n.
+  induction k; intros.
+  1: applys_eq @segRLs_nil; flia.
+  cbn[lpow].
+  eapply segRLs_concat.
+  1: applys_eq (w0_Incs2 (n+k)); flia.
+  applys_eq (IHk n); flia.
+Qed.
+
+Lemma d1_rot r:
+  [1;1]*>d1*>r = d1*>[1;1]*>r.
+Proof. trivial. Qed.
+
+Lemma w0_rot r:
+  [1;1]*>w0*>r = w0'*>[1;1]*>r.
+Proof. trivial. Qed.
+
+Lemma w1_rot r:
+  [1;1]*>w1*>r = w1'*>[1;1]*>r.
+Proof. trivial. Qed.
+
+Lemma w01_rot r:
+  [1;1]*>w01*>r = w01'*>[1;1]*>r.
+Proof. trivial. Qed.
+
+Lemma w11_rot r:
+  [1;1]*>w11*>r = w11'*>[1;1]*>r.
+Proof. trivial. Qed.
+
+Lemma d1s_rot n r:
+  [1;1]*>d1^^n*>r = d1^^n*>[1;1]*>r.
+Proof. simpl_rotate; trivial. Qed.
+
+Lemma w0s_rot n r:
+  [1;1]*>w0^^n*>r = w0'^^n*>[1;1]*>r.
+Proof. simpl_rotate; trivial. Qed.
+
+Lemma w1s_rot n r:
+  [1;1]*>w1^^n*>r = w1'^^n*>[1;1]*>r.
+Proof. simpl_rotate; trivial. Qed.
+
+Ltac rw_rot :=
+  repeat (
+  rewrite d1s_rot ||
+  rewrite w0s_rot ||
+  rewrite w1s_rot ||
+  rewrite d1_rot ||
+  rewrite w0_rot ||
+  rewrite w1_rot ||
+  rewrite w01_rot ||
+  rewrite w11_rot).
+
+Lemma sideRLs_trans_10 tm h r r' r'':
+  sideRLs tm h r r' ->
+  sideRLs tm [] r' r'' ->
+  sideRLs tm h r r''.
+Proof.
+  intros.
+  rewrite <-(app_nil_r h).
+  eapply sideRLs_trans; eauto.
+Qed.
+
+Lemma LIncs_w01_w0s_0 k n:
+  k+3<=n ->
+  (n-k) mod 2 = 1%nat ->
+  sideRLs tm' (hLR^^n) ([1;1]*>w01*>w0^^k*>0inf) (d1*>w0*>w1^^k*>w01*>w0^^((n-k-3)/2)*>0inf).
+Proof.
+  intros.
+  rw_rot.
+  eapply sideRLs_trans_10.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w01_Incs (n-1)); flia.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w0s_Incs k (n-1-k)); flia.
+    applys_eq (lh_Incs0 ((n-k-3)/2)); flia.
+  }
+  esx.
+Qed.
+
+Lemma LIncs_w01_w0s_1 k n:
+  k+4<=n ->
+  (n-k) mod 2 = 0%nat ->
+  sideRLs tm' (hLR^^n) ([1;1]*>w01*>w0^^k*>0inf) (d1*>w0*>w1^^k*>w11*>w0^^((n-k-4)/2)*>0inf).
+Proof.
+  intros.
+  rw_rot.
+  eapply sideRLs_trans_10.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w01_Incs (n-1)); flia.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w0s_Incs k (n-1-k)); flia.
+    applys_eq (lh_Incs1 ((n-k-4)/2)); flia.
+  }
+  esx.
+Qed.
+
+Lemma LIncs_w11_w0s_0 k n:
+  6+k<=n*4 ->
+  k mod 2 = 1%nat ->
+  sideRLs tm' (hLR^^n) ([1;1]*>w11*>w0^^k*>0inf) (d1^^3*>w1^^k*>w01*>w0^^(n*2-3-k/2)*>0inf).
+Proof.
+  intros.
+  rw_rot.
+  eapply sideRLs_trans_10.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w11_Incs (n-1)); flia.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w0s_Incs k (n*4-3-k)); flia.
+    applys_eq (lh_Incs0 (n*2-3-k/2)); flia.
+  }
+  esx.
+Qed.
+
+Lemma LIncs_w11_w0s_1 k n:
+  6+k<=n*4 ->
+  k mod 2 = 0%nat ->
+  sideRLs tm' (hLR^^n) ([1;1]*>w11*>w0^^k*>0inf) (d1^^3*>w1^^k*>w11*>w0^^(n*2-3-k/2)*>0inf).
+Proof.
+  intros.
+  rw_rot.
+  eapply sideRLs_trans_10.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w11_Incs (n-1)); flia.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w0s_Incs k (n*4-3-k)); flia.
+    applys_eq (lh_Incs1 (n*2-3-k/2)); flia.
+  }
+  esx.
+Qed.
+
+Lemma LIncs_d1s a0 a r r':
+  sideRLs tm' (hLR^^(2^a0*2^a)) ([1;1]*>r) r' ->
+  sideRLs tm' (hLR^^1) ([1;1]*>d1^^a0*>d1^^a*>r) (d1^^(a0+a)*>r').
+Proof.
+  intros.
+  rewrite <-lpow_add'.
+  rw_rot.
+  eapply segRLs_sideRLs_concat.
+  1: apply d1s_Incs.
+  eapply segRLs_sideRLs_concat.
+  1: apply d1s_Incs.
+  applys_eq H; flia.
+Qed.
+
+Lemma LIncs_d1s' a0 a r r':
+  sideRLs tm' (hLR^^(((2^a0-1)*4+2)*2^a)) ([1;1]*>r) r' ->
+  sideRLs tm' (hLR^^1) ([1;1]*>d1^^a0*>w1*>d1^^a*>r) (d1^^(a0+2+a)*>r').
+Proof.
+  intros.
+  rw_rot.
+  eapply sideRLs_trans_10.
+  {
+    eapply segRLs_sideRLs_concat.
+    1: apply d1s_Incs.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (w1_Incs (2^a0-1)); flia.
+    eapply segRLs_sideRLs_concat.
+    1: apply d1s_Incs.
+    apply H.
+  }
+  esx.
+Qed.
+
+Lemma LIncs_w1s n b r r':
+  n>=1 ->
+  sideRLs tm' (hLR^^(((n*3-2)*4^b+2)/3)) ([1;1]*>r) r' ->
+  sideRLs tm' (hLR^^n) ([1;1]*>w1^^b*>r) (d1^^(b*2)*>r').
+Proof.
+  intros.
+  rw_rot.
+  eapply segRLs_sideRLs_concat.
+  1: applys_eq (w1s_Incs b (n-1)); flia.
+  applys_eq H0; flia.
+Qed.
+
+Lemma LIncs_w1s' n b r r':
+  n>=3 ->
+  n mod 2 = 0%nat ->
+  sideRLs tm' (hLR^^(((n*3-8)*4^b+2)/3)) ([1;1]*>r) r' ->
+  sideRLs tm' (hLR^^n) ([1;1]*>w0*>w1^^b*>r) (w1*>d1^^(b*2)*>r').
+Proof.
+  intros.
+  rw_rot.
+  eapply segRLs_sideRLs_concat.
+  1: applys_eq (w0_Incs2 ((n-2)/2)); flia.
+  eapply segRLs_sideRLs_concat.
+  1: applys_eq (w1s_Incs b (n-3)); flia.
+  applys_eq H1; flia.
+Qed.
+
+Definition LC1 (a1:bool) a r := (if a1 then w1 else []) *> d1^^a *> r.
+Definition LC2 (b0:bool) b r := (if b0 then w0 else []) *> w1^^b *> r.
+Definition LC3 (c1:bool) c := (if c1 then w11 else w01) *> w0^^c *> 0inf.
+
+Lemma LC2_Incs n (b0:bool) b r r':
+  n>=3 ->
+  n mod 2 = 0%nat ->
+  sideRLs tm' (hLR^^(((n*3-8+(if b0 then 0 else 6))*4^b+2)/3)) ([1;1]*>r) r' ->
+  sideRLs tm' (hLR^^n) ([1;1]*>LC2 b0 b r) (LC1 b0 (b*2) r').
+Proof.
+  intros.
+  unfold LC2,LC1.
+  destruct b0.
+  - apply LIncs_w1s'.
+    3: applys_eq H1; flia.
+    all: lia.
+  - apply LIncs_w1s.
+    2: applys_eq H1; flia.
+    all: lia.
+Qed.
+
+Lemma LC1_Incs (a1:bool) a0 a r r':
+  sideRLs tm' (hLR^^(if a1 then ((2^a0-1)*4+2)*2^a else 2^a0*2^a)) ([1;1]*>r) r' ->
+  sideRLs tm' (hLR^^1) ([1;1]*>d1^^a0*>LC1 a1 a r) (d1^^(a0+a+(if a1 then 2 else 0))*>r').
+Proof.
+  intros.
+  unfold LC1.
+  destruct a1.
+  - applys_eq (LIncs_d1s' a0 a).
+    1: flia.
+    applys_eq H; flia.
+  - applys_eq (LIncs_d1s a0 a).
+    1: flia.
+    applys_eq H; flia.
+Qed.
+
+Import DivModCases.
+
+Lemma LC3_Incs n (c1:bool) c:
+  6+c*2<=n ->
+  exists c1' c',
+  sideRLs tm' (hLR^^n) ([1;1]*>LC3 c1 c) (d1*>(if c1 then d1^^2 else w0)*>w1^^c*>LC3 c1' c') /\
+  1<=c' /\
+  n/4<=c'<=n*2.
+Proof.
+  unfold LC3.
+  intros.
+  destruct c1.
+  - destruct (mod2 c).
+    + eexists true,_; split.
+      1: apply LIncs_w11_w0s_1; lia.
+      lia.
+    + eexists false,_; split.
+      1: apply LIncs_w11_w0s_0; lia.
+      lia.
+  - destruct (mod2 (n-c)).
+    + eexists true,_; split.
+      1: apply LIncs_w01_w0s_1; lia.
+      lia.
+    + eexists false,_; split.
+      1: apply LIncs_w01_w0s_0; lia.
+      lia.
+Qed.
+
+
+Notation rh := (d1*>0inf).
+
+Lemma BigStep l l':
+  sideRLs tm' (hLR^^1) ([1;1]*>l) l' ->
+  l {{{ (hR,R) }}} rh -->+
+  l' {{{ (hR,R) }}} rh.
+Proof.
+  intros.
+  mid10 (l <* <[1;1] {{{ (hL,L) }}} rh).
+  1: er.
+  eapply sideRLs_1,progress_evstep,unflip_evstep in H.
+  apply H.
+Qed.
+
+Definition Config:Type := bool*nat*nat*bool*nat*bool*nat.
+
+Definition to_config(x:Config) :=
+  let '(a1,a0,a,b0,b,c1,c):=x in
+  d1^^a0*>LC1 a1 a (LC2 b0 b (LC3 c1 c)) {{{ (hR,R) }}} rh.
+
+Definition P(x:Config):Prop :=
+  let '(a1,a0,a,b0,b,c1,c):=x in
+  3<=a0 /\
+  2<=a /\
+  1<=b /\
+  1<=c /\
+  6+c*2<=((2^a*3-8)*4^b+2)/3 /\
+  a0+a+4<=c*2 /\
+  True
+  .
+
+Lemma pow4_pow2 c:
+  4^c = 2^(c*2).
+Proof.
+  rewrite Nat.mul_comm.
+  rewrite Nat.pow_mul_r.
+  trivial.
+Qed.
+
+Ltac rw_pa := repeat rewrite Nat.pow_add_r in *.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=to_config (false,3,3,false,5,false,12)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=P).
+  2: unfold P; lia.
+  unfold P,to_config.
+  intros [[[[[[a1 a0] a] b0] b] c1] c] [HP0 [HP1 [HP2 [HP3 [HP4 [HP5 HP6]]]]]].
+  epose proof (LC3_Incs _ c1 c _) as [c1' [c' [I3 I3']]].
+  epose proof (LC2_Incs _ b0 b _ _ _ _ I3) as I2.
+  epose proof (LC1_Incs a1 a0 a _ _ I2) as I1.
+  clear I2 I3.
+  exists (b0,a0+a+(if a1 then 2 else 0),b*2+(if c1 then 3 else 1),negb c1,c,c1',c'); split.
+  - apply BigStep.
+    applys_eq I1.
+    destruct a1,b0,c1,c1'; ut; st; reflexivity.
+  - shelve.
+  Unshelve.
+  + etransitivity.
+    1: apply HP4.
+    destruct a1,b0.
+    all: zify_pow2sub1; lia.
+  + pose proof (Nat.pow_le_mono_r 2 2 a).
+    destruct a1.
+    * rewrite Nat.mul_add_distr_r.
+      apply (add_ge 0 3).
+      2,3: lia.
+      remember ((2^a0-1)*4*2^a).
+      lia.
+    * lia.
+  + destruct a.
+    1: lia.
+    cbn[Nat.pow].
+    destruct a1; lia.
+  + clear I1.
+    repeat split; try lia.
+    * destruct I3' as [_ [_ I3']].
+      assert (4+c'*2<=2^(b*2+c*2)). {
+        assert (I:4+c'*2<=2^(a0+a+b*2+4)). {
+          rw_pa.
+          rewrite pow4_pow2 in *.
+          destruct a1,b0.
+          all: zify_pow2sub1; try lia.
+        }
+        etransitivity.
+        1: apply I.
+        apply Nat.pow_le_mono_r; lia.
+      }
+      clear I3'.
+      rw_pa.
+      rewrite pow4_pow2.
+      remember (2^(b*2)-4) as v1.
+      replace (2^(b*2)) with (v1+4) in * by (pose proof (Nat.pow_le_mono_r 2 2 (b*2)); lia).
+      destruct c1; lia.
+    * assert (2^((a0-1)+(a-2)+b*2)<=c'*2). {
+        remember (a0-1) as a0'.
+        replace a0 with (a0'+1) in * by lia.
+        remember (a-2) as a'.
+        replace a with (a'+2) in * by lia.
+        rw_pa.
+        destruct I3' as [_ [I3' _]].
+        rewrite pow4_pow2 in *.
+        destruct a1,b0.
+        all: time (zify_pow2sub1; try lia).
+      }
+      assert ((a0-1)+(a-2)+b*2+12<=c'*2). {
+        etransitivity.
+        2: apply H.
+        remember ((a0-1)+(a-2)+b*2) as v1.
+        assert (4<=v1) by lia.
+        remember (v1-4) as v2.
+        replace v1 with (v2+4) in * by lia.
+        rw_pa.
+        clear.
+        induction v2; cbn[Nat.pow]; try lia.
+      }
+      destruct a1,c1; lia.
+Qed.
+
+End TM25.
+
+
+Module TM26.
+Definition tm := Eval compute in (TM_from_str "1RB1LE_0RC0RE_1LC0LD_1LA0RE_1RF0LA_---0RA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition tm' := flip tm.
+
+Notation hL := (A,[0;1]).
+Notation hR := (B,<[1;0;1]).
+Notation hLR := [(hL,hR)].
+Notation hRL := [(hR,hL)].
+
+Notation d0 := <[1;0;1;0].
+Notation d1 := <[1;1;1;1].
+
+Inductive LC: nat->nat->nat->side->Prop :=
+| LC_O a: LC 0 0 a (0inf<*<[0;1]^^a)
+| LC_S0 len n a l:
+  LC len n a l ->
+  LC (S len) (n+2^len) a (l<*d0)
+| LC_S1 len n a l:
+  LC len n a l ->
+  LC (S len) n a (l<*d1).
+
+Lemma LC_empty len a l:
+  LC len 0 a l ->
+  l = 0inf<*<[0;1]^^a<*d1^^len.
+Proof.
+  gen l.
+  induction len; intros.
+  - inverts H; trivial.
+  - inverts H.
+    1: lia.
+    apply IHlen in H1; subst; trivial.
+Qed.
+
+Lemma LC_full len a:
+  LC len (2^len-1) a (0inf<*<[0;1]^^a<*d0^^len).
+Proof.
+  induction len.
+  - apply LC_O.
+  - apply LC_S0 in IHlen.
+    applys_eq IHlen; cbn[Nat.pow]; flia.
+Qed.
+
+Lemma LC_lt [len n a l]:
+  LC len n a l ->
+  n<2^len.
+Proof.
+  intros H.
+  induction H; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma LC_Inc_O len n l:
+  LC len (S n) 0 l ->
+  exists l',
+  LC len n 0 l' /\
+  sideRLs tm' (hLR^^3) l l'.
+Proof.
+  gen n l.
+  induction len; intros.
+  - inverts H.
+  - inverts H.
+    + destruct n0 as [|n0].
+      * eexists; split.
+        -- apply LC_S1.
+           applys_eq LC_full; flia.
+        -- apply LC_empty in H2; subst.
+           esx.
+      * apply IHlen in H2.
+        destruct H2 as [l' [I1 I2]].
+        eexists; split.
+        -- apply LC_S0 in I1.
+           applys_eq I1; flia.
+        -- eapply segRLs_sideRLs_concat.
+          2: apply I2.
+          esx.
+    + apply IHlen in H1.
+      destruct H1 as [l' [I1 I2]].
+      eexists; split.
+      * apply LC_S1,I1.
+      * eapply segRLs_sideRLs_concat.
+        2: apply I2.
+        esx.
+Qed.
+
+Lemma LC_Inc_S len n a l:
+  LC len (S n) (S a) l ->
+  exists l',
+  LC len n a l' /\
+  sideRLs tm' (hLR^^2) l l'.
+Proof.
+  gen n l.
+  induction len; intros.
+  - inverts H.
+  - inverts H.
+    + destruct n0 as [|n0].
+      * eexists; split.
+        -- apply LC_S1.
+           applys_eq LC_full; flia.
+        -- apply LC_empty in H2; subst.
+           esx.
+      * apply IHlen in H2.
+        destruct H2 as [l' [I1 I2]].
+        eexists; split.
+        -- apply LC_S0 in I1.
+           applys_eq I1; flia.
+        -- eapply segRLs_sideRLs_concat.
+          2: apply I2.
+          esx.
+    + apply IHlen in H1.
+      destruct H1 as [l' [I1 I2]].
+      eexists; split.
+      * apply LC_S1,I1.
+      * eapply segRLs_sideRLs_concat.
+        2: apply I2.
+        esx.
+Qed.
+
+Definition RC1 n := [0;1;1;0] *> [1;0;1;0]^^n *> [1;1] *> 0inf.
+
+Definition S' '(l,k) := l {{{ (hL,L) }}} RC1 k.
+
+Lemma Ov len l k:
+  LC len 0 0 l ->
+  exists l',
+  LC (k+1) (2^(k+1)-1) (len*2+3) l' /\
+  S' (l,k) -->+
+  S' (l',1%nat).
+Proof.
+  unfold S'.
+  intros.
+  apply LC_empty in H; subst.
+  unfold RC1.
+  eexists; split.
+  1: apply LC_full.
+  es.
+Qed.
+
+Lemma Inc_S len n a l k:
+  LC len (S n) (S a) l ->
+  exists l',
+  LC len n a l' /\
+  S' (l,k) -->+
+  S' (l',2+k).
+Proof.
+  intros.
+  apply LC_Inc_S in H.
+  destruct H as [l' [I1 I2]].
+  eexists; split.
+  1: apply I1.
+  unfold S',RC1.
+  eapply @sideRLs_split with (ls1:=hLR) in I2.
+  destruct I2 as [l0 [I2 I2a]].
+  eapply sideRLs_1 in I2,I2a.
+  apply unflip_progress in I2,I2a.
+  follow10 I2.
+  es; er.
+  follow100 I2a.
+  es.
+Qed.
+
+Lemma Inc_O len n l k:
+  LC len (S n) O l ->
+  exists l',
+  LC len n O l' /\
+  S' (l,k) -->+
+  S' (l',3+k).
+Proof.
+  intros.
+  apply LC_Inc_O in H.
+  destruct H as [l' [I1 I2]].
+  eexists; split.
+  1: apply I1.
+  unfold S',RC1.
+  eapply @sideRLs_split with (ls1:=hLR) in I2.
+  destruct I2 as [l0 [I2 I2a]].
+  eapply @sideRLs_split with (ls1:=hLR) in I2a.
+  destruct I2a as [l1 [I2a I2b]].
+  eapply sideRLs_1 in I2,I2a,I2b.
+  apply unflip_progress in I2,I2a,I2b.
+  follow10 I2.
+  es; er.
+  follow100 I2a.
+  es; er.
+  follow100 I2b.
+  es.
+Qed.
+
+Ltac rw_pa := repeat rewrite Nat.pow_add_r in *.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (d0^^4*>[1;0]^^5*>0inf,1%nat)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(l,k) => exists len n a, LC len n a l /\ a<=n /\ len*2+3<=2^k+n*2/\k<>O).
+  2: {
+    eexists _,_,_; split.
+    1: apply LC_full.
+    lia.
+  }
+  intros [l k] [len [n [a [I1 I2]]]].
+  destruct n.
+  {
+    destruct a.
+    2: lia.
+    eapply Ov in I1.
+    destruct I1 as [l' [I1 I1a]].
+    eexists; split.
+    1: apply I1a.
+    eexists _,_,_; split.
+    1: apply I1.
+    rw_pa.
+    split.
+    1: lia.
+    destruct k; [lia|].
+    clear.
+    induction k; cbn[Nat.pow] in *; lia.
+  }
+  destruct a.
+  {
+    eapply Inc_O in I1.
+    destruct I1 as [l' [I1 I1a]].
+    eexists; split.
+    1: apply I1a.
+    eexists _,_,_; split.
+    1: apply I1.
+    rw_pa.
+    lia.
+  }
+  {
+    eapply Inc_S in I1.
+    destruct I1 as [l' [I1 I1a]].
+    eexists; split.
+    1: apply I1a.
+    eexists _,_,_; split.
+    1: apply I1.
+    rw_pa.
+    lia.
+  }
+Qed.
+
+End TM26.
+
+

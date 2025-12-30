@@ -1760,3 +1760,111 @@ Qed.
 End TM24.
 
 
+Module TM25.
+
+From BusyCoq Require Import Longitudinal ES_v2.
+Require Import ZifyNat.
+
+Ltac es_v2 := ES_v2.es.
+
+Definition tm := Eval compute in (TM_from_str "1RB1RE_1LC1RC_1LD0LC_1RA0LA_0RF---_0RE1RB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (C,<[1;1]).
+Notation hL := (A,[0;1]).
+Notation hRL := [(hR,hL)].
+
+Lemma pow4_mod3 n:
+  4^n mod 3 = 1%nat.
+Proof.
+  induction n; cbn[Nat.pow]; lia.
+Qed.
+
+Lemma RIncs k r:
+  sideRLs tm (hRL^^((4^k*8-2)/3)) ([0;1;1;1]^^k*>[0;1;1;0]*>r) ([0;1;0;1]^^k*>[0;1;0;0]*>r).
+Proof.
+  induction k.
+  1: esx.
+  cbn[Nat.pow lpow].
+  do 2 rewrite Str_app_assoc.
+  eapply segRLs_sideRLs_concat.
+  2: apply IHk.
+  pose proof (pow4_mod3 k).
+  applys_eq (segRLs_addmul_v2 4 1 ((4^k*8-2)/3) 2 0); unfold DH0.
+  1,2: flia.
+  1,2: esx.
+Qed.
+
+Notation hL' := (C,[]).
+Notation hR' := (E,[]).
+Notation hLR' := [(hL',hR')].
+Notation hRL' := [(hR',hL')].
+
+Lemma RIncs' k r:
+  sideRLs tm (hRL'^^((4^k*8-2)/3)) ([0;1;1]*>[0;1;1;1]^^k*>[0;1;1;0]*>r) ([0;1;1]*>[0;1;0;1]^^k*>[0;1;0;0]*>r).
+Proof.
+  eapply segRLs_sideRLs_concat.
+  2: apply RIncs.
+  apply segRLs_wall''.
+  esx.
+Qed.
+
+Definition tm' := flip tm.
+
+Lemma LIncs k:
+  sideRLs tm' (hLR'^^((4^k-1)/3)) (0inf<*<[0;0;0;0]^^k) (0inf<*<[0;0;1;1]^^k).
+Proof.
+  induction k.
+  1: esx.
+  cbn[Nat.pow lpow].
+  do 2 rewrite Str_app_assoc.
+  eapply segRLs_sideRLs_concat.
+  2: apply IHk.
+  pose proof (pow4_mod3 k).
+  applys_eq (segRLs_addmul_v2 4 1 ((4^k-1)/3) 1 0); unfold DH0.
+  1,2: flia.
+  1,2: esx.
+Qed.
+
+Lemma LIncs' k:
+  sideRLs tm' (hLR'^^((4^k*8-2)/3)) (0inf<*<[0;0;0;0]^^(S k)<*<[0;0]) (0inf<*<[0;0;1;1]^^(S k)<*<[0;0]).
+Proof.
+  eapply segRLs_sideRLs_concat.
+  2: apply LIncs.
+  cbn[Nat.pow].
+  pose proof (pow4_mod3 k).
+  applys_eq (segRLs_addmul_v2 2 1 ((4*4^k-1)/3) 0 0); unfold DH0.
+  1,2: flia.
+  1,2: esx.
+Qed.
+
+Definition S' '(k,r) := 0inf {{{ (hL',L) }}} [0;1;1]*>[0;1;1;1]^^k*>[0;1;1;0]*>r.
+
+Lemma BigStep k r:
+  exists r',
+  S' (k,r) -->+ S' (S k,r').
+Proof.
+  eexists ([0;1;1;0]^^k*>1>>r).
+  unfold S'.
+  epose proof (sideRLs_concat_1L (RIncs' k r) (LIncs' k)) as I1.
+  rewrite lpow_all0 in I1 by solve_const0_eq.
+  replace ([0;0]*>0inf) with 0inf in I1 by solve_const0_eq.
+  follow I1. clear I1.
+  do 2 (er; sr).
+  es_v2.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (1%nat,1>>0inf)).
+  1: esx.
+  eapply progress_nonhalt_simple; intros [k r].
+  epose proof (BigStep k r) as [r' I1].
+  eexists (_,_); apply I1.
+Qed.
+
+End TM25.
+
+
