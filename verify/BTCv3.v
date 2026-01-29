@@ -2334,3 +2334,209 @@ Qed.
 End TM13.
 
 
+Module TM14.
+
+Definition tm := Eval compute in (TM_from_str "1LB1RE_1RC0LD_1RA1RC_1LA0LE_1LF0RC_---1LA").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Ltac esc :=
+  (apply BoundedConfig.segRLs_c_spec with (T:=10^3); reflexivity) ||
+  (apply BoundedConfig.sideRLs_c_spec with (T:=10^3); reflexivity).
+
+Notation a01 := [1;1;0;0;1;1].
+Notation a23 := [1;0;1;1].
+Notation a4 := [1;0;1;1;1].
+
+Notation b01 := [1;1;1].
+Notation b2 := [1;1;0;1].
+Notation b3 := [1;1;1;0;0].
+Notation b4 := [1;1;1;0;0;1].
+
+Notation h0 := [((C,<[1]),(A,[1;1;0;0;1]))].
+Notation h1 := [((C,<[0]),(B,[1]));((C,<[0]),(B,[1;1;0;1;1]))].
+Notation h2 := [((E,<[1]),(D,[0]));((E,<[1]),(D,[0;1;1;0;1]))].
+Notation h3 := [((C,<[0]),(B,[1;1;1;0;0]))].
+
+Notation h0' := [((C,<[1]),(E,[0;0;1]))].
+Notation h1' := [((C,<[0]),(A,[1]));((C,<[0]),(B,[1;1;1;0;0;1]))].
+Notation h2' := [((C,<[1]),(E,[0]));((A,<[1]),(D,[0]));((A,<[1]),(E,[0;0;1;1;0;1]))].
+Notation h3' := [((E,<[1]),(D,[0]));((E,<[1]),(D,[0;1;1;1;0;0]))].
+
+Inductive Tp := tA | tB.
+
+Inductive LC: side->nat->nat->Tp->Prop :=
+| LC_dh0: LC (a01*>0inf) 1 O tA
+| LC_dh1: LC (a23*>0inf) 1 O tA
+| LC_dh2: LC (a4*>0inf) 1 O tA
+| LC_dh3: LC (b01*>0inf) 1 O tB
+| LC_dh4: LC (b4*>0inf) 0 O tB
+| LC_a01 l t h tp:
+  LC l t h tp ->
+  LC (a01*>l) 1 (S h) tA
+| LC_a23 l t h tp:
+  LC l t h tp ->
+  LC (a23*>l) 1 (S h) tA
+| LC_a4 l t h:
+  LC l t h tB ->
+  LC (a4*>l) 1 (S h) tA
+| LC_b01 l t h tp:
+  LC l t h tp ->
+  LC (b01*>l) 1 (S h) tB
+| LC_b2 l t h:
+  LC l t h tB ->
+  LC (b2*>l) 1 (S h) tB
+| LC_b3 l t h:
+  LC l t h tB ->
+  LC (b3*>l) 1 (S h) tB
+| LC_b4 l t h:
+  LC l t h tB ->
+  LC (b4*>l) t (S h) tB
+  .
+
+Ltac eex := repeat eexists.
+
+Ltac ec := econstructor.
+
+Ltac ssc H :=
+  eapply segRLs_sideRLs_concat; [|apply H].
+
+Inductive is_hRL: _->_->Prop :=
+| is_h0 tp: is_hRL h0 tp
+| is_h1 tp: is_hRL h1 tp
+| is_h2: is_hRL h2 tB
+| is_h3: is_hRL h3 tB.
+
+Inductive is_hRL': _->_->Prop :=
+| is_h0': is_hRL' h0' tA
+| is_h1': is_hRL' h1' tB
+| is_h2': is_hRL' h2' tB
+| is_h3': is_hRL' h3' tB.
+
+Inductive t_mono: _->_->Prop :=
+| tAB: t_mono tA tB
+| tAA: t_mono tA tA
+| tBB: t_mono tB tB.
+
+Lemma LC_spec l t h t0:
+  LC l t h t0 ->
+  match t with
+  | S t =>
+    forall hRL,
+    is_hRL hRL t0 ->
+    exists l' t' t0', LC l' t' h t0' /\ sideRLs tm hRL l l' /\ t<=t' /\ t_mono t0 t0'
+  | O =>
+    forall hRL' t0',
+    is_hRL' hRL' t0' ->
+    exists l' t', LC l' t' h t0' /\ sideRLs tm hRL' l l' /\ 1<=t'
+  end.
+Proof.
+  gen l t t0.
+  induction h; intros.
+  {
+    inverts H.
+    - introv X; inverts X.
+      all: exists (a23*>0inf); eex; [ec|esc|lia|ec].
+    - introv X; inverts X.
+      all: exists (a4*>0inf); eex; [ec|esc|lia|ec].
+    - introv X; inverts X.
+      all: exists (b01*>0inf); eex; [ec|esc|lia|ec].
+    - introv X; inverts X.
+      all: exists (b4*>0inf); eex; [ec|esc|lia|ec].
+    - introv X; inverts X.
+      1: exists (a01*>0inf); eex; [ec|esc|lia].
+      all: exists (b01*>0inf); eex; [ec|esc|lia].
+  }
+  inverts H.
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t1.
+    + epose proof (IH _ _ is_h0') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      all: eexists (a23*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+    + epose proof (IH _ (is_h0 _)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      introv X; inverts X.
+      all: eexists (a01*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t1.
+    + epose proof (IH _ _ is_h1') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      all: eexists (a4*>_); eex; [ec; apply I1 | ssc I2; esc | lia | ec].
+    + epose proof (IH _ (is_h1 _)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      introv X; inverts X.
+      all: eexists (a23*>_); eex; [ec; apply I1 | ssc I2; esc | lia | ec].
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t1.
+    + epose proof (IH _ _ is_h0') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      all: eexists (b01*>_); eex; [ec; apply I1 | ssc I2; esc | lia | ec].
+    + epose proof (IH _ (is_h0 _)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      inverts I4.
+      introv X; inverts X.
+      all: eexists (a4*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t1.
+    + epose proof (IH _ _ is_h2') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      all: eexists (b2*>_); eex; [ec; apply I1 | ssc I2; esc | lia | ec].
+    + epose proof (IH _ (is_h0 _)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      introv X; inverts X.
+      all: eexists (b01*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t1.
+    + epose proof (IH _ _ is_h3') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      all: eexists (b3*>_); eex; [ec; apply I1 | ssc I2; esc | lia | ec].
+    + epose proof (IH _ (is_h2)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      inverts I4.
+      introv X; inverts X.
+      all: eexists (b2*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t1.
+    + epose proof (IH _ _ is_h1') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      all: eexists (b4*>_); eex; [ec; apply I1 | ssc I2; esc | lia | ec].
+    + epose proof (IH _ (is_h3)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      inverts I4.
+      introv X; inverts X.
+      all: eexists (b3*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+  - rename H3 into IH.
+    apply IHh in IH; clear IHh.
+    destruct t.
+    + epose proof (IH _ _ is_h0') as [l' [t' [I1 [I2 I3]]]].
+      introv X; inverts X.
+      1: eexists (a01*>_); eex; [ec; apply I1 | ssc I2; esc | lia ].
+      all: eexists (b01*>_); eex; [ec; apply I1 | ssc I2; esc | lia ].
+    + epose proof (IH _ (is_h0 _)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+      inverts I4.
+      introv X; inverts X.
+      all: eexists (b4*>_); eex; [ec; apply I1 | ssc I2; esc | lia |ec].
+Qed.
+
+Definition S' (r:side) := 0inf <* [1] <* <[1] {{C}}> r.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (a23*>0inf)).
+  1: unfold S'; esx.
+  eapply progress_nonhalt_cond with (P:=fun l => exists t h t0, LC l (S t) h t0).
+  2: eex; ec.
+  intros l [t [h [t0 I0]]].
+  apply LC_spec in I0.
+  epose proof (I0 _ (is_h0 _)) as [l' [t' [t0' [I1 [I2 [I3 I4]]]]]].
+  eapply sideRLs_1 in I2.
+  unfold S'.
+  eexists (a01*>l'); split.
+  - follow10 I2; er.
+  - eex; ec; eauto 1.
+Qed.
+
+End TM14.
+
+
