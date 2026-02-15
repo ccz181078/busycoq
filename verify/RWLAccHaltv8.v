@@ -69,6 +69,14 @@ Proof. solve_halt'' 16 true. Time Qed.
 Lemma tm25: halts_at_trans (TM_from_str "1RB0RD_1LC1LD_1RD0LB_1LC0RE_0RF1RA_---1RC") c0 (F,0).
 Proof. solve_halt' 21 10000 false 2%N (10^10)%N. Time Qed.
 
+Lemma tm26: halts_at_trans (TM_from_str "1RB0LE_1LC0RA_1RD0RC_1LA0LD_1LB0LF_0RA---") c0 (F,1).
+Proof. solve_halt' 19 10000 false 2%N (10^10)%N. Time Qed.
+
+Lemma tm27: halts_at_trans (TM_from_str "1RB0RA_1LC0RE_1RD0LB_1LA0LD_1RC0RF_0LB---") c0 (F,1).
+Proof. solve_halt' 19 10000 false 2%N (10^10)%N. Time Qed.
+
+Lemma tm28: halts_at_trans (TM_from_str "1RB0RF_1RC0LE_1LD0LC_1RE0RD_1LB0RA_0LE---") c0 (F,1).
+Proof. solve_halt' 19 10000 false 2%N (10^10)%N. Time Qed.
 
 
 

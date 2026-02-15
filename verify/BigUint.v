@@ -224,6 +224,12 @@ Definition pr_b(a:Z) := a.
 Definition div' a b :=
   ofZ ((pr_a (toZ' a))/(pr_b (toZ' b))).
 
+Definition mod' a b :=
+  ofZ ((pr_a (toZ' a)) mod (pr_b (toZ' b))).
+
+Definition divmod' a b :=
+  (div' a b,mod' a b).
+
 Definition div a b :=
 match b with
 | BigUintNil => BigUintNil
@@ -243,6 +249,18 @@ match b with
     if 1<=?b0 then Some (fst (divmodc a b0))
     else None
   else None
+end.
+
+Definition divmod_small a b :=
+match b with
+| BigUintCons b0 BigUintNil =>
+  if b0<=?mask0 then
+    if 1<=?b0 then
+      let (c,d):=divmodc a b0 in
+      Some (c,Cons_simpl d BigUintNil)
+    else None
+  else None
+| _ => None
 end.
 
 Lemma mask_spec c:
@@ -705,6 +723,17 @@ Proof.
   - apply Z.div_pos; lia.
 Qed.
 
+Lemma mod'_spec a b:
+  (toZ (mod' a b) = toZ a mod toZ b)%Z.
+Proof.
+  unfold mod'.
+  unfold pr_a,pr_b.
+  repeat rewrite toZ'_spec.
+  epose proof (toZ_ge0 a).
+  epose proof (toZ_ge0 b).
+  rewrite ofZ_spec; lia.
+Qed.
+
 (*
 Lemma mul_v2_spec a b:
   (toZ (mul_v2 a b) = toZ a * toZ b)%Z.
@@ -758,6 +787,31 @@ Proof.
   - apply div'_spec.
 Qed.
 
+Local Opaque Cons_simpl.
+
+Lemma divmod_small_spec a b c d:
+  divmod_small a b = Some (c,d) ->
+  (toZ a = toZ b * toZ c + toZ d /\ 0 <= toZ d < toZ b)%Z.
+Proof.
+  unfold divmod_small.
+  destruct b as [|b0 [|]].
+  1,3: congruence.
+  pose proof (divmodc_spec a b0).
+  destruct (divmodc a b0) as [c' d'].
+  destruct (b0 <=? mask0) eqn:E.
+  2: congruence.
+  destruct (1 <=? b0) eqn:E0.
+  2: congruence.
+  specialize (H eq_refl eq_refl).
+  intro I1.
+  inverts I1.
+  rewrite Cons_simpl_spec.
+  solve_v1.
+  do 2 rewrite (Z.mod_small _ (2^54)) by lia.
+  lia.
+Qed.
+
+Local Transparent Cons_simpl.
 
 
 Definition to_nat x := Z.to_nat (toZ x).
@@ -834,6 +888,27 @@ Proof.
   epose proof (toZ_ge0 a).
   epose proof (toZ_ge0 b).
   rewrite Z2Nat.inj_div; lia.
+Qed.
+
+Lemma inj_divmod_small a b c d:
+  divmod_small a b = Some (c,d) ->
+  (to_nat a = to_nat b * to_nat c + to_nat d /\ to_nat d < to_nat b).
+Proof.
+  intros.
+  apply divmod_small_spec in H.
+  epose proof (toZ_ge0 a).
+  epose proof (toZ_ge0 c).
+  epose proof (toZ_ge0 d).
+  unfold to_nat.
+  lia.
+Qed.
+
+Lemma to_of_nat n:
+  to_nat (of_nat n) = n.
+Proof.
+  unfold to_nat,of_nat.
+  rewrite ofZ_spec by lia.
+  lia.
 Qed.
 
 Ltac rw_N' :=

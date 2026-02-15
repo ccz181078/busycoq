@@ -91,6 +91,28 @@ Proof.
     + apply IHn.
 Qed.
 
+Lemma lpow_rotate_list {A} (a0:list A) a1 b n:
+  (a1::a0)^^n ++ a1::b = a1::(a0++[a1])^^n++b.
+Proof.
+  induction n; cbn.
+  - trivial.
+  - repeat rewrite <-List.app_assoc.
+    rewrite IHn.
+    trivial.
+Qed.
+
+Lemma lpow_rotate_list'{A}(a b:list A) n:
+  (a++b)^^n++a = a++(b++a)^^n.
+Proof.
+  gen b.
+  induction a; intros.
+  - repeat rewrite app_nil_r; trivial.
+  - cbn.
+    specialize (IHa (b++[a])).
+    rewrite lpow_rotate_list,<-app_assoc,IHa,<-app_assoc.
+    trivial.
+Qed.
+
 #[export] Hint Rewrite firstn_nil skipn_nil skipn_all firstn_all
   firstn_app_2 : list.
 

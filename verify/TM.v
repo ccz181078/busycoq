@@ -438,6 +438,18 @@ Proof.
     eauto.
 Qed.
 
+Lemma multistep_evstep_iff:
+  forall {tm c c'},
+  c -[ tm ]->* c' <->
+  exists n, c -[ tm ]->> n / c'.
+Proof.
+  intros.
+  split; intro.
+  - apply with_counter; auto.
+  - destruct H as [n H].
+    apply without_counter in H; auto.
+Qed.
+
 Lemma evstep_progress :
   forall tm c c',
   c -[ tm ]->* c' ->
@@ -713,6 +725,14 @@ Proof.
       rewrite <-step_c_spec in H1.
       rewrite H1,IHn.
       assumption.
+Qed.
+
+Lemma evstep_c_spec tm c c':
+  (exists n, multistep_c tm n c = Some c') <->
+  c -[ tm ]->* c'.
+Proof.
+  rewrite multistep_evstep_iff.
+  split; intros [n H]; exists n; apply multistep_c_spec,H.
 Qed.
 
 Lemma halts_in_halts_in' {tm c n}:

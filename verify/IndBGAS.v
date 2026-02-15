@@ -47,6 +47,18 @@ Ltac solve_hlin_nonhalt cfg :=
     (solve_hlin_nonhalt_T (config_exploop cfg) 1000000%N)
   end.
 
+Lemma nonhalt134: ~halts (TM_from_str "1RB0LD_0RC0RE_1LC0LA_---1LE_0LF0RE_0RA0LE") c0.
+Proof.
+  solve_hlin_nonhalt_T
+  (upd_config
+[
+  set_rep_step1_limit 1;
+  set_max_period 293;
+  set_initial_steps (2*10^6)
+]
+  default_config) (10^7)%N.
+Time Qed.
+
 Lemma nonhalt133: ~halts (TM_from_str "1RB1RE_0LC1RA_1RD1LD_1LB1LE_1LF0RB_---0LA") c0.
 Proof.
   solve_hlin_nonhalt (

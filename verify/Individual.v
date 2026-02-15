@@ -878,16 +878,6 @@ Proof.
         apply H3.
 Qed.
 
-Lemma lpow_rotate_list {A} (a0:list A) a1 b n:
-  (a1::a0)^^n ++ a1::b = a1::(a0++[a1])^^n++b.
-Proof.
-  induction n; cbn.
-  - trivial.
-  - repeat rewrite <-List.app_assoc.
-    rewrite IHn.
-    trivial.
-Qed.
-
 Lemma segRLs_addmul tm a x b c h w1 w2:
   segRLs tm (h^^b) (h^^c) w1 w2 ->
   segRLs tm (h^^a) h w2 w2 ->

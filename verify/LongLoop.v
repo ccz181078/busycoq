@@ -1018,15 +1018,7 @@ match T with
     skip ls0 ls' &&& (fun ls0 =>
     skip ls1 ls' &&& (fun ls1 =>
     interpolate ls ls0 ls1 T &&& (fun res =>
-    (match res with
-    | inr ls'0 :: res =>
-      let n2:=length ls'0 in
-      let n1:=length ls' in
-      b2o (eqb ls'0 (skipn (n1-n2) ls')) &&& (fun _ =>
-      let ls' := firstn (n1-n2) ls' in
-      Some (inl ls' :: inr ls'0 :: inl ls'0 :: res))
-    | _ => None
-    end ||| (fun _ => Some (inl ls' :: res))))
+    ((Some (inl ls' :: res))))
     )))
   end
 end.
@@ -1135,17 +1127,22 @@ Qed.
 
 Inductive N' :=
 | N'_mk(a b c d:N)
-| N'_c(a:N).
+| N'_c(a:N)
+| N'_mk2(a b c a' c':N).
 
 Definition toN(n:N)(x:N'):N :=
 match x with
 | N'_mk a b c d => ((2^(n*a)-1)*b+c)/d
 | N'_c a => a
+| N'_mk2 a b c a' c' => ((2^(n*a)-1)*b+c)*2^(n*a')+c'
 end.
 
 Definition N'_eq_c x k :=
 match x with
 | N'_c c => b2o (c =? k)
+| N'_mk a b c d =>
+  b2o (b =? 0) &&& (fun _ =>
+  b2o (c/d =? k))
 | _ => None
 end.
 
@@ -1171,9 +1168,14 @@ Proof.
   unfold N'_eq_c.
   intros.
   destruct x.
-  1: inverts H.
-  des_N_op.
-  trivial.
+  - des_if' H.
+    cbn in H.
+    des_N_op.
+    unfold toN.
+    f_equal; lia.
+  - des_N_op.
+    trivial.
+  - congruence.
 Qed.
 
 Definition N'_Nmap_apply mp x :=
@@ -1190,6 +1192,12 @@ match mp with
     Ndiv c (2^a0*d) &&& (fun c =>
     b2o (negb (d=?0)) &&& (fun _ =>
     Some (N'_mk a (b*2^a1*d) ((c*2^a1+b1)*d) d)))))
+  | N'_mk2 a b c a' c' =>
+    Nsubge c' b0 &&& (fun c' =>
+    Ndiv b (2^a0) &&& (fun b =>
+    Ndiv c (2^a0) &&& (fun c =>
+    Ndiv c' (2^a0) &&& (fun c' =>
+    Some (N'_mk2 a (b*2^a1) (c*2^a1) a' (c'*2^a1+b1))))))
   end
 | Nmap_c b0 b1 =>
   N'_eq_c x b0 &&& (fun _ =>
@@ -1217,6 +1225,11 @@ Proof.
       des_N_op.
       unfold toN.
       applys_eq (Nmap_apply_mk a0 a1 b0 b1 n1); lia.
+    + do 4 des_if' H.
+      inverts H.
+      des_N_op.
+      unfold toN.
+      applys_eq (Nmap_apply_mk a0 a1 b0 b1 (((2^(n*a)-1)*n1+n2)*2^(n*a')+n3)); lia.
   - des_if' H.
     inverts H.
     eapply N'_eq_c_spec in E.
@@ -1231,6 +1244,14 @@ match x with
   Nsubge n b0 &&& (fun n =>
   Ndiv n (2^a0) &&& (fun n =>
   Some (N'_mk a1 (2^a0*(b1+n*(2^a1-1))) ((2^a0*n+b0)*(2^a1-1)) (2^a1-1)))))
+| N'_mk a b c d =>
+  b2o (d=?1) &&& (fun _ =>
+  b2o (negb (a1=?0)) &&& (fun _ =>
+  b2o (b1=?0) &&& (fun _ =>
+  Nsubge c b0 &&& (fun c =>
+  Ndiv c (2^a0) &&& (fun c =>
+  Ndiv b (2^a0) &&& (fun b =>
+  Some (N'_mk2 a (b*2^a0) (c*2^a0) a1 b0)))))))
 | _ => None
 end.
 
@@ -1243,7 +1264,7 @@ match x with
   Ndiv c g &&& (fun c =>
   Ndiv d g &&& (fun d =>
   Some (N'_mk a b c d)))))
-| _ => None
+| _ => Some x
 end.
 
 Lemma N'_simpl_d_spec x x' n:
@@ -1253,7 +1274,7 @@ Proof.
   unfold N'_simpl_d.
   intros.
   destruct x.
-  2: inverts H.
+  2,3: inverts H; trivial.
   do 4 des_if' H.
   inverts H.
   des_N_op.
@@ -1293,7 +1314,17 @@ Proof.
   unfold N'_Nmap_applys_inc_0.
   intros.
   destruct x.
-  1: inverts H.
+  3: inverts H.
+  1:{
+    do 6 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    applys_eq (Nmap_applys_inc a0 a1 b0 0 ((2^(n*a)-1)*n2+n1)).
+    1,3: lia.
+    rewrite (N.mul_comm _ n).
+    lia.
+  }
   do 3 des_if' H.
   inverts H.
   des_N_op.
@@ -1348,7 +1379,7 @@ Proof.
   unfold N'_set_d.
   intros.
   destruct x.
-  2: inverts H.
+  2,3: inverts H.
   do 2 des_if' H.
   inverts H.
   des_N_op.
@@ -1358,7 +1389,100 @@ Proof.
   rewrite N.Div0.div_mul_cancel_r; trivial.
 Qed.
 
-Definition N'_Nmap_applys_dec(a0 a1 b0 b1:N)(x:N'):option N' :=
+Definition N'_Nmap_applys_dec_v3(a0 a1 b0 b1:N)(x:N'):option N' :=
+match x with
+| N'_mk2 a b c a' c' =>
+  b2o (negb (a1=?0)) &&& (fun _ =>
+  b2o (b1=?0) &&& (fun _ =>
+  b2o (a1=?a') &&& (fun _ =>
+  b2o (b0=?c') &&& (fun _ =>
+  Ndiv b (2^a0) &&& (fun b =>
+  Ndiv c (2^a0) &&& (fun c =>
+  Some (N'_mk a (b*2^a0) (c*2^a0+b0) 1)))))))
+| _ => None
+end.
+
+Lemma N'_Nmap_applys_dec_v3_spec a0 a1 b0 b1 x x' n:
+  N'_Nmap_applys_dec_v3 a0 a1 b0 b1 x = Some x' ->
+  Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (toN n x) (toN n x') n.
+Proof.
+  unfold N'_Nmap_applys_dec_v3.
+  intros.
+  destruct x.
+  1,2: inverts H.
+  do 6 des_if' H.
+  inverts H.
+  des_N_op.
+  unfold toN.
+  applys_eq (Nmap_applys_dec a0 a' c' 0 ((2^(n*a)-1)*n0+n1)).
+  2,3: lia.
+  rewrite (N.mul_comm _ n).
+  lia.
+Qed.
+
+
+Definition N'_Nmap_applys_dec_v2(a0 a1 b0 b1:N)(x:N'):option N' :=
+N'_set_d x (2^a1-1) &&& (fun x =>
+match x with
+| N'_mk a b c d =>
+  b2o (negb (a1=?0)) &&& (fun _ =>
+  b2o (a=?a1*2) &&& (fun _ =>
+  b2o (d =? 2^a1-1) &&& (fun _ =>
+  Ndiv b (2^a0*d) &&& (fun b' =>
+  Nsubge c (b0*d) &&& (fun c =>
+  Ndiv c (2^a0*d) &&& (fun c' =>
+  b2o (b'*d=?b1+c'*d) &&& (fun _ =>
+  Some (N'_mk a1 (b'*2^a0) (c'*2^a0+b0) 1))))))))
+| _ => None
+end).
+
+Ltac Nmul_to_r d :=
+  repeat rewrite <-N.mul_assoc;
+  repeat rewrite (N.mul_comm d);
+  repeat rewrite N.mul_assoc.
+
+Lemma N'_Nmap_applys_dec_v2_spec a0 a1 b0 b1 x x' n:
+  N'_Nmap_applys_dec_v2 a0 a1 b0 b1 x = Some x' ->
+  Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (toN n x) (toN n x') n.
+Proof.
+  unfold N'_Nmap_applys_dec_v2.
+  intros.
+  destruct x.
+  2,3: inverts H.
+  des_if' H.
+  cbn in H.
+  destruct n0.
+  2,3: inverts H.
+  do 7 des_if' H.
+  inverts H.
+  rename n2 into c'.
+  rename n0 into b'.
+  des_N_op.
+  eapply N'_set_d_spec in E.
+  rewrite E; clear E.
+  unfold toN.
+  pose proof (geosum_div a1 n) as I1.
+  replace (n*(a1*2)) with (n*a1+n*a1) by lia.
+  rewrite N.pow_add_r.
+  remember (2^a1-1) as v1.
+  assert (v1<>0) by (pose proof (N.pow_le_mono_r 2 1 a1); lia).
+  Nmul_to_r (2^a1-1).
+  repeat rewrite N.div_add_l by lia.
+  repeat rewrite N.div_mul by lia.
+  rewrite N.div_1_r.
+  applys_eq (Nmap_applys_dec a0 a1 b0 b1 (((2^(n*a1)-1)*b'+c')) n).
+  2,3: lia.
+  rewrite (N.mul_comm a1 n).
+  remember (2^(n*a1)-1) as v2.
+  replace (2^(n*a1)) with (v2+1) in * by lia.
+  replace (2^a1) with (v1+1) in * by lia.
+  rewrite N.add_sub.
+  remember (v2/v1) as v3.
+  replace v2 with (v3*v1) in * by (apply N.Div0.div_exact in I1; lia).
+  lia.
+Qed.
+
+Definition N'_Nmap_applys_dec_v1(a0 a1 b0 b1:N)(x:N'):option N' :=
 N'_set_d x (2^a1-1) &&& (fun x =>
 match x with
 | N'_mk a b c d =>
@@ -1372,18 +1496,18 @@ match x with
 | _ => None
 end).
 
-Lemma N'_Nmap_applys_dec_spec a0 a1 b0 b1 x x' n:
-  N'_Nmap_applys_dec a0 a1 b0 b1 x = Some x' ->
+Lemma N'_Nmap_applys_dec_v1_spec a0 a1 b0 b1 x x' n:
+  N'_Nmap_applys_dec_v1 a0 a1 b0 b1 x = Some x' ->
   Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (toN n x) (toN n x') n.
 Proof.
-  unfold N'_Nmap_applys_dec.
+  unfold N'_Nmap_applys_dec_v1.
   intros.
   destruct x.
-  2: inverts H.
+  2,3: inverts H.
   des_if' H.
   cbn in H.
   destruct n0.
-  2: inverts H.
+  2,3: inverts H.
   do 6 des_if' H.
   inverts H.
   des_N_op.
@@ -1408,6 +1532,31 @@ Proof.
   pose proof (N.div_mod v2 v1) as I2.
   rewrite I1 in I2.
   lia.
+Qed.
+
+Definition N'_Nmap_applys_dec(a0 a1 b0 b1:N)(x:N'):option N' :=
+  N'_Nmap_applys_dec_v1 a0 a1 b0 b1 x ||| (fun _ =>
+  N'_Nmap_applys_dec_v2 a0 a1 b0 b1 x ||| (fun _ =>
+  N'_Nmap_applys_dec_v3 a0 a1 b0 b1 x)).
+
+Lemma N'_Nmap_applys_dec_spec a0 a1 b0 b1 x x' n:
+  N'_Nmap_applys_dec a0 a1 b0 b1 x = Some x' ->
+  Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (toN n x) (toN n x') n.
+Proof.
+  unfold N'_Nmap_applys_dec.
+  intros.
+  des_if' H.
+  {
+    inverts H.
+    eapply N'_Nmap_applys_dec_v1_spec,E.
+  }
+  clear E; rename H1 into H.
+  des_if' H.
+  {
+    inverts H.
+    eapply N'_Nmap_applys_dec_v2_spec,E.
+  }
+  eapply N'_Nmap_applys_dec_v3_spec,H1.
 Qed.
 
 Definition N'_Nmap_applys_id(a0 b0:N)(x:N'):option N' :=
@@ -1558,6 +1707,7 @@ Definition N'_eqb x x0 :=
 match x,x0 with
 | N'_mk a b c d,N'_mk a0 b0 c0 d0 => eqb a a0 && eqb b b0 && eqb c c0 && eqb d d0
 | N'_c c,N'_c c0 => eqb c c0
+| N'_mk2 a b c a' c',N'_mk2 a0 b0 c0 a'0 c'0 => eqb a a0 && eqb b b0 && eqb c c0 && eqb a' a'0 && eqb c' c'0
 | _,_ => false
 end.
 
@@ -1572,6 +1722,11 @@ Proof with solve_Bool_reflect.
     destruct (eqb_spec c c1)...
     destruct (eqb_spec d d0)...
   - destruct (eqb_spec a a0)...
+  - destruct (eqb_spec a a0)...
+    destruct (eqb_spec b b0)...
+    destruct (eqb_spec c c1)...
+    destruct (eqb_spec a' a'0)...
+    destruct (eqb_spec c' c'0)...
 Defined.
 
 Fixpoint N'_matched_vheads hs (hs':list (N'_head)) f {struct hs} :=
@@ -1636,7 +1791,60 @@ match hs,hs' with
 | _,_ => None
 end.
 
+Definition N'_add (x x0:N') :=
+match x,x0 with
+| N'_mk a b c d,N'_mk a0 b0 c0 d0 =>
+  b2o (eqb a a0) &&& (fun _ =>
+  b2o (eqb d 1) &&& (fun _ =>
+  b2o (eqb d0 1) &&& (fun _ =>
+  Some (N'_mk a (b+b0) (c+c0) d))))
+| _,_ => None
+end.
+
+Lemma N'_add_spec x x0 x1 n:
+  N'_add x x0 = Some x1 ->
+  toN n x + toN n x0 = toN n x1.
+Proof.
+  unfold N'_add.
+  intros.
+  destruct x,x0.
+  all: try congruence.
+  do 3 des_if' H.
+  inverts H.
+  des_N_op.
+  unfold toN.
+  lia.
+Qed.
+
+Definition N'_head_add (x x0:N'_head) :=
+match x,x0 with
+| N'_head_mk h n,N'_head_mk h0 n0 =>
+  b2o (eqb h h0) &&& (fun _ =>
+  N'_add n n0 &&& (fun n1 =>
+  Some (N'_head_mk h n1)))
+end.
+
+Fixpoint merge_hs (hsN':list N'_head) (hs:list vhead) :=
+match hsN',hs with
+| h'::t',h::t =>
+  merge_hs t' t &&& (fun '(t',t) =>
+  match t',t with
+  | h'0::t'0,h0::t0 =>
+    (vhead_add h h0 &&& (fun h1 =>
+    N'_head_add h' h'0 &&& (fun h'1 =>
+    Some (h'1::t'0,h1::t0)
+    ))) ||| (fun _ =>
+    Some (h'::t',h::t))
+  | [],[] => Some ([h'],[h])
+  | _,_ => None
+  end)
+| [],[] => Some ([],[])
+| _,_ => None
+end.
+
+
 Fixpoint segRLs_rec_v hsN' hs ws T :=
+merge_hs hsN' (vheads_v hs 0 (fun _ => true)) &&& (fun '(hsN',hs) =>
 let hs:=vheads_v hs 0 (fun _=>false) in
 match ws with
 | [] => Some (hsN',hs,[])
@@ -1659,7 +1867,7 @@ match ws with
   hs_match_rec hs hs' 0 &&& (fun _ =>
   segRLs_rec_v hsN' hs' ws0 T &&& (fun '(res0,res) =>
   Some (res0,inr ws'::res))))))))
-end.
+end).
 
 Definition sideRLs_rec_v hsN' hs '(ws,w) T :=
 segRLs_rec_v hsN' hs ws T &&& (fun '(hsN',hs,ws0) =>
@@ -2188,6 +2396,47 @@ Proof.
     eapply segRLs_concat; eauto 1.
 Qed.
 
+Lemma merge_hs_spec hsN' hs hsN'0 hs0 n:
+  merge_hs hsN' hs = Some (hsN'0,hs0) ->
+  N'_heads_eval hsN' n = N'_heads_eval hsN'0 n.
+Proof.
+  gen hs hsN'0 hs0.
+  induction hsN' as [|h' t']; destruct hs as [|h t]; cbn[merge_hs]; intros.
+  all: try congruence.
+  des_if' H.
+  destruct p as [[|h'0 t'0] [|h0 t0]];
+  cbn in H.
+  all: try congruence.
+  - inverts H.
+    cbn[N'_heads_eval].
+    destruct h' as [h' n'].
+    apply IHt' in E.
+    rewrite E; reflexivity.
+  - des_if' H.
+    + inverts H.
+      do 2 des_if' E0.
+      inverts E0.
+      apply IHt' in E.
+      cbn[N'_heads_eval].
+      unfold N'_head_add in E2.
+      destruct h' as [h' n'].
+      destruct h'0 as [h'0 n'0].
+      do 2 des_if' E2.
+      inverts E2.
+      des_N_op.
+      eapply N'_add_spec in E3.
+      rewrite <-E3,E.
+      cbn[N'_heads_eval].
+      rewrite Nnat.N2Nat.inj_add,lpow_add,app_assoc; reflexivity.
+    + clear E0.
+      apply IHt' in E.
+      destruct h' as [h' n'].
+      destruct h'0 as [h'0 n'0].
+      cbn[N'_heads_eval].
+      rewrite E.
+      reflexivity.
+Qed.
+
 
 Lemma segRLs_rec_v_spec hsN' hs ws T hsN'0 hs' ws' n:
   segRLs_rec_v hsN' hs ws T = Some (hsN'0,hs',ws') ->
@@ -2195,9 +2444,18 @@ Lemma segRLs_rec_v_spec hsN' hs ws T hsN'0 hs' ws' n:
 Proof.
   gen hsN' hs hsN'0 hs' ws'.
   induction ws; cbn[segRLs_rec_v]; intros.
-  - inverts H.
+  - des_if' H.
+    destruct p as [hsN'a hsa].
+    inverts H.
+    eapply merge_hs_spec in E.
+    rewrite E.
     apply segRLs_nil.
-  - destruct a.
+  - des_if' H.
+    destruct p as [hsN'a hsa].
+    eapply merge_hs_spec in E.
+    rewrite E.
+    clear E.
+    destruct a.
     + des_if' H.
       destruct p as [hs'0 ws'0].
       des_if' H.
