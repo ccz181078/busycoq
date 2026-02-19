@@ -1467,3 +1467,461 @@ Time Qed.
 End TM15.
 
 
+Module TM16.
+Definition tm := Eval compute in (TM_from_str "1LB0RC_1RC0LB_0RD1LB_0LA1RE_0RA1RF_0RA---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((A,<[1;0]),(B,[0;0])).
+Notation h1 := ((C,<[1;0;0]),(B,[0;0])).
+Notation h2 := ((D,<[1;0;0;0]),(B,[0;0])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;0;1;0]),([[1;0;1;0]],[h0;h0]))::
+((h0,[0;1;0]),([[1;1;0]],[]))::
+((h0,[1;1;0]),([[0;1;0]],[h0]))::
+((h2,[1;0;1;0]),([[1;0;1;0]],[h2;h0]))::
+((h2,[1;1;0]),([[1;0;1;0];[1]],[h0]))::
+((h0,[1]),([],[h1]))::
+((h1,[0;1;0]),([[1;0;1;0]],[h0;h0]))::
+((h2,[0;1;0]),([[0;1;0]],[h2]))::
+((h1,[1;0;1;0]),([[0;1;0]],[h2]))::
+((h1,[1;1;0]),([[0;1;0];[0]],[h0]))::
+((h0,[0]),([[1]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1]),([[0;1;0]],[1]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;0;1;0]),(0%N,1%N,h0))::
+((h0,[0;1;0]),(1%N,0%N,h0))::
+((h0,[1;1;0]),(1%N,0%N,h0))::
+((h2,[0;1;0]),(0%N,0%N,h2))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;1;0];[0;1;0];[0;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;0;1;0];[1;1;0];[0;1;0];[1;1;0]],[1]).
+
+Definition hs_step:(list head) := [h2]^^20.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1;0]) (pp:=5%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - esx.
+  - native_check_eq.
+Time Qed.
+End TM16.
+
+
+Module TM17.
+Definition tm := Eval compute in (TM_from_str "1RB---_1LC0RD_1RD0LC_0RE1LC_0LB1RF_0RB1RA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((B,<[1;0]),(C,[0;0])).
+Notation h1 := ((E,<[1;0;0;0]),(C,[0;0])).
+Notation h2 := ((B,<[1;1;1]),(C,[0;0])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;0;1;0]),([[1;0;1;0]],[h0;h0]))::
+((h0,[0;1;0]),([[1;1;0]],[]))::
+((h0,[1;1;0]),([[0;1;0]],[h0]))::
+((h1,[1;0;1;0]),([[1;0;1;0]],[h1;h0]))::
+((h1,[0;1;0]),([[0;1;0]],[h1]))::
+((h1,[1;1;0]),([[1;0;1;0]],[h2;h0]))::
+((h2,[1;0;1;0]),([[0;0;0;1;0]],[h0;h0]))::
+((h0,[0;0;0;1;0]),([[1;0;0;1;0]],[]))::
+((h0,[1;0;0;1;0]),([[0;1;0]],[h1]))::
+((h2,[0;1;0]),([[0;1;1;0]],[]))::
+((h0,[0;1;1;0]),([[1;1;1;0]],[]))::
+((h0,[1;1;1;0]),([[0;1;0]],[h2]))::
+((h2,[1;1;0]),([[0;0;1;0]],[]))::
+((h0,[0;0;1;0]),([[1;0;1;0]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1]),([[0;1;0]],[1]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;0;1;0]),(0%N,1%N,h0))::
+((h0,[0;1;0]),(1%N,0%N,h0))::
+((h0,[1;1;0]),(1%N,0%N,h0))::
+((h1,[0;1;0]),(0%N,0%N,h1))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;1;0];[1;1;0];[1;1;0];[1;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;1;0];[1;0;1;0];[1;1;0];[1;1;0];[1;1;0];[1;1;0];[1;1;0];[0;1;0];[1;1;0];[1;1;0];[1;1;0];[1;1;0];[1;1;0];[0;1;0];[0;1;0];[1;1;0];[1;1;0];[0;1;0];[0;1;0];[0;1;0];[0;1;0];[1;1;0];[0;1;0];[0;1;0];[0;1;0];[1;1;0];[0;1;0];[0;1;0];[0;1;0];[1;1;0];[0;1;0];[0;1;0];[0;1;0]],[1]).
+
+Definition hs_step:(list head) := [h1]^^20.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1;0]) (pp:=4%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - eapply evstep_trans.
+    + eapply evstep_c_spec.
+      eapply LongAcc62.TM.Compute.TM.evstep_c_spec.
+      eapply LongAcc62.decide_evstep with
+        (D:=16) (T:=50%N) (T0:=(10^6)%N) (T1:=10^3).
+      time native_compute; reflexivity.
+    + ut.
+      do 11 step1.
+      finish.
+  - native_check_eq.
+Time Qed.
+End TM17.
+
+
+Module TM18.
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC0RB_1LD0RB_0LF0LE_0LD1LC_0RA1RF").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((B,<[]),(E,[])).
+Notation h1 := ((C,<[1]),(E,[])).
+Notation h2 := ((B,<[1;0;0]),(E,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1]),([[0;1;1]],[h0;h0]))::
+((h0,[0;0]),([[0;1]],[]))::
+((h0,[0;1]),([[0;0]],[h0]))::
+((h1,[0;1;1]),([[0;1;1;1]],[]))::
+((h0,[0;1;1;1]),([[0;1;1]],[h0;h1]))::
+((h1,[0;0]),([[0;1];[0]],[]))::
+((h0,[0]),([],[h1]))::
+((h1,[0;1]),([[0;1;1]],[]))::
+((h2,[0;1;1;1]),([[0;1;1];[0;1;1]],[h0;h1;h0;h0]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[]),([[0;1]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1]),(0%N,1%N,h0))::
+((h0,[0;0]),(1%N,0%N,h0))::
+((h0,[0;1]),(1%N,0%N,h0))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1];[0;1;1;1];[0;1;1];[0;1;1];[0;1];[0;1;1];[0;1;1];[0;0];[0;1];[0;0];[0;0];[0;0];[0;1];[0;0];[0;0];[0;0];[0;1]],[]).
+
+Definition hs_step:(list head) := [h1;h2]^^42.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1]) (pp:=4%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - esx.
+  - native_check_eq.
+Time Qed.
+End TM18.
+
+
+Module TM19.
+Definition tm := Eval compute in (TM_from_str "1RB0RA_1LC0RA_0LE0LD_0LC1LB_0RF1RE_1RA---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((A,<[]),(D,[])).
+Notation h1 := ((B,<[1]),(D,[])).
+Notation h2 := ((A,<[1;0;0]),(D,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1]),([[0;1;1]],[h0;h0]))::
+((h0,[0;0]),([[0;1]],[]))::
+((h0,[0;1]),([[0;0]],[h0]))::
+((h1,[0;1;1]),([[0;1;1;1]],[]))::
+((h0,[0;1;1;1]),([[0;1;1]],[h0;h1]))::
+((h1,[0;0]),([[0;1];[0]],[]))::
+((h0,[0]),([],[h1]))::
+((h1,[0;1]),([[0;1;1]],[]))::
+((h2,[0;1;1;1]),([[0;1;1];[0;1;1]],[h0;h1;h0;h0]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[]),([[0;1]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1]),(0%N,1%N,h0))::
+((h0,[0;0]),(1%N,0%N,h0))::
+((h0,[0;1]),(1%N,0%N,h0))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1];[0;1;1;1];[0;1];[0;1;1];[0;1];[0;1;1];[0;1];[0;1;1];[0;1;1];[0;1];[0;1];[0;0];[0;0];[0;1];[0;1];[0;1];[0;0];[0;0];[0;0];[0;1]],[]).
+
+Definition hs_step:(list head) := [h1;h2]^^42.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1]) (pp:=4%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - esx.
+  - native_check_eq.
+Time Qed.
+End TM19.
+
+
+Module TM20.
+Definition tm := Eval compute in (TM_from_str "1LB0RE_0LC0LF_0RD1RC_1RE---_1RA0RE_0LB1LA").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((E,<[]),(F,[])).
+Notation h1 := ((A,<[1]),(F,[])).
+Notation h2 := ((E,<[1;0;0]),(F,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1]),([[0;1;1]],[h0;h0]))::
+((h0,[0;0]),([[0;1]],[]))::
+((h0,[0;1]),([[0;0]],[h0]))::
+((h1,[0;1;1]),([[0;1;1;1]],[]))::
+((h0,[0;1;1;1]),([[0;1;1]],[h0;h1]))::
+((h1,[0;0]),([[0;1];[0]],[]))::
+((h0,[0]),([],[h1]))::
+((h1,[0;1]),([[0;1;1]],[]))::
+((h2,[0;1;1;1]),([[0;1;1];[0;1;1]],[h0;h1;h0;h0]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[]),([[0;1]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1]),(0%N,1%N,h0))::
+((h0,[0;0]),(1%N,0%N,h0))::
+((h0,[0;1]),(1%N,0%N,h0))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1];[0;1;1;1];[0;1;1];[0;1];[0;1;1];[0;1];[0;1;1];[0;1;1];[0;1];[0;1;1];[0;1;1];[0;1;1];[0;1];[0;1];[0;1];[0;0];[0;0];[0;1];[0;0];[0;1];[0;1];[0;0];[0;0];[0;0];[0;1]],[]).
+
+Definition hs_step:(list head) := [h1;h2]^^42.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1]) (pp:=4%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - esx.
+  - native_check_eq.
+Time Qed.
+End TM20.
+
+
+Module TM21.
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1RC0RA_1RD0RF_1LA0RC_1LB1LA_0LA---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((D,<[0;1]),(B,[1;0])).
+Notation h1 := ((D,<[]),(A,[])).
+Notation h2 := ((C,<[0;1;0]),(B,[1;0])).
+Notation h3 := ((B,<[]),(A,[])).
+Notation h4 := ((C,<[1]),(A,[])).
+Notation h5 := ((B,<[0;1;0;1]),(A,[])).
+Notation h6 := ((A,<[0;1;0;1;0;1;0;1;0]),(A,[])).
+Notation h7 := ((C,<[0;1;0;1;0;1;1;1;1;1;0;1;0]),(A,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;0;0;0]),([[1;0;0;0]],[]))::
+((h0,[1;0;0;0]),([[0;0;0;0]],[h0]))::
+((h1,[1;0;1;0]),([[1;0;1;0]],[h1;h1]))::
+((h1,[1;0;1;0;1;0;0;0;1;0;0;0]),([[1;0;1;0;1;0;0;0;0;0;0;0]],[h0]))::
+((h1,[1;0;1;0;1;0;0;0;0;0;0;0]),([[1;0;1;0;1;0;0;0;1;0;0;0]],[]))::
+((h1,[1;0;1;0;1;0;0;0]),([[1;0;1;0;1;0;0;0]],[h1]))::
+((h4,[1;0;1;0]),([[1;0;1;0]],[h4]))::
+((h4,[1;0;1;0;1;0;0;0]),([[1;0;1;0;1;0;1;0;1]],[]))::
+((h4,[1;0;1;0;1;0;0;0;1;0;0;0]),([[1;0;1;0;1;0;1;0;1;1;0;0;0]],[]))::
+((h3,[1;0;1;0]),([[1;0;1;0]],[h3;h1]))::
+((h5,[1;0;1;0]),([[1;0;1;0];[1;0;1;0]],[h3;h1;h1;h1]))::
+((h3,[1;0;1;0;1;0;0;0]),([[1;0;1;0;1;0;0;0]],[h1;h1]))::
+((h3,[1;0;1;0;1;0;1;0;1]),([],[h6]))::
+((h6,[1;0;1;0]),([[1;0;1;0;1;0;0;0];[1;0;1;0]],[h4;h1]))::
+((h1,[1;0;1;0;1;0;1;0;1;1;0;0;0]),([],[h7]))::
+((h7,[1;0;0;0]),([[1;0;1;0];[1;0;1;0;1;0;0;0;1;0;0;0]],[h2]))::
+((h2,[1;0;0;0]),([[0;0;0;0]],[h2]))::
+((h2,[0;0;0;0]),([[0;0;0;0];[1]],[]))::
+((h0,[1]),([],[h2]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h2,[1]),([[0;0;0;0];[0;0;0;0]],[1]))::
+((h0,[1]),([[0;0;0;0]],[1]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;0;0;0]),(1%N,0%N,h0))::
+((h0,[1;0;0;0]),(1%N,0%N,h0))::
+((h1,[1;0;1;0]),(0%N,1%N,h1))::
+((h1,[1;0;1;0;1;0;0;0;1;0;0;0]),(1%N,0%N,h0))::
+((h1,[1;0;1;0;1;0;0;0;0;0;0;0]),(1%N,0%N,h0))::
+((h1,[1;0;1;0;1;0;0;0]),(0%N,0%N,h1))::
+((h4,[1;0;1;0]),(0%N,0%N,h4))::
+((h3,[1;0;1;0;1;0;0;0]),(0%N,1%N,h1))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[1;0;1;0];[1;0;1;0;1;0;0;0];[1;0;1;0];[1;0;1;0];[1;0;1;0;1;0;0;0;1;0;0;0];[1;0;0;0];[0;0;0;0];[0;0;0;0]],[1]).
+
+Definition hs_step:(list head) := [h4;h5;h3]^^2.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1;1]) (pp:=3%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - esx.
+  - native_check_eq.
+Time Qed.
+End TM21.
+
+

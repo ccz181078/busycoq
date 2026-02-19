@@ -1051,8 +1051,9 @@ Ltac rw_pa := repeat rewrite N.pow_add_r in *.
 
 Lemma Nmap_applys_inc a0 a1 b0 b1 n k:
   a1<>0 ->
-  Nmap_applys (Nmap_mk a0 (a0+a1) b0 (b0+2^a0*b1)) (2^a0*n+b0) (2^a0*2^(a1*k)*n+(b0+(2^(a1*k)-1)/(2^a1-1)*(2^a0*b1))) k.
+  Nmap_applys (Nmap_mk a0 (a0+a1) b0 (b0+2^a0*b1)) (2^a0*n+b0) (2^a0*2^(k*a1)*n+(b0+(2^(k*a1)-1)/(2^a1-1)*(2^a0*b1))) k.
 Proof.
+  rewrite (N.mul_comm k a1).
   gen a0 a1 b0 b1 n.
   induction k using N.peano_ind; intros.
   - applys_eq Nmap_applys_O.
@@ -1118,7 +1119,7 @@ Qed.
 
 Lemma Nmap_applys_dec a0 a1 b0 b1 n k:
   a1<>0 ->
-  Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (2^a0*2^(a1*k)*n+(b0+(2^(a1*k)-1)/(2^a1-1)*(2^a0*b1))) (2^a0*n+b0) k.
+  Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (2^a0*2^(k*a1)*n+(b0+(2^(k*a1)-1)/(2^a1-1)*(2^a0*b1))) (2^a0*n+b0) k.
 Proof.
   intros.
   apply Nmap_applys_rev.
@@ -1126,23 +1127,20 @@ Proof.
 Qed.
 
 Inductive N' :=
-| N'_mk(a b c d:N)
+| N'_mk(a b c:N)
 | N'_c(a:N)
-| N'_mk2(a b c a' c':N).
+| N'_mk2(a b a' b' c':N).
 
 Definition toN(n:N)(x:N'):N :=
 match x with
-| N'_mk a b c d => ((2^(n*a)-1)*b+c)/d
+| N'_mk a b c => ((2^(n*a)-1)/(2^a-1))*b+c
 | N'_c a => a
-| N'_mk2 a b c a' c' => ((2^(n*a)-1)*b+c)*2^(n*a')+c'
+| N'_mk2 a b a' b' c' => ((2^(n*a)-1)/(2^a-1))*2^(n*a')*b + ((2^(n*a')-1)/(2^a'-1))*b' + c'
 end.
 
 Definition N'_eq_c x k :=
 match x with
 | N'_c c => b2o (c =? k)
-| N'_mk a b c d =>
-  b2o (b =? 0) &&& (fun _ =>
-  b2o (c/d =? k))
 | _ => None
 end.
 
@@ -1161,21 +1159,17 @@ match goal with
   apply Ndiv_spec in H; subst
 end.
 
+Ltac cg := try congruence.
+
 Lemma N'_eq_c_spec x k u n:
   N'_eq_c x k = Some u ->
   toN n x = k.
 Proof.
   unfold N'_eq_c.
   intros.
-  destruct x.
-  - des_if' H.
-    cbn in H.
-    des_N_op.
-    unfold toN.
-    f_equal; lia.
+  destruct x; cg.
   - des_N_op.
     trivial.
-  - congruence.
 Qed.
 
 Definition N'_Nmap_apply mp x :=
@@ -1186,18 +1180,17 @@ match mp with
     Nsubge c b0 &&& (fun c =>
     Ndiv c (2^a0) &&& (fun c =>
     Some (N'_c (c*2^a1+b1))))
-  | N'_mk a b c d =>
-    Nsubge c (b0*d) &&& (fun c =>
-    Ndiv b (2^a0*d) &&& (fun b =>
-    Ndiv c (2^a0*d) &&& (fun c =>
-    b2o (negb (d=?0)) &&& (fun _ =>
-    Some (N'_mk a (b*2^a1*d) ((c*2^a1+b1)*d) d)))))
-  | N'_mk2 a b c a' c' =>
-    Nsubge c' b0 &&& (fun c' =>
+  | N'_mk a b c =>
+    Nsubge c (b0) &&& (fun c =>
     Ndiv b (2^a0) &&& (fun b =>
     Ndiv c (2^a0) &&& (fun c =>
+    Some (N'_mk a (b*2^a1) (c*2^a1+b1)))))
+  | N'_mk2 a b a' b' c' =>
+    Nsubge c' b0 &&& (fun c' =>
+    Ndiv b (2^a0) &&& (fun b =>
+    Ndiv b' (2^a0) &&& (fun b' =>
     Ndiv c' (2^a0) &&& (fun c' =>
-    Some (N'_mk2 a (b*2^a1) (c*2^a1) a' (c'*2^a1+b1))))))
+    Some (N'_mk2 a (b*2^a1) a' (b'*2^a1) (c'*2^a1+b1))))))
   end
 | Nmap_c b0 b1 =>
   N'_eq_c x b0 &&& (fun _ =>
@@ -1212,14 +1205,11 @@ Proof.
   intros.
   destruct mp.
   - destruct x.
-    + do 4 des_if' H.
+    + do 3 des_if' H.
       inverts H.
       des_N_op.
       unfold toN.
-      repeat rewrite N.mul_assoc.
-      repeat rewrite <-N.mul_add_distr_r.
-      repeat rewrite N.div_mul by auto 1.
-      applys_eq (Nmap_apply_mk a0 a1 b0 b1 ((2^(n*a)-1)*n1+n2)); lia.
+      applys_eq (Nmap_apply_mk a0 a1 b0 b1 ((2^(n*a)-1)/(2^a-1)*n1+n2)); lia.
     + do 2 des_if' H.
       inverts H.
       des_N_op.
@@ -1229,7 +1219,7 @@ Proof.
       inverts H.
       des_N_op.
       unfold toN.
-      applys_eq (Nmap_apply_mk a0 a1 b0 b1 (((2^(n*a)-1)*n1+n2)*2^(n*a')+n3)); lia.
+      applys_eq (Nmap_apply_mk a0 a1 b0 b1 ((2^(n*a)-1)/(2^a-1)*2^(n*a')*n1+(2^(n*a')-1)/(2^a'-1)*n2+n3)); lia.
   - des_if' H.
     inverts H.
     eapply N'_eq_c_spec in E.
@@ -1237,59 +1227,50 @@ Proof.
     ec.
 Qed.
 
-Definition N'_Nmap_applys_inc_0(a0 a1 b0 b1:N)(x:N'):option N' :=
+Definition N'_Nmap_applys_inc_v1(a0 a1 b0 b1:N)(x:N'):option N' :=
 match x with
 | N'_c n =>
   b2o (negb (a1=?0)) &&& (fun _ =>
   Nsubge n b0 &&& (fun n =>
   Ndiv n (2^a0) &&& (fun n =>
-  Some (N'_mk a1 (2^a0*(b1+n*(2^a1-1))) ((2^a0*n+b0)*(2^a1-1)) (2^a1-1)))))
-| N'_mk a b c d =>
-  b2o (d=?1) &&& (fun _ =>
+  Some (N'_mk a1 (((2^a1-1)*n+b1)*2^a0) (n*2^a0+b0)))))
+| N'_mk a b c =>
   b2o (negb (a1=?0)) &&& (fun _ =>
-  b2o (b1=?0) &&& (fun _ =>
   Nsubge c b0 &&& (fun c =>
-  Ndiv c (2^a0) &&& (fun c =>
   Ndiv b (2^a0) &&& (fun b =>
-  Some (N'_mk2 a (b*2^a0) (c*2^a0) a1 b0)))))))
+  Ndiv c (2^a0) &&& (fun c =>
+  Some (N'_mk2 a (b*2^a0) a1 (((2^a1-1)*c+b1)*2^a0) (c*2^a0+b0))))))
 | _ => None
 end.
 
-Definition N'_simpl_d x :=
+Definition N'_simpl x :=
 match x with
-| N'_mk a b c d =>
-  let g:=N.gcd d (N.gcd b c) in
-  b2o (negb (g=?0)) &&& (fun _ =>
-  Ndiv b g &&& (fun b =>
-  Ndiv c g &&& (fun c =>
-  Ndiv d g &&& (fun d =>
-  Some (N'_mk a b c d)))))
-| _ => Some x
-end.
+| N'_mk a b c =>
+  b2o (b=?0) &&& (fun _ =>
+  Some (N'_c c))
+| _ => None
+end ||| (fun _ => Some x).
 
-Lemma N'_simpl_d_spec x x' n:
-  N'_simpl_d x = Some x' ->
+Lemma N'_simpl_spec x x' n:
+  N'_simpl x = Some x' ->
   toN n x = toN n x'.
 Proof.
-  unfold N'_simpl_d.
+  unfold N'_simpl.
   intros.
   destruct x.
   2,3: inverts H; trivial.
-  do 4 des_if' H.
+  des_if' H.
+  2: inverts E; trivial.
   inverts H.
+  des_if' E.
+  inverts E.
   des_N_op.
-  remember (N.gcd d (N.gcd b c)) as v1.
-  clear Heqv1.
-  subst.
   unfold toN.
-  rewrite N.mul_assoc.
-  rewrite <-N.mul_add_distr_r.
-  rewrite N.Div0.div_mul_cancel_r; trivial.
+  lia.
 Qed.
 
 Definition N'_Nmap_applys_inc(a0 a1 b0 b1:N)(x:N'):option N' :=
-N'_Nmap_applys_inc_0 a0 a1 b0 b1 x &&& (fun x =>
-N'_simpl_d x).
+N'_Nmap_applys_inc_v1 a0 a1 b0 b1 x &&& N'_simpl.
 
 Lemma geosum_div a n:
   (2^(n*a)-1) mod (2^a-1) = 0.
@@ -1307,46 +1288,48 @@ Proof.
     rewrite N.Div0.mod_add; trivial.
 Qed.
 
-Lemma N'_Nmap_applys_inc_0_spec a0 a1 b0 b1 x x' n:
-  N'_Nmap_applys_inc_0 a0 a1 b0 b1 x = Some x' ->
+Lemma geosum_div' a n:
+  2^(n*a) = (2^(n*a)-1)/(2^a-1)*(2^a-1)+1.
+Proof.
+  pose proof (geosum_div a n) as I1.
+  apply N.Div0.div_exact in I1.
+  lia.
+Qed.
+
+Ltac rem_v1 a n v1 :=
+  pose proof (geosum_div' a n) as I1;
+  remember ((2^(n*a)-1)/(2^a-1)) as v1 eqn:Heqv1;
+  repeat rewrite I1;
+  clear Heqv1 I1.
+
+Lemma N'_Nmap_applys_inc_v1_spec a0 a1 b0 b1 x x' n:
+  N'_Nmap_applys_inc_v1 a0 a1 b0 b1 x = Some x' ->
   Nmap_applys (Nmap_mk a0 (a0+a1) b0 (b0+2^a0*b1)) (toN n x) (toN n x') n.
 Proof.
-  unfold N'_Nmap_applys_inc_0.
+  unfold N'_Nmap_applys_inc_v1.
   intros.
-  destruct x.
-  3: inverts H.
-  1:{
-    do 6 des_if' H.
+  destruct x; cg.
+  {
+    do 4 des_if' H.
     inverts H.
     des_N_op.
     unfold toN.
-    applys_eq (Nmap_applys_inc a0 a1 b0 0 ((2^(n*a)-1)*n2+n1)).
+    applys_eq (Nmap_applys_inc a0 a1 b0 b1 ((2^(n*a)-1)/(2^a-1)*n1+n2)).
     1,3: lia.
-    rewrite (N.mul_comm _ n).
+    rem_v1 a1 n v1.
+    rem_v1 a n v.
     lia.
   }
-  do 3 des_if' H.
-  inverts H.
-  des_N_op.
-  unfold toN.
-  pose proof (geosum_div a1 n) as I1.
-  applys_eq (Nmap_applys_inc a0 a1 b0 b1 n1 n).
-  1,3: lia.
-  remember (2^a1-1) as v1.
-  assert (v1<>0) by (pose proof (N.pow_le_mono_r 2 1 a1); lia).
-  replace (2^a1) with (v1+1) in * by lia.
-  rewrite (N.mul_comm a1 n).
-  remember (2^(n*a1)-1) as v2.
-  replace (2^(n*a1)) with (v2+1) in * by lia.
-  repeat rewrite N.mul_assoc.
-  repeat rewrite N.add_assoc.
-  rewrite N.div_add by lia.
-  rewrite <-N.mul_assoc,N.mul_comm.
-  rewrite N.Lcm0.divide_div_mul_exact.
-  2: apply N.Lcm0.mod_divide,I1.
-  pose proof (N.div_mod v2 v1) as I2.
-  rewrite I1 in I2.
-  lia.
+  {
+    do 3 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    applys_eq (Nmap_applys_inc a0 a1 b0 b1 n1 n).
+    1,3: lia.
+    rem_v1 a1 n v1.
+    lia.
+  }
 Qed.
 
 Lemma N'_Nmap_applys_inc_spec a0 a1 b0 b1 x x' n:
@@ -1356,85 +1339,106 @@ Proof.
   unfold N'_Nmap_applys_inc.
   intros.
   des_if' H.
-  inverts H.
-  eapply N'_Nmap_applys_inc_0_spec in E.
-  eapply N'_simpl_d_spec in H1.
-  rewrite H1 in E.
+  eapply N'_simpl_spec in H.
+  rewrite <-H.
+  eapply N'_Nmap_applys_inc_v1_spec in E.
   apply E.
 Qed.
 
-Definition N'_set_d x k :=
+Definition N'_Nmap_applys_dec_v1(a0 a1 b0 b1:N)(x:N'):option N' :=
 match x with
-| N'_mk a b c d =>
-  Ndiv k d &&& (fun k =>
-  b2o (negb (k =? 0)) &&& (fun _ =>
-  Some (N'_mk a (b*k) (c*k) (d*k))))
-| _ => None
-end.
-
-Lemma N'_set_d_spec x k x' n:
-  N'_set_d x k = Some x' ->
-  toN n x = toN n x'.
-Proof.
-  unfold N'_set_d.
-  intros.
-  destruct x.
-  2,3: inverts H.
-  do 2 des_if' H.
-  inverts H.
-  des_N_op.
-  unfold toN.
-  rewrite N.mul_assoc.
-  rewrite <-N.mul_add_distr_r.
-  rewrite N.Div0.div_mul_cancel_r; trivial.
-Qed.
-
-Definition N'_Nmap_applys_dec_v3(a0 a1 b0 b1:N)(x:N'):option N' :=
-match x with
-| N'_mk2 a b c a' c' =>
+| N'_mk a b c =>
   b2o (negb (a1=?0)) &&& (fun _ =>
-  b2o (b1=?0) &&& (fun _ =>
+  b2o (a1=?a) &&& (fun _ =>
+  Nsubge c b0 &&& (fun c =>
+  Ndiv c (2^a0) &&& (fun n =>
+  b2o ((((2^a1-1)*n+b1)*2^a0)=?b) &&& (fun _ =>
+  Some (N'_c (n*2^a0+b0)))))))
+| N'_mk2 a b a' b' c' =>
+  b2o (negb (a1=?0)) &&& (fun _ =>
   b2o (a1=?a') &&& (fun _ =>
-  b2o (b0=?c') &&& (fun _ =>
+  Nsubge c' b0 &&& (fun c' =>
   Ndiv b (2^a0) &&& (fun b =>
-  Ndiv c (2^a0) &&& (fun c =>
-  Some (N'_mk a (b*2^a0) (c*2^a0+b0) 1)))))))
+  Ndiv c' (2^a0) &&& (fun c =>
+  b2o ((((2^a1-1)*c+b1)*2^a0)=?b') &&& (fun _ =>
+  Some (N'_mk a (b*2^a0) (c*2^a0+b0))))))))
 | _ => None
 end.
 
-Lemma N'_Nmap_applys_dec_v3_spec a0 a1 b0 b1 x x' n:
-  N'_Nmap_applys_dec_v3 a0 a1 b0 b1 x = Some x' ->
+Lemma N'_Nmap_applys_dec_v1_spec a0 a1 b0 b1 x x' n:
+  N'_Nmap_applys_dec_v1 a0 a1 b0 b1 x = Some x' ->
   Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (toN n x) (toN n x') n.
 Proof.
-  unfold N'_Nmap_applys_dec_v3.
+  unfold N'_Nmap_applys_dec_v1.
   intros.
-  destruct x.
-  1,2: inverts H.
-  do 6 des_if' H.
-  inverts H.
-  des_N_op.
+  destruct x; cg.
+  {
+    do 5 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    applys_eq (Nmap_applys_dec a0 a b0 b1 n1 n).
+    2,3: lia.
+    rem_v1 a n v.
+    lia.
+  }
+  {
+    do 6 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    applys_eq (Nmap_applys_dec a0 a' b0 b1 (toN n (N'_mk a n1 n2)) n); unfold toN.
+    2,3: lia.
+    rem_v1 a' n v'.
+    rem_v1 a n v.
+    lia.
+  }
+Qed.
+
+Lemma sqr_sub1 n:
+  n<>0%N ->
+  n*n-1 = (n-1)*(n+1).
+Proof.
+  intros.
+  remember (n-1) as n'.
+  replace n with (n'+1) by lia.
+  lia.
+Qed.
+
+Lemma N'_mk_mk2 a b c n:
+  toN n (N'_mk (a*2) ((2^a+1)*b) c) =
+  toN n (N'_mk2 a b a b c).
+Proof.
   unfold toN.
-  applys_eq (Nmap_applys_dec a0 a' c' 0 ((2^(n*a)-1)*n0+n1)).
-  2,3: lia.
-  rewrite (N.mul_comm _ n).
+  replace (a*2) with (a+a) by lia.
+  rewrite N.mul_assoc.
+  rewrite (N.mul_comm _ (2^a+1)).
+  rewrite <-N.Lcm0.divide_div_mul_exact.
+  2: apply N.Lcm0.mod_divide,geosum_div.
+  rewrite N.mul_add_distr_l.
+  repeat rewrite N.pow_add_r.
+  repeat rewrite sqr_sub1 by lia.
+  rewrite (N.mul_comm (2^(n*a)-1)).
+  rewrite N.mul_assoc.
+  rewrite <-N.Div0.div_div.
+  rewrite N.Lcm0.divide_div_mul_exact.
+  2: apply N.Lcm0.mod_divide,geosum_div.
+  rem_v1 a n v1.
+  rewrite <-N.mul_assoc.
+  rewrite (N.mul_comm (2^a+1)).
+  rewrite N.div_mul by lia.
   lia.
 Qed.
 
 
 Definition N'_Nmap_applys_dec_v2(a0 a1 b0 b1:N)(x:N'):option N' :=
-N'_set_d x (2^a1-1) &&& (fun x =>
 match x with
-| N'_mk a b c d =>
-  b2o (negb (a1=?0)) &&& (fun _ =>
+| N'_mk a b c =>
   b2o (a=?a1*2) &&& (fun _ =>
-  b2o (d =? 2^a1-1) &&& (fun _ =>
-  Ndiv b (2^a0*d) &&& (fun b' =>
-  Nsubge c (b0*d) &&& (fun c =>
-  Ndiv c (2^a0*d) &&& (fun c' =>
-  b2o (b'*d=?b1+c'*d) &&& (fun _ =>
-  Some (N'_mk a1 (b'*2^a0) (c'*2^a0+b0) 1))))))))
+  Ndiv b (2^a1+1) &&& (fun b =>
+  N'_Nmap_applys_dec_v1 a0 a1 b0 b1 (N'_mk2 a1 b a1 b c)))
 | _ => None
-end).
+end.
 
 Ltac Nmul_to_r d :=
   repeat rewrite <-N.mul_assoc;
@@ -1447,97 +1451,19 @@ Lemma N'_Nmap_applys_dec_v2_spec a0 a1 b0 b1 x x' n:
 Proof.
   unfold N'_Nmap_applys_dec_v2.
   intros.
-  destruct x.
-  2,3: inverts H.
-  des_if' H.
-  cbn in H.
-  destruct n0.
-  2,3: inverts H.
-  do 7 des_if' H.
-  inverts H.
-  rename n2 into c'.
-  rename n0 into b'.
+  destruct x; cg.
+  do 2 des_if' H.
   des_N_op.
-  eapply N'_set_d_spec in E.
-  rewrite E; clear E.
-  unfold toN.
-  pose proof (geosum_div a1 n) as I1.
-  replace (n*(a1*2)) with (n*a1+n*a1) by lia.
-  rewrite N.pow_add_r.
-  remember (2^a1-1) as v1.
-  assert (v1<>0) by (pose proof (N.pow_le_mono_r 2 1 a1); lia).
-  Nmul_to_r (2^a1-1).
-  repeat rewrite N.div_add_l by lia.
-  repeat rewrite N.div_mul by lia.
-  rewrite N.div_1_r.
-  applys_eq (Nmap_applys_dec a0 a1 b0 b1 (((2^(n*a1)-1)*b'+c')) n).
-  2,3: lia.
-  rewrite (N.mul_comm a1 n).
-  remember (2^(n*a1)-1) as v2.
-  replace (2^(n*a1)) with (v2+1) in * by lia.
-  replace (2^a1) with (v1+1) in * by lia.
-  rewrite N.add_sub.
-  remember (v2/v1) as v3.
-  replace v2 with (v3*v1) in * by (apply N.Div0.div_exact in I1; lia).
-  lia.
-Qed.
-
-Definition N'_Nmap_applys_dec_v1(a0 a1 b0 b1:N)(x:N'):option N' :=
-N'_set_d x (2^a1-1) &&& (fun x =>
-match x with
-| N'_mk a b c d =>
-  b2o (negb (a1=?0)) &&& (fun _ =>
-  b2o (a=?a1) &&& (fun _ =>
-  b2o (d =? 2^a1-1) &&& (fun _ =>
-  Nsubge b (2^a0*b1) &&& (fun b =>
-  Ndiv b (2^a0*d) &&& (fun n =>
-  b2o (c =? ((2^a0*n+b0)*d)) &&& (fun _ =>
-  Some (N'_c (n*2^a0+b0))))))))
-| _ => None
-end).
-
-Lemma N'_Nmap_applys_dec_v1_spec a0 a1 b0 b1 x x' n:
-  N'_Nmap_applys_dec_v1 a0 a1 b0 b1 x = Some x' ->
-  Nmap_applys (Nmap_mk (a0+a1) a0 (b0+2^a0*b1) b0) (toN n x) (toN n x') n.
-Proof.
-  unfold N'_Nmap_applys_dec_v1.
-  intros.
-  destruct x.
-  2,3: inverts H.
-  des_if' H.
-  cbn in H.
-  destruct n0.
-  2,3: inverts H.
-  do 6 des_if' H.
-  inverts H.
-  des_N_op.
-  eapply N'_set_d_spec in E.
-  rewrite E; clear E.
-  unfold toN.
-  pose proof (geosum_div a1 n) as I1.
-  applys_eq (Nmap_applys_dec a0 a1 b0 b1 n1 n).
-  2,3: lia.
-  remember (2^a1-1) as v1.
-  assert (v1<>0) by (pose proof (N.pow_le_mono_r 2 1 a1); lia).
-  replace (2^a1) with (v1+1) in * by lia.
-  rewrite (N.mul_comm a1 n).
-  remember (2^(n*a1)-1) as v2.
-  replace (2^(n*a1)) with (v2+1) in * by lia.
-  repeat rewrite N.mul_assoc.
-  repeat rewrite N.add_assoc.
-  rewrite N.div_add by lia.
-  rewrite <-N.mul_assoc,N.mul_comm.
-  rewrite N.Lcm0.divide_div_mul_exact.
-  2: apply N.Lcm0.mod_divide,I1.
-  pose proof (N.div_mod v2 v1) as I2.
-  rewrite I1 in I2.
-  lia.
+  cbn[if_Some] in H.
+  apply N'_Nmap_applys_dec_v1_spec with (n:=n) in H.
+  rewrite <-N'_mk_mk2 in H.
+  applys_eq H; flia.
 Qed.
 
 Definition N'_Nmap_applys_dec(a0 a1 b0 b1:N)(x:N'):option N' :=
   N'_Nmap_applys_dec_v1 a0 a1 b0 b1 x ||| (fun _ =>
   N'_Nmap_applys_dec_v2 a0 a1 b0 b1 x ||| (fun _ =>
-  N'_Nmap_applys_dec_v3 a0 a1 b0 b1 x)).
+  None)).
 
 Lemma N'_Nmap_applys_dec_spec a0 a1 b0 b1 x x' n:
   N'_Nmap_applys_dec a0 a1 b0 b1 x = Some x' ->
@@ -1556,7 +1482,6 @@ Proof.
     inverts H.
     eapply N'_Nmap_applys_dec_v2_spec,E.
   }
-  eapply N'_Nmap_applys_dec_v3_spec,H1.
 Qed.
 
 Definition N'_Nmap_applys_id(a0 b0:N)(x:N'):option N' :=
@@ -1705,9 +1630,9 @@ end.
 
 Definition N'_eqb x x0 :=
 match x,x0 with
-| N'_mk a b c d,N'_mk a0 b0 c0 d0 => eqb a a0 && eqb b b0 && eqb c c0 && eqb d d0
+| N'_mk a b c,N'_mk a0 b0 c0 => eqb a a0 && eqb b b0 && eqb c c0
 | N'_c c,N'_c c0 => eqb c c0
-| N'_mk2 a b c a' c',N'_mk2 a0 b0 c0 a'0 c'0 => eqb a a0 && eqb b b0 && eqb c c0 && eqb a' a'0 && eqb c' c'0
+| N'_mk2 a b a' b' c',N'_mk2 a0 b0 a'0 b'0 c'0 => eqb a a0 && eqb b b0 && eqb a' a'0 && eqb b' b'0 && eqb c' c'0
 | _,_ => false
 end.
 
@@ -1720,12 +1645,11 @@ Proof with solve_Bool_reflect.
   - destruct (eqb_spec a a0)...
     destruct (eqb_spec b b0)...
     destruct (eqb_spec c c1)...
-    destruct (eqb_spec d d0)...
   - destruct (eqb_spec a a0)...
   - destruct (eqb_spec a a0)...
     destruct (eqb_spec b b0)...
-    destruct (eqb_spec c c1)...
     destruct (eqb_spec a' a'0)...
+    destruct (eqb_spec b' b'0)...
     destruct (eqb_spec c' c'0)...
 Defined.
 
@@ -1793,11 +1717,14 @@ end.
 
 Definition N'_add (x x0:N') :=
 match x,x0 with
-| N'_mk a b c d,N'_mk a0 b0 c0 d0 =>
+| N'_mk a b c,N'_mk a0 b0 c0 =>
   b2o (eqb a a0) &&& (fun _ =>
-  b2o (eqb d 1) &&& (fun _ =>
-  b2o (eqb d0 1) &&& (fun _ =>
-  Some (N'_mk a (b+b0) (c+c0) d))))
+  Some (N'_mk a (b+b0) (c+c0)))
+| N'_c n,N'_c n0 => Some (N'_c (n+n0))
+| N'_mk2 a b a' b' c',N'_mk2 a0 b0 a'0 b'0 c'0 =>
+  b2o (eqb a a0) &&& (fun _ =>
+  b2o (eqb a' a'0) &&& (fun _ =>
+  Some (N'_mk2 a (b+b0) a' (b'+b'0) (c'+c'0))))
 | _,_ => None
 end.
 
@@ -1809,11 +1736,21 @@ Proof.
   intros.
   destruct x,x0.
   all: try congruence.
-  do 3 des_if' H.
-  inverts H.
-  des_N_op.
-  unfold toN.
-  lia.
+  - do 1 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    lia.
+  - do 0 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    lia.
+  - do 2 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    lia.
 Qed.
 
 Definition N'_head_add (x x0:N'_head) :=

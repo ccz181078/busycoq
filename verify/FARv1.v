@@ -383,3 +383,6 @@ Proof. solve_cert (CPS_LRU_FAR 6000 3000 1 3200 5 0 20 0). Time Qed.
 Lemma nonhalt127: ~halts (TM_from_str "1RB0RB_1LC1RA_0LA1RD_1LA1LE_1LF1LD_---0LC") c0.
 Proof. solve_cert (CPS_LRU_FAR 600000 300000 6 3200 2 4 6 0). Time Qed.
 
+Lemma nonhalt128: ~halts (TM_from_str "1RB1RD_1LC1LE_1RA0LB_1RE---_1RF0LC_1RC0RF") c0.
+Proof. solve_cert (RWL_mod_FAR 6000000 3000000 4 3200 2 3 32 0). Time Qed.
+
