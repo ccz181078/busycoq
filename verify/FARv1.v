@@ -386,3 +386,39 @@ Proof. solve_cert (CPS_LRU_FAR 600000 300000 6 3200 2 4 6 0). Time Qed.
 Lemma nonhalt128: ~halts (TM_from_str "1RB1RD_1LC1LE_1RA0LB_1RE---_1RF0LC_1RC0RF") c0.
 Proof. solve_cert (RWL_mod_FAR 6000000 3000000 4 3200 2 3 32 0). Time Qed.
 
+Lemma nonhalt129: ~halts (TM_from_str "1RB1LB_1LC1RE_0RD0LB_0LB1RA_1LA0RF_---0RC") c0.
+Proof. solve_cert (CPS_LRU_FAR 1200000 600000 4 3200 3 3 1 0). Time Qed.
+
+Lemma nonhalt130: ~halts (TM_from_str "1RB0LD_0RC1RF_1RD0RA_1LE1RB_1LC0LE_1RC---") c0.
+Proof. solve_cert (CPS_LRU_FAR 12000000 4000000 24 3200 4 2 1 0). Time Qed.
+
+Lemma nonhalt131: ~halts (TM_from_str "1LB0RD_1RC1LC_1LE1RA_---0RE_0RF0LC_0LC1RB") c0.
+Proof. solve_cert (CPS_LRU_FAR 1200000 600000 4 3200 3 3 1 0). Time Qed.
+
+Lemma nonhalt132: ~halts (TM_from_str "1LB1RE_0RC0LA_0LA1RD_1RA1LA_1LD0RF_---0RB") c0.
+Proof. solve_cert (CPS_LRU_FAR 1200000 600000 4 3200 3 3 1 0). Time Qed.
+
+Lemma nonhalt133: ~halts (TM_from_str "1LB0RA_1LC1LA_0RD1RA_1RF1LE_0LD0LE_0RC---") c0.
+Proof. solve_cert (CPS_LRU_FAR 600000 300000 4 3200 4 3 0 0). Time Qed.
+
+Lemma nonhalt134: ~halts (TM_from_str "1RB---_1RC1RE_0RD0RF_0RE0RB_0LF0LA_1LE0LB") c0.
+Proof. solve_cert (CPS_LRU_FAR 2000000 1000000 24 3200 4 3 1 0). Time Qed.
+
+Lemma nonhalt135: ~halts (TM_from_str "1RB1RE_1LC0LC_1RD1LB_0RB1LA_1RF1RA_---0RD") c0.
+Proof. solve_cert (CPS_LRU_FAR 600000 300000 6 3200 6 2 0 0). Time Qed.
+
+Lemma nonhalt136: ~halts (TM_from_str "1RB1RD_1RC0RA_1LD0LE_1RF0RC_1LC0RE_---1RB") c0.
+Proof. solve_cert (CPS_LRU_FAR 100000000 5000000 4 3200 3 3 2 0). Time Qed.
+
+Lemma nonhalt137: ~halts (TM_from_str "1RB1RC_1LC0RF_1LD0RA_1RE0LB_---1RA_1RE1LB") c0.
+Proof. solve_cert (CPS_LRU_FAR 100000000 10000000 4 3200 2 2 4 0). Time Qed.
+
+Lemma nonhalt138: ~halts (TM_from_str "1LB0RF_1RC0LB_0RD1RA_0LA1RE_0RA1RC_1RA---") c0.
+Proof. solve_cert (RWL_mod_FAR 20000000 10000000 22 3200 2 4 3 0). Time Qed.
+
+Lemma nonhalt139: ~halts (TM_from_str "1RB0LA_0RC---_1RD1RE_1LA1LD_1RD0RF_0RC1RC") c0.
+Proof. solve_cert (RWL_mod_FAR 20000000 10000000 6 3200 2 3 8 0). Time Qed.
+
+Lemma nonhalt140: ~halts (TM_from_str "1RB1RF_1LC1LB_---0LD_1RE0LD_0RA1RA_0LE0RE") c0.
+Proof. solve_cert (RWL_mod_FAR 20000000 10000000 6 3200 2 3 8 0). Time Qed.
+
