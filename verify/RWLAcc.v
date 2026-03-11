@@ -891,6 +891,12 @@ match RWL_steps T with
 | _ => None
 end.
 
+Definition decide_evstep T :=
+match RWL_steps T with
+| inl (_,c,_,_) => Some c
+| _ => None
+end.
+
 Lemma decide_nonhalt_spec T:
   decide_nonhalt T = true ->
   ~halts tm c0.
@@ -911,6 +917,20 @@ Proof.
   destruct (N_iter_until RWL_step' (inl RWL_state_0) T).
   1: congruence.
   destruct d; try congruence.
+Qed.
+
+Lemma decide_evstep_spec T c:
+  decide_evstep T = Some c ->
+  c0 -[ tm ]->* to_config 0 0 c.
+Proof.
+  unfold decide_evstep,RWL_steps.
+  pose proof (RWL_step'_spec RWL_state_0 T RWL_state_0_WF) as H0.
+  destruct (N_iter_until RWL_step' (inl RWL_state_0) T).
+  2: congruence.
+  destruct r as [[[c1 c2] c3] c4].
+  intro X; inverts X.
+  cbn in H0.
+  apply H0.
 Qed.
 
 End bsz.

@@ -2151,3 +2151,119 @@ Qed.
 End TM17.
 
 
+Module TM18.
+
+Definition tm := Eval compute in (TM_from_str "1LB1RE_0LC0LB_1RD1LF_0RE---_1RA0RD_0LA0RB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hR := (E,[]).
+Notation hL := (B,[]).
+Notation hRL := [(hR,hL)].
+
+Notation ld := [1;0;1;0].
+Notation ld0 := [0;0;0;0].
+Notation m0 := [1;0;1;0;0;1].
+Notation m1 := [1;0;1;0;0;0].
+Notation rd0 := [0;0].
+Notation rd1 := [0;1].
+
+Definition R1 a b c (tp:bool) r := ld^^a *> (if tp then m0 else m1) *> rd1^^b *> rd0^^c *> r.
+
+Lemma R1_Ov a tp r r':
+  sideRLs tm hRL r r' ->
+  sideRLs tm hRL (R1 a a 0 tp r) (R1 a a 0 tp r').
+Proof.
+  intros H.
+  unfold R1.
+  eapply segRLs_sideRLs_concat.
+  1: apply LBC_IncsOv; esc.
+  eapply segRLs_sideRLs_concat.
+  1: eapply @segRLs_wall'' with (h2:=hRL); destruct tp; esc.
+  eapply segRLs_sideRLs_concat.
+  1: apply RBC_IncsOv; esc.
+  apply H.
+Qed.
+
+Lemma R1_Inc a c tp r:
+  sideRLs tm hRL (R1 a a (1+c) tp r) (R1 a (a+1) c tp r).
+Proof.
+  unfold R1.
+  do 2 rewrite <-lpow_add'.
+  eapply segRLs_sideRLs_concat.
+  1: apply LBC_IncsOv; esc.
+  eapply segRLs_sideRLs_concat.
+  1: eapply @segRLs_wall'' with (h2:=hRL); destruct tp; esc.
+  eapply segRLs_sideRLs_concat.
+  1: apply RBC_IncsOv; esc.
+  esc.
+Qed.
+
+Definition S1 l a b c tp r := l <* ld0^^a <* <[1;0] {{{ (hR,R) }}} R1 b b c tp r.
+
+Ltac R1_Inc :=
+  epose proof (R1_Inc _ _ _ _) as I1;
+  eapply sideRLs_1 in I1;
+  follow100 I1; clear I1.
+
+Lemma Inc1 l a b c tp r:
+  S1 l (1+a) b (1+c) tp r -->*
+  S1 l a (1+b) c tp r.
+Proof.
+  unfold S1.
+  R1_Inc.
+  ut; er.
+Qed.
+
+Lemma Incs1 n l a b c tp r:
+  S1 l (n+a) b (n+c) tp r -->*
+  S1 l a (n+b) c tp r.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma Incs1' b c tp r:
+  S1 0inf 0 b c tp r -->*
+  S1 0inf 0 (c+b) 0 tp r.
+Proof.
+  mid (S1 0inf (c+0) b (c+0) tp r).
+  2: apply Incs1.
+  ut.
+  rewrite lpow_all0 by solve_const0_eq.
+  finish.
+Qed.
+
+Definition S' '(c,d,r) :=
+  S1 0inf 0 0 (2+c) true ([1;0]*>rd1^^(2+d)*>rd0*>r).
+
+Lemma BigStep c d r:
+  S' (c,d,r) -->+
+  S' (5+c*2,c,rd1*>rd0^^d*>rd1*>r).
+Proof.
+  unfold S'.
+  follow Incs1'.
+  mid10 (S1 (0inf<*<[1;0]) ((2+c)+0) 0 ((2+c)+0) false (rd1*>rd0^^(1+d)*>rd1*>r)).
+  1: ut; es.
+  follow Incs1.
+  unfold S1.
+  epose proof (R1_Ov _ _ _ _) as I1.
+  eapply sideRLs_1 in I1.
+  1: follow100 I1; clear I1.
+  2: esx.
+  ut; es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (11,3,[0;0;0;1;0;1]*>0inf)).
+  1: esx.
+  eapply progress_nonhalt_simple.
+  intros [[c d] r].
+  eexists _; apply BigStep.
+Qed.
+
+End TM18.
+
+
