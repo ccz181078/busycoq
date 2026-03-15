@@ -1,4 +1,4 @@
-From BusyCoq Require Import Individual62.
+From BusyCoq Require Import Individual.
 
 Require Import ZifyN Lia.
 Require Import ZArith.
@@ -60,6 +60,12 @@ Notation "a ||| b" := (if_None a b) (at level 30, right associativity).
 
 Definition b2o(b:bool) := if b then Some tt else None.
 
+Module LongLoop(Ctx:Ctx).
+Module TM := Individual Ctx.
+Export TM.
+Import Eqb.
+
+
 Notation seg := (list Sym).
 Notation head := (DH0*DH0)%type.
 Notation vseg := (list seg + list seg)%type.
@@ -87,6 +93,7 @@ Hypothesis f2:seg->head->option(N*N*head).
 Hypothesis f1:seg->head->option((list seg)*(list head)).
 Hypothesis f0:seg->head->option((list seg)*seg).
 Hypothesis tm:TM.
+Notation "0inf" := (const s0).
 
 Definition to_side '(ws,w) :=
   concat ws*>w*>0inf.
@@ -1345,6 +1352,16 @@ Proof.
   apply E.
 Qed.
 
+Lemma Nmap_applys_c a0 a1 a n:
+  Nmap_applys (Nmap_mk a0 a1 a a) a a n.
+Proof.
+  induction n using N.peano_ind.
+  - ec.
+  - replace (N.succ n) with (1+n) by lia.
+    ec; eauto 1.
+    applys_eq (Nmap_apply_mk a0 a1 a a 0); flia.
+Qed.
+
 Definition N'_Nmap_applys_dec_v1(a0 a1 b0 b1:N)(x:N'):option N' :=
 match x with
 | N'_mk a b c =>
@@ -1362,7 +1379,10 @@ match x with
   Ndiv c' (2^a0) &&& (fun c =>
   b2o ((((2^a1-1)*c+b1)*2^a0)=?b') &&& (fun _ =>
   Some (N'_mk a (b*2^a0) (c*2^a0+b0))))))))
-| _ => None
+| N'_c c =>
+  b2o (b1=?0) &&& (fun _ =>
+  b2o (b0=?c) &&& (fun _ =>
+  Some (N'_c c)))
 end.
 
 Lemma N'_Nmap_applys_dec_v1_spec a0 a1 b0 b1 x x' n:
@@ -1381,6 +1401,14 @@ Proof.
     2,3: lia.
     rem_v1 a n v.
     lia.
+  }
+  {
+    do 2 des_if' H.
+    inverts H.
+    des_N_op.
+    unfold toN.
+    rewrite N.mul_0_r,N.add_0_r.
+    apply Nmap_applys_c.
   }
   {
     do 6 des_if' H.
@@ -1430,6 +1458,32 @@ Proof.
   lia.
 Qed.
 
+Ltac rem_v2 a n v1 :=
+  let I1:=fresh "I" in
+  pose proof (geosum_div' a n) as I1;
+  remember ((2 ^ (n * a) - 1) / (2 ^ a - 1)) as v1 eqn:Heqv1 ;
+  repeat rewrite I1; clear Heqv1.
+
+Lemma N'_mk2_mk a b a0 b0 c b1 n:
+  b1*(2^a-1) = b*(2^(a+a0)-1) ->
+  b*(2^a0-1) = b0*(2^a-1) ->
+  (2^a-1) <> 0 ->
+  (2^a0-1) <> 0 ->
+  toN n (N'_mk2 a b a0 b0 c) =
+  toN n (N'_mk (a+a0) b1 c).
+Proof.
+  unfold toN.
+  intros.
+  rem_v2 a n v.
+  rem_v2 a0 n v0.
+  rem_v2 (a+a0) n v1.
+  rewrite (N.mul_add_distr_l) in I1.
+  rewrite N.pow_add_r in I1.
+  rewrite I,I0 in I1; clear I I0.
+  rewrite N.pow_add_r in *.
+  nia.
+Qed.
+
 
 Definition N'_Nmap_applys_dec_v2(a0 a1 b0 b1:N)(x:N'):option N' :=
 match x with
@@ -1437,6 +1491,12 @@ match x with
   b2o (a=?a1*2) &&& (fun _ =>
   Ndiv b (2^a1+1) &&& (fun b =>
   N'_Nmap_applys_dec_v1 a0 a1 b0 b1 (N'_mk2 a1 b a1 b c)))
+| N'_mk2 a b a' b' c' =>
+  b2o (negb (a=?0)) &&& (fun _ =>
+  b2o (negb (a'=?0)) &&& (fun _ =>
+  b2o (b*(2^a'-1) =? b'*(2^a-1)) &&& (fun _ =>
+  Ndiv (b*(2^(a+a')-1)) (2^a-1) &&& (fun b2 =>
+  N'_Nmap_applys_dec_v1 a0 a1 b0 b1 (N'_mk (a+a') b2 c')))))
 | _ => None
 end.
 
@@ -1452,12 +1512,23 @@ Proof.
   unfold N'_Nmap_applys_dec_v2.
   intros.
   destruct x; cg.
-  do 2 des_if' H.
-  des_N_op.
-  cbn[if_Some] in H.
-  apply N'_Nmap_applys_dec_v1_spec with (n:=n) in H.
-  rewrite <-N'_mk_mk2 in H.
-  applys_eq H; flia.
+  {
+    do 2 des_if' H.
+    des_N_op.
+    cbn[if_Some] in H.
+    apply N'_Nmap_applys_dec_v1_spec with (n:=n) in H.
+    rewrite <-N'_mk_mk2 in H.
+    applys_eq H; flia.
+  }
+  {
+    do 4 des_if' H.
+    cbn[if_Some] in H.
+    des_N_op.
+    apply N'_Nmap_applys_dec_v1_spec with (n:=n) in H.
+    assert (2^a-1<>0) by (replace a with (1+(a-1)) by lia; rewrite N.pow_add_r; lia).
+    assert (2^a'-1<>0) by (replace a' with (1+(a'-1)) by lia; rewrite N.pow_add_r; lia).
+    erewrite (N'_mk2_mk a b a' b' c' n0); eauto 1.
+  }
 Qed.
 
 Definition N'_Nmap_applys_dec(a0 a1 b0 b1:N)(x:N'):option N' :=
@@ -2596,6 +2667,8 @@ Qed.
 End sim_sec.
 
 End sec.
+
+End LongLoop.
 
 Require Import String.
 

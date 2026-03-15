@@ -1,12 +1,26 @@
 From BusyCoq Require Import LongLoop.
 From BusyCoq Require Import Individual62.
 
+Module LongLoop62 := LongLoop BB62.
+Import LongLoop62.
+
 Require Import ZArith.
 Require Import String.
 
 Close Scope N.
 
 Import Eqb.
+
+Ltac esx :=
+  (apply BoundedConfig.segRLs_c_spec with (T:=10^3); reflexivity) ||
+  (apply BoundedConfig.segRLs_c_spec with (T:=10^6); reflexivity) ||
+  (apply BoundedConfig.sideRLs_c_spec with (T:=10^3); reflexivity) ||
+  (eapply sideRLs_c_spec with (T:=10^6); [vm_compute; reflexivity | st; reflexivity]) ||
+  (eapply evstep_c_spec;
+   eapply Individual62.Enumerate.Permute.Flip.Compute.TM.evstep_c_spec;
+   change c0 with (Individual62.Enumerate.Permute.Flip.Compute.TM.c0);
+   cbn; solve_init).
+
 
 Lemma find_spec {X Y} {E:Eqb X} (x0:X) ls (y0:Y):
   List.find (fun '(x,y) => eqb x x0) ls &&& (fun '(x,y) => Some y) = Some y0 ->
@@ -65,7 +79,6 @@ Proof.
   rewrite Str_app_assoc in H0.
   apply H0.
 Qed.
-
 
 
 Module TM1.

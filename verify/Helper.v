@@ -72,6 +72,16 @@ Proof.
     rewrite app_assoc. reflexivity.
 Qed.
 
+Lemma lpow_mul{A} (a:list A) b n:
+  a^^(b*n) = (a^^n)^^b.
+Proof.
+  induction b.
+  - reflexivity.
+  - cbn.
+    rewrite lpow_add.
+    congruence.
+Qed.
+
 Lemma app_cons_r : forall {A} xs (x : A) ys,
   xs ++ x :: ys = (xs ++ [x]) ++ ys.
 Proof.

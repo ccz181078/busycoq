@@ -2,12 +2,30 @@ From BusyCoq Require Import LongLoop.
 From BusyCoq Require Import Individual62.
 From BusyCoq Require LongAcc.
 
+Module LongLoop62 := LongLoop BB62.
+Import LongLoop62.
+
 Require Import ZArith.
 Require Import String.
 
 Close Scope N.
 
 Import Eqb.
+
+Ltac esx :=
+  (apply BoundedConfig.segRLs_c_spec with (T:=10^3); reflexivity) ||
+  (apply BoundedConfig.segRLs_c_spec with (T:=10^6); reflexivity) ||
+  (apply BoundedConfig.sideRLs_c_spec with (T:=10^3); reflexivity) ||
+  (eapply sideRLs_c_spec with (T:=10^6); [vm_compute; reflexivity | st; reflexivity]) ||
+  (eapply evstep_c_spec;
+   eapply Individual62.Enumerate.Permute.Flip.Compute.TM.evstep_c_spec;
+   change c0 with (Individual62.Enumerate.Permute.Flip.Compute.TM.c0);
+   cbn; solve_init).
+
+Ltac stepn n0 :=
+  eapply without_counter with (n:=N.to_nat n0);
+  eapply multistep_c_spec; vm_compute; repeat rewrite <-const_unfold; reflexivity.
+
 
 Module LongAcc62 := LongAcc.LongAcc BB62.
 
@@ -152,8 +170,7 @@ Proof.
         (D:=32) (T:=23%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 9 step1.
-      finish.
+      stepn 9%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -253,8 +270,7 @@ Proof.
         (D:=14) (T:=114%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 13 step1.
-      finish.
+      stepn 13%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -348,8 +364,7 @@ Proof.
         (D:=8) (T:=83%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 55 step1.
-      finish.
+      stepn 55%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -436,7 +451,7 @@ Proof.
     time vm_compute; reflexivity.
   - reflexivity.
   - intro X; inverts X.
-  - do 3 (eapply sideRLseq_S with (r2:=0inf); [unfold sideRL; es|]).
+  - change 0inf with ([]*>0inf).
     esx.
   - eapply evstep_trans.
     + eapply evstep_c_spec.
@@ -445,8 +460,7 @@ Proof.
         (D:=60) (T:=136%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 1 step1.
-      finish.
+      stepn 1%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -533,7 +547,7 @@ Proof.
     time vm_compute; reflexivity.
   - reflexivity.
   - intro X; inverts X.
-  - do 3 (eapply sideRLseq_S with (r2:=0inf); [unfold sideRL; es|]).
+  - change 0inf with ([]*>0inf).
     esx.
   - eapply evstep_trans.
     + eapply evstep_c_spec.
@@ -542,8 +556,7 @@ Proof.
         (D:=60) (T:=136%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 1 step1.
-      finish.
+      stepn 1%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -650,8 +663,7 @@ Proof.
         (D:=10) (T:=44%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 10 step1.
-      finish.
+      stepn 10%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -762,8 +774,7 @@ Proof.
         (D:=10) (T:=54%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 10 step1.
-      finish.
+      stepn 10%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -874,8 +885,7 @@ Proof.
         (D:=10) (T:=51%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 10 step1.
-      finish.
+      stepn 10%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -987,8 +997,7 @@ Proof.
         (D:=10) (T:=49%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 10 step1.
-      finish.
+      stepn 10%N.
   - time vm_compute; reflexivity.
 Time Qed.
 
@@ -1069,8 +1078,7 @@ Proof.
         (D:=10) (T:=49%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 7 step1.
-      finish.
+      stepn 7%N.
   - native_check_eq.
 Time Qed.
 End TM10.
@@ -1150,8 +1158,7 @@ Proof.
         (D:=12) (T:=49%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 7 step1.
-      finish.
+      stepn 7%N.
   - native_check_eq.
 Time Qed.
 End TM11.
@@ -1232,8 +1239,7 @@ Proof.
         (D:=10) (T:=39%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 2 step1.
-      finish.
+      stepn 2%N.
   - native_check_eq.
 Time Qed.
 End TM12.
@@ -1314,8 +1320,7 @@ Proof.
         (D:=10) (T:=40%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 2 step1.
-      finish.
+      stepn 2%N.
   - native_check_eq.
 Time Qed.
 End TM13.
@@ -1617,8 +1622,7 @@ Proof.
         (D:=16) (T:=50%N) (T0:=(10^6)%N) (T1:=10^3).
       time native_compute; reflexivity.
     + ut.
-      do 11 step1.
-      finish.
+      stepn 11%N.
   - native_check_eq.
 Time Qed.
 End TM17.
@@ -1923,5 +1927,307 @@ Proof.
   - native_check_eq.
 Time Qed.
 End TM21.
+
+
+Module TM22.
+Definition tm := Eval compute in (TM_from_str "1LB0LA_1RC0LD_0RF0RD_1RE0RB_1LA1RD_0RD---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((D,<[]),(A,[])).
+Notation h1 := ((E,<[1]),(A,[])).
+Notation h2 := ((B,<[0]),(A,[])).
+Notation h3 := ((B,<[1;1;0]),(A,[])).
+Notation h4 := ((C,<[1;1;0;1]),(A,[])).
+Notation h5 := ((F,<[1;1;0;1;0]),(A,[])).
+Notation h6 := ((B,<[1;1;0;1;0;0]),(A,[])).
+Notation h7 := ((E,<[1;1;0;1;0;0;1]),(A,[])).
+Notation h8 := ((B,<[1;1;0;1;0;0;0]),(A,[])).
+Notation h9 := ((C,<[1;1;0;1;0;0;0;1]),(A,[])).
+Notation h10 := ((F,<[1;1;0;1;0;0;1;0]),(A,[])).
+Notation h11 := ((F,<[1;1;0;1;0;0;0;1;0]),(A,[])).
+Notation h12 := ((B,<[1;1;0;1;0;0;0;1;0;0;0]),(A,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0]))::
+((h0,[0;0]),([[0;1]],[]))::
+((h0,[0;1]),([[0;0]],[h0]))::
+((h0,[0;1;1]),([],[h3]))::
+((h3,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0;h3]))::
+((h3,[0;1;1]),([],[h6]))::
+((h6,[0;0]),([],[h10]))::
+((h10,[0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0;h3]))::
+((h3,[0;0]),([],[h5]))::
+((h5,[0;0]),([],[h7]))::
+((h7,[0;0]),([[0;1;1;0;0;0;1;1]],[h1;h0]))::
+((h7,[0;1;1]),([[0;1;1;0;0;0;1;1];[0;0]],[h0]))::
+((h1,[0;0]),([[0;1];[0]],[]))::
+((h0,[0]),([],[h1]))::
+((h1,[0;1;1;0;0;0;1;1]),([[0;1];[1;1];[0;0];[0;1;1]],[]))::
+((h5,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1];[0;0]],[h3]))::
+((h5,[0;1]),([],[h8]))::
+((h8,[0;1;1;0;0;0;1;1]),([[0;1;1];[0;1];[1;1];[0;0];[0;1;1]],[h0;h0;h3]))::
+((h7,[0;1]),([[0;1;1]],[h3;h0;h3]))::
+((h3,[0;1]),([[0;0];[0;1;1]],[h0]))::
+((h0,[1;1]),([[0;1]],[]))::
+((h5,[0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0]))::
+((h1,[0;1]),([[0;1;1]],[]))::
+((h3,[0]),([],[h4]))::
+((h4,[0;0]),([[0;1;1]],[h0;h0;h0;h3]))::
+((h8,[0;1]),([[0;1;1]],[h0;h3;h0;h3]))::
+((h1,[0;1;1]),([[0;1];[1;1]],[]))::
+((h6,[0;1;1]),([[0;0];[0;1;1];[0;1;1]],[h2]))::
+((h2,[0;1;1]),([[0;1;1]],[h2]))::
+((h2,[0;1]),([[0;1;1]],[h0]))::
+((h10,[0;0]),([[0;1;1]],[h1;h0;h0;h3;h0;h3]))::
+((h8,[0]),([],[h9]))::
+((h9,[0;0]),([[0;1;1];[0;1];[1;1]],[h0;h0;h0;h3]))::
+((h8,[0;0]),([],[h11]))::
+((h11,[0;0]),([[0;1;1];[0;1];[1;1]],[h1;h0;h0;h3]))::
+((h6,[0;1]),([[0;0];[0;1;1];[0;1;1]],[h0]))::
+((h8,[0;1;1]),([[0;1;1;0;0;0;1;1]],[h2;h2;h0]))::
+((h11,[0;1]),([],[h12]))::
+((h12,[0;1;1;0;0;0;1;1]),([[0;1;1];[0;1];[1;1];[0;1];[1;1];[0;0];[0;1;1]],[h0;h0;h3]))::
+((h11,[0;1;1]),([[0;1;1];[0;1];[1;1];[0;0];[0;1;1]],[h0;h0]))::
+((h7,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;1;1]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h5,[0;1]),([[0;1;1];[0;1];[1;1];[0;0];[0;1;1];[0;0]],[0;1]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1;0;0;0;1;1]),(0%N,1%N,h0))::
+((h0,[0;0]),(1%N,0%N,h0))::
+((h0,[0;1]),(1%N,0%N,h0))::
+((h2,[0;1;1]),(0%N,0%N,h2))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;0];[0;1;1];[0;0];[0;0];[0;0];[0;0];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;0];[0;0];[0;0];[0;1];[0;0];[0;0];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;1];[0;1];[0;0];[0;1];[0;1];[0;1];[0;1];[0;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1];[0;1;1];[0;0]],[0;1]).
+
+Definition hs_step:(list head) := [h3]^^24.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1;0]) (pp:=4%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - stepn 12920484%N.
+  - native_check_eq.
+Time Qed.
+End TM22.
+
+
+Module TM23.
+Definition tm := Eval compute in (TM_from_str "1RB0LD_0RC0RD_0RD---_1RE0RA_1LF1RD_1LA0LF").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((D,<[]),(F,[])).
+Notation h1 := ((E,<[1]),(F,[])).
+Notation h2 := ((A,<[0]),(F,[])).
+Notation h3 := ((A,<[1;1;0]),(F,[])).
+Notation h4 := ((B,<[1;1;0;1]),(F,[])).
+Notation h5 := ((C,<[1;1;0;1;0]),(F,[])).
+Notation h6 := ((A,<[1;1;0;1;0;0]),(F,[])).
+Notation h7 := ((E,<[1;1;0;1;0;0;1]),(F,[])).
+Notation h8 := ((A,<[1;1;0;1;0;0;0]),(F,[])).
+Notation h9 := ((B,<[1;1;0;1;0;0;0;1]),(F,[])).
+Notation h10 := ((C,<[1;1;0;1;0;0;1;0]),(F,[])).
+Notation h11 := ((C,<[1;1;0;1;0;0;0;1;0]),(F,[])).
+Notation h12 := ((A,<[1;1;0;1;0;0;0;1;0;0;0]),(F,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0]))::
+((h0,[0;0]),([[0;1]],[]))::
+((h0,[0;1]),([[0;0]],[h0]))::
+((h0,[0;1;1]),([],[h3]))::
+((h3,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0;h3]))::
+((h3,[0;1;1]),([],[h6]))::
+((h6,[0;0]),([],[h10]))::
+((h10,[0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0;h3]))::
+((h3,[0;0]),([],[h5]))::
+((h5,[0;0]),([],[h7]))::
+((h7,[0;0]),([[0;1;1;0;0;0;1;1]],[h1;h0]))::
+((h7,[0;1;1]),([[0;1;1;0;0;0;1;1];[0;0]],[h0]))::
+((h1,[0;0]),([[0;1];[0]],[]))::
+((h0,[0]),([],[h1]))::
+((h1,[0;1;1;0;0;0;1;1]),([[0;1];[1;1];[0;0];[0;1;1]],[]))::
+((h5,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1];[0;0]],[h3]))::
+((h5,[0;1]),([],[h8]))::
+((h8,[0;1;1;0;0;0;1;1]),([[0;1;1];[0;1];[1;1];[0;0];[0;1;1]],[h0;h0;h3]))::
+((h7,[0;1]),([[0;1;1]],[h3;h0;h3]))::
+((h3,[0;1]),([[0;0];[0;1;1]],[h0]))::
+((h0,[1;1]),([[0;1]],[]))::
+((h5,[0;1;1]),([[0;1;1;0;0;0;1;1]],[h0;h0]))::
+((h1,[0;1]),([[0;1;1]],[]))::
+((h3,[0]),([],[h4]))::
+((h4,[0;0]),([[0;1;1]],[h0;h0;h0;h3]))::
+((h8,[0;1]),([[0;1;1]],[h0;h3;h0;h3]))::
+((h1,[0;1;1]),([[0;1];[1;1]],[]))::
+((h6,[0;1;1]),([[0;0];[0;1;1];[0;1;1]],[h2]))::
+((h2,[0;1;1]),([[0;1;1]],[h2]))::
+((h2,[0;1]),([[0;1;1]],[h0]))::
+((h10,[0;0]),([[0;1;1]],[h1;h0;h0;h3;h0;h3]))::
+((h8,[0]),([],[h9]))::
+((h9,[0;0]),([[0;1;1];[0;1];[1;1]],[h0;h0;h0;h3]))::
+((h8,[0;0]),([],[h11]))::
+((h11,[0;0]),([[0;1;1];[0;1];[1;1]],[h1;h0;h0;h3]))::
+((h6,[0;1]),([[0;0];[0;1;1];[0;1;1]],[h0]))::
+((h8,[0;1;1]),([[0;1;1;0;0;0;1;1]],[h2;h2;h0]))::
+((h11,[0;1]),([],[h12]))::
+((h12,[0;1;1;0;0;0;1;1]),([[0;1;1];[0;1];[1;1];[0;1];[1;1];[0;0];[0;1;1]],[h0;h0;h3]))::
+((h11,[0;1;1]),([[0;1;1];[0;1];[1;1];[0;0];[0;1;1]],[h0;h0]))::
+((h7,[0;1;1;0;0;0;1;1]),([[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;1;1]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h5,[0;1]),([[0;1;1];[0;1];[1;1];[0;0];[0;1;1];[0;0]],[0;1]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[0;1;1;0;0;0;1;1]),(0%N,1%N,h0))::
+((h0,[0;0]),(1%N,0%N,h0))::
+((h0,[0;1]),(1%N,0%N,h0))::
+((h2,[0;1;1]),(0%N,0%N,h2))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[1;1];[0;0];[0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;1];[0;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;0];[0;0];[0;0];[0;0];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;0];[0;1;1;0;0;0;1;1];[0;0];[0;0];[0;0];[0;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;0];[0;0];[0;0];[0;1];[0;0];[0;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;1;1;0;0;0;1;1];[0;0];[0;1];[0;1];[0;0];[0;0];[0;1];[0;1];[0;1];[0;1];[0;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1;1];[0;1];[0;1;1];[0;0]],[0;1]).
+
+Definition hs_step:(list head) := [h3]^^24.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[1;0]) (pp:=4%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - do 7 (eapply evstep_trans; [time stepn (10^7)%N|]).
+    stepn 2952764%N.
+  - native_check_eq.
+Time Qed.
+End TM23.
+
+
+Module TM24.
+Definition tm := Eval compute in (TM_from_str "1RB0RE_1RC0LD_1LD1RA_1LB1LD_0RF1RC_---1RE").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation h0 := ((E,<[]),(D,[])).
+Notation h1 := ((F,<[1;1;0;0]),(D,[])).
+Notation h2 := ((A,<[1;1]),(D,[])).
+Notation h3 := ((A,<[0;0;1;1]),(D,[])).
+
+Definition f1 (w:seg)(h:head):option((list seg)*(list head)) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;1;1;0;1]),([[1;1;1;0;1]],[h0;h0]))::
+((h0,[1;0;1]),([[1;1;1]],[]))::
+((h0,[1;1;1]),([[1;0;1]],[h0]))::
+((h3,[1;1;1;0;1]),([[1;1;1;0;1]],[h1;h0]))::
+((h1,[1;1;1;0;1]),([[1;1;1;0;1]],[h1]))::
+((h1,[1;1;1]),([[1;1;1;0;1]],[h2;h0]))::
+((h2,[1;1;1;0;1]),([[1;0;1];[1;1;1;0]],[]))::
+((h0,[1;1;1;0]),([],[h1]))::
+((h2,[1;1;1]),([[1;0;1]],[h2]))::
+((h2,[1;0;1]),([[1;1;1;0;1]],[h0;h0]))::
+((h1,[1;0;1]),([[1;1;1];[1;1;0;1]],[h0]))::
+((h0,[1;1;0;1]),([[1;1;1;0]],[]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f0 (w:seg)(h:head):option((list seg)*seg) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;1]),([[1;1;1]],[1;1]))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition f2 (w:seg)(h:head):option(N*N*head) :=
+List.find (fun '(x,y) => eqb x (h,w)) (
+((h0,[1;1;1;0;1]),(0%N,1%N,h0))::
+((h0,[1;0;1]),(1%N,0%N,h0))::
+((h0,[1;1;1]),(1%N,0%N,h0))::
+((h1,[1;1;1;0;1]),(0%N,0%N,h1))::
+nil) &&& (fun '(x,y) => Some y).
+
+Definition ws_init:(list seg)*seg := ([[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1;0;1];[1;1;1];[1;0;1];[1;0;1];[1;1;1;0;1];[1;0;1];[1;1;1];[1;0;1];[1;1;1;0;1];[1;1;1];[1;0;1];[1;1;1];[1;1;1];[1;1;1];[1;0;1];[1;0;1];[1;0;1];[1;0;1];[1;1;1]],[1;1]).
+
+Definition hs_step:(list head) := [h3]^^28.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply decide_nonhalt_spec with
+  (tm:=tm) (f2:=f2) (f1:=f1) (f0:=f0) (hs_step:=hs_step) (ws_init:=ws_init)
+  (lh:=0inf<*<[]) (pp:=6%nat) (T:=N.to_nat (10^6)).
+  - intros.
+    unfold f2 in H.
+    apply find_spec in H.
+    gen w h a0 a1 h'.
+    apply f2_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f1 in H.
+    apply find_spec in H.
+    gen w h ws hs.
+    apply f1_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - intros.
+    unfold f0 in H.
+    apply find_spec in H.
+    gen w h w'.
+    apply f0_spec' with (T:=(10^3)).
+    time vm_compute; reflexivity.
+  - reflexivity.
+  - intro X; inverts X.
+  - apply BoundedConfig.sideRLs_c_spec with (T:=10^4); reflexivity.
+  - esx.
+  - native_check_eq.
+Time Qed.
+End TM24.
 
 

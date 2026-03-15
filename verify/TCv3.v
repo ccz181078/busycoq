@@ -101,3 +101,65 @@ Time Qed.
 
 End TM2.
 
+
+Module TM3.
+Definition tm := Eval compute in (TM_from_str "1RB0LA_0RC0RF_0RD0RA_1LD0LE_0LA1LE_---1RC").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition config '(n,r) :=
+to_config 0 0 
+         ([([0; 0], (0%N, 0%N), 1%N); ([1; 1], (0%N, 0%N), 1%N);
+           ([0; 1], (0%N, 0%N), 1303%N); ([1; 0], (0%N, 0%N), 2%N);
+           ([0; 1], (0%N, 0%N), 1%N); ([1; 1], (0%N, 0%N), n)] ++ r,
+          [([1; 1], (0%N, 0%N), 983%N); ([1; 0], (0%N, 0%N), 1%N);
+           ([1; 1], (0%N, 0%N), 4%N); ([1; 0], (0%N, 0%N), 1%N)], D, R).
+
+Definition r0 :=
+           [([1; 0], (0%N, 0%N), 251%N); ([1; 1], (0%N, 0%N), 1%N);
+           ([0; 1], (0%N, 0%N), 1%N); ([0; 0], (0%N, 0%N), 1%N);
+           ([1; 0], (0%N, 0%N), 8%N); ([1; 1], (0%N, 0%N), 1%N);
+           ([0; 1], (0%N, 0%N), 1%N); ([0; 0], (0%N, 0%N), 1%N);
+           ([1; 1], (0%N, 0%N), 2%N); ([1; 0], (0%N, 0%N), 381607%N);
+           ([1; 1], (0%N, 0%N), 1%N); ([0; 1], (0%N, 0%N), 1%N);
+           ([0; 0], (0%N, 0%N), 1%N); ([1; 0], (0%N, 0%N), 127182%N)].
+
+
+Lemma init:
+  c0 -->* config (109290%N,r0).
+Proof.
+  eapply (decide_evstep_spec tm 2 320 true 2 40000000).
+  native_check_eq.
+Time Qed.
+
+Opaque N.add.
+
+Lemma BigStep n r:
+  config ((n)%N,r) -->+
+  config (((1+n))%N,r).
+Proof.
+  unfold config.
+  cbn.
+  repeat rewrite Nnat.N2Nat.inj_add.
+  eapply multistep_progress with (n:=18030877).
+  eapply multistep_c_spec.
+  time native_compute.
+  rewrite <-const_unfold.
+  reflexivity.
+Time Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_simple.
+  intros [n r].
+  eexists.
+  apply BigStep.
+Qed.
+
+End TM3.
+
+
+
