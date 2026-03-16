@@ -1,4 +1,4 @@
-Require Import ZifyNat Lia.
+Require Import ZifyNat Lia Arith.
 Require Import PeanoNat.
 
 Inductive DivMod2{n:nat}:Set :=
@@ -85,4 +85,17 @@ destruct (n mod 6) as [|[|[|[|[|]]]]] eqn:E.
 Unshelve.
 all: lia.
 Defined.
+
+
+Inductive Sub(a b:nat):Set :=
+| subge c: a=b+c -> Sub a b
+| sublt: a<b -> Sub a b.
+
+Lemma sub a b: Sub a b.
+Proof.
+  destruct (lt_dec a b) as [E|E].
+  - apply sublt,E.
+  - eapply subge with (c:=a-b).
+    lia.
+Qed.
 
