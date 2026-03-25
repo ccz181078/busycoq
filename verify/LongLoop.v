@@ -2,8 +2,71 @@ From BusyCoq Require Import Individual.
 
 Require Import ZifyN Lia.
 Require Import ZArith.
-Require Import List.
+Require Import String List.
+Require Import FSets.FMapPositive.
 Import Eqb.
+
+Ltac cg := try congruence.
+
+Fixpoint Decimal_uint_to_str x:string :=
+match x with
+| Decimal.Nil => ""
+| Decimal.D0 x => "0" ++ Decimal_uint_to_str x
+| Decimal.D1 x => "1" ++ Decimal_uint_to_str x
+| Decimal.D2 x => "2" ++ Decimal_uint_to_str x
+| Decimal.D3 x => "3" ++ Decimal_uint_to_str x
+| Decimal.D4 x => "4" ++ Decimal_uint_to_str x
+| Decimal.D5 x => "5" ++ Decimal_uint_to_str x
+| Decimal.D6 x => "6" ++ Decimal_uint_to_str x
+| Decimal.D7 x => "7" ++ Decimal_uint_to_str x
+| Decimal.D8 x => "8" ++ Decimal_uint_to_str x
+| Decimal.D9 x => "9" ++ Decimal_uint_to_str x
+end.
+
+Class ToStr A := {
+  str : A -> string;
+}.
+
+Definition nat_to_str x :=
+  Decimal_uint_to_str (Nat.to_uint x).
+
+Definition Pos_to_str x :=
+  Decimal_uint_to_str (Pos.to_uint x).
+
+Definition N_to_str x :=
+  Decimal_uint_to_str (N.to_uint x).
+
+Instance NatToStr : ToStr nat := Build_ToStr _ nat_to_str.
+Instance PosToStr : ToStr positive := Build_ToStr _ Pos_to_str.
+Instance NToStr : ToStr N := Build_ToStr _ N_to_str.
+
+Fixpoint join (ls:list string):string :=
+match ls with
+| h::t =>
+  match t with
+  | [] => h
+  | _ => h ++ " " ++ join t
+  end
+| [] => ""
+end.
+
+Definition option_to_str {A} (x:option A):string :=
+match x with
+| None => "fail: "
+| _ => ""
+end.
+
+Definition Ns_to_str (h:string) (ls:list N):string :=
+  "("++(join (h::map N_to_str ls))++")".
+
+Definition strs_to_str (h:string) (ls:list string):string :=
+  "("++(join (h::ls))++")".
+
+Definition pr{A}(x:A)(s:string):A :=
+  x.
+
+Definition pr'{A}(x:option A)(s:string):option A :=
+  pr x (option_to_str x ++ s).
 
 Open Scope N.
 
@@ -59,6 +122,85 @@ end.
 Notation "a ||| b" := (if_None a b) (at level 30, right associativity).
 
 Definition b2o(b:bool) := if b then Some tt else None.
+
+Definition land_ones a b := N.land a (N.ones b).
+Definition shl1 a := N.shiftl 1 a.
+Notation shl := N.shiftl.
+Notation shr := N.shiftr.
+Notation n1s := land_ones.
+
+Definition mul1s a b :=
+  (shl a b)-a.
+
+Lemma mul1s_def a b:
+  mul1s a b = (2^b-1)*a.
+Proof.
+  unfold mul1s.
+  rewrite N.shiftl_mul_pow2.
+  nia.
+Qed.
+
+Lemma N_ones_def n:
+  N.ones n = 2^n-1.
+Proof.
+  rewrite N.ones_equiv.
+  lia.
+Qed.
+
+Lemma shl1_def a:
+  shl1 a = 2^a.
+Proof.
+  unfold shl1.
+  rewrite N.shiftl_mul_pow2.
+  lia.
+Qed.
+
+Lemma n1s_def a b:
+  n1s a b = a mod 2^b.
+Proof.
+  unfold n1s.
+  apply N.land_ones.
+Qed.
+
+Ltac rw_sh :=
+  repeat (
+  rewrite shl1_def in * ||
+  rewrite N.shiftl_mul_pow2 in * ||
+  rewrite N.shiftr_div_pow2 in * ||
+  rewrite n1s_def in * ||
+  rewrite mul1s_def in * ||
+  rewrite N_ones_def in *
+  ).
+
+Definition Ndivpow2(a b:N) :=
+  if n1s a b =? 0 then Some (shr a b) else None.
+
+Lemma Ndivpow2_spec a b c:
+  Ndivpow2 a b = Some c ->
+  a=c*2^b.
+Proof.
+  unfold Ndivpow2.
+  rw_sh.
+  apply Ndiv_spec.
+Qed.
+
+Ltac des_N_op :=
+rw_sh;
+repeat
+match goal with
+| [H: b2o (?a =? ?b) = Some _ |- _] =>
+  destruct (N.eqb_spec a b); inverts H; subst
+| [H: b2o (negb (?a =? ?b)) = Some _ |- _] =>
+  destruct (N.eqb_spec a b); inverts H
+| [H: b2o (eqb ?a ?b) = Some _ |- _] =>
+  destruct (eqb_spec a b); inverts H; subst
+| [H: Nsubge ?a ?b = Some _ |- _] =>
+  apply Nsubge_spec in H; subst
+| [H: Ndiv ?a ?b = Some _ |- _] =>
+  apply Ndiv_spec in H; subst
+| [H: Ndivpow2 ?a ?b = Some _ |- _] =>
+  apply Ndivpow2_spec in H; subst
+end.
 
 Module LongLoop(Ctx:Ctx).
 Module TM := Individual Ctx.
@@ -117,12 +259,20 @@ Inductive Nmap :=
 | Nmap_mk(a0 a1 b0 b1:N)
 | Nmap_c(b0 b1:N).
 
+Definition Nmap_to_str x :=
+match x with
+| Nmap_mk a0 a1 b0 b1 => Ns_to_str "Nmap_mk" [a0;a1;b0;b1]
+| Nmap_c b0 b1 => Ns_to_str "Nmap_c" [b0;b1]
+end.
+
+Instance NmapToStr: ToStr Nmap := Build_ToStr _ Nmap_to_str.
+
 Inductive Nmap_apply: Nmap->N->N->Prop :=
 | Nmap_apply_mk(a0 a1 b0 b1 n:N): Nmap_apply (Nmap_mk a0 a1 b0 b1) (2^a0*n+b0) (2^a1*n+b1)
 | Nmap_apply_c b0 b1: Nmap_apply (Nmap_c b0 b1) b0 b1.
 
 Inductive vN :=
-| vN_v(id:N)(mp:Nmap)
+| vN_v(id:positive)(mp:Nmap)
 | vN_c(c:N).
 
 Definition Nmap_add x k :=
@@ -144,7 +294,7 @@ Inductive vhead :=
 .
 
 Section vhead_sec.
-Hypothesis ctx:N->N.
+Hypothesis ctx:positive->N.
 Inductive vN_eval: vN->N->Prop :=
 | vN_eval_v id mp n:
   Nmap_apply mp (ctx id) n ->
@@ -234,8 +384,8 @@ end.
 Definition Nmap_sub x k :=
 match x with
 | Nmap_mk a0 a1 b0 b1 =>
-  let c:=(k-b1+(2^a1-1))/2^a1 in
-  Some (Nmap_mk a0 a1 (b0+c*2^a0) (b1+c*2^a1-k))
+  let c:=shr (k-b1+(N.ones a1)) a1 in
+  Some (Nmap_mk a0 a1 (b0+(shl c a0)) (b1+(shl c a1)-k))
 | Nmap_c b0 b1 =>
   Nsubge b1 k &&& (fun b2 =>
   Some (Nmap_c b0 b2))
@@ -244,33 +394,50 @@ end.
 Definition Nmap_divpow2 x k :=
 match x with
 | Nmap_mk a0 a1 b0 b1 =>
-  let pk:=2^k in
-  Ndiv b1 pk &&& (fun b1 => Some (Nmap_mk (a0+(k-a1)) (a1-k) b0 b1))
+  if k<=?a1 then
+    Ndivpow2 b1 k &&& (fun b1 => Some (Nmap_mk a0 (a1-k) b0 b1))
+  else
+    Ndivpow2 b1 a1 &&& (fun b1 =>
+    let k' := k-a1 in
+    let b1' := n1s b1 k' in
+    if b1'=?0 then
+      Some (Nmap_mk (a0+k') 0 b0 (shr b1 k'))
+    else
+      let s := ((shl1 k') - b1') in
+      Some (Nmap_mk (a0+k') 0 (b0+(shl s a0)) ((shr b1 k')+1)))
 | Nmap_c b0 b1 =>
-  Ndiv b1 (2^k) &&& (fun b1 => Some (Nmap_c b0 b1))
+  Ndivpow2 b1 k &&& (fun b1 => Some (Nmap_c b0 b1))
 end.
 
 Definition Nmap_mulpow2 x k :=
 match x with
-| Nmap_mk a0 a1 b0 b1 => Some (Nmap_mk a0 (a1+k) b0 (b1*2^k))
-| Nmap_c b0 b1 => Some (Nmap_c b0 (b1*2^k))
+| Nmap_mk a0 a1 b0 b1 => Some (Nmap_mk a0 (a1+k) b0 (shl b1 k))
+| Nmap_c b0 b1 => Some (Nmap_c b0 (shl b1 k))
 end.
 
 Definition Nmap_to_c x k :=
 match x with
 | Nmap_mk a0 a1 b0 b1 =>
   Nsubge k b1 &&& (fun k =>
-  Ndiv k (2^a1) &&& (fun k =>
-  Some (Nmap_c (2^a0*k+b0) (2^a1*k+b1))))
+  Ndivpow2 k a1 &&& (fun k =>
+  Some (Nmap_c ((shl k a0)+b0) ((shl k a1)+b1))))
 | Nmap_c b0 b1 =>
   if b1=?k then Some x else None
 end.
+
+Definition vN_to_str x :=
+match x with
+| vN_v id mp => strs_to_str "vN_v" [str id;str mp]
+| vN_c c => Ns_to_str "vN_c" [c]
+end.
+
+Instance vNToStr: ToStr vN := Build_ToStr _ vN_to_str.
 
 Definition vN_to_c x k :=
 match x with
 | vN_v id mp => Nmap_to_c mp k &&& (fun mp => Some (vN_v id mp))
 | vN_c c => if c=?k then Some x else None
-end.
+end ||| (fun _ => pr None (strs_to_str "vN_to_c" [str x;str k])).
 
 Definition vN_subdivmulpow2 x m a0 a1 :=
 match x with
@@ -281,9 +448,9 @@ match x with
   Some (vN_v id mp))))
 | vN_c c =>
   Nsubge c m &&& (fun c =>
-  Ndiv c (2^a0) &&& (fun c =>
-  Some (vN_c (c*2^a1))))
-end.
+  Ndivpow2 c a0 &&& (fun c =>
+  Some (vN_c (shl c a1))))
+end (*||| (fun _ => pr None (strs_to_str "vN_subdivmulpow2" [str x;str m;str a0;str a1]))*).
 
 Definition vhead_c h n := vhead_mk h n (vN_c n).
 
@@ -344,10 +511,9 @@ match hs with
   (b2o flag &&& (fun _ =>
   N_OS n &&& (fun _ =>
   f2 w h &&& (fun '(a0,a1,h') =>
-  let pa0:=2^a0 in
-  let n1:=(n/pa0)*2^a1 in
-  let n2:=n mod pa0 in
-  vN_subdivmulpow2 n' n2 a0 a1 &&& (fun n' =>
+  let n1:=shl (shr n a0) a1 in
+  let n2:=n1s n a0 in
+  (vN_subdivmulpow2 n' n2 a0 a1 ||| (fun _ => pr None (strs_to_str "vN_subdivmulpow2" [str n;str n';str n2;str a0;str a1]))) &&& (fun n' =>
   segRLs_rec [vhead_mk h' n1 n'] ws true T &&& (fun '(hs',ws') =>
   segRLs_rec ((vhead_c h n2)::hs) (w::ws') false T &&& (fun '(hs'0,ws'0) =>
   Some (vheads_simpl hs' hs'0,ws'0)
@@ -412,6 +578,7 @@ Proof.
   destruct mp.
   - inverts H.
     inverts H0.
+    rw_sh.
     remember ((k-b1+(2^a1-1))/2^a1) as c.
     applys_eq (Nmap_apply_mk a0 a1 b0 b1 (n0+c)); lia.
   - des_if' H.
@@ -422,6 +589,8 @@ Proof.
     ec.
 Qed.
 
+Local Opaque shl1.
+
 Lemma Nmap_divpow2_spec mp k mp':
   Nmap_divpow2 mp k = Some mp' ->
   forall n n',
@@ -431,24 +600,45 @@ Proof.
   unfold Nmap_divpow2.
   intros.
   destruct mp.
+  - destruct (N.leb_spec k a1).
+    + des_if' H.
+      inverts H.
+      des_N_op.
+      inverts H0.
+      applys_eq (Nmap_apply_mk a0 a1 b0 (n0*2^k)).
+      replace (2^a1) with (2^(a1-k+k)) by flia.
+      rewrite N.pow_add_r.
+      lia.
+    + des_if' H.
+      cbn in H.
+      destruct (N.eqb_spec (n1s n0 (k-a1)) 0).
+      * inverts H.
+        des_N_op.
+        inverts H0.
+        rewrite N.pow_add_r.
+        applys_eq (Nmap_apply_mk a0 a1 b0 (n0*2^a1) (2^(k-a1)*n1)).
+        1: lia.
+        apply N.Div0.div_exact in e.
+        replace (2^k) with (2^(k-a1+a1)) by flia.
+        rewrite N.pow_add_r.
+        lia.
+      * inverts H.
+        des_N_op.
+        inverts H0.
+        remember (k-a1) as k'.
+        replace k with (k'+a1) by lia.
+        clear Heqk'.
+        repeat rewrite N.pow_add_r.
+        remember (n0 mod 2^k') as s.
+        applys_eq (Nmap_apply_mk a0 a1 b0 (n0*2^a1) (2^k'*n2+(2^k'-s))).
+        1: lia.
+        assert (s<2^k') by lia.
+        nia.
   - des_if H; inverts H.
-    apply Ndiv_spec in E.
+    apply Ndivpow2_spec in E.
     subst b1.
     inverts H0.
-    applys_eq (Nmap_apply_mk a0 a1 b0 (n0*2^k) (2^(k-a1)*n1)).
-    1: rewrite N.pow_add_r; lia.
-    rewrite N.mul_add_distr_r.
-    f_equal.
-    rewrite N.mul_shuffle0.
-    rewrite N.mul_assoc.
-    f_equal.
-    do 2 rewrite <-N.pow_add_r.
-    f_equal.
-    lia.
-  - des_if H; inverts H.
-    apply Ndiv_spec in E.
-    subst b1.
-    inverts H0.
+    rw_sh.
     ec.
 Qed.
 
@@ -465,12 +655,20 @@ Proof.
   destruct mp.
   - inverts H.
     inverts H0.
+    rw_sh.
     eexists (2^a1*n0+b1); split.
     2: rewrite N.pow_add_r; lia.
     constructor.
   - inverts H.
     inverts H0.
+    rw_sh.
     eexists; split; ec.
+Qed.
+
+Lemma if_None_None{A}(a:option A) s:
+  a ||| (fun _ => pr None s) = a.
+Proof.
+  destruct a; cbn; trivial.
 Qed.
 
 Lemma vN_subdivmulpow2_spec x m a0 a1 x':
@@ -485,6 +683,7 @@ Lemma vN_subdivmulpow2_spec x m a0 a1 x':
 Proof.
   unfold vN_subdivmulpow2.
   intros.
+  repeat rewrite if_None_None in *.
   destruct x.
   - do 3 des_if' H.
     inverts H.
@@ -503,11 +702,12 @@ Proof.
   - do 2 des_if' H.
     inverts H.
     apply Nsubge_spec in E.
-    apply Ndiv_spec in E0.
+    apply Ndivpow2_spec in E0.
     subst c n.
     inverts H0.
     eexists; split.
     1: ec.
+    rw_sh.
     eexists n0; lia.
 Qed.
 
@@ -523,10 +723,11 @@ Proof.
   - do 2 des_if' H.
     inverts H.
     apply Nsubge_spec in E.
-    apply Ndiv_spec in E0.
+    apply Ndivpow2_spec in E0.
     subst.
     inverts H0.
-    rewrite (N.mul_comm n1).
+    rw_sh.
+    do 2 rewrite (N.mul_comm n1).
     ec; ec.
   - destruct (N.eqb_spec b1 k); [subst|congruence].
     inverts H.
@@ -542,6 +743,7 @@ Lemma vN_to_c_spec x n x':
 Proof.
   unfold vN_to_c.
   intros.
+  rewrite if_None_None in *.
   destruct x.
   - des_if' H; inverts H.
     inverts H0.
@@ -778,6 +980,7 @@ Proof.
     des_if' E.
     destruct p as [[a0 a1] h'].
     do 2 des_if' E.
+    rewrite if_None_None in E2.
     destruct p as [hs'0 ws'0].
     des_if' E.
     destruct p as [hs'1 ws'1].
@@ -1038,19 +1241,19 @@ match x0,x1,x2 with
   Some (ws,w0)))
 end.
 
-Fixpoint vheads_v hs id (f:N->bool) :=
+Fixpoint vheads_v hs id (f:positive->bool) :=
 match hs with
 | vhead_mk h n _::hs =>
-  vhead_mk h n (if f id then vN_c n else vN_v id (Nmap_mk 0 0 0 0))::vheads_v hs (id+1) f
+  vhead_mk h n (if f id then vN_c n else vN_v id (Nmap_mk 0 0 0 0))::vheads_v hs (Pos.succ id) f
 | [] => []
 end.
 
 Fixpoint get_del_vars hs :=
 match hs with
 | vhead_mk h 0 (vN_v id _)::hs =>
-  fun x => if x =? id then true else get_del_vars hs x
+  PositiveMap.add id tt (get_del_vars hs)
 | _::hs => get_del_vars hs
-| [] => fun _ => false
+| [] => PositiveMap.empty _
 end.
 
 
@@ -1138,6 +1341,15 @@ Inductive N' :=
 | N'_c(a:N)
 | N'_mk2(a b a' b' c':N).
 
+Definition N'_to_str x :=
+match x with
+| N'_mk a b c => Ns_to_str "N'_mk" [a;b;c]
+| N'_c a => Ns_to_str "N'_c" [a]
+| N'_mk2 a b a' b' c' => Ns_to_str "N'_mk2" [a;b;a';b';c']
+end.
+
+Instance N'ToStr : ToStr N' := Build_ToStr _ N'_to_str.
+
 Definition toN(n:N)(x:N'):N :=
 match x with
 | N'_mk a b c => ((2^(n*a)-1)/(2^a-1))*b+c
@@ -1150,23 +1362,6 @@ match x with
 | N'_c c => b2o (c =? k)
 | _ => None
 end.
-
-Ltac des_N_op :=
-repeat
-match goal with
-| [H: b2o (?a =? ?b) = Some _ |- _] =>
-  destruct (N.eqb_spec a b); inverts H; subst
-| [H: b2o (negb (?a =? ?b)) = Some _ |- _] =>
-  destruct (N.eqb_spec a b); inverts H
-| [H: b2o (eqb ?a ?b) = Some _ |- _] =>
-  destruct (eqb_spec a b); inverts H; subst
-| [H: Nsubge ?a ?b = Some _ |- _] =>
-  apply Nsubge_spec in H; subst
-| [H: Ndiv ?a ?b = Some _ |- _] =>
-  apply Ndiv_spec in H; subst
-end.
-
-Ltac cg := try congruence.
 
 Lemma N'_eq_c_spec x k u n:
   N'_eq_c x k = Some u ->
@@ -1185,19 +1380,19 @@ match mp with
   match x with
   | N'_c c =>
     Nsubge c b0 &&& (fun c =>
-    Ndiv c (2^a0) &&& (fun c =>
-    Some (N'_c (c*2^a1+b1))))
+    Ndivpow2 c a0 &&& (fun c =>
+    Some (N'_c ((shl c a1)+b1))))
   | N'_mk a b c =>
     Nsubge c (b0) &&& (fun c =>
-    Ndiv b (2^a0) &&& (fun b =>
-    Ndiv c (2^a0) &&& (fun c =>
-    Some (N'_mk a (b*2^a1) (c*2^a1+b1)))))
+    Ndivpow2 b a0 &&& (fun b =>
+    Ndivpow2 c a0 &&& (fun c =>
+    Some (N'_mk a (shl b a1) ((shl c a1)+b1)))))
   | N'_mk2 a b a' b' c' =>
     Nsubge c' b0 &&& (fun c' =>
-    Ndiv b (2^a0) &&& (fun b =>
-    Ndiv b' (2^a0) &&& (fun b' =>
-    Ndiv c' (2^a0) &&& (fun c' =>
-    Some (N'_mk2 a (b*2^a1) a' (b'*2^a1) (c'*2^a1+b1))))))
+    Ndivpow2 b a0 &&& (fun b =>
+    Ndivpow2 b' a0 &&& (fun b' =>
+    Ndivpow2 c' a0 &&& (fun c' =>
+    Some (N'_mk2 a (shl b a1) a' (shl b' a1) ((shl c' a1)+b1))))))
   end
 | Nmap_c b0 b1 =>
   N'_eq_c x b0 &&& (fun _ =>
@@ -1239,14 +1434,14 @@ match x with
 | N'_c n =>
   b2o (negb (a1=?0)) &&& (fun _ =>
   Nsubge n b0 &&& (fun n =>
-  Ndiv n (2^a0) &&& (fun n =>
-  Some (N'_mk a1 (((2^a1-1)*n+b1)*2^a0) (n*2^a0+b0)))))
+  Ndivpow2 n a0 &&& (fun n =>
+  Some (N'_mk a1 (shl ((mul1s n a1)+b1) a0) ((shl n a0)+b0)))))
 | N'_mk a b c =>
   b2o (negb (a1=?0)) &&& (fun _ =>
   Nsubge c b0 &&& (fun c =>
-  Ndiv b (2^a0) &&& (fun b =>
-  Ndiv c (2^a0) &&& (fun c =>
-  Some (N'_mk2 a (b*2^a0) a1 (((2^a1-1)*c+b1)*2^a0) (c*2^a0+b0))))))
+  Ndivpow2 b a0 &&& (fun b =>
+  Ndivpow2 c a0 &&& (fun c =>
+  Some (N'_mk2 a (shl b a0) a1 (shl ((mul1s c a1)+b1) a0) ((shl c a0)+b0))))))
 | _ => None
 end.
 
@@ -1368,17 +1563,17 @@ match x with
   b2o (negb (a1=?0)) &&& (fun _ =>
   b2o (a1=?a) &&& (fun _ =>
   Nsubge c b0 &&& (fun c =>
-  Ndiv c (2^a0) &&& (fun n =>
-  b2o ((((2^a1-1)*n+b1)*2^a0)=?b) &&& (fun _ =>
-  Some (N'_c (n*2^a0+b0)))))))
+  Ndivpow2 c a0 &&& (fun n =>
+  b2o ((shl ((mul1s n a1)+b1) a0)=?b) &&& (fun _ =>
+  Some (N'_c ((shl n a0)+b0)))))))
 | N'_mk2 a b a' b' c' =>
   b2o (negb (a1=?0)) &&& (fun _ =>
   b2o (a1=?a') &&& (fun _ =>
   Nsubge c' b0 &&& (fun c' =>
-  Ndiv b (2^a0) &&& (fun b =>
-  Ndiv c' (2^a0) &&& (fun c =>
-  b2o ((((2^a1-1)*c+b1)*2^a0)=?b') &&& (fun _ =>
-  Some (N'_mk a (b*2^a0) (c*2^a0+b0))))))))
+  Ndivpow2 b a0 &&& (fun b =>
+  Ndivpow2 c' a0 &&& (fun c =>
+  b2o ((shl ((mul1s c a1)+b1) a0)=?b') &&& (fun _ =>
+  Some (N'_mk a (shl b a0) ((shl c a0)+b0))))))))
 | N'_c c =>
   b2o (b1=?0) &&& (fun _ =>
   b2o (b0=?c) &&& (fun _ =>
@@ -1489,13 +1684,13 @@ Definition N'_Nmap_applys_dec_v2(a0 a1 b0 b1:N)(x:N'):option N' :=
 match x with
 | N'_mk a b c =>
   b2o (a=?a1*2) &&& (fun _ =>
-  Ndiv b (2^a1+1) &&& (fun b =>
+  Ndiv b ((shl1 a1)+1) &&& (fun b =>
   N'_Nmap_applys_dec_v1 a0 a1 b0 b1 (N'_mk2 a1 b a1 b c)))
 | N'_mk2 a b a' b' c' =>
   b2o (negb (a=?0)) &&& (fun _ =>
   b2o (negb (a'=?0)) &&& (fun _ =>
-  b2o (b*(2^a'-1) =? b'*(2^a-1)) &&& (fun _ =>
-  Ndiv (b*(2^(a+a')-1)) (2^a-1) &&& (fun b2 =>
+  b2o (mul1s b a' =? mul1s b' a) &&& (fun _ =>
+  Ndiv (mul1s b (a+a')) (N.ones a) &&& (fun b2 =>
   N'_Nmap_applys_dec_v1 a0 a1 b0 b1 (N'_mk (a+a') b2 c')))))
 | _ => None
 end.
@@ -1527,7 +1722,7 @@ Proof.
     apply N'_Nmap_applys_dec_v1_spec with (n:=n) in H.
     assert (2^a-1<>0) by (replace a with (1+(a-1)) by lia; rewrite N.pow_add_r; lia).
     assert (2^a'-1<>0) by (replace a' with (1+(a'-1)) by lia; rewrite N.pow_add_r; lia).
-    erewrite (N'_mk2_mk a b a' b' c' n0); eauto 1.
+    erewrite (N'_mk2_mk a b a' b' c' n0); eauto 1; lia.
   }
 Qed.
 
@@ -1569,16 +1764,16 @@ match mp with
   N'_Nmap_applys_id a0 b0 x))) ||| (fun _ =>
   (Nsubge a1 a0 &&& (fun a1 =>
   Nsubge b1 b0 &&& (fun b1 =>
-  Ndiv b1 (2^a0) &&& (fun b1 =>
+  Ndivpow2 b1 a0 &&& (fun b1 =>
   N'_Nmap_applys_inc a0 a1 b0 b1 x)))) ||| (fun _ =>
   (Nsubge a0 a1 &&& (fun a0 =>
   Nsubge b0 b1 &&& (fun b0 =>
-  Ndiv b0 (2^a1) &&& (fun b0 =>
+  Ndivpow2 b0 a1 &&& (fun b0 =>
   N'_Nmap_applys_dec a1 a0 b1 b0 x))))))
 | Nmap_c b0 b1 =>
   b2o (b0=?b1) &&& (fun _ =>
   N'_Nmap_applys_id_c b0 x)
-end.
+end ||| (fun _ => pr None (strs_to_str "N'_Nmap_applys" [str mp;str x])).
 
 Lemma Nmap_applys_id a0 b0 x x' n:
   Nmap_apply (Nmap_mk a0 a0 b0 b0) x x' ->
@@ -1636,6 +1831,7 @@ Lemma N'_Nmap_applys_spec mp x x' n:
 Proof.
   unfold N'_Nmap_applys.
   intros.
+  rewrite if_None_None in *.
   destruct mp.
   2:{
     des_if' H.
@@ -1690,12 +1886,12 @@ match hs,hs' with
   match n' with
   | vN_v id mp =>
     Nmap_is_id mp &&& (fun _ =>
-    Some (fun x => if x=?id then Some h' else f x))
+    Some (PositiveMap.add id h' f))
   | vN_c c =>
     N'_eq_c h' c &&& (fun _ =>
     Some f)
   end))
-| [],[] => Some (fun _ => None)
+| [],[] => Some (PositiveMap.empty _)
 | _,_ => None
 end.
 
@@ -1779,9 +1975,9 @@ match hs,hs' with
 | vhead_mk h n (vN_v id mp)::hs,vhead_mk h' n' (vN_v id' mp')::hs' =>
   b2o (eqb h h') &&& (fun _ =>
   b2o (eqb id id') &&& (fun _ =>
-  b2o (id0 <=? id) &&& (fun _ =>
+  b2o (id0 <=? id)%positive &&& (fun _ =>
   Nmap_is_id mp &&& (fun _ =>
-  hs_match_rec hs hs' (1+id)))))
+  hs_match_rec hs hs' (Pos.succ id)))))
 | [],[] => Some tt
 | _,_ => None
 end.
@@ -1850,39 +2046,50 @@ match hsN',hs with
 | _,_ => None
 end.
 
+Definition to_boolf f x :=
+match PositiveMap.find x f with
+| Some tt => true
+| None => false
+end.
+
+Definition to_f {A} f x := @PositiveMap.find A x f.
+
 
 Fixpoint segRLs_rec_v hsN' hs ws T :=
-merge_hs hsN' (vheads_v hs 0 (fun _ => true)) &&& (fun '(hsN',hs) =>
-let hs:=vheads_v hs 0 (fun _=>false) in
+merge_hs hsN' (vheads_v hs 1 (fun _ => true)) &&& (fun '(hsN',hs) =>
+let hs:=vheads_v hs 1 (fun _=>false) in
 match ws with
 | [] => Some (hsN',hs,[])
 | inl ws::ws0 =>
   segRLs_rec' hs ws T &&& (fun '(hs',ws') =>
-  let hs:=vheads_v hs 0 (get_del_vars hs') in
-  segRLs_rec' hs ws T &&& (fun '(hs',ws') =>
-  N'_match_vheads hs hsN' &&& (fun f =>
-  N'_matched_vheads hs hsN' f &&& (fun _ =>
-  N'_apply_vheads hs' f &&& (fun hsN' =>
+  let hs:=vheads_v hs 1 (to_boolf (get_del_vars hs')) in
+  pr' (segRLs_rec' hs ws T) "segRLs_rec' (inl)" &&& (fun '(hs',ws') =>
+  N'_match_vheads hs hsN' &&& (fun f0 =>
+  let f:=to_f f0 in
+  pr' (N'_matched_vheads hs hsN' f) "N'_matched_vheads" &&& (fun _ =>
+  pr' (N'_apply_vheads hs' f) "N'_applys_vheads" &&& (fun hsN' =>
   segRLs_rec_v hsN' hs' ws0 T &&& (fun '(res0,res) =>
   Some (res0,inl ws'::res)))))))
 | inr ws::ws0 =>
   segRLs_rec' hs ws T &&& (fun '(hs',ws') =>
-  let hs:=vheads_v hs 0 (get_del_vars hs') in
-  segRLs_rec' hs ws T &&& (fun '(hs',ws') =>
-  N'_match_vheads hs hsN' &&& (fun f =>
-  N'_matched_vheads hs hsN' f &&& (fun _ =>
-  N'_applys_vheads hs' f &&& (fun hsN' =>
-  hs_match_rec hs hs' 0 &&& (fun _ =>
+  let hs:=vheads_v hs 1 (to_boolf (get_del_vars hs')) in
+  pr' (segRLs_rec' hs ws T) "segRLs_rec' (inr)" &&& (fun '(hs',ws') =>
+  N'_match_vheads hs hsN' &&& (fun f0 =>
+  let f:=to_f f0 in
+  pr' (N'_matched_vheads hs hsN' f) "N'_matched_vheads" &&& (fun _ =>
+  pr' (N'_applys_vheads hs' f) "N'_applys_vheads" &&& (fun hsN' =>
+  pr' (hs_match_rec hs hs' 1) "hs_match_rec" &&& (fun _ =>
   segRLs_rec_v hsN' hs' ws0 T &&& (fun '(res0,res) =>
   Some (res0,inr ws'::res))))))))
 end).
 
 Definition sideRLs_rec_v hsN' hs '(ws,w) T :=
 segRLs_rec_v hsN' hs ws T &&& (fun '(hsN',hs,ws0) =>
-let hs:=vheads_v hs 0 (fun _=>true) in
-N'_match_vheads hs hsN' &&& (fun f =>
-N'_matched_vheads hs hsN' f &&& (fun _ =>
-sideRLs_rec hs [] w T &&& (fun '(ws1,w0) =>
+let hs:=vheads_v hs 1 (fun _=>true) in
+N'_match_vheads hs hsN' &&& (fun f0 =>
+let f:=to_f f0 in
+pr' (N'_matched_vheads hs hsN' f) "N'_matched_vheads" &&& (fun _ =>
+pr' (sideRLs_rec hs [] w T) "sideRLs_rec" &&& (fun '(ws1,w0) =>
 Some (ws0++[inl ws1],w0))))).
 
 Definition vseg_eval n (w:vseg) :=
@@ -2031,7 +2238,7 @@ match hs with
 | N'_head_mk h n'::hs => [h]^^(N.to_nat (toN n n')) ++ N'_heads_eval hs n
 end.
 
-Definition f_eval (f:N->option N') i n :=
+Definition f_eval (f:positive->option N') i n :=
 match f n with
 | Some n' => toN i n'
 | None => 0
@@ -2169,11 +2376,11 @@ Proof.
       trivial.
 Qed.
 
-Inductive hs_match: (list vhead)->(list vhead)->N->Prop :=
+Inductive hs_match: (list vhead)->(list vhead)->positive->Prop :=
 | hs_match_O id': hs_match [] [] id'
 | hs_match_Sv h n n' hs hs' id mp id':
-  hs_match hs hs' (1+id) ->
-  id'<=id ->
+  hs_match hs hs' (Pos.succ id) ->
+  (id'<=id)%positive ->
   hs_match (vhead_mk h n (vN_v id (Nmap_mk 0 0 0 0))::hs) (vhead_mk h n' (vN_v id mp)::hs') id'
 | hs_match_Sc h n n0 n' hs hs' id':
   hs_match hs hs' id' ->
@@ -2197,7 +2404,7 @@ Proof with (try congruence).
       apply IHhs in H.
       destruct (eqb_spec h h0); inverts E; subst.
       destruct (eqb_spec id id1); inverts E0; subst.
-      destruct (N.leb_spec id0 id1); inverts E1; subst.
+      destruct (Pos.leb_spec id0 id1); inverts E1; subst.
       eapply Nmap_is_id_spec in E2; subst.
       ec; eauto 1.
     + destruct hs' as [|h' hs']...
@@ -2213,7 +2420,7 @@ Qed.
 
 Lemma hs_match_hs'_ge hs hs' id' hs'v i ctx1 ctx2:
   hs_match hs hs' id' ->
-  (forall i, id'<=i -> ctx1 i = ctx2 i) ->
+  (forall i, (id'<=i)%positive -> ctx1 i = ctx2 i) ->
   vheads_evaln ctx1 hs' hs'v i ->
   vheads_evaln ctx2 hs' hs'v i.
 Proof.
@@ -2244,7 +2451,7 @@ Qed.
 
 Lemma hs_match_hs_ge hs hs' id' hsv ctx1 ctx2:
   hs_match hs hs' id' ->
-  (forall i, id'<=i -> ctx1 i = ctx2 i) ->
+  (forall i, (id'<=i)%positive -> ctx1 i = ctx2 i) ->
   vheads_eval ctx1 hs hsv ->
   vheads_eval ctx2 hs hsv.
 Proof.
@@ -2297,22 +2504,22 @@ Proof.
     inverts H5.
     1: lia.
     replace k with i in * by lia.
-    exists (fun x => if x=?id then n1 else ctx' x); split.
+    exists (fun x => if (x=?id)%positive then n1 else ctx' x); split.
     + ec.
       2: {
         eapply hs_match_hs'_ge; eauto 1.
         intros.
-        destruct (N.eqb_spec i0 id); lia.
+        destruct (Pos.eqb_spec i0 id); lia.
       }
       ec.
       ec.
-      destruct (N.eqb_spec id id); [eauto 1|lia].
+      destruct (Pos.eqb_spec id id); [eauto 1|lia].
     + intros.
       inverts H3.
       inverts H6.
       inverts H10.
       inverts H6.
-      destruct (N.eqb_spec id id); [|lia].
+      destruct (Pos.eqb_spec id id); [|lia].
       subst.
       ec.
       * ec.
@@ -2324,7 +2531,7 @@ Proof.
         1: eauto 1.
         intros.
         cbn.
-        destruct (N.eqb_spec i0 id); lia.
+        destruct (Pos.eqb_spec i0 id); lia.
   - inverts H0.
     eapply IHhs_match in H6.
     destruct H6 as [ctx' [I1 I2]].
@@ -2376,7 +2583,7 @@ Qed.
 
 Lemma segRLs_rec'_specn hs ws T hs' ws' i:
   segRLs_rec' hs ws T = Some (hs',ws') ->
-  hs_match hs hs' 0 ->
+  hs_match hs hs' 1 ->
   forall ctx hs'v,
   vheads_evaln ctx hs' hs'v i ->
   exists hsv,
@@ -2596,11 +2803,11 @@ Proof.
 Qed.
 
 Definition decide_nonhalt pp T :=
-  msteps pp ws_init T &&& (fun x0 =>
-  mstep x0 T &&& (fun x1 =>
-  mstep x1 T &&& (fun x2 =>
-  interpolate' x0 x1 x2 T &&& (fun x =>
-  sideRLs_rec_v (map (fun h => (N'_head_mk h (N'_c 1))) hs_step) (map (fun h => vhead_c h 1) hs_step) x T &&& (fun x' =>
+  pr' (msteps (pr pp (N_to_str (N.of_nat pp))) ws_init T) "msteps" &&& (fun x0 =>
+  pr' (mstep x0 T) "mstep" &&& (fun x1 =>
+  pr' (mstep x1 T) "mstep" &&& (fun x2 =>
+  pr' (interpolate' x0 x1 x2 T) "interpolate'" &&& (fun x =>
+  pr' (sideRLs_rec_v (map (fun h => (N'_head_mk h (N'_c 1))) hs_step) (map (fun h => vhead_c h 1) hs_step) x T) "sideRLs_rec_v" &&& (fun x' =>
   b2o (eqb (vside_O x) x0) &&& (fun _ =>
   b2o (eqb (vside_rot (vside_S x)) (vside_rot x')) &&& (fun _ =>
   Some tt
