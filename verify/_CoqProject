@@ -1,1 +1,1 @@
--Q . BusyCoq -native-compiler yes
+-Q . BusyCoq -Q ./BigInt BigInt -native-compiler yes
