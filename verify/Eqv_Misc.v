@@ -392,3 +392,4847 @@ Qed.
 End TM4.
 
 
+Module TM5.
+Definition tm := TM_from_str "1RB1LA_1LC0RE_1LF1LD_1RE0LC_1RA1RE_---0LD".
+Definition tm' := TM_from_str "1LB0RC_1RC0LE_1RD1RC_1RA1LD_1LF1LB_---0LB".
+
+Close Scope sym.
+
+Definition f0 (tp:bool) (l:list nat) (a b m:nat) (r:list nat) :=
+if tp then
+match m with
+| S m => Some (true,l<:(1+a)<:(1+b),m,r)
+| O =>
+  match r with
+  | c::r => Some (true,l<:a<:(2+b)<:0,c,r)
+  | [] =>
+    match mod2 b with
+    | mod2eq0 b => Some (true,l<:(2+a),1+b,[])
+    | mod2eq1 b => Some (false,l<:a,2+b,[])
+    end
+  end
+end
+else
+match b with
+| O => None
+| S O => Some (true,l<:(1+a),1+m,r)
+| S (S b) =>
+  match mod2 b with
+  | mod2eq0 b => Some (false,l<:a,b,m::r)
+  | mod2eq1 b => Some (true,l<:(2+a),b,m::r)
+  end
+end.
+
+Definition f '(tp,l,m,r) :=
+match l with
+| [] => f0 tp [] 0 0 m r
+| [b] => f0 tp [] 0 b m r
+| b::a::l => f0 tp l a b m r
+end.
+
+Definition cfg0 := (true,[2],0,@nil nat).
+
+Open Scope sym.
+
+Section to_config_sec.
+Hypothesis QR:Q.
+Hypothesis w:list sym.
+
+Fixpoint LC ls :=
+match ls with
+| [] => 0inf
+| n::ls => LC ls <* [0] <* [1]^^n
+end.
+
+Fixpoint RC ls :=
+match ls with
+| [] => w *> 0inf
+| n::ls => [0] *> [0;1]^^(1+n) *> RC ls
+end.
+
+Definition to_config '(tp,l,m,r) :=
+match tp with
+| true => LC l {{QR}}> [0;1]^^m *> RC r
+| false => LC l <{{F}} [1] *> [0;1]^^m *> RC r
+end.
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match mod2 ?a with _ => _ end] =>
+  destruct (mod2 a); subst
+end.
+
+Ltac solve_v1 a' b' :=
+  erewrite <-(halts_iff _ _ _ f (to_config a' b') (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [[[[] [|b [|a l]]] m] r] _;
+  unfold f,f0,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[LC RC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 E [1].
+  - replace a with O in * by lia.
+    es.
+  - lia.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C (@nil sym).
+  - replace a with O in * by lia.
+    es.
+  - lia.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM5.
+
+
+Module TM6.
+Definition tm := TM_from_str "1RB0LB_1LC1RD_0LE1LA_0RB1RD_---0LF_1RA1LF".
+Definition tm' := TM_from_str "1RB0LD_1LC1RD_0LE1LA_0RB1RD_---0LF_1RA1LF".
+
+Fixpoint LC ls :=
+match ls with
+| [] => 0inf
+| n::ls => LC ls <* [1]^^(1+n) <* [0]
+end.
+
+Inductive Config :=
+| S1 (l:list nat)(a b c:nat)(r:list nat)
+| S2 (l:list nat)(a:nat)(r:list nat).
+
+Definition to_config x :=
+match x with
+| S1 l a b c r =>
+  LC l <* [1]^^(1+a) <* [0] <* [1]^^b <{{F}} [0;0;1] *> [1]^^c *> LC r
+| S2 l a r =>
+  LC l <* [1]^^(1+a) {{D}}> LC r
+end.
+
+Close Scope sym.
+
+Definition f x :=
+match x with
+| S1 l a b c r =>
+  match b with
+  | O => Some (S2 (l<:a) (2+c) r)
+  | S O =>
+    match l with
+    | l<:a0 => Some (S1 l a0 (1+a) 0 (c::r))
+    | [] =>
+      match a with
+      | S a => Some (S1 [] 0 a 1 (c::r))
+      | O => None
+      end
+    end
+  | S (S b) => Some (S1 l (1+a) b (1+c) r)
+  end
+| S2 l a r =>
+  match r with
+  | c::r => Some (S2 (l<:a) c r)
+  | [] =>
+    match l with
+    | l<:a0 => Some (S1 l a0 a 0 [])
+    | [] =>
+      match a with
+      | S (S a) => Some (S1 [] 0 a 1 [])
+      | _ => None
+      end
+    end
+  end
+end.
+
+Definition cfg0 := S2 [] 2 [].
+
+Open Scope sym.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 :=
+  erewrite <-(halts_iff _ _ _ f (to_config) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[LC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM6.
+
+
+Module TM7.
+Definition tm := TM_from_str "1RB1RA_1RC1LB_1LD0RA_1RA0LE_---0LF_0RD0LB".
+Definition tm' := TM_from_str "1RB1RA_1RC1LB_1LD0RA_---0LE_1LC0LF_1RE0LB".
+
+Fixpoint LC ls :=
+match ls with
+| [] => 0inf
+| n::ls => LC ls <* [1]^^(1+n) <* [0]
+end.
+
+Fixpoint RC ls :=
+match ls with
+| [] => 0inf
+| n::ls => RC ls <* [1]^^(1+n) <* [0;0]
+end.
+
+Inductive Config :=
+| S1 (l:list nat)(a b c:nat)(r:list nat)
+| S2 (l:list nat)(a:nat)(r:list nat).
+
+Definition to_config x :=
+match x with
+| S1 l a b c r =>
+  LC l <* [1]^^(1+a) <* [0] <* [1]^^b <{{B}} [0;0;0;1] *> [1]^^c *> RC r
+| S2 l a r =>
+  LC l <* [1]^^(a) {{A}}> RC r
+end.
+
+Close Scope sym.
+
+Definition f x :=
+match x with
+| S1 l a b c r =>
+  match b with
+  | O =>
+    match l with
+    | l<:a0 =>
+      match a with
+      | S a => Some (S1 l a0 a 0 (c::r))
+      | O => Some (S2 (l<:(1+a0)) 2 (c::r))
+      end
+    | [] =>
+      match a with
+      | 0 => Some (S2 [0] 2 (c::r))
+      | 1 => None
+      | 2 => Some (S2 [1] 3 (c::r))
+      | S (S (S a)) => Some (S1 [] 0 a 1 (c::r))
+      end
+    end
+  | S O => Some (S2 (l<:(2+a)) (3+c) r)
+  | S (S b) => Some (S1 l (1+a) b (1+c) r)
+  end
+| S2 l a r =>
+  match r with
+  | c::r => Some (S2 (l<:(1+a)) c r)
+  | [] =>
+    match l with
+    | l<:a0 =>
+      match a with
+      | O => Some (S1 l (1+a0) 1 0 [])
+      | S a => Some (S1 l a0 a 0 [])
+      end
+    | [] =>
+      match a with
+      | 0 => Some (S1 [] 0 1 0 [])
+      | 1 => None
+      | 2 => Some (S2 [1] 3 [])
+      | S (S (S a)) => Some (S1 [] 0 a 1 [])
+      end
+    end
+  end
+end.
+
+Definition cfg0 := S2 [] 0 [].
+
+Open Scope sym.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 :=
+  erewrite <-(halts_iff _ _ _ f (to_config) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[LC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM7.
+
+
+Module TM8.
+Definition tm := TM_from_str "1LB0RB_0RC0LE_0LE0RD_1RA1LF_1LF---_1RC0LB".
+Definition tm' := TM_from_str "1LB---_1RC0LF_0LA0RD_1RE1LB_1LF0RF_0RC0LA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L011 | L0101 | L0100(n:nat)
+.
+
+Inductive Config :=
+| hR(l:list LD)(n:nat)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QR1 QR2 QL:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L011::ls => toLC ls <* <[0;1;1]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L0100 n::ls => toLC ls <* <[0;1;0;0] <* <[1]^^n
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| hR l n r =>
+  match n with
+  | 0%nat => toLC l <* <[0;1] {{QR1}}> r
+  | 1%nat => toLC l <* <[0;1;0] {{QR2}}> r
+  | 2%nat => toLC l <* <[0;1;0;0] {{C}}> r
+  | S(S(S n)) => toLC l <* <[0;1;0;0] <* <[1]^^n <* <[0] {{D}}> r
+  end
+| hL l r => toLC l <{{QL}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| hR l 0 (0>>r) => Some (hL l (1>>r))
+| hR l 0 (1>>r) => Some (hR l 1 r)
+| hR l 1 (0>>r) => Some (hR l 2 r)
+| hR l 1 (1>>r) => Some (hL l ([1;0]*>r))
+| hR l 2 (0>>r) => Some (hR (l<:L011) 0 r)
+| hR l 2 (1>>r) => Some (hR l 3 r)
+| hR l (S(S(S n))) (0>>r) => Some (hR (l<:(L0100 n)) 0 r)
+| hR l (S(S(S n))) (1>>r) => Some (hR l (S(S(S(S n)))) r)
+| hL [] r => Some (hR [] 2 r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:(L0100 0)) r => Some (hR (l<:L0101) 0 r)
+| hL (l<:(L0100 1)) r => Some (hR (l<:L011) 2 r)
+| hL (l<:(L0100 2)) r => Some (hL l ([0;1;0;1;1;0]*>r))
+| hL (l<:(L0100 _)) r => None
+end.
+
+Definition cfg0 := hR [] 0 ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 a' b' c' d' :=
+  erewrite <-(halts_iff _ _ _ f (to_config a' b' c' d') (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 E F B <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM8.
+
+
+Module TM9.
+Definition tm := TM_from_str "1LB---_1LC0RF_1RD0LF_0LB0RE_1RB1RA_0RD0LB".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_1LA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L011 | L0101 | L0100 | L01001
+.
+
+Inductive Config :=
+| hR(l:list LD)(n:nat)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QR1 QR2 QR3 QR4 QR5 QL:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L011::ls => toLC ls <* <[0;1;1]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| hR l n r =>
+  match n with
+  | 0%nat => toLC l <* <[0;1] {{QR1}}> r
+  | 1%nat => toLC l <* <[0;1;0] {{QR2}}> r
+  | 2%nat => toLC l <* <[0;1;0;0] {{QR3}}> r
+  | 3%nat => toLC l <* <[0;1;0;0;0] {{QR4}}> r
+  | _ => toLC l <* <[0;1;0;0;0;1] {{QR5}}> r
+  end
+| hL l r => toLC l <{{QL}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| hR l 0 (0>>r) => Some (hL l (1>>r))
+| hR l 0 (1>>r) => Some (hR l 1 r)
+| hR l 1 (0>>r) => Some (hR l 2 r)
+| hR l 1 (1>>r) => Some (hL l ([1;0]*>r))
+| hR l 2 (0>>r) => Some (hR (l<:L011) 0 r)
+| hR l 2 (1>>r) => Some (hR l 3 r)
+| hR l 3 (0>>r) => Some (hR (l<:L0100) 0 r)
+| hR l 3 (1>>r) => Some (hR l 4 r)
+| hR l _ (0>>r) => Some (hR (l<:L01001) 0 r)
+| hR l _ (1>>r) => None
+| hL [] r => Some (hR [] 2 r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L0100) r => Some (hR (l<:L0101) 0 r)
+| hL (l<:L01001) r => Some (hR (l<:L011) 2 r)
+end.
+
+Definition cfg0 := hR [] 0 ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 B F D E A C <[1;0;1;1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A E C D F B <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM9.
+
+
+Module TM10.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LB_0LB0RA_0RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01000E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| h010C(l:list LD)(r:side)
+| h0101E(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h01000E l r => toLC l <* <[0;1;0;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| h010C l r => toLC l <* <[0;1;0] {{QC}}> r
+| h0101E l r => toLC l <* <[0;1;0;1] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h01000E l (0>>r) => Some (hL (l<:L0100) r)
+| h01000E l (1>>r) => Some (h0A (l<:L01000) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h010C l r)
+| h01F l (1>>r) => None
+| h010C l (0>>r) => Some (h0101E l r)
+| h010C l (1>>r) => Some (hL l (1>>0>>r))
+| h0101E l (0>>r) => Some (h01000E l r)
+| h0101E l (1>>r) => Some (h0A (l<:L0101) r)
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM10.
+
+
+Module TM11.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_0RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01000E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| h010C(l:list LD)(r:side)
+| h0101E(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h01000E l r => toLC l <* <[0;1;0;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| h010C l r => toLC l <* <[0;1;0] {{QC}}> r
+| h0101E l r => toLC l <* <[0;1;0;1] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h01000E l (0>>r) => Some (hL (l<:L0100) r)
+| h01000E l (1>>r) => Some (h0A (l<:L01000) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h010C l r)
+| h01F l (1>>r) => None
+| h010C l (0>>r) => Some (h0101E l r)
+| h010C l (1>>r) => Some (hL l (1>>0>>r))
+| h0101E l (0>>r) => Some (h01000E l r)
+| h0101E l (1>>r) => Some (h0A (l<:L0101) r)
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM11.
+
+
+Module TM12.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1RB---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_1RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001 | L0111 | L01100 | L01101
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h011B(l:list LD)(r:side)
+| h0110D(l:list LD)(r:side)
+| h01100E(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| L01100::ls => toLC ls <* <[0;1;1;0;0]
+| L01101::ls => toLC ls <* <[0;1;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011B l r => toLC l <* <[0;1;1] {{QB}}> r
+| h0110D l r => toLC l <* <[0;1;1;0] {{QD}}> r
+| h01100E l r => toLC l <* <[0;1;1;0;0] {{QE}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h011B l (0>>r) => Some (hL l (0>>1>>r))
+| h011B l (1>>r) => Some (h0110D l r)
+| h0110D l (0>>r) => Some (h01100E l r)
+| h0110D l (1>>r) => Some (hL l (0>>1>>0>>r))
+| h01100E l (0>>r) => Some (h01B (l<:L0111) r)
+| h01100E l (1>>r) => Some (h0A (l<:L01100) r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h011B l r)
+| h01F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL (l<:L0111) r => Some (hL l ([0;0;1;0]*>r))
+| hL (l<:L01100) r => Some (h01B (l<:L01101) r)
+| hL (l<:L01101) r => Some (hL l ([0;1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM12.
+
+
+Module TM13.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1RD---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_1RE---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L0110 | L0111
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h011D(l:list LD)(r:side)
+| h0110E(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L0110::ls => toLC ls <* <[0;1;1;0]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011D l r => toLC l <* <[0;1;1] {{QD}}> r
+| h0110E l r => toLC l <* <[0;1;1;0] {{QE}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h011D l (0>>r) => Some (h0110E l r)
+| h011D l (1>>r) => Some (hL l (0>>0>>r))
+| h0110E l (0>>r) => Some (hL l (0>>1>>0>>r))
+| h0110E l (1>>r) => Some (h0A (l<:L0110) r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h011D l r)
+| h01F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L0110) r => Some (h01B (l<:L0111) r)
+| hL (l<:L0111) r => Some (hL l ([0;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM13.
+
+
+Module TM14.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_0RB---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_0RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010B(l:list LD)(r:side)
+| h0100D(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01000E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010B l r => toLC l <* <[0;1;0] {{QB}}> r
+| h0100D l r => toLC l <* <[0;1;0;0] {{QD}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h01000E l r => toLC l <* <[0;1;0;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010B l (0>>r) => Some (h0A (l<:L011) r)
+| h010B l (1>>r) => Some (h0100D l r)
+| h0100D l (0>>r) => Some (h01000E l r)
+| h0100D l (1>>r) => Some (h01B (l<:L011) r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h01000E l (0>>r) => Some (hL (l<:L0100) r)
+| h01000E l (1>>r) => Some (h0A (l<:L01000) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h010B l r)
+| h01F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM14.
+
+
+Module TM15.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LE_1RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001 | L0111 | L01100 | L01101
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h0111E(l:list LD)(r:side)
+| h01100E(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| L01100::ls => toLC ls <* <[0;1;1;0;0]
+| L01101::ls => toLC ls <* <[0;1;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h0111E l r => toLC l <* <[0;1;1;1] {{QE}}> r
+| h01100E l r => toLC l <* <[0;1;1;0;0] {{QE}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (h0111E l r)
+| h011C l (1>>r) => Some (hL l (0>>0>>r))
+| h0111E l (0>>r) => Some (h01100E l r)
+| h0111E l (1>>r) => Some (h0A (l<:L0111) r)
+| h01100E l (0>>r) => Some (h01B (l<:L0111) r)
+| h01100E l (1>>r) => Some (h0A (l<:L01100) r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h011C l r)
+| h01F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL (l<:L0111) r => Some (hL l ([0;0;1;0]*>r))
+| hL (l<:L01100) r => Some (h01B (l<:L01101) r)
+| hL (l<:L01101) r => Some (hL l ([0;1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM15.
+
+
+Module TM16.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LB_0LB0RA_0RE---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_0RC---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| h010E(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| h010E l r => toLC l <* <[0;1;0] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h010E l r)
+| h01F l (1>>r) => None
+| h010E l (0>>r) => Some (hL l (1>>0>>r))
+| h010E l (1>>r) => Some (h0A (l<:L010) r)
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM16.
+
+
+Module TM17.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LB_0LB0RA_0RB---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_0RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010B(l:list LD)(r:side)
+| h0100D(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01000E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010B l r => toLC l <* <[0;1;0] {{QB}}> r
+| h0100D l r => toLC l <* <[0;1;0;0] {{QD}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h01000E l r => toLC l <* <[0;1;0;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010B l (0>>r) => Some (h0A (l<:L011) r)
+| h010B l (1>>r) => Some (h0100D l r)
+| h0100D l (0>>r) => Some (h01000E l r)
+| h0100D l (1>>r) => Some (h01B (l<:L011) r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h01000E l (0>>r) => Some (hL (l<:L0100) r)
+| h01000E l (1>>r) => Some (h0A (l<:L01000) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h010B l r)
+| h01F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM17.
+
+
+Module TM18.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LB_0LB0RA_1RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_1RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01 | L010 | L011 | L0100 | L0101 | L01000 | L01001 | L0111 | L01100 | L01101
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h0111E(l:list LD)(r:side)
+| h01100E(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L01::ls => toLC ls <* <[0;1]
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| L01100::ls => toLC ls <* <[0;1;1;0;0]
+| L01101::ls => toLC ls <* <[0;1;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h0111E l r => toLC l <* <[0;1;1;1] {{QE}}> r
+| h01100E l r => toLC l <* <[0;1;1;0;0] {{QE}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (h0111E l r)
+| h011C l (1>>r) => Some (h01B (l<:L01) r)
+| h0111E l (0>>r) => Some (h01100E l r)
+| h0111E l (1>>r) => Some (h0A (l<:L0111) r)
+| h01100E l (0>>r) => Some (h01B (l<:L0111) r)
+| h01100E l (1>>r) => Some (h0A (l<:L01100) r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h011C l r)
+| h01F l (1>>r) => None
+| hL (l<:L01) r => Some (hL l ([1;0]*>r))
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL (l<:L0111) r => Some (h0100E (l<:L01) r)
+| hL (l<:L01100) r => Some (h01B (l<:L01101) r)
+| hL (l<:L01101) r => Some (hL l ([0;1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM18.
+
+
+Module TM19.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE0LB_0LB0RA_0LC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC0LA_0LB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (hL l (0>>r))
+| h01F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM19.
+
+
+Module TM20.
+Definition tm := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1LE---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LE_1LC---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h00F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h00F l r => toLC l <* <[0;0] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h00F l r)
+| h00F l (0>>r) => Some (hL l (1>>r))
+| h00F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM20.
+
+
+Module TM21.
+Definition tm := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_1LA---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LE_1LD---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h00F(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h00F l r => toLC l <* <[0;0] {{QF}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h00F l r)
+| h00F l (0>>r) => Some (h010D l r)
+| h00F l (1>>r) => None
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM21.
+
+
+Module TM22.
+Definition tm := TM_from_str "1RB1RF_1LC0RD_1RE0LD_0RE1LF_0LB0RA_0RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA1RF_0RC1LF_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L010 | L011 | L0100 | L0101 | L01000 | L01001
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01000E(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01F(l:list LD)(r:side)
+| h010C(l:list LD)(r:side)
+| h0101E(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0100::ls => toLC ls <* <[0;1;0;0]
+| L0101::ls => toLC ls <* <[0;1;0;1]
+| L01000::ls => toLC ls <* <[0;1;0;0;0]
+| L01001::ls => toLC ls <* <[0;1;0;0;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h01000E l r => toLC l <* <[0;1;0;0;0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01F l r => toLC l <* <[0;1] {{QF}}> r
+| h010C l r => toLC l <* <[0;1;0] {{QC}}> r
+| h0101E l r => toLC l <* <[0;1;0;1] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (hL (l<:L010) r)
+| h0100E l (1>>r) => Some (h0A (l<:L0100) r)
+| h01000E l (0>>r) => Some (hL (l<:L0100) r)
+| h01000E l (1>>r) => Some (h0A (l<:L01000) r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => Some (h01F l r)
+| h01F l (0>>r) => Some (h010C l r)
+| h01F l (1>>r) => None
+| h010C l (0>>r) => Some (h0101E l r)
+| h010C l (1>>r) => Some (hL l (1>>0>>r))
+| h0101E l (0>>r) => Some (h01000E l r)
+| h0101E l (1>>r) => Some (h0A (l<:L0101) r)
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L0100) r => Some (h01B (l<:L0101) r)
+| hL (l<:L0101) r => Some (hL l ([1;0;1;0]*>r))
+| hL (l<:L01000) r => Some (h01B (l<:L01001) r)
+| hL (l<:L01001) r => Some (h0100E (l<:L011) r)
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM22.
+
+
+Module TM23.
+Definition tm := TM_from_str "1LB0RB_0RC0LE_0LE0RD_1RA1RB_1LF---_1RC0LB".
+Definition tm' := TM_from_str "1LB---_1RC0LF_0LA0RD_1RE1RF_1LF0RF_0RC0LA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L01 | L010 | L011
+.
+
+Inductive Config :=
+| h01A(l:list LD)(r:side)
+| h010B(l:list LD)(r:side)
+| h0100C(l:list LD)(r:side)
+| h01000D(l:list LD)(r:side)
+| h01B(l:list LD)(r:side)
+| h010C(l:list LD)(r:side)
+| h0100D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L01::ls => toLC ls <* <[0;1]
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01A l r => toLC l <* <[0;1] {{QA}}> r
+| h010B l r => toLC l <* <[0;1;0] {{QB}}> r
+| h0100C l r => toLC l <* <[0;1;0;0] {{QC}}> r
+| h01000D l r => toLC l <* <[0;1;0;0;0] {{QD}}> r
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010C l r => toLC l <* <[0;1;0] {{QC}}> r
+| h0100D l r => toLC l <* <[0;1;0;0] {{QD}}> r
+| hL l r => toLC l <{{QF}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01A l (0>>r) => Some (hL l (1>>r))
+| h01A l (1>>r) => Some (h010B l r)
+| h010B l (0>>r) => Some (h0100C l r)
+| h010B l (1>>r) => Some (hL l (1>>0>>r))
+| h0100C l (0>>r) => Some (h01A (l<:L011) r)
+| h0100C l (1>>r) => Some (h01000D l r)
+| h01000D l (0>>r) => Some (h01A (l<:L01<:L00) r)
+| h01000D l (1>>r) => Some (h01B (l<:L01<:L00) r)
+| h01B l (0>>r) => Some (h010C l r)
+| h01B l (1>>r) => None
+| h010C l (0>>r) => Some (hL l (1>>0>>r))
+| h010C l (1>>r) => Some (h0100D l r)
+| h0100D l (0>>r) => Some (h01A (l<:L010) r)
+| h0100D l (1>>r) => Some (h01B (l<:L010) r)
+| hL (l<:L00) r => Some (h01A (l<:L01) r)
+| hL (l<:L01) r => Some (hL l (1>>0>>r))
+| hL (l<:L010) r => Some (h01A (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL [] r => Some (h01A [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01A [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 E F C D B <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM23.
+
+
+Module TM24.
+Definition tm := TM_from_str "1RB---_1LC0RD_1RF0LD_0RE0LD_0LB1RF_0LF0RA".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LC0RD_1RA---_0RF0LE_0LA1RC".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L01 | L010 | L011
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01001F(l:list LD)(r:side)
+| h010010A(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L01::ls => toLC ls <* <[0;1]
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h01001F l r => toLC l <* <[0;1;0;0;1] {{QF}}> r
+| h010010A l r => toLC l <* <[0;1;0;0;1;0] {{QA}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (h01B (l<:L011) r)
+| h0100E l (1>>r) => Some (h01001F l r)
+| h01001F l (0>>r) => Some (h01B (l<:L01<:L00) r)
+| h01001F l (1>>r) => Some (h010010A l r)
+| h010010A l (0>>r) => Some (h01B (l<:L010<:L01) r)
+| h010010A l (1>>r) => None
+| hL (l<:L00) r => Some (h01B (l<:L01) r)
+| hL (l<:L01) r => Some (hL l (1>>0>>r))
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E F C <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM24.
+
+
+Module TM25.
+Definition tm := TM_from_str "1LB0RB_0RC0LE_0LE0RD_1RA1RE_1LF---_1RC0LB".
+Definition tm' := TM_from_str "1LB---_1RC0LF_0LA0RD_1RE1RA_1LF0RF_0RC0LA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L01 | L010 | L011
+.
+
+Inductive Config :=
+| h01A(l:list LD)(r:side)
+| h010B(l:list LD)(r:side)
+| h0100C(l:list LD)(r:side)
+| h01000D(l:list LD)(r:side)
+| h01E(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L01::ls => toLC ls <* <[0;1]
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01A l r => toLC l <* <[0;1] {{QA}}> r
+| h010B l r => toLC l <* <[0;1;0] {{QB}}> r
+| h0100C l r => toLC l <* <[0;1;0;0] {{QC}}> r
+| h01000D l r => toLC l <* <[0;1;0;0;0] {{QD}}> r
+| h01E l r => toLC l <* <[0;1] {{QE}}> r
+| hL l r => toLC l <{{QF}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01A l (0>>r) => Some (hL l (1>>r))
+| h01A l (1>>r) => Some (h010B l r)
+| h010B l (0>>r) => Some (h0100C l r)
+| h010B l (1>>r) => Some (hL l (1>>0>>r))
+| h0100C l (0>>r) => Some (h01A (l<:L011) r)
+| h0100C l (1>>r) => Some (h01000D l r)
+| h01000D l (0>>r) => Some (h01A (l<:L01<:L00) r)
+| h01000D l (1>>r) => Some (h01E (l<:L01<:L00) r)
+| h01E l (0>>r) => Some (hL l (1>>r))
+| h01E l (1>>r) => None
+| hL (l<:L00) r => Some (h01A (l<:L01) r)
+| hL (l<:L01) r => Some (hL l (1>>0>>r))
+| hL (l<:L010) r => Some (h01A (l<:L011) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL [] r => Some (h01A [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01A [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 E F C D A B <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM25.
+
+
+Module TM26.
+Definition tm := TM_from_str "1RB---_1RC0RD_1LD1RF_0LF0LE_1LD0LE_0RB0RA".
+Definition tm' := TM_from_str "1LB1RC_0LC0LE_0RD0RF_1RA0RB_1LB0LE_1RD---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01 | L10 | L011 | L0111
+.
+
+Inductive Config :=
+| h01C(l:list LD)(r:side)
+| h011F(l:list LD)(r:side)
+| h0110B(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01100D(l:list LD)(r:side)
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0111F(l:list LD)(r:side)
+| h0101C(l:list LD)(r:side)
+| h01110B(l:list LD)(r:side)
+| h011100D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L01::ls => toLC ls <* <[0;1]
+| L10::ls => toLC ls <* <[1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01C l r => toLC l <* <[0;1] {{QC}}> r
+| h011F l r => toLC l <* <[0;1;1] {{QF}}> r
+| h0110B l r => toLC l <* <[0;1;1;0] {{QB}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01100D l r => toLC l <* <[0;1;1;0;0] {{QD}}> r
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0111F l r => toLC l <* <[0;1;1;1] {{QF}}> r
+| h0101C l r => toLC l <* <[0;1;0;1] {{QC}}> r
+| h01110B l r => toLC l <* <[0;1;1;1;0] {{QB}}> r
+| h011100D l r => toLC l <* <[0;1;1;1;0;0] {{QD}}> r
+| hL l r => toLC l <{{QD}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01C l (0>>r) => Some (hL l (1>>r))
+| h01C l (1>>r) => Some (h011F l r)
+| h011F l (0>>r) => Some (h0110B l r)
+| h011F l (1>>r) => Some (h0A (l<:L011) r)
+| h0110B l (0>>r) => Some (h01C (l<:L011) r)
+| h0110B l (1>>r) => Some (h01100D l r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => None 
+| h01100D l (0>>r) => Some (h01C (l<:L01<:L10) r)
+| h01100D l (1>>r) => Some (h01C (l<:L01<:L01) r)
+| h01B l (0>>r) => Some (h011C l r) 
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (hL l (0>>1>>r)) 
+| h011C l (1>>r) => Some (h0111F l r)
+| h010D l (0>>r) => Some (h0101C l r) 
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0111F l (0>>r) => Some (h01110B l r) 
+| h0111F l (1>>r) => Some (h0A (l<:L0111) r)
+| h0101C l (0>>r) => Some (hL l (1>>0>>1>>r)) 
+| h0101C l (1>>r) => Some (h011F (l<:L01) r)
+| h01110B l (0>>r) => Some (h01C (l<:L0111) r) 
+| h01110B l (1>>r) => Some (h011100D l r)
+| h011100D l (0>>r) => Some (h01C (l<:L011<:L10) r) 
+| h011100D l (1>>r) => Some (h01C (l<:L011<:L01) r)
+| hL (l<:L0111) r => Some (hL l ([0;0;1;0]*>r))
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L10) r => Some (h0101C l r)
+| hL (l<:L01) r => Some (hL l ([1;0]*>r))
+| hL [] r => Some (h01C [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01C [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D F <[0;1;1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F D A B C <[0;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM26.
+
+
+Module TM27.
+Definition tm := TM_from_str "1RB---_1RC0RD_1LD1RF_0LF0LE_1LD0LE_0RB0RA".
+Definition tm' := TM_from_str "1RB0RC_1LC1RE_0LE0LD_1LC0LD_0RA0RF_1RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01 | L10 | L011 | L0111
+.
+
+Inductive Config :=
+| h01C(l:list LD)(r:side)
+| h011F(l:list LD)(r:side)
+| h0110B(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01100D(l:list LD)(r:side)
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0111F(l:list LD)(r:side)
+| h0101C(l:list LD)(r:side)
+| h01110B(l:list LD)(r:side)
+| h011100D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L01::ls => toLC ls <* <[0;1]
+| L10::ls => toLC ls <* <[1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01C l r => toLC l <* <[0;1] {{QC}}> r
+| h011F l r => toLC l <* <[0;1;1] {{QF}}> r
+| h0110B l r => toLC l <* <[0;1;1;0] {{QB}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01100D l r => toLC l <* <[0;1;1;0;0] {{QD}}> r
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0111F l r => toLC l <* <[0;1;1;1] {{QF}}> r
+| h0101C l r => toLC l <* <[0;1;0;1] {{QC}}> r
+| h01110B l r => toLC l <* <[0;1;1;1;0] {{QB}}> r
+| h011100D l r => toLC l <* <[0;1;1;1;0;0] {{QD}}> r
+| hL l r => toLC l <{{QD}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01C l (0>>r) => Some (hL l (1>>r))
+| h01C l (1>>r) => Some (h011F l r)
+| h011F l (0>>r) => Some (h0110B l r)
+| h011F l (1>>r) => Some (h0A (l<:L011) r)
+| h0110B l (0>>r) => Some (h01C (l<:L011) r)
+| h0110B l (1>>r) => Some (h01100D l r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => None 
+| h01100D l (0>>r) => Some (h01C (l<:L01<:L10) r)
+| h01100D l (1>>r) => Some (h01C (l<:L01<:L01) r)
+| h01B l (0>>r) => Some (h011C l r) 
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (hL l (0>>1>>r)) 
+| h011C l (1>>r) => Some (h0111F l r)
+| h010D l (0>>r) => Some (h0101C l r) 
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0111F l (0>>r) => Some (h01110B l r) 
+| h0111F l (1>>r) => Some (h0A (l<:L0111) r)
+| h0101C l (0>>r) => Some (hL l (1>>0>>1>>r)) 
+| h0101C l (1>>r) => Some (h011F (l<:L01) r)
+| h01110B l (0>>r) => Some (h01C (l<:L0111) r) 
+| h01110B l (1>>r) => Some (h011100D l r)
+| h011100D l (0>>r) => Some (h01C (l<:L011<:L10) r) 
+| h011100D l (1>>r) => Some (h01C (l<:L011<:L01) r)
+| hL (l<:L0111) r => Some (hL l ([0;0;1;0]*>r))
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L10) r => Some (h0101C l r)
+| hL (l<:L01) r => Some (hL l ([1;0]*>r))
+| hL [] r => Some (h01C [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01C [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D F <[0;1;1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F A B C E (@nil Sym).
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM27.
+
+
+Module TM28.
+Definition tm := TM_from_str "1LB1RD_1LC0LB_0LD0LB_0RE0RF_1RA0RC_1RE---".
+Definition tm' := TM_from_str "1LB0LA_0LC0LA_0RD0RF_1RE0RB_1LA1RC_1RD---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01 | L10 | L011 | L0111
+.
+
+Inductive Config :=
+| h01C(l:list LD)(r:side)
+| h011F(l:list LD)(r:side)
+| h0110B(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01100D(l:list LD)(r:side)
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0111F(l:list LD)(r:side)
+| h0101C(l:list LD)(r:side)
+| h01110B(l:list LD)(r:side)
+| h011100D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L01::ls => toLC ls <* <[0;1]
+| L10::ls => toLC ls <* <[1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01C l r => toLC l <* <[0;1] {{QC}}> r
+| h011F l r => toLC l <* <[0;1;1] {{QF}}> r
+| h0110B l r => toLC l <* <[0;1;1;0] {{QB}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01100D l r => toLC l <* <[0;1;1;0;0] {{QD}}> r
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0111F l r => toLC l <* <[0;1;1;1] {{QF}}> r
+| h0101C l r => toLC l <* <[0;1;0;1] {{QC}}> r
+| h01110B l r => toLC l <* <[0;1;1;1;0] {{QB}}> r
+| h011100D l r => toLC l <* <[0;1;1;1;0;0] {{QD}}> r
+| hL l r => toLC l <{{QD}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01C l (0>>r) => Some (hL l (1>>r))
+| h01C l (1>>r) => Some (h011F l r)
+| h011F l (0>>r) => Some (h0110B l r)
+| h011F l (1>>r) => Some (h0A (l<:L011) r)
+| h0110B l (0>>r) => Some (h01C (l<:L011) r)
+| h0110B l (1>>r) => Some (h01100D l r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => None 
+| h01100D l (0>>r) => Some (h01C (l<:L01<:L10) r)
+| h01100D l (1>>r) => Some (h01C (l<:L01<:L01) r)
+| h01B l (0>>r) => Some (h011C l r) 
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (hL l (0>>1>>r)) 
+| h011C l (1>>r) => Some (h0111F l r)
+| h010D l (0>>r) => Some (h0101C l r) 
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0111F l (0>>r) => Some (h01110B l r) 
+| h0111F l (1>>r) => Some (h0A (l<:L0111) r)
+| h0101C l (0>>r) => Some (hL l (1>>0>>1>>r)) 
+| h0101C l (1>>r) => Some (h011F (l<:L01) r)
+| h01110B l (0>>r) => Some (h01C (l<:L0111) r) 
+| h01110B l (1>>r) => Some (h011100D l r)
+| h011100D l (0>>r) => Some (h01C (l<:L011<:L10) r) 
+| h011100D l (1>>r) => Some (h01C (l<:L011<:L01) r)
+| hL (l<:L0111) r => Some (hL l ([0;0;1;0]*>r))
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L10) r => Some (h0101C l r)
+| hL (l<:L01) r => Some (hL l ([1;0]*>r))
+| hL [] r => Some (h01C [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01C [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F E A C D <[0;1;1;0;1;1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F D E B C <[0;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM28.
+
+
+Module TM29.
+Definition tm := TM_from_str "1LB1RC_0LC0LE_0RD0RF_1RA0RB_1LB0LA_1RD---".
+Definition tm' := TM_from_str "1RB---_1RC0RD_1LD1RF_0LF0LE_1LD0LC_0RB0RA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01 | L10 | L011 | L0111
+.
+
+Inductive Config :=
+| h01C(l:list LD)(r:side)
+| h011F(l:list LD)(r:side)
+| h0110B(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01100D(l:list LD)(r:side)
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0111F(l:list LD)(r:side)
+| h0101C(l:list LD)(r:side)
+| h01110B(l:list LD)(r:side)
+| h011100D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L01::ls => toLC ls <* <[0;1]
+| L10::ls => toLC ls <* <[1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01C l r => toLC l <* <[0;1] {{QC}}> r
+| h011F l r => toLC l <* <[0;1;1] {{QF}}> r
+| h0110B l r => toLC l <* <[0;1;1;0] {{QB}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01100D l r => toLC l <* <[0;1;1;0;0] {{QD}}> r
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0111F l r => toLC l <* <[0;1;1;1] {{QF}}> r
+| h0101C l r => toLC l <* <[0;1;0;1] {{QC}}> r
+| h01110B l r => toLC l <* <[0;1;1;1;0] {{QB}}> r
+| h011100D l r => toLC l <* <[0;1;1;1;0;0] {{QD}}> r
+| hL l r => toLC l <{{QD}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01C l (0>>r) => Some (hL l (1>>r))
+| h01C l (1>>r) => Some (h011F l r)
+| h011F l (0>>r) => Some (h0110B l r)
+| h011F l (1>>r) => Some (h0A (l<:L011) r)
+| h0110B l (0>>r) => Some (h01C (l<:L011) r)
+| h0110B l (1>>r) => Some (h01100D l r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => None 
+| h01100D l (0>>r) => Some (h01C (l<:L01<:L10) r)
+| h01100D l (1>>r) => Some (h01C (l<:L01<:L01) r)
+| h01B l (0>>r) => Some (h011C l r) 
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (hL l (0>>1>>r)) 
+| h011C l (1>>r) => Some (h0111F l r)
+| h010D l (0>>r) => Some (h0101C l r) 
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0111F l (0>>r) => Some (h01110B l r) 
+| h0111F l (1>>r) => Some (h0A (l<:L0111) r)
+| h0101C l (0>>r) => Some (hL l (1>>0>>1>>r)) 
+| h0101C l (1>>r) => Some (h011F (l<:L01) r)
+| h01110B l (0>>r) => Some (h01C (l<:L0111) r) 
+| h01110B l (1>>r) => Some (h011100D l r)
+| h011100D l (0>>r) => Some (h01C (l<:L011<:L10) r) 
+| h011100D l (1>>r) => Some (h01C (l<:L011<:L01) r)
+| hL (l<:L0111) r => Some (h0110B (l<:L01) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L10) r => Some (h0101C l r)
+| hL (l<:L01) r => Some (hL l ([1;0]*>r))
+| hL [] r => Some (h01C [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01C [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F D A B C <[0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D F <[0;1;1;0;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM29.
+
+
+Module TM30.
+Definition tm := TM_from_str "1LB1RC_0LC0LE_0RD0RF_1RA0RB_1LB0LA_1RD---".
+Definition tm' := TM_from_str "1RB0RC_1LC1RE_0LE0LD_1LC0LB_0RA0RF_1RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01 | L10 | L011 | L0111
+.
+
+Inductive Config :=
+| h01C(l:list LD)(r:side)
+| h011F(l:list LD)(r:side)
+| h0110B(l:list LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h01100D(l:list LD)(r:side)
+| h01B(l:list LD)(r:side)
+| h011C(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0111F(l:list LD)(r:side)
+| h0101C(l:list LD)(r:side)
+| h01110B(l:list LD)(r:side)
+| h011100D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L01::ls => toLC ls <* <[0;1]
+| L10::ls => toLC ls <* <[1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| L0111::ls => toLC ls <* <[0;1;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01C l r => toLC l <* <[0;1] {{QC}}> r
+| h011F l r => toLC l <* <[0;1;1] {{QF}}> r
+| h0110B l r => toLC l <* <[0;1;1;0] {{QB}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h01100D l r => toLC l <* <[0;1;1;0;0] {{QD}}> r
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h011C l r => toLC l <* <[0;1;1] {{QC}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0111F l r => toLC l <* <[0;1;1;1] {{QF}}> r
+| h0101C l r => toLC l <* <[0;1;0;1] {{QC}}> r
+| h01110B l r => toLC l <* <[0;1;1;1;0] {{QB}}> r
+| h011100D l r => toLC l <* <[0;1;1;1;0;0] {{QD}}> r
+| hL l r => toLC l <{{QD}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01C l (0>>r) => Some (hL l (1>>r))
+| h01C l (1>>r) => Some (h011F l r)
+| h011F l (0>>r) => Some (h0110B l r)
+| h011F l (1>>r) => Some (h0A (l<:L011) r)
+| h0110B l (0>>r) => Some (h01C (l<:L011) r)
+| h0110B l (1>>r) => Some (h01100D l r)
+| h0A l (0>>r) => Some (h01B l r)
+| h0A l (1>>r) => None 
+| h01100D l (0>>r) => Some (h01C (l<:L01<:L10) r)
+| h01100D l (1>>r) => Some (h01C (l<:L01<:L01) r)
+| h01B l (0>>r) => Some (h011C l r) 
+| h01B l (1>>r) => Some (h010D l r)
+| h011C l (0>>r) => Some (hL l (0>>1>>r)) 
+| h011C l (1>>r) => Some (h0111F l r)
+| h010D l (0>>r) => Some (h0101C l r) 
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0111F l (0>>r) => Some (h01110B l r) 
+| h0111F l (1>>r) => Some (h0A (l<:L0111) r)
+| h0101C l (0>>r) => Some (hL l (1>>0>>1>>r)) 
+| h0101C l (1>>r) => Some (h011F (l<:L01) r)
+| h01110B l (0>>r) => Some (h01C (l<:L0111) r) 
+| h01110B l (1>>r) => Some (h011100D l r)
+| h011100D l (0>>r) => Some (h01C (l<:L011<:L10) r) 
+| h011100D l (1>>r) => Some (h01C (l<:L011<:L01) r)
+| hL (l<:L0111) r => Some (h0110B (l<:L01) r)
+| hL (l<:L011) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:L10) r => Some (h0101C l r)
+| hL (l<:L01) r => Some (hL l ([1;0]*>r))
+| hL [] r => Some (h01C [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01C [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F D A B C <[0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 F A B C E (@nil Sym).
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM30.
+
+
+Module TM31.
+Definition tm := TM_from_str "1RB---_1LC0RC_0RF0LD_1LE0LB_1RF0LD_0LD0RA".
+Definition tm' := TM_from_str "1LB0LE_1RC0LA_0LA0RD_1RE---_1LF0RF_0RC0LA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L01 | L010 | L011
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h01001F(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+| hL'(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L01::ls => toLC ls <* <[0;1]
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QC}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QF}}> r
+| h01001F l r => toLC l <* <[0;1;0;0;0] {{QA}}> r
+| hL l r => toLC l <{{QE}} [1;0] *> r
+| hL' l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (h01B (l<:L011) r)
+| h0100E l (1>>r) => Some (h01001F l r)
+| h01001F l (0>>r) => Some (h01B (l<:L01<:L00) r)
+| h01001F l (1>>r) => None 
+| hL (l<:L00) r => Some (h01B (l<:L01) r)
+| hL (l<:L01) r => Some (hL l (1>>0>>r))
+| hL (l<:L010) r => Some (h01B (l<:L011) r)
+| hL (l<:L011) r => Some (hL' l ([0;1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+| hL' (l<:L00) r => Some (h01B (l<:L00) r)
+| hL' (l<:L01) r => Some (hL l (1>>0>>r))
+| hL' (l<:L010) r => Some (h01B (l<:L010) r)
+| hL' (l<:L011) r => Some (hL' l ([0;1;0]*>r))
+| hL' [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L011 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D E F B C <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM31.
+
+
+Module TM32.
+Definition tm := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE1LF_0LB0RA_0RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC1LF_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01(a b:nat)
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(l0:LD)(r:side)
+| hF(l:list LD)(l0:LD)(r:side)
+| h0C(l:list LD)(l0:LD)(r:side)
+| h01E(l:list LD)(l0:LD)(r:side)
+| h000E(l:list LD)(l0:LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| (L01 a b)::ls => toLC ls <* <[0;1] <* <[1]^^a <* <[0]^^b
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l l0 r => toLC (l0::l) <* <[0] {{QA}}> r
+| hF l l0 r => toLC (l0::l) <* <[] {{QF}}> r
+| h0C l l0 r => toLC (l0::l) <* <[0] {{QC}}> r
+| h01E l l0 r => toLC (l0::l) <* <[0;1] {{QE}}> r
+| h000E l l0 r => toLC (l0::l) <* <[0;0;0] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (h01B (l<:(L01 1 0)) r)
+| h0100E l (1>>r) => Some (h0A l (L01 0 2) r)
+| h0A l l0 (0>>r) => Some (h01B (l<:l0) r)
+| h0A l (L01 a b) (1>>r) => Some (hF l (L01 a (S(S b))) r)
+| hF l l0 (0>>r) => Some (h0C l l0 r)
+| hF l l0 (1>>r) => None
+| h0C l l0 (0>>r) => Some (h01E l l0 r)
+| h0C l l0 (1>>r) => Some (hL (l<:l0) r)
+| h01E l l0 (0>>r) => Some (h000E l l0 r)
+| h01E l l0 (1>>r) => Some (h0A (l<:l0) (L01 0 0) r)
+| h000E l l0 (0>>r) => Some (h01B (l<:l0<:(L01 0 0)) r)
+| h000E l (L01 a b) (1>>r) => Some (h0A l (L01 a (S(S(S b)))) r)
+| hL (l<:(L01 a (S (S b)))) r => Some (h01B (l<:(L01 a b)<:(L01 0 0)) r)
+| hL (l<:(L01 a 1)) r => Some (h01B (l<:(L01 (S a) 0)) r)
+| hL (l<:(L01 0 0)) r => Some (hL l (1>>0>>r))
+| hL (l<:(L01 1 0)) r => Some (hL l (0>>1>>0>>r))
+| hL (l<:(L01 _ 0)) r => None
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 _ _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM32.
+
+
+Module TM33.
+Definition tm := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_0RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LE_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01(a b:nat)
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(l0:LD)(r:side)
+| hF(l:list LD)(l0:LD)(r:side)
+| h0C(l:list LD)(l0:LD)(r:side)
+| h01E(l:list LD)(l0:LD)(r:side)
+| h000E(l:list LD)(l0:LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| (L01 a b)::ls => toLC ls <* <[0;1] <* <[1]^^a <* <[0]^^b
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l l0 r => toLC (l0::l) <* <[0] {{QA}}> r
+| hF l l0 r => toLC (l0::l) <* <[] {{QF}}> r
+| h0C l l0 r => toLC (l0::l) <* <[0] {{QC}}> r
+| h01E l l0 r => toLC (l0::l) <* <[0;1] {{QE}}> r
+| h000E l l0 r => toLC (l0::l) <* <[0;0;0] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (h01B (l<:(L01 1 0)) r)
+| h0100E l (1>>r) => Some (h0A l (L01 0 2) r)
+| h0A l l0 (0>>r) => Some (h01B (l<:l0) r)
+| h0A l (L01 a b) (1>>r) => Some (hF l (L01 a (S(S b))) r)
+| hF l l0 (0>>r) => Some (h0C l l0 r)
+| hF l l0 (1>>r) => None
+| h0C l l0 (0>>r) => Some (h01E l l0 r)
+| h0C l l0 (1>>r) => Some (hL (l<:l0) r)
+| h01E l l0 (0>>r) => Some (h000E l l0 r)
+| h01E l l0 (1>>r) => Some (h0A (l<:l0) (L01 0 0) r)
+| h000E l l0 (0>>r) => Some (h01B (l<:l0<:(L01 0 0)) r)
+| h000E l (L01 a b) (1>>r) => Some (h0A l (L01 a (S(S(S b)))) r)
+| hL (l<:(L01 a (S (S b)))) r => Some (h01B (l<:(L01 a b)<:(L01 0 0)) r)
+| hL (l<:(L01 a 1)) r => Some (h01B (l<:(L01 (S a) 0)) r)
+| hL (l<:(L01 a 0)) r => Some (hL l ([0]^^a*>[1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 _ _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM33.
+
+
+Module TM34.
+Definition tm := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE0LB_0LB0RA_0RC---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LA_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01(a b:nat)
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(l0:LD)(r:side)
+| hF(l:list LD)(l0:LD)(r:side)
+| h0C(l:list LD)(l0:LD)(r:side)
+| h01E(l:list LD)(l0:LD)(r:side)
+| h000E(l:list LD)(l0:LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| (L01 a b)::ls => toLC ls <* <[0;1] <* <[1]^^a <* <[0]^^b
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l l0 r => toLC (l0::l) <* <[0] {{QA}}> r
+| hF l l0 r => toLC (l0::l) <* <[] {{QF}}> r
+| h0C l l0 r => toLC (l0::l) <* <[0] {{QC}}> r
+| h01E l l0 r => toLC (l0::l) <* <[0;1] {{QE}}> r
+| h000E l l0 r => toLC (l0::l) <* <[0;0;0] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (h01B (l<:(L01 1 0)) r)
+| h0100E l (1>>r) => Some (h0A l (L01 0 2) r)
+| h0A l l0 (0>>r) => Some (h01B (l<:l0) r)
+| h0A l (L01 a b) (1>>r) => Some (hF l (L01 a (S(S b))) r)
+| hF l l0 (0>>r) => Some (h0C l l0 r)
+| hF l l0 (1>>r) => None
+| h0C l l0 (0>>r) => Some (h01E l l0 r)
+| h0C l l0 (1>>r) => Some (hL (l<:l0) r)
+| h01E l l0 (0>>r) => Some (h000E l l0 r)
+| h01E l l0 (1>>r) => Some (h0A (l<:l0) (L01 0 0) r)
+| h000E l l0 (0>>r) => Some (h01B (l<:l0<:(L01 0 0)) r)
+| h000E l (L01 a b) (1>>r) => Some (h0A l (L01 a (S(S(S b)))) r)
+| hL (l<:(L01 a (S (S b)))) r => Some (h01B (l<:(L01 a b)<:(L01 0 0)) r)
+| hL (l<:(L01 a 1)) r => Some (h01B (l<:(L01 (S a) 0)) r)
+| hL (l<:(L01 0 0)) r => Some (hL l ([1;0]*>r))
+| hL (l<:(L01 1 0)) r => Some (hL l ([0;1;0]*>r))
+| hL (l<:(L01 (S(S a)) 0)) r => Some (h0100E (l<:(L01 a 0)) r)
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 _ _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM34.
+
+
+Module TM35.
+Definition tm := TM_from_str "1RB0RF_1LC0RD_1RE0LD_0RE0LD_0LB0RA_0RD---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LE_0RE---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01(a b:nat)
+.
+
+Inductive Config :=
+| h01B(l:list LD)(r:side)
+| h010D(l:list LD)(r:side)
+| h0100E(l:list LD)(r:side)
+| h0A(l:list LD)(l0:LD)(r:side)
+| h00F(l:list LD)(l0:LD)(r:side)
+| h000D(l:list LD)(l0:LD)(r:side)
+| h0000E(l:list LD)(l0:LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| (L01 a b)::ls => toLC ls <* <[0;1] <* <[1]^^a <* <[0]^^b
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h01B l r => toLC l <* <[0;1] {{QB}}> r
+| h010D l r => toLC l <* <[0;1;0] {{QD}}> r
+| h0100E l r => toLC l <* <[0;1;0;0] {{QE}}> r
+| h0A l l0 r => toLC (l0::l) <* <[0] {{QA}}> r
+| h00F l l0 r => toLC (l0::l) <* <[0;0] {{QF}}> r
+| h000D l l0 r => toLC (l0::l) <* <[0;0;0] {{QD}}> r
+| h0000E l l0 r => toLC (l0::l) <* <[0;0;0;0] {{QE}}> r
+| hL l r => toLC l <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| h01B l (0>>r) => Some (hL l (1>>r))
+| h01B l (1>>r) => Some (h010D l r)
+| h010D l (0>>r) => Some (h0100E l r)
+| h010D l (1>>r) => Some (hL l (1>>0>>r))
+| h0100E l (0>>r) => Some (h01B (l<:(L01 1 0)) r)
+| h0100E l (1>>r) => Some (h0A l (L01 0 2) r)
+| h0A l l0 (0>>r) => Some (h01B (l<:l0) r)
+| h0A l l0 (1>>r) => Some (h00F l l0 r)
+| h00F l l0 (0>>r) => Some (h000D l l0 r)
+| h00F l l0 (1>>r) => None
+| h000D l l0 (0>>r) => Some (h0000E l l0 r)
+| h000D l l0 (1>>r) => Some (h01B (l<:l0<:(L01 0 0)) r)
+| h0000E l (L01 a b) (0>>r) => Some (h01B (l<:(L01 a (S b))<:(L01 0 0)) r)
+| h0000E l (L01 a b) (1>>r) => Some (h0A l (L01 a (S(S(S(S b))))) r)
+| hL (l<:(L01 a (S (S b)))) r => Some (h01B (l<:(L01 a b)<:(L01 0 0)) r)
+| hL (l<:(L01 a 1)) r => Some (h01B (l<:(L01 (S a) 0)) r)
+| hL (l<:(L01 a 0)) r => Some (hL l ([0]^^a*>[1;0]*>r))
+| hL [] r => Some (h01B [] (1>>0>>r))
+end.
+
+Definition cfg0 := h01B [] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 _ _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A B E C F <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM35.
+
+
+Module TM36.
+Definition tm := TM_from_str "1RB0LC_1LA1RE_0RD1LB_0LB---_1RF0RE_1RC0RA".
+Definition tm' := TM_from_str "1LB1RC_1RA0LE_1RD0RC_1RE0RB_0RF1LA_0LA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L01(a b:nat)
+.
+
+Inductive Config :=
+| hB(l:list LD)(m:nat)(r:side)
+| hE(l:list LD)(m:nat)(r:side)
+| hF(l:list LD)(m:nat)(r:side)
+| hC(l:list LD)(m:nat)(r:side)
+| h0E(l:list LD)(m:LD)(r:side)
+| h0A(l:list LD)(r:side)
+| h0D(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| (L01 a b)::ls => toLC ls <* <[0;1] <* <[1]^^a <* <[0]^^b
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| hB l m r => toLC l <* <[0;1] <* [1]^^m {{QB}}> r
+| hE l m r => toLC l <* <[0;1] <* [1]^^m {{QE}}> r
+| hF l m r => toLC l <* <[0;1] <* [1]^^m {{QF}}> r
+| hC l m r => toLC l <* <[0;1] <* [1]^^m {{QC}}> r
+| h0E l l0 r => toLC (l<:l0) <* <[0] {{QE}}> r
+| h0A l r => toLC l <* <[0] {{QA}}> r
+| h0D l r => toLC l <* <[0] {{QD}}> r
+| hL l r => toLC l <{{QA}} [1] *> r
+end.
+
+Definition f x :=
+match x with
+| hB l m (0>>r) => Some (hL (l<:(L01 m 0)) r)
+| hB l m (1>>r) => Some (hE l (S m) r)
+| hE l m (0>>r) => Some (hF l (S m) r)
+| hE l m (1>>r) => Some (h0E l (L01 m 0) r)
+| hF l m (0>>r) => Some (hC l (S m) r)
+| hF l m (1>>r) => Some (h0A (l<:(L01 m 0)) r)
+| hC l m (0>>r) => Some (h0D (l<:(L01 m 0)) r)
+| hC l m (1>>r) => Some (h0E l (L01 m 0) r)
+| h0E l m (0>>r) => Some (hF (l<:m) 0 r)
+| h0E l (L01 a b) (1>>r) => Some (h0E l (L01 a (S b)) r)
+| h0A l (0>>r) => Some (hB l 0 r)
+| h0A l (1>>r) => Some (hL l (0>>r))
+| h0D l (0>>r) => Some (hL l (0>>r))
+| h0D l (1>>r) => None
+| hL (l<:(L01 0 0)) r => Some (hL l (0>>1>>r))
+| hL (l<:(L01 1 0)) r => Some (hL l (1>>0>>1>>r))
+| hL (l<:(L01 (S(S a)) 0)) r => Some (h0A (l<:(L01 a 0)<:(L01 0 0)) r)
+| hL (l<:(L01 a 1)) r => Some (hE l (S(S a)) r)
+| hL (l<:(L01 a (S(S b)))) r => Some (hE (l<:(L01 a b)) 1 r)
+| hL [] r => Some (hE [] 1 r)
+end.
+
+Definition cfg0 := hL [] ([0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 _ _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F (@nil Sym).
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 B A E F C D <[1;1;0;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM36.
+
+
+Module TM37.
+Definition tm := TM_from_str "1LB0RD_0LC0LB_0RD1LB_1RD1RE_1RF---_0RA1LA".
+Definition tm' := TM_from_str "1RB---_0RC1LC_1LD0RF_0LE0LD_0RF1LD_1RF1RA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L1 | L10 | L100
+.
+
+Inductive Config :=
+| hD(l:list LD)(r:side)
+| h1E(l:list LD)(r:side)
+| h11F(l:list LD)(r:side)
+| h10A(l:list LD)(r:side)
+| hL(l:list LD)(r:side).
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L1::ls => toLC ls <* <[1]
+| L10::ls => toLC ls <* <[1;0]
+| L100::ls => toLC ls <* <[1;0;0]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| hD l r => toLC l <* <[] {{QD}}> r
+| h1E l r => toLC l <* <[1] {{QE}}> r
+| h11F l r => toLC l <* <[1;1] {{QF}}> r
+| h10A l r => toLC l <* <[1;0] {{QA}}> r
+| hL l r => toLC l <{{QB}} r
+end.
+
+Definition f x :=
+match x with
+| hD l (0>>r) => Some (hD (l<:L1) r)
+| hD l (1>>r) => Some (h1E l r)
+| h1E l (0>>r) => Some (h11F l r)
+| h1E l (1>>r) => None
+| h11F l (0>>r) => Some (h10A (l<:L1) r)
+| h11F l (1>>r) => Some (h1E (l<:L10) r)
+| h10A l (0>>r) => Some (hL l (1>>0>>1>>r))
+| h10A l (1>>r) => Some (hD (l<:L100) r)
+| hL (l<:L1) r => Some (hL l (0>>r))
+| hL (l<:L10) r => Some (hL l (1>>0>>r))
+| hL (l<:L100) r => Some (hD (l<:L10<:L1) r)
+| hL [] r => Some (hD [] (0>>r))
+end.
+
+Definition cfg0 := hD [] ([0;1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B D E F <[1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C D F A B (@nil Sym).
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM37.
+
+
+Module TM38.
+Definition tm := TM_from_str "1RB0LF_1RC0LD_1RD0RB_1LE0RC_---0LA_1LA0LF".
+Definition tm' := TM_from_str "1RB0LC_1RC0RA_1LD0RB_---0LE_1RA0LF_1LE0LF".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L1 | L0
+.
+
+Inductive Config :=
+| h1B(l:list LD)(r:side)
+| h1C(l:list LD)(r:side)
+| h1D(l:list LD)(r:side)
+| h0C(l:list LD)(r:side)
+| h10B(l:list LD)(r:side)
+| h00B(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+| hL'(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L1::ls => toLC ls <* <[1]
+| L0::ls => toLC ls <* <[0]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| h1C l r => toLC l <* <[1] {{QC}}> r
+| h1D l r => toLC l <* <[1] {{QD}}> r
+| h0C l r => toLC l <* <[0] {{QC}}> r
+| h10B l r => toLC l <* <[1;0] {{QB}}> r
+| h00B l r => toLC l <* <[0;0] {{QB}}> r
+| hL l r => toLC l <{{QA}} r
+| hL' l r => toLC l <{{QF}} r
+end.
+
+Definition f x :=
+match x with
+| h1B l (0>>r) => Some (h1C (l<:L1) r)
+| h1B l (1>>r) => Some (h1D (l<:L0) r)
+| h1C l (0>>r) => Some (h1D (l<:L1) r)
+| h1C l (1>>r) => Some (h10B l r)
+| h1D l (0>>r) => Some (hL l (0>>1>>r))
+| h1D l (1>>r) => Some (h0C (l<:L1) r)
+| h0C l (0>>r) => Some (h1D (l<:L0) r)
+| h0C l (1>>r) => Some (h00B l r)
+| h10B l (0>>r) => Some (h1C (l<:L1<:L0) r)
+| h10B l (1>>r) => Some (hL l (0>>1>>0>>r))
+| h00B l (0>>r) => Some (h1C (l<:L0<:L0) r)
+| h00B l (1>>r) => None
+| hL (l<:L0) r => Some (h1B l r)
+| hL (l<:L1) r => Some (hL' l (0>>r))
+| hL' (l<:L0) r => Some (hL l (1>>r))
+| hL' (l<:L1) r => Some (hL' l (0>>r))
+| hL [] r => Some (h1C [L0] r)
+| hL' [] r => Some (h1C [L0] r)
+end.
+
+Definition cfg0 := hL [] ([1;0;1;0;1;0;0;1;0;0;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D F <[1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 E A B C F <[1;1;0;1;0;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM38.
+
+
+Module TM39.
+Definition tm := TM_from_str "1RB0LF_1RC0LD_1RD0RB_1LE0RC_---0LA_1LA0LF".
+Definition tm' := TM_from_str "1RB0RE_1LC0RA_---0LD_1RE0LF_1RA0LB_1LD0LF".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L1 | L0
+.
+
+Inductive Config :=
+| h1B(l:list LD)(r:side)
+| h1C(l:list LD)(r:side)
+| h1D(l:list LD)(r:side)
+| h0C(l:list LD)(r:side)
+| h10B(l:list LD)(r:side)
+| h00B(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+| hL'(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L1::ls => toLC ls <* <[1]
+| L0::ls => toLC ls <* <[0]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| h1C l r => toLC l <* <[1] {{QC}}> r
+| h1D l r => toLC l <* <[1] {{QD}}> r
+| h0C l r => toLC l <* <[0] {{QC}}> r
+| h10B l r => toLC l <* <[1;0] {{QB}}> r
+| h00B l r => toLC l <* <[0;0] {{QB}}> r
+| hL l r => toLC l <{{QA}} r
+| hL' l r => toLC l <{{QF}} r
+end.
+
+Definition f x :=
+match x with
+| h1B l (0>>r) => Some (h1C (l<:L1) r)
+| h1B l (1>>r) => Some (h1D (l<:L0) r)
+| h1C l (0>>r) => Some (h1D (l<:L1) r)
+| h1C l (1>>r) => Some (h10B l r)
+| h1D l (0>>r) => Some (hL l (0>>1>>r))
+| h1D l (1>>r) => Some (h0C (l<:L1) r)
+| h0C l (0>>r) => Some (h1D (l<:L0) r)
+| h0C l (1>>r) => Some (h00B l r)
+| h10B l (0>>r) => Some (h1C (l<:L1<:L0) r)
+| h10B l (1>>r) => Some (hL l (0>>1>>0>>r))
+| h00B l (0>>r) => Some (h1C (l<:L0<:L0) r)
+| h00B l (1>>r) => None
+| hL (l<:L0) r => Some (h1B l r)
+| hL (l<:L1) r => Some (hL' l (0>>r))
+| hL' (l<:L0) r => Some (hL l (1>>r))
+| hL' (l<:L1) r => Some (hL' l (0>>r))
+| hL [] r => Some (h1C [L0] r)
+| hL' [] r => Some (h1C [L0] r)
+end.
+
+Definition cfg0 := hL [] ([1;0;1;0;1;0;0;1;0;0;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D F <[1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D E A B F <[1;1;0;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM39.
+
+
+Module TM40.
+Definition tm := TM_from_str "1RB1RD_0LC---_1LD1LC_1RE0RE_0RF0LA_1RA0RE".
+Definition tm' := TM_from_str "1LB1LA_1RC0RC_0RE0LD_1RF1RB_1RD0RC_0LA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L10 | L1
+.
+
+Inductive Config :=
+| h1E(l:list LD)(r:side)
+| hF(l:list LD)(r:side)
+| h0E(l:list LD)(r:side)
+| hA(l:list LD)(r:side)
+| h1B(l:list LD)(r:side)
+| hD(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L10::ls => toLC ls <* <[1;0]
+| L1::ls => toLC ls <* <[1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1E l r => toLC l <* <[1] {{QE}}> r
+| hF l r => toLC l <* <[] {{QF}}> r
+| h0E l r => toLC l <* <[0] {{QE}}> r
+| hA l r => toLC l <* <[] {{QA}}> r
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| hD l r => toLC l <* <[] {{QD}}> r
+| hL l r => toLC l <{{QC}} [1] *> r
+end.
+
+Definition f x :=
+match x with
+| h1E l (0>>r) => Some (hF (l<:L10) r)
+| h1E l (1>>r) => Some (h1E (l<:L1) r)
+| hF l (0>>r) => Some (hA (l<:L1) r)
+| hF l (1>>r) => Some (h0E l r)
+| h0E l (0>>r) => Some (hF (l<:L00) r)
+| h0E l (1>>r) => Some (hL l (0>>r)) 
+| hA l (0>>r) => Some (h1B l r)
+| hA l (1>>r) => Some (hD (l<:L1) r)
+| h1B l (0>>r) => Some (hL l (0>>r))
+| h1B l (1>>r) => None
+| hD l (0>>r) => Some (h1E l r)
+| hD l (1>>r) => Some (h0E l r)
+| hL (l<:L00) r => Some (h1E (l<:L1<:L1) r)
+| hL (l<:L10) r => Some (hL l (0>>1>>r))
+| hL (l<:L1) r => Some (hL l (1>>r))
+| hL [] r => Some (h1E [] (1>>1>>r))
+end.
+
+Definition cfg0 := hL [] ([1;1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D F A B C E <[1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM40.
+
+
+Module TM41.
+Definition tm := TM_from_str "1RB1RD_0LC---_1LD1LC_1RE0RE_0RF0LA_1RA0RE".
+Definition tm' := TM_from_str "1RB0RB_0RC0LD_1RD0RB_1RE1RA_0LF---_1LA1LF".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L10 | L1
+.
+
+Inductive Config :=
+| h1E(l:list LD)(r:side)
+| hF(l:list LD)(r:side)
+| h0E(l:list LD)(r:side)
+| hA(l:list LD)(r:side)
+| h1B(l:list LD)(r:side)
+| hD(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L10::ls => toLC ls <* <[1;0]
+| L1::ls => toLC ls <* <[1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1E l r => toLC l <* <[1] {{QE}}> r
+| hF l r => toLC l <* <[] {{QF}}> r
+| h0E l r => toLC l <* <[0] {{QE}}> r
+| hA l r => toLC l <* <[] {{QA}}> r
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| hD l r => toLC l <* <[] {{QD}}> r
+| hL l r => toLC l <{{QC}} [1] *> r
+end.
+
+Definition f x :=
+match x with
+| h1E l (0>>r) => Some (hF (l<:L10) r)
+| h1E l (1>>r) => Some (h1E (l<:L1) r)
+| hF l (0>>r) => Some (hA (l<:L1) r)
+| hF l (1>>r) => Some (h0E l r)
+| h0E l (0>>r) => Some (hF (l<:L00) r)
+| h0E l (1>>r) => Some (hL l (0>>r)) 
+| hA l (0>>r) => Some (h1B l r)
+| hA l (1>>r) => Some (hD (l<:L1) r)
+| h1B l (0>>r) => Some (hL l (0>>r))
+| h1B l (1>>r) => None
+| hD l (0>>r) => Some (h1E l r)
+| hD l (1>>r) => Some (h0E l r)
+| hL (l<:L00) r => Some (h1E (l<:L1<:L1) r)
+| hL (l<:L10) r => Some (hL l (0>>1>>r))
+| hL (l<:L1) r => Some (hL l (1>>r))
+| hL [] r => Some (h1E [] (1>>1>>r))
+end.
+
+Definition cfg0 := hL [] ([1;1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D E F A B C (@nil Sym).
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM41.
+
+
+Module TM42.
+Definition tm := TM_from_str "1RB1RD_0LC---_1LD1LC_1RE0RE_0RF0LA_1RA0RE".
+Definition tm' := TM_from_str "1RB0RF_1RC1RE_0LD---_1LE1LD_1RF0RF_0RA0LB".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L10 | L1
+.
+
+Inductive Config :=
+| h1E(l:list LD)(r:side)
+| hF(l:list LD)(r:side)
+| h0E(l:list LD)(r:side)
+| hA(l:list LD)(r:side)
+| h1B(l:list LD)(r:side)
+| hD(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L10::ls => toLC ls <* <[1;0]
+| L1::ls => toLC ls <* <[1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1E l r => toLC l <* <[1] {{QE}}> r
+| hF l r => toLC l <* <[] {{QF}}> r
+| h0E l r => toLC l <* <[0] {{QE}}> r
+| hA l r => toLC l <* <[] {{QA}}> r
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| hD l r => toLC l <* <[] {{QD}}> r
+| hL l r => toLC l <{{QC}} [1] *> r
+end.
+
+Definition f x :=
+match x with
+| h1E l (0>>r) => Some (hF (l<:L10) r)
+| h1E l (1>>r) => Some (h1E (l<:L1) r)
+| hF l (0>>r) => Some (hA (l<:L1) r)
+| hF l (1>>r) => Some (h0E l r)
+| h0E l (0>>r) => Some (hF (l<:L00) r)
+| h0E l (1>>r) => Some (hL l (0>>r)) 
+| hA l (0>>r) => Some (h1B l r)
+| hA l (1>>r) => Some (hD (l<:L1) r)
+| h1B l (0>>r) => Some (hL l (0>>r))
+| h1B l (1>>r) => None
+| hD l (0>>r) => Some (h1E l r)
+| hD l (1>>r) => Some (h0E l r)
+| hL (l<:L00) r => Some (h1E (l<:L1<:L1) r)
+| hL (l<:L10) r => Some (hL l (0>>1>>r))
+| hL (l<:L1) r => Some (hL l (1>>r))
+| hL [] r => Some (h1E [] (1>>1>>r))
+end.
+
+Definition cfg0 := hL [] ([1;1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F <[1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 B C D E F A <[1;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM42.
+
+
+Module TM43.
+Definition tm := TM_from_str "1LB0LA_1RC0LA_1RF0LD_1RA0RE_1RB---_0RD0LC".
+Definition tm' := TM_from_str "1RB0LE_1RC0LD_0RD0LB_1RE0RF_1LA0LE_1RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L100 | L10 | L1
+.
+
+Inductive Config :=
+| h1B(l:list LD)(r:side)
+| h11C(l:list LD)(r:side)
+| h111F(l:list LD)(r:side)
+| h10D(l:list LD)(r:side)
+| h1A(l:list LD)(r:side)
+| hE(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L100::ls => toLC ls <* <[1;0;0]
+| L10::ls => toLC ls <* <[1;0]
+| L1::ls => toLC ls <* <[1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| h11C l r => toLC l <* <[1;1] {{QC}}> r
+| h111F l r => toLC l <* <[1;1;1] {{QF}}> r
+| h10D l r => toLC l <* <[1;0] {{QD}}> r
+| h1A l r => toLC l <* <[1] {{QA}}> r
+| hE l r => toLC l <* <[] {{QE}}> r
+| hL l r => toLC l <{{QA}} [] *> r
+end.
+
+Definition f x :=
+match x with
+| h1B l (0>>r) => Some (h11C l r)
+| h1B l (1>>r) => Some (hL l (0>>0>>r))
+| h11C l (0>>r) => Some (h111F l r)
+| h11C l (1>>r) => Some (h1B (l<:L10) r)
+| h111F l (0>>r) => Some (h10D (l<:L1<:L1) r)
+| h111F l (1>>r) => Some (h11C (l<:L10) r)
+| h10D l (0>>r) => Some (h1A (l<:L10) r)
+| h10D l (1>>r) => Some (hE (l<:L100) r)
+| h1A l (0>>r) => Some (hL l (0>>1>>r))
+| h1A l (1>>r) => Some (hL l (0>>0>>r))
+| hE l (0>>r) => Some (h1B l r)
+| hE l (1>>r) => None
+| hL (l<:L100) r => Some (h1B (l<:L10) r)
+| hL (l<:L10) r => Some (hL l (0>>1>>r))
+| hL (l<:L1) r => Some (hL l (0>>r))
+| hL [] r => Some (h1B [] r)
+end.
+
+Definition cfg0 := hL [] ([0;0;0;1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F (@nil Sym).
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 E A B D F C <[1;0;1;0].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM43.
+
+
+Module TM44.
+Definition tm := TM_from_str "1LB0LA_1RC0LA_1RF0LD_1RA0RE_1RB---_0RD0LC".
+Definition tm' := TM_from_str "1RB0RE_1LC0LB_1RD0LB_1RF0LA_1RC---_0RA0LD".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L100 | L10 | L1
+.
+
+Inductive Config :=
+| h1B(l:list LD)(r:side)
+| h11C(l:list LD)(r:side)
+| h111F(l:list LD)(r:side)
+| h10D(l:list LD)(r:side)
+| h1A(l:list LD)(r:side)
+| hE(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lh:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L100::ls => toLC ls <* <[1;0;0]
+| L10::ls => toLC ls <* <[1;0]
+| L1::ls => toLC ls <* <[1]
+| [] => 0inf <* lh
+end.
+
+Definition to_config x :=
+match x with
+| h1B l r => toLC l <* <[1] {{QB}}> r
+| h11C l r => toLC l <* <[1;1] {{QC}}> r
+| h111F l r => toLC l <* <[1;1;1] {{QF}}> r
+| h10D l r => toLC l <* <[1;0] {{QD}}> r
+| h1A l r => toLC l <* <[1] {{QA}}> r
+| hE l r => toLC l <* <[] {{QE}}> r
+| hL l r => toLC l <{{QA}} [] *> r
+end.
+
+Definition f x :=
+match x with
+| h1B l (0>>r) => Some (h11C l r)
+| h1B l (1>>r) => Some (hL l (0>>0>>r))
+| h11C l (0>>r) => Some (h111F l r)
+| h11C l (1>>r) => Some (h1B (l<:L10) r)
+| h111F l (0>>r) => Some (h10D (l<:L1<:L1) r)
+| h111F l (1>>r) => Some (h11C (l<:L10) r)
+| h10D l (0>>r) => Some (h1A (l<:L10) r)
+| h10D l (1>>r) => Some (hE (l<:L100) r)
+| h1A l (0>>r) => Some (hL l (0>>1>>r))
+| h1A l (1>>r) => Some (hL l (0>>0>>r))
+| hE l (0>>r) => Some (h1B l r)
+| hE l (1>>r) => None
+| hL (l<:L100) r => Some (h1B (l<:L10) r)
+| hL (l<:L10) r => Some (hL l (0>>1>>r))
+| hL (l<:L1) r => Some (hL l (0>>r))
+| hL [] r => Some (h1B [] r)
+end.
+
+Definition cfg0 := hL [] ([0;0;0;1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A B C D E F (@nil Sym).
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 B C D A E F <[1;0].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM44.
+
+
+Module TM45.
+Definition tm := TM_from_str "1LB0RD_1LC1LE_1RA0LB_0RF1RA_0RC---_0LA0RA".
+Definition tm' := TM_from_str "1LB1LF_1RC0LA_1LA0RD_0RE1RC_0LC0RC_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LH :=
+| LH0 | LH1 | LH2.
+
+Inductive LD :=
+| L01(a b:nat)
+.
+
+Inductive Config :=
+| hA(l0:LH)(l:list LD)(k m:nat)(r:side)
+| hD(l0:LH)(l:list LD)(k m:nat)(r:side)
+| hF(l0:LH)(l:list LD)(k m:nat)(r:side)
+| hL(l0:LH)(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QB QC QD QE QF:Q.
+Hypothesis lhn:nat.
+
+Fixpoint toLC ls lh :=
+match ls with
+| L01 a b::ls => toLC ls lh <* <[0;1] <* <[1]^^a <* <[0]^^b
+| [] =>
+  match lh with
+  | LH0 => 0inf <* <[1;0]^^lhn <* <[1;0;0;1]
+  | LH1 => 0inf <* <[1;0]^^lhn <* <[1;1;0;1]
+  | LH2 => 0inf <* <[1;0]^^lhn <* <[1;0;0;0;0;1]
+  end
+end.
+
+Definition to_config x :=
+match x with
+| hA l0 l k m r => toLC (l<:(L01 k (m*3))) l0 {{QA}}> r
+| hD l0 l k m r => toLC (l<:(L01 k (1+m*3))) l0 {{QD}}> r
+| hF l0 l k m r => toLC (l<:(L01 k (2+m*3))) l0 {{QF}}> r
+| hL l0 l r => toLC l l0 <{{QC}} [1;0] *> r
+end.
+
+Definition f x :=
+match x with
+| hA l0 l 0 0 (0>>r) => Some (hL l0 l (1>>r))
+| hA l0 l _ 0 (0>>r) => None
+| hA l0 l k (S m) (0>>r) => Some (hA l0 (l<:(L01 k (m*3))<:(L01 0 0)) 0 0 r)
+| hA l0 l k m (1>>r) => Some (hD l0 l k m r)
+| hD l0 l k m (0>>r) => Some (hF l0 l k m r)
+| hD l0 l k m (1>>r) => Some (hA l0 (l<:(L01 k (m*3))) 0 0 r)
+| hF l0 l 0 0 (0>>r) => Some (hL l0 l (1>>1>>0>>r))
+| hF l0 l 1 0 (0>>r) => Some (hL l0 l (0>>1>>1>>0>>r))
+| hF l0 l _ 0 (0>>r) => None
+| hF l0 l k 1 (0>>r) => Some (hD l0 (l<:(L01 (S k) 0)<:(L01 0 0)) 0 0 r)
+| hF l0 l k (S(S m)) (0>>r) => Some (hD l0 (l<:(L01 k (2+m*3))<:(L01 0 0)<:(L01 0 0)) 0 0 r)
+| hF l0 l k m (1>>r) => Some (hA l0 l k (S m) r)
+| hL l0 (l<:(L01 0 0)) r => Some (hL l0 l (1>>0>>r))
+| hL l0 (l<:(L01 1 0)) r => Some (hL l0 l (0>>1>>0>>r))
+| hL l0 (l<:(L01 _ 0)) r => None
+| hL l0 (l<:(L01 a 1)) r => Some (hF l0 l (S a) 0 r)
+| hL l0 (l<:(L01 a (S(S b)))) r => Some (hF l0 (l<:(L01 a b)) 0 0 r)
+| hL LH0 [] r => Some (hA LH1 [] 0 0 r)
+| hL LH1 [] r => Some (hA LH2 [] 0 0 (1>>0>>r))
+| hL LH2 [] r => Some (hA LH0 [] 0 0 (1>>1>>r))
+end.
+
+Definition cfg0 := hL LH1 [] ([1;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | LH0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 a b => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A C D F 2.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C B D E O.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM45.
+
+
