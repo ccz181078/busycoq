@@ -40,6 +40,8 @@ This part is relatively stable, and no new decider has been proposed recently.
 
   implemented in `Inductive.v`
 
+  it can be extracted to native executable `./decider` by `make && make decider`
+
 - [RWLAcc](https://discord.com/channels/960643023006490684/1239205785913790465/1333106708117196941)
 
   see also some sections of [Inductive_Proof_System](https://wiki.bbchallenge.org/wiki/Inductive_Proof_System):

@@ -8,7 +8,7 @@ ALLVFILES := LibTactics.v Helper.v Pigeonhole.v TM.v Compute.v Flip.v Permute.v 
 	BB25.v Individual25.v CTL25.v Inductive25.v TC25.v RWLAcc25.v BinaryCounter25.v BinaryCounter25_v2.v \
 	BB33.v Individual33.v CTL33.v Inductive33.v TC33.v RWLAcc33.v \
 	RWLAcc.v TC.v RRBA.v Enumerate62.v Enumerate25.v Enumerate33.v \
-	Longitudinal.v QSymMap.v TMLR.v TMAddOneSymbol.v TMLocalHistory.v SimplTape.v NatMod.v ES_v2.v SeqTape.v UintArith.v SimplPow2.v LongitudinalEx.v BBinf.v BigUint.v RWLAcc_BigUint.v RWLAcc62_BigUint.v ES_v3.v NatMod_v2.v NatMod_v3.v DivModCases.v LongAcc.v LongLoop.v
+	Longitudinal.v QSymMap.v TMLR.v TMAddOneSymbol.v TMLocalHistory.v SimplTape.v NatMod.v ES_v2.v SeqTape.v UintArith.v SimplPow2.v LongitudinalEx.v BBinf.v BigUint.v RWLAcc_BigUint.v RWLAcc62_BigUint.v ES_v3.v NatMod_v2.v NatMod_v3.v DivModCases.v LongAcc.v LongLoop.v Inductive_inf.v
 	#BB52.v Individual52.v FixedBin.v ShiftOverflow.v ShiftOverflowBins.v Skelet15.v Skelet26.v Skelet33.v Skelet34.v Skelet35.v \
 	Skelet10.v Skelet17.v Skelet1.v Finned.v Finned1.v Finned2.v Finned3.v Finned4.v Finned5.v Extraction.v \
 	BB33.v Individual33.v BB33_494.v \
@@ -25,7 +25,7 @@ check: Makefile.coq
 
 clean::
 	if [ -e Makefile.coq ]; then $(MAKE) -f Makefile.coq cleanall; fi
-	$(RM) $(wildcard Makefile.coq Makefile.coq.conf) extraction.ml extraction.mli skelet1.mli skelet1.ml *.cmi *.cmx *.o verify skelet1
+	$(RM) $(wildcard Makefile.coq Makefile.coq.conf) extraction.ml extraction.mli skelet1.mli skelet1.ml *.cmi *.cmx *.o verify skelet1 decider Inductive.mli Inductive.ml
 
 #verify: extraction.mli extraction.ml main.ml
 #	ocamlopt.opt -o $@ $^
@@ -36,6 +36,9 @@ clean::
 #extraction.mli extraction.ml: Extraction.vo
 #skelet1.mli skelet1.ml: Skelet1.vo
 
+decider:
+	ocamlfind ocamlopt -O2 -package coq-core.kernel -linkpkg Inductive.mli Inductive.ml decider.ml -o decider
+
 -include Makefile.coq
 
-.PHONY: build clean
+.PHONY: build clean decider
