@@ -1900,3 +1900,42 @@ Proof. solve_cert (RNGS_mod_QSym 1000001 100000 100000 0 0 0 1 2 8 24 0). Time Q
 Lemma nonhalt642: ~halts (TM_from_str "1RB0RA_0LC1LE_1LA1LD_0LB---_1LF1RA_0LC1LD") c0.
 Proof. solve_cert (RNGS_mod_QSym 1000001 1000000 1000000 0 0 0 1 4 11 12 0). Time Qed.
 
+Lemma nonhalt643: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD1RA_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt644: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD1RF_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt645: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD0RC_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt646: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD0RF_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt647: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD1RE_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt648: ~halts (TM_from_str "1RB1LC_0LA1LF_1LD0LC_1RE0RE_1LB0RD_0LB---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt649: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD0RA_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt650: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD1LC_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt651: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD0LC_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt652: ~halts (TM_from_str "1RB---_1RC0RB_1LD0LD_1RE0LC_0RA1RF_0RE---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt653: ~halts (TM_from_str "1RB---_1RC0RB_1LD0LD_1RE0LC_0RA1RF_1LE0RE") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt654: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD1RB_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+
+Lemma nonhalt655: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD0LE_1RA---") c0.
+Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
+

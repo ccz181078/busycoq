@@ -155,7 +155,17 @@ Usage:
   end
 end.
 
-Definition exec ls := parse_args ls default_config None (10^9).
+Definition exec ls :=
+match ls with
+| "UBRRBA"::bsz::tm::[] =>
+  let bsz:=(Nat.of_uint (Decimal_uint_of_str bsz)) in
+  let tm:=(TM'_from_str (pr tm tm)) in
+  match ubrrba_upds tm (config_ubrrba bsz) (10^9) (10^9) with
+  | inr (Halt (q,s)) => pr tt ("halts at " ++ N_to_str q ++ " " ++ N_to_str s)
+  | _ => pr tt "failed to decide"
+  end
+| _ => parse_args ls default_config None (10^9)
+end.
 
 Require Import Extraction ExtrOCamlInt63 ExtrOCamlPArray ExtrOcamlNativeString.
 Extract Constant PArray.array "'a" => "'a Parray.t".
