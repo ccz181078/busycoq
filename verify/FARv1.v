@@ -461,3 +461,9 @@ Proof. solve_cert (RWL_mod_FAR 60000000 30000000 21 3200 4 1 6 0). Time Qed.
 Lemma nonhalt153: ~halts (TM_from_str "1LB---_1RC1LD_1RD1RC_1RE0LD_1LF0RE_1LA0RE") c0.
 Proof. solve_cert (RWL_mod_FAR 60000000 30000000 21 3200 4 1 6 0). Time Qed.
 
+Lemma nonhalt154: ~halts (TM_from_str "1RB0RF_0RC---_0LD1RA_1RE1LF_1RC0RE_1LD0LF") c0.
+Proof. solve_cert (CPS_LRU_FAR 40000000 20000000 1 3200 29 0 0 0). Time Qed.
+
+Lemma nonhalt155: ~halts (TM_from_str "1RB---_1RC1LE_1RD0RC_0LB1RF_1LB0LE_1RA0RE") c0.
+Proof. solve_cert (CPS_LRU_FAR 12000000 6000000 2 3200 10 4 12 0). Time Qed.
+
