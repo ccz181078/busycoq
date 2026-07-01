@@ -1623,4 +1623,499 @@ Qed.
 End TM6.
 
 
+Module TM7.
+Definition tm := Eval compute in (TM_from_str "1RB0RC_1LC0RE_0LC0LD_1RD1LB_0RF1RA_0RB---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation ld := [1;1;0].
+Notation d0 := [0;0;0].
+Notation d1 := [1;0;0].
+Notation hR := (B,@nil Sym).
+Notation hR' := (D,[1]).
+Notation hL := (C,@nil Sym).
+Notation h := [(hR,hL)].
+Notation h' := [(hR',hL)].
+
+Inductive RD := LD|D0|D1.
+Inductive H := hx|h1.
+
+Fixpoint toRC ls :=
+match ls with
+| [] => 0inf
+| LD::ls => ld*>toRC ls
+| D0::ls => d0*>toRC ls
+| D1::ls => d1*>toRC ls
+end.
+
+Definition toH' x :=
+match x with
+| hx => []
+| h1 => [1]
+end.
+
+Definition toH x :=
+match x with
+| hx => h'
+| h1 => []
+end.
+
+Inductive RIncs: H->nat->(list RD)->(list RD)->Prop :=
+| RIncs_hx_ld k r r':
+  RIncs hx (1+k) r r' ->
+  RIncs hx k (LD::r) (LD::r')
+
+| RIncs_hx_d1 k r r':
+  RIncs h1 k r r' ->
+  RIncs hx k (D1::r) (LD::r')
+
+| RIncs_hx_d0 k r r':
+  RIncs hx (1+k) r r' ->
+  RIncs hx k (D0::r) (LD::r')
+
+| RIncs_h1_ld k r r':
+  RIncs hx (1+k) r r' ->
+  RIncs h1 (1+k) (LD::r) (LD::r')
+
+| RIncs_h1_d1 k r r':
+  RIncs h1 k r r' ->
+  RIncs h1 (1+k) (D1::r) (LD::r')
+
+| RIncs_h1_d0_0 k r r':
+  RIncs h1 k r r' ->
+  RIncs h1 (1+k*2) (D0::r) (D0::r')
+
+| RIncs_h1_d0_1 k r r':
+  RIncs h1 k r r' ->
+  RIncs h1 (2+k*2) (D0::r) (D1::r')
+
+| RIncs_h1_rh_0:
+  RIncs h1 0 [] [D1]
+
+| RIncs_h1_rh_1 k r':
+  RIncs h1 k [] r' ->
+  RIncs h1 (1+k*2) [] (D0::r')
+| RIncs_h1_rh_2 k r':
+  RIncs h1 k [] r' ->
+  RIncs h1 (2+k*2) [] (D1::r')
+.
+
+Ltac cat3 :=
+  eapply @segRLs_sideRLs_concat with (w1:=[_;_;_]) (w2:=[_;_;_]); [|eauto 1].
+
+Ltac tr1 :=
+  rewrite lpow_add,app_assoc;
+  eapply segRLs_trans; [esx | ].
+
+Ltac wal :=
+  eapply segRLs_wall''; esx.
+
+Ltac tr2 :=
+  eapply sideRLs_trans; [esx | ].
+
+Open Scope nat.
+
+Lemma RIncs_spec tp k r r':
+  RIncs tp k r r' ->
+  sideRLs tm (toH tp++h^^k) (toH' tp*>toRC r) (toRC r').
+Proof.
+  intro H.
+  induction H; intros; cbn[toH toH' toRC] in *.
+  - cat3; tr1; wal.
+  - tr2.
+    cat3; wal.
+  - cat3; tr1; wal.
+  - rewrite lpow_add,app_assoc.
+    eapply @segRLs_sideRLs_concat with (w1:=[_;_;_;_]) (w2:=[_;_;_]); [|eauto 1].
+    tr1; wal.
+  - rewrite lpow_add,app_assoc.
+    tr2.
+    cat3; wal.
+  - cat3.
+    rewrite app_nil_l.
+    am 2 1 k 1 1.
+    rewrite Nat.add_comm,lpow_add,Nat.mul_1_r.
+    tr2; eauto 1.
+  - cat3.
+    rewrite Nat.add_comm.
+    am 2 1 k 2 1.
+    rewrite Nat.add_comm,lpow_add,Nat.mul_1_r.
+    tr2; eauto 1.
+  - esc.
+  - rewrite lpow_add,app_assoc.
+    tr2.
+    cat3.
+    rewrite app_nil_l.
+    am 2 1 k 0 0.
+  - change (2+k*2) with (1+(1+k*2)).
+    rewrite lpow_add,app_assoc.
+    tr2.
+    cat3.
+    rewrite app_nil_l.
+    am 2 1 k 1 0.
+Qed.
+
+Lemma RIncs_nxt_1 k:
+  exists r, RIncs h1 k [] r.
+Proof.
+  induction k using lt_wf_ind.
+  destruct k.
+  + ec. ec.
+  + destruct (mod2 k); subst.
+    * epose proof (H0 _ _) as [r I].
+      ec. ec. apply I.
+    * epose proof (H0 _ _) as [r I].
+      ec. ec. apply I.
+  Unshelve. all: lia.
+Qed.
+
+
+Ltac solve_v2 :=
+  (epose proof (RIncs_nxt_1 _) as [r I]; repeat ec; try apply I).
+
+Ltac solve_v1 H tp'0 k'0 H' :=
+  eapply H with (tp':=tp'0) (k':=k'0) in H';
+  try lia;
+  try (
+  destruct H' as [r'' I1];
+  repeat ec; try apply I1).
+
+Lemma RIncs_nxt tp k r r' tp' k':
+  RIncs tp k r r' ->
+  match tp,tp' with
+  | hx,hx => k<=k'
+  | h1,h1 => k*2+1<=k'
+  | h1,hx => k+1<=k'
+  | _,_ => False
+  end ->
+  exists r'',
+  RIncs tp' k' r' r''.
+Proof.
+  gen tp k r' tp' k'.
+  induction r; intros.
+  {
+    gen tp r' tp' k'.
+    induction k using lt_wf_ind.
+    intros.
+    inverts H1; destruct tp'.
+    all: try lia.
+    - solve_v2.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v2.
+    - solve_v1 H0 hx (1+k') H3.
+    - destruct (sub k' 1); [subst|lia].
+      destruct (mod2 c); subst.
+      + solve_v1 H0 h1 (a) H3.
+      + solve_v1 H0 h1 (a) H3.
+    - solve_v1 H0 h1 (k') H3.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 H0 h1 (c) H3.
+  }
+  {
+    inverts H0; destruct tp'.
+    all: try lia.
+    - solve_v1 IHr hx (1+k') H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 IHr hx (1+c) H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 IHr hx (1+c) H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - destruct (sub k' 1); [subst|lia].
+      destruct (mod2 c); subst.
+      + solve_v1 IHr h1 (a) H7.
+      + solve_v1 IHr h1 (a) H7.
+    - solve_v1 IHr h1 k' H7.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 IHr h1 (c) H7.
+  }
+Qed.
+
+Open Scope sym.
+
+Notation lh := (0inf<*<[1]).
+
+Definition S' r :=
+  lh {{{ (hR',R) }}} toH' hx *> toRC r.
+
+Lemma BigStep r r':
+  RIncs hx 0 r r' ->
+  S' r -->+ S' r'.
+Proof.
+  intros H.
+  apply RIncs_spec in H.
+  unfold S'.
+  eapply sideRLs_1 in H.
+  follow10 H.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' [D1]).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun r => exists r', RIncs hx 0 r r').
+  2: repeat ec.
+  intros r [r' I1].
+  pose proof I1 as I2.
+  eapply RIncs_nxt with (tp':=hx) (k':=O) in I2.
+  2: lia.
+  exists r'; split.
+  - apply BigStep,I1.
+  - apply I2.
+Qed.
+
+End TM7.
+
+
+Module TM8.
+Definition tm := Eval compute in (TM_from_str "1RB0LC_1LC0RE_0LC0LD_1RD1LB_0RF1RA_0RB---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation ld := [1;1;0].
+Notation d0 := [0;0;0].
+Notation d1 := [1;0;0].
+Notation hR := (B,@nil Sym).
+Notation hR' := (D,[1]).
+Notation hL := (C,@nil Sym).
+Notation h := [(hR,hL)].
+Notation h' := [(hR',hL)].
+
+Inductive RD := LD|D0|D1.
+Inductive H := hx|h1.
+
+Fixpoint toRC ls :=
+match ls with
+| [] => 0inf
+| LD::ls => ld*>toRC ls
+| D0::ls => d0*>toRC ls
+| D1::ls => d1*>toRC ls
+end.
+
+Definition toH' x :=
+match x with
+| hx => []
+| h1 => [1]
+end.
+
+Definition toH x :=
+match x with
+| hx => h'
+| h1 => []
+end.
+
+Inductive RIncs: H->nat->(list RD)->(list RD)->Prop :=
+| RIncs_hx_ld k r r':
+  RIncs hx (1+k) r r' ->
+  RIncs hx k (LD::r) (LD::r')
+
+| RIncs_hx_d1 k r r':
+  RIncs h1 k r r' ->
+  RIncs hx k (D1::r) (LD::r')
+
+| RIncs_hx_d0 k r r':
+  RIncs hx (1+k) r r' ->
+  RIncs hx k (D0::r) (LD::r')
+
+| RIncs_h1_ld k r r':
+  RIncs hx (1+k) r r' ->
+  RIncs h1 (1+k) (LD::r) (LD::r')
+
+| RIncs_h1_d1 k r r':
+  RIncs h1 k r r' ->
+  RIncs h1 (1+k) (D1::r) (LD::r')
+
+| RIncs_h1_d0_0 k r r':
+  RIncs h1 k r r' ->
+  RIncs h1 (1+k*2) (D0::r) (D0::r')
+
+| RIncs_h1_d0_1 k r r':
+  RIncs h1 k r r' ->
+  RIncs h1 (2+k*2) (D0::r) (D1::r')
+
+| RIncs_h1_rh_0:
+  RIncs h1 0 [] [D1]
+
+| RIncs_h1_rh_1 k r':
+  RIncs h1 k [] r' ->
+  RIncs h1 (1+k*2) [] (D0::r')
+| RIncs_h1_rh_2 k r':
+  RIncs h1 k [] r' ->
+  RIncs h1 (2+k*2) [] (D1::r')
+.
+
+Ltac cat3 :=
+  eapply @segRLs_sideRLs_concat with (w1:=[_;_;_]) (w2:=[_;_;_]); [|eauto 1].
+
+Ltac tr1 :=
+  rewrite lpow_add,app_assoc;
+  eapply segRLs_trans; [esx | ].
+
+Ltac wal :=
+  eapply segRLs_wall''; esx.
+
+Ltac tr2 :=
+  eapply sideRLs_trans; [esx | ].
+
+Open Scope nat.
+
+Lemma RIncs_spec tp k r r':
+  RIncs tp k r r' ->
+  sideRLs tm (toH tp++h^^k) (toH' tp*>toRC r) (toRC r').
+Proof.
+  intro H.
+  induction H; intros; cbn[toH toH' toRC] in *.
+  - cat3; tr1; wal.
+  - tr2.
+    cat3; wal.
+  - cat3; tr1; wal.
+  - rewrite lpow_add,app_assoc.
+    eapply @segRLs_sideRLs_concat with (w1:=[_;_;_;_]) (w2:=[_;_;_]); [|eauto 1].
+    tr1; wal.
+  - rewrite lpow_add,app_assoc.
+    tr2.
+    cat3; wal.
+  - cat3.
+    rewrite app_nil_l.
+    am 2 1 k 1 1.
+    rewrite Nat.add_comm,lpow_add,Nat.mul_1_r.
+    tr2; eauto 1.
+  - cat3.
+    rewrite Nat.add_comm.
+    am 2 1 k 2 1.
+    rewrite Nat.add_comm,lpow_add,Nat.mul_1_r.
+    tr2; eauto 1.
+  - esc.
+  - rewrite lpow_add,app_assoc.
+    tr2.
+    cat3.
+    rewrite app_nil_l.
+    am 2 1 k 0 0.
+  - change (2+k*2) with (1+(1+k*2)).
+    rewrite lpow_add,app_assoc.
+    tr2.
+    cat3.
+    rewrite app_nil_l.
+    am 2 1 k 1 0.
+Qed.
+
+Lemma RIncs_nxt_1 k:
+  exists r, RIncs h1 k [] r.
+Proof.
+  induction k using lt_wf_ind.
+  destruct k.
+  + ec. ec.
+  + destruct (mod2 k); subst.
+    * epose proof (H0 _ _) as [r I].
+      ec. ec. apply I.
+    * epose proof (H0 _ _) as [r I].
+      ec. ec. apply I.
+  Unshelve. all: lia.
+Qed.
+
+
+Ltac solve_v2 :=
+  (epose proof (RIncs_nxt_1 _) as [r I]; repeat ec; try apply I).
+
+Ltac solve_v1 H tp'0 k'0 H' :=
+  eapply H with (tp':=tp'0) (k':=k'0) in H';
+  try lia;
+  try (
+  destruct H' as [r'' I1];
+  repeat ec; try apply I1).
+
+Lemma RIncs_nxt tp k r r' tp' k':
+  RIncs tp k r r' ->
+  match tp,tp' with
+  | hx,hx => k<=k'
+  | h1,h1 => k*2+1<=k'
+  | h1,hx => k+1<=k'
+  | _,_ => False
+  end ->
+  exists r'',
+  RIncs tp' k' r' r''.
+Proof.
+  gen tp k r' tp' k'.
+  induction r; intros.
+  {
+    gen tp r' tp' k'.
+    induction k using lt_wf_ind.
+    intros.
+    inverts H1; destruct tp'.
+    all: try lia.
+    - solve_v2.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v2.
+    - solve_v1 H0 hx (1+k') H3.
+    - destruct (sub k' 1); [subst|lia].
+      destruct (mod2 c); subst.
+      + solve_v1 H0 h1 (a) H3.
+      + solve_v1 H0 h1 (a) H3.
+    - solve_v1 H0 h1 (k') H3.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 H0 h1 (c) H3.
+  }
+  {
+    inverts H0; destruct tp'.
+    all: try lia.
+    - solve_v1 IHr hx (1+k') H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 IHr hx (1+c) H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 IHr hx (1+c) H7.
+    - solve_v1 IHr hx (1+k') H7.
+    - destruct (sub k' 1); [subst|lia].
+      destruct (mod2 c); subst.
+      + solve_v1 IHr h1 (a) H7.
+      + solve_v1 IHr h1 (a) H7.
+    - solve_v1 IHr h1 k' H7.
+    - destruct (sub k' 1); [subst|lia].
+      solve_v1 IHr h1 (c) H7.
+  }
+Qed.
+
+Open Scope sym.
+
+Notation lh := (0inf<*<[1]).
+
+Definition S' r :=
+  lh {{{ (hR',R) }}} toH' hx *> toRC r.
+
+Lemma BigStep r r':
+  RIncs hx 0 r r' ->
+  S' r -->+ S' r'.
+Proof.
+  intros H.
+  apply RIncs_spec in H.
+  unfold S'.
+  eapply sideRLs_1 in H.
+  follow10 H.
+  es.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' [D1]).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun r => exists r', RIncs hx 0 r r').
+  2: repeat ec.
+  intros r [r' I1].
+  pose proof I1 as I2.
+  eapply RIncs_nxt with (tp':=hx) (k':=O) in I2.
+  2: lia.
+  exists r'; split.
+  - apply BigStep,I1.
+  - apply I2.
+Qed.
+
+End TM8.
+
 
