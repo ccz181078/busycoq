@@ -377,210 +377,53 @@ Lemma step_unbounded_nonhalt tm c:
   (forall n, exists c', c -[ tm ]->> n / c') ->
   ~halts tm c.
 Proof.
-  intros H [n [x [I1 I2]]].
-  destruct (H (n+1)) as [c' I3].
-  eapply rewind_split in I3.
-  destruct I3 as [c'0 [I3 I4]].
-  multistep_deterministic.
-  inverts I4.
-  inverts H1; cbn in *; congruence.
+  apply nonhalt_iff.
 Qed.
 
 
-Module TM1.
-Definition tm := Eval compute in (TM_from_str "1LB0RD_0LC0LB_0RD1LB_1RD1RE_1RF---_0RA1LA").
-
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
-Notation hR1 := (D,@nil Sym).
-Notation hR2 := (F,<[1;1]).
-Notation hL := (B,@nil Sym).
-Notation h1 := [(hR1,hL)].
-Notation h2 := [(hR2,hL)].
-
-Definition P1 n := segRLs_n tm (h1^^(2^n*4-2)) (h2^^(2^n*2-1)) ([1]++[0]^^(2^n*6-2)) ([0]^^(2^n*2-1)++[1;0]) (S n).
-Definition P2 n := segRLs_n tm (h1^^(2^n*4-1)) (h2^^(2^n*2)) ([1]++[0]^^(2^n*6-2)) ([0]^^(2^n*2-1)) (S n).
-
-Lemma h2s_010 n:
-  n<>O ->
-  segRLs_n tm (h2^^n) (h1^^(n*2)) ([0;1;0]) ([0;1;0]++[0]^^(n*2)) 1.
+Lemma segRLs_to_segRLs_n_0 tm h1 h2 w1 w2:
+  segRLs tm h1 h2 w1 w2 ->
+  segRLs_n tm h1 h2 w1 w2 0.
 Proof.
-  do 2 rewrite lpow_mul.
-  induction n.
-  1: lia.
-  destruct n.
-  - intros.
-    solve_segRLs_n.
-  - intros.
-    remember (S n) as n'.
-    replace (S n') with (n'+1) by lia.
-    do 2 rewrite lpow_add.
-    eapply segRLs_n_trans.
-    + apply IHn; lia.
-    + solve_segRLs_n.
+  intro H.
+  induction H; split; intros.
+  - inverts H.
+    constructor.
+  - eapply segRLs_sideRLs_concat; eauto.
+    constructor.
+  - cbn.
+    econstructor 1.
+    + intros l. apply H.
+    + destruct IHsegRLs as [IHn _].
+      apply IHn. exact H1.
     + lia.
-    + lia.
+  - eapply segRLs_sideRLs_concat; eauto.
+    econstructor; eauto.
+  - cbn.
+    eapply sideRLs_n_split in H3.
+    destruct H3 as [I1|[r2 [I1 I2]]].
+    + econstructor 2.
+      intros l.
+      specialize (H l r1).
+      apply with_counter in H.
+      destruct H as [n1 H].
+      eapply segLRs_sideRLs_n_concat in I1; eauto.
+      destruct I1 as [c [n2 [I2 I3]]].
+      do 3 eexists.
+      * eapply multistep_trans; eauto.
+      * lia.
+    + econstructor 1.
+      * intros l.
+        follow H.
+        eapply progress_evstep_trans.
+        2: apply H0.
+        eapply sideRLs_segLRs_concat; eauto.
+      * destruct IHsegRLs as [IHn _].
+        apply IHn. exact I2.
+      * lia.
+  - eapply segRLs_sideRLs_concat; eauto.
+    eapply segRLs_lrcons; eauto.
 Qed.
-
-Lemma h1s_0s n m:
-  n<>O ->
-  m<>O ->
-  segRLs_n tm (h1^^n) (h1^^n) ([0]^^m) ([0]^^m) 1.
-Proof.
-  intros.
-  eapply segRLs_n_wall; eauto.
-  destruct m; [lia|].
-  solve_segRLs_n.
-Qed.
-
-Lemma h2s_10 n:
-  n<>O ->
-  segRLs_n tm (h2^^n) (h2^^n) [1;0] [1;0] 1.
-Proof.
-  intros.
-  eapply segRLs_n_wall; eauto.
-  solve_segRLs_n.
-Qed.
-
-Lemma h1_0s10 n:
-  segRLs_n tm h1 h2 ([0]^^n++[1;0]) ([0]^^n) (S n).
-Proof.
-  induction n.
-  - solve_segRLs_n.
-  - cbn[lpow].
-    rewrite <-app_assoc.
-    replace (S (S n)) with (1+S n) by lia.
-    eapply segRLs_n_concat'.
-    2: apply IHn.
-    solve_segRLs_n.
-Qed.
-
-Lemma h2_00 r:
-  segRLs_n tm h2 [] ([0;0]++r) ([0;1;0]++[1]++r) 1.
-Proof.
-  eapply segRLs_n_S.
-  solve_seg.
-Qed.
-
-Lemma lpow_add'' {A} (ls:list A) a b ls0:
-  ls^^a ++ ls^^b ++ ls0 =
-  ls^^(a+b) ++ ls0.
-Proof.
-  rewrite app_assoc,lpow_add.
-  reflexivity.
-Qed.
-
-Lemma P1_S n:
-  P1 n ->
-  P2 n ->
-  P1 (S n).
-Proof.
-  unfold P1,P2.
-  intros HP1 HP2.
-  cbn[Nat.pow].
-  replace (2*2^n*4-2) with ((2^n*4-1)+(2^n*4-1)) by lia.
-  replace (h2^^(2*2^n*2-1)) with (h2^^((2^n*2-1)+(2^n*2))) by flia.
-  replace (2*2^n*6-2) with ((2^n*6-2)+(2+(2^n*6-2))) by lia.
-  do 3 rewrite lpow_add.
-  eapply segRLs_n_trans.
-  - rewrite app_assoc.
-    eapply segRLs_n_concat'.
-    1: apply HP2.
-    replace (h2^^(2^n*2-1)) with (h2^^(0+(2^n*2-1))) by flia.
-    replace (h2^^(2^n*2)) with (h2^^(1+(2^n*2-1))) by flia.
-    do 3 rewrite lpow_add.
-    eapply segRLs_n_trans'.
-    1: apply h2_00.
-    eapply segRLs_n_concat'.
-    1: apply h2s_010; lia.
-    applys_eq HP1; flia.
-  - change ([0;1;0]) with ([0]^^1++[1]++[0]^^1).
-    repeat rewrite <-app_assoc.
-    repeat rewrite lpow_add''.
-    replace (2*2^n*2-1) with (2^n*2-1+1+(2^n*2-1)) by lia.
-    rewrite (lpow_add _ (2^n*2-1+1)),<-app_assoc.
-    eapply segRLs_n_concat'.
-    1: eapply h1s_0s; lia.
-    rewrite app_assoc.
-    eapply segRLs_n_concat'.
-    1: applys_eq HP2; flia.
-    eapply h2s_10; lia.
-  - lia.
-  - lia.
-Qed.
-
-Lemma pow2_gt n:
-  n<2^n.
-Proof.
-  induction n; cbn; lia.
-Qed.
-
-Lemma P2_S n:
-  P1 n ->
-  P2 n.
-Proof.
-  unfold P1,P2.
-  intros HP1.
-  replace (2^n*4-1) with (2^n*4-2+1) by lia.
-  replace (h2^^(2^n*2)) with (h2^^(2^n*2-1+1)) by flia.
-  do 2 rewrite lpow_add.
-  eapply segRLs_n_trans.
-  - apply HP1.
-  - eapply h1_0s10.
-  - lia.
-  - pose proof (pow2_gt n).
-    lia.
-Qed.
-
-Lemma P1_n n:
-  P1 n.
-Proof.
-  induction n; intros.
-  - unfold P1.
-    cbn.
-    eapply segRLs_n_trans with (h1:=h1) (h2:=[]).
-    1: solve_segRLs_n.
-    1: solve_segRLs_n.
-    all: lia.
-  - eapply P1_S; eauto using P2_S.
-Qed.
-
-Notation hLR := [(hL,hR1)].
-
-Lemma LIncs n:
-  sideRLs (flip tm) (hLR^^n) (0inf<*[1]) (0inf<*[1]^^(1+n)).
-Proof.
-  induction n.
-  - esx.
-  - replace (S n) with (n+1) by lia.
-    rewrite lpow_add.
-    eapply sideRLs_trans; eauto.
-    esx.
-Qed.
-
-Lemma nonhalt: ~halts tm c0.
-Proof.
-  eapply multistep_nonhalt with (c':=0inf<*[1] {{{ (hR1,R) }}} [1] *> 0inf).
-  1: esx.
-  eapply step_unbounded_nonhalt.
-  intros n.
-  epose proof (P1_n n) as HP1.
-  unfold P1 in HP1.
-  eapply segRLs_n_sideRLs_n in HP1.
-  eapply sideRLs_n_mono with (n0:=n) in HP1.
-  2: lia.
-  eapply sideRLs_n_sideRLs_concat_1 in HP1.
-  2: epose proof (pow2_gt n); lia.
-  2: apply LIncs.
-  rewrite Str_app_assoc in HP1.
-  rewrite lpow_all0 in HP1.
-  2: solve_const0_eq.
-  apply HP1.
-Qed.
-
-End TM1.
-
-
+Arguments segRLs_to_segRLs_n_0 {tm h1 h2 w1 w2} _.
 
 
