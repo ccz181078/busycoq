@@ -327,3 +327,7 @@ Proof. solve_halt 3. Time Qed.
 Lemma tm103: halts_at_trans (TM_from_str "1RB1RF_1LC0RD_0LD0LC_1RE0RF_0RB1RA_0LB---") c0 (F,1).
 Proof. solve_halt 12. Time Qed.
 
+Lemma tm104: halts_at_trans (TM_from_str "1RB0RF_1RC0RD_0LD0LC_1RF1RE_1LC---_0RA1RD") c0 (E,1).
+Proof. solve_halt 6. Time Qed.
+
+

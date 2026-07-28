@@ -1145,5 +1145,44 @@ Tactic Notation "es'" constr(a) constr(b) constr(c) "&" constr(d) :=
   if s=?"d" then d else
   0inf)).
 
+Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) "&" constr(e) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  if s=?"d" then d else
+  O)
+  (fun s =>
+  if s=?"e" then e else
+  0inf)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) "&" constr(f) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  if s=?"d" then d else
+  if s=?"e" then e else
+  O)
+  (fun s =>
+  if s=?"f" then f else
+  0inf)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) constr(f) "&" constr(g) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  if s=?"d" then d else
+  if s=?"e" then e else
+  if s=?"f" then f else
+  O)
+  (fun s =>
+  if s=?"g" then g else
+  0inf)).
+
 Close Scope string.
 
