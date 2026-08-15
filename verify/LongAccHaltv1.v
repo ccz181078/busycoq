@@ -116,7 +116,35 @@ Proof.
   native_check_eq.
 Time Qed.
 
+Lemma tm19: halts_at_trans (TM_from_str "1RB---_1LC0LB_1RE0RD_0RA1LB_1LB1RF_1RC0RE") c0 (A,1).
+Proof.
+  eapply decide_halt with (D:=14) (T:=(10^6)%N) (T0:=(10^5)).
+  native_check_eq.
+Time Qed.
 
+Lemma tm20: halts_at_trans (TM_from_str "1RB1RE_1LC1RD_1LA0LC_1RA0RB_1RF0LD_0RD---") c0 (F,1).
+Proof.
+  eapply decide_halt with (D:=20) (T:=(2*10^6)%N) (T0:=(10^5)).
+  native_check_eq.
+Time Qed.
+
+Lemma tm21: halts_at_trans (TM_from_str "1RB0RA_1LC1RB_1LF1LD_1RE0LC_---1RD_1RA1LC") c0 (E,0).
+Proof.
+  eapply decide_halt with (D:=6) (T:=(10^6)%N) (T0:=(10^5)).
+  native_check_eq.
+Time Qed.
+
+Lemma tm22: halts_at_trans (TM_from_str "1LB0LA_0LC0LE_1RD---_1RE1RD_1LF0RD_1RB1LA") c0 (C,1).
+Proof.
+  eapply decide_halt with (D:=8) (T:=(10^7)%N) (T0:=(10^5)).
+  native_check_eq.
+Time Qed.
+
+Lemma tm23: halts_at_trans (TM_from_str "1RB0LB_0RC1RF_1LD1RE_0LA0RB_0RD0LD_0LE---") c0 (F,1).
+Proof.
+  eapply decide_halt with (D:=8) (T:=(10^6)%N) (T0:=(10^5)).
+  native_check_eq.
+Time Qed.
 
 
 

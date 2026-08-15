@@ -14,7 +14,7 @@ Ltac solve_halt bsz :=
   match goal with
   | |- halts_at_trans (TM_from_str ?x) c0 _ =>
     idtac x;
-    solve_halt' bsz 50000%N
+    solve_halt' bsz 200000%N
   end.
 
 
@@ -329,5 +329,8 @@ Proof. solve_halt 12. Time Qed.
 
 Lemma tm104: halts_at_trans (TM_from_str "1RB0RF_1RC0RD_0LD0LC_1RF1RE_1LC---_0RA1RD") c0 (E,1).
 Proof. solve_halt 6. Time Qed.
+
+Lemma tm105: halts_at_trans (TM_from_str "1LB1RC_1LC1LE_1RD1RF_---0RE_1LB0LB_0RF1RA") c0 (D,0).
+Proof. solve_halt 12. Time Qed.
 
 

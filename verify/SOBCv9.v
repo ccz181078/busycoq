@@ -790,3 +790,334 @@ Qed.
 
 End TM2.
 
+
+Module TM3.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_1LC0RA_---0LD_0LE0LB_1RF1RB_1RE1LF").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (D,[0;1]).
+Notation hR := (A,<[1;0]).
+Notation hRL := [(hR,hL)].
+Notation hLR := [(hL,hR)].
+Notation d0 := <[1;0;1;0;1;1].
+Notation d1 := <[1;1;1;1;1;1].
+Notation w := [0;1].
+Notation lh0 := (0inf<*<[1;1;1]).
+Notation lh1 := (0inf<*<[1;1;1;1;0;1;1]).
+
+Lemma LIncs l n:
+  sideRLs (flip tm) (hLR^^(2^n-1)) (l<*d0^^n) (l<*d1^^n).
+Proof.
+  eapply segRLs_sideRLs_concat.
+  1: eapply BC.Incs.
+  1: solve_seg.
+  1: solve_seg.
+  1: solve_seg.
+  esx.
+Qed.
+
+Lemma RIncs k n:
+  sideRLs tm (hRL^^k) (w^^n*>0inf) (w^^(k+n)*>0inf).
+Proof.
+  sideRLs_ind k.
+Qed.
+
+Definition S0 l a b :=
+  l <* d0^^a {{{ (hL,L) }}} w^^b *> 0inf.
+
+Definition S1 l a b :=
+  l <* d1^^a {{{ (hL,L) }}} w^^b *> 0inf.
+
+Lemma S0_Incs l a b:
+  S0 l a b -->*
+  S1 l a ((2^a-1)+b).
+Proof.
+  unfold S0,S1.
+  eapply sideRLs_concat_1L.
+  1: apply RIncs.
+  apply LIncs.
+Qed.
+
+Lemma S1_d1 l a b:
+  S1 (l<*d1) a b -->*
+  S1 l (a+1) b.
+Proof.
+  unfold S1.
+  es.
+Qed.
+
+Notation lh2 := (0inf<*<[1]^^8<*<[0;1;1]).
+
+Definition S2 l a b c :=
+  l <* d0^^a <* <[1;0;1] <* <[1]^^(b*14) <* <[0;1;1] {{E}}> [1;0]^^c *> 0inf.
+
+Ltac es_v3_pre ::= 
+  unfold c0,q0,tape0,s0,S0,S1,S2,to_DH_config.
+
+Lemma init:
+  c0 -->*
+  S0 (lh0<*d1) 20 2.
+Proof.
+  es'.
+Qed.
+
+Lemma S1_Ov0 a b:
+  S1 lh0 a b -->*
+  S2 lh0 a 0 b.
+Proof.
+  es' a b.
+Qed.
+
+Lemma S1_Ov1 a b:
+  S1 lh1 (1+a) b -->*
+  S2 lh2 a 0 b.
+Proof.
+  es' a b.
+Qed.
+
+Lemma S1_Ov1' a b:
+  1<=a ->
+  S1 lh1 a b -->*
+  S2 lh2 (a-1) 0 b.
+Proof.
+  intros.
+  applys_eq (S1_Ov1 (a-1) b); flia.
+Qed.
+
+Lemma S2_Inc l a b c:
+  S2 l (1+a) b (4+c) -->*
+  S2 l a (1+b) c.
+Proof.
+  es' a b c & l.
+Qed.
+
+Lemma S2_Incs n l a b c:
+  S2 l (n+a) b (n*4+c) -->*
+  S2 l a (n+b) c.
+Proof.
+  gen a b c.
+  ind n S2_Inc.
+Qed.
+
+Lemma S2_Incs' l a b c:
+  a*4<=c ->
+  S2 l a b c -->*
+  S2 l 0 (a+b) (c-a*4).
+Proof.
+  intros.
+  applys_eq (S2_Incs a l 0 b (c-a*4)); flia.
+Qed.
+
+Lemma S2_Ov0_0 b c:
+  S2 lh0 0 (b*3) (7+c) -->*
+  S2 lh0 (1+b*7) 1 c.
+Proof.
+  unfold S2.
+  es' b c.
+Qed.
+
+Lemma S2_Ov0_0' b c:
+  b mod 3 = O ->
+  7<=c ->
+  S2 lh0 0 b c -->*
+  S2 lh0 (1+b/3*7) 1 (c-7).
+Proof.
+  intros.
+  applys_eq (S2_Ov0_0 (b/3) (c-7)); flia.
+Qed.
+
+Lemma S2_Ov0_1 b c:
+  S2 lh0 0 (1+b*3) (4+c) -->*
+  S0 lh1 (4+b*7) (2+c).
+Proof.
+  es' b c.
+Qed.
+
+Lemma S2_Ov0_1' b c:
+  b mod 3 = 1%nat ->
+  4<=c ->
+  S2 lh0 0 b c -->*
+  S0 lh1 (4+b/3*7) (c-2).
+Proof.
+  intros.
+  applys_eq (S2_Ov0_1 (b/3) (c-4)); flia.
+Qed.
+
+Lemma S2_Ov0_2 b c:
+  halts tm (S2 lh0 0 (2+b*3) (7+c)).
+Proof.
+  es' b c.
+Qed.
+
+Lemma S2_Ov0_2' b c:
+  b mod 3 = 2 ->
+  7<=c ->
+  halts tm (S2 lh0 0 b c).
+Proof.
+  intros.
+  applys_eq (S2_Ov0_2 (b/3) (c-7)); flia.
+Qed.
+
+Lemma S2_Ov2_1 b c:
+  S2 lh2 0 (1+b*3) (6+c) -->*
+  S0 lh1 (6+b*7) (2+c).
+Proof.
+  es' b c.
+Qed.
+
+Lemma S2_Ov2_1' b c:
+  b mod 3 = 1%nat ->
+  6<=c ->
+  S2 lh2 0 b c -->*
+  S0 lh1 (6+b/3*7) (c-4).
+Proof.
+  intros.
+  applys_eq (S2_Ov2_1 (b/3) (c-6)); flia.
+Qed.
+
+Lemma S2_Ov2_0 b c:
+  S2 lh2 0 (b*3) (9+c) -->*
+  S2 lh0 (3+b*7) 1 c.
+Proof.
+  es' b c.
+Qed.
+
+Lemma S2_Ov2_0' b c:
+  b mod 3 = O ->
+  9 <=c ->
+  S2 lh2 0 b c -->*
+  S2 lh0 (3+b/3*7) 1 (c-9).
+Proof.
+  intros.
+  applys_eq (S2_Ov2_0 (b/3) (c-9)); flia.
+Qed.
+
+Inductive LH := LH0 | LH1 | LH2.
+Inductive Config :=
+| cfg0(l:LH)(a b:N)
+| cfg1(l:LH)(a b:N)
+| cfg2(l:LH)(a b c:N).
+
+Definition to_lh x :=
+match x with
+| LH0 => lh0
+| LH1 => lh1
+| LH2 => lh2
+end.
+
+Definition to_Config x :=
+match x with
+| cfg0 l a b => S0 (to_lh l) (N.to_nat a) (N.to_nat b)
+| cfg1 l a b => S1 (to_lh l) (N.to_nat a) (N.to_nat b)
+| cfg2 l a b c => S2 (to_lh l) (N.to_nat a) (N.to_nat b) (N.to_nat c)
+end.
+
+Definition mstep x :=
+match x with
+| cfg0 l a b => cfg1 l a (2^a-1+b)
+| cfg1 LH0 a b => cfg2 LH0 a 0 b
+| cfg1 LH1 a b =>
+  if N.leb 1 a then
+    cfg2 LH2 (a-1) 0 b
+  else x
+| cfg2 l a b c =>
+  if N.eqb a 0 then
+    if N.eqb (b mod 3) 0 then
+      match l with
+      | LH0 => if N.leb 7 c then cfg2 LH0 (1+b/3*7) 1 (c-7) else x
+      | LH2 => if N.leb 9 c then cfg2 LH0 (3+b/3*7) 1 (c-9) else x
+      | _ => x
+      end
+    else if N.eqb (b mod 3) 1 then
+      match l with
+      | LH0 => if N.leb 4 c then cfg0 LH1 (4+b/3*7) (c-2) else x
+      | LH2 => if N.leb 6 c then cfg0 LH1 (6+b/3*7) (c-4) else x
+      | _ => x
+      end
+    else x
+  else if N.leb (a*4) c then
+    cfg2 l 0 (a+b) (c-a*4)
+  else x
+| _ => x
+end.
+
+Fixpoint msteps x T :=
+match T with
+| O => x
+| S T => mstep (msteps x T)
+end.
+
+Ltac rw2 :=
+  rewrite Nnat.N2Nat.inj_add ||
+  rewrite Nnat.N2Nat.inj_sub ||
+  rewrite Nnat.N2Nat.inj_mul ||
+  rewrite Nnat.N2Nat.inj_div ||
+  rewrite Nnat.N2Nat.inj_mod ||
+  rewrite Nnat.N2Nat.inj_pow.
+
+Ltac rw1 :=
+  repeat (
+  rw2 ||
+  match goal with
+  | |- _ -->* match if N.leb ?a ?b then _ else _ with _ => _ end => destruct (N.leb_spec a b)
+  | |- _ -->* match if N.eqb ?a ?b then _ else _ with _ => _ end => destruct (N.eqb_spec a b)
+  end ||
+  apply evstep_refl
+  ).
+
+Lemma mstep_spec x:
+  to_Config x -->* to_Config (mstep x).
+Proof.
+  unfold mstep,to_Config,to_lh.
+  destruct x as [l a b|[] a b|[] a b c]; rw1.
+  - apply S0_Incs.
+  - apply S1_Ov0.
+  - apply S1_Ov1'; lia.
+  - subst a.
+    apply S2_Ov0_0'; lia.
+  - subst a.
+    apply S2_Ov0_1'; lia.
+  - apply S2_Incs'; lia.
+  - apply S2_Incs'; lia.
+  - subst a.
+    apply S2_Ov2_0'; lia.
+  - subst a.
+    apply S2_Ov2_1'; lia.
+  - apply S2_Incs'; lia.
+Qed.
+
+Lemma msteps_spec x x' T:
+  msteps x T = x' ->
+  to_Config x -->* to_Config x'.
+Proof.
+  gen x x'.
+  induction T; cbn[msteps]; intros.
+  1: subst; finish.
+  follow IHT.
+  follow mstep_spec.
+  rewrite H.
+  finish.
+Qed.
+
+
+Lemma halt:
+  halts tm c0.
+Proof.
+  eapply halts_evstep.
+  2:{
+    follow init.
+    follow S0_Incs.
+    follow S1_d1.
+    mid (to_Config (cfg1 LH0 (20+1) (2^20-1+2))).
+    1: unfold to_Config,to_lh; repeat rw2; finish.
+    apply msteps_spec with (T:=30).
+    vm_compute; reflexivity.
+  }
+  unfold to_Config,to_lh.
+  eapply S2_Ov0_2'; lia.
+Qed.
+
+End TM3.
+

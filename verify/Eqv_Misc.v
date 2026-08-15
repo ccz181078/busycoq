@@ -6880,3 +6880,655 @@ Qed.
 End TM59.
 
 
+Module TM60.
+Definition tm := TM_from_str "1RB0LB_0RC0LE_1RD---_1LB0RE_0RF0LA_1LA0RC".
+Definition tm' := TM_from_str "1RB0LB_0RC0LD_1LD1RE_0LA0RF_0RD1RF_0RC---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L0 | L1 | L2
+.
+
+Inductive Config :=
+| hR(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QR QL:Q.
+Hypothesis qR qL l0 l1 l2:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L0::ls => toLC ls <* l0
+| L1::ls => toLC ls <* l1
+| L2::ls => toLC ls <* l2
+| [] => 0inf <* <[1]
+end.
+
+Definition to_config x :=
+match x with
+| hR l r => toLC l <* qR {{QR}}> r
+| hL l r => toLC l <{{QL}} qL *> r
+end.
+
+Definition f x :=
+match x with
+| hR l (0>>r) => Some (hL l (1>>r))
+| hR l (1>>0>>0>>r) => Some (hR (l<:L2) r)
+| hR l (1>>1>>0>>r) => Some (hR (l<:L2) r)
+| hR l (1>>0>>1>>0>>r) => Some (hR (l<:L0) r)
+| hL (l<:L0) r => Some (hR (l<:L1) r)
+| hL (l<:L1) r => Some (hL l (1>>0>>1>>0>>r))
+| hL (l<:L2) r => Some (hL l (0>>0>>0>>r))
+| hL [] r => Some (hR [] (1>>0>>r))
+| _ => None
+end.
+
+Definition cfg0 := hR <[] 0inf.
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 D A <[0;1] [0;0] <[0;1;0;0] <[0;1;0;1] <[0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C A <[0] [0] <[0;1;0;0] <[0;1;0;1] <[0;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM60.
+
+
+Module TM61.
+Definition tm := TM_from_str "1RB0LB_0RC0LD_1LD1RE_0LA0RB_0RD0RF_0LA---".
+Definition tm' := TM_from_str "1RB0LB_0RC0LF_1LD1RE_0LA0RB_0RD0RF_0LA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L0 | L1 | L2
+.
+
+Inductive Config :=
+| hR(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QR QL:Q.
+Hypothesis qR qL l0 l1 l2:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L0::ls => toLC ls <* l0
+| L1::ls => toLC ls <* l1
+| L2::ls => toLC ls <* l2
+| [] => 0inf <* <[1]
+end.
+
+Definition to_config x :=
+match x with
+| hR l r => toLC l <* qR {{QR}}> r
+| hL l r => toLC l <{{QL}} qL *> r
+end.
+
+Definition f x :=
+match x with
+| hR l (0>>r) => Some (hL l (1>>r))
+| hR l (1>>0>>0>>r) => Some (hR (l<:L2) r)
+| hR l (1>>1>>0>>r) => Some (hR (l<:L2) r)
+| hR l (1>>0>>1>>0>>r) => Some (hR (l<:L0) r)
+| hR l (1>>0>>1>>1>>r) => Some (hL l (0>>0>>0>>1>>r))
+| hL (l<:L0) r => Some (hR (l<:L1) r)
+| hL (l<:L1) r => Some (hL l (1>>0>>1>>0>>r))
+| hL (l<:L2) r => Some (hL l (0>>0>>0>>r))
+| hL [] r => Some (hR [] (1>>0>>r))
+| _ => None
+end.
+
+Definition cfg0 := hR <[] 0inf.
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C A <[0] [0] <[0;1;0;0] <[0;1;0;1] <[0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C A <[0] [0] <[0;1;0;0] <[0;1;0;1] <[0;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM61.
+
+
+Module TM62.
+Definition tm := TM_from_str "1RB0LD_0LC0RE_1LA0RD_0RB0LC_1RC1RF_0LD---".
+Definition tm' := TM_from_str "1LB0RD_0LC---_1RD0LF_0RE0LA_0LA1RF_0RA1RB".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L0 | L1 | L2
+.
+
+Inductive Config :=
+| hR(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QR QL:Q.
+Hypothesis qR qL l0 l1 l2:list sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L0::ls => toLC ls <* l0
+| L1::ls => toLC ls <* l1
+| L2::ls => toLC ls <* l2
+| [] => 0inf <* <[1]
+end.
+
+Definition to_config x :=
+match x with
+| hR l r => toLC l <* qR {{QR}}> r
+| hL l r => toLC l <{{QL}} qL *> r
+end.
+
+Definition f x :=
+match x with
+| hR l (0>>r) => Some (hL l (1>>r))
+| hR l (1>>0>>0>>r) => Some (hR (l<:L2) r)
+| hR l (1>>1>>r) => Some (hL l (1>>0>>r))
+| hR l (1>>0>>1>>0>>r) => Some (hR (l<:L0) r)
+| hR l (1>>0>>1>>1>>0>>r) => Some (hL l (1>>0>>1>>0>>1>>r))
+| hL (l<:L0) r => Some (hR (l<:L1) r)
+| hL (l<:L1) r => Some (hL l (1>>0>>1>>0>>r))
+| hL (l<:L2) r => Some (hL l (0>>1>>0>>r))
+| hL [] r => Some (hR [] (1>>0>>r))
+| _ => None
+end.
+
+Definition cfg0 := hR <[] 0inf.
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 p6 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5 p6) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C A <[0;1] [1;0] <[0;1;0;0] <[0;1;0;1] <[0;1;1].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A C <[0;1;0] [0;1;0] <[0;1;0;0] <[0;1;0;1] <[0;1;1].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM62.
+
+
+Module TM63.
+Definition tm := TM_from_str "1RB0LB_0RC0LD_1LD1RE_0LA0RB_0RD1RF_1RA---".
+Definition tm' := TM_from_str "1RB0LB_0RC0LD_1LD1RE_0LA0RB_0RD0RF_0RA---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L0 | L1 | L2 | L11000 | L11001
+.
+
+Inductive Config :=
+| hR(l:list LD)(r:side)
+| hR1(l:list LD)(r:side)
+| hR10(l:list LD)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QR QR1 QR10 QL:Q.
+Hypothesis l3 l4: list Sym.
+
+Fixpoint toLC ls :=
+match ls with
+| L0::ls => toLC ls <* <[0;1;0;0]
+| L1::ls => toLC ls <* <[0;1;0;1]
+| L2::ls => toLC ls <* <[0;1;1]
+| L11000::ls => toLC ls <* l3
+| L11001::ls => toLC ls <* l4
+| [] => 0inf <* <[1]
+end.
+
+Definition to_config x :=
+match x with
+| hR l r => toLC l <* <[0] {{QR}}> r
+| hR1 l r => toLC l <* <[0;1] {{QR1}}> r
+| hR10 l r => toLC l <* <[0;1;0] {{QR10}}> r
+| hL l r => toLC l <{{QL}} [0] *> r
+end.
+
+Definition f x :=
+match x with
+| hR l (0>>r) => Some (hL l (1>>r))
+| hR l (1>>r) => Some (hR1 l r)
+| hR1 l (0>>r) => Some (hR10 l r)
+| hR10 l (0>>r) => Some (hR (l<:L2) r)
+| hR10 l (1>>0>>r) => Some (hR (l<:L0) r)
+| hR10 l (1>>1>>r) => Some (hL l (0>>0>>0>>1>>r))
+| hR1 l (1>>0>>0>>0>>r) => Some (hR (l<:L11000) r)
+| hR1 l (1>>0>>0>>1>>r) => Some (hR (l<:L11001) r)
+| hR1 l (1>>0>>1>>r) => Some (hR1 (l<:L2) r)
+| hL (l<:L0) r => Some (hR (l<:L1) r)
+| hL (l<:L1) r => Some (hL l (1>>0>>1>>0>>r))
+| hL (l<:L2) r => Some (hL l (0>>0>>0>>r))
+| hL (l<:L11000) r => Some (hR10 (l<:L2) r)
+| hL (l<:L11001) r => Some (hR (l<:L11000) r)
+| hL [] r => Some (hR [] (1>>0>>r))
+| _ => None
+end.
+
+Definition cfg0 := hR <[] 0inf.
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 p3 p4 p5 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2 p3 p4 p5) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C E D A <[0;1;1;1;1] <[0;1;1;1;0].
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 C E D A <[0;1;0;0;1] <[0;1;0;0;0].
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM63.
+
+
+Module TM64.
+Definition tm := TM_from_str "1LB0RE_0LC---_1RC0LD_0LB1LA_1RF1RE_0RA1RF".
+Definition tm' := TM_from_str "1LB0RD_0LC---_0RD0LF_1RE1RD_0RA0LD_0LB1LA".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L100 | L1001 | L10011 | L10001 | L111(a:nat) | L101(a:nat).
+
+Inductive RD :=
+| R1 | R000 | R100.
+
+Inductive Config :=
+| hR(l:list LD)(r:list RD)
+| hR1(l:list LD)(r:list RD)
+| hR11(l:list LD)(r:list RD)
+| hR111(l:list LD)(r:list RD)
+| hR'(l:list LD)(a:nat)(r:list RD)
+| hL(l:list LD)(r:list RD)
+.
+
+Section to_config_sec.
+Hypothesis QR QR1 QL:Q.
+
+Fixpoint toLC ls :=
+match ls with
+| L100::ls => toLC ls <* <[1;0;0]
+| L1001::ls => toLC ls <* <[1;0;0;1]
+| L10011::ls => toLC ls <* <[1;0;0;1;1]
+| L10001::ls => toLC ls <* <[1;0;0;0;1]
+| L111 a::ls => toLC ls <* <[1]^^a <* <[1;1;1]
+| L101 a::ls => toLC ls <* <[1]^^a <* <[1;0;1]
+| [] => 0inf <* <[1]
+end.
+
+Fixpoint toRC ls :=
+match ls with
+| R1::ls => [1] *> toRC ls
+| R000::ls => [0;0;0] *> toRC ls
+| R100::ls => [1;0;0] *> toRC ls
+| [] => 0inf
+end.
+
+Definition to_config x :=
+match x with
+| hR l r => toLC l <* <[1;0] {{QR}}> toRC r
+| hR1 l r => toLC l <* <[1;0;0] {{QR1}}> toRC r
+| hR11 l r => toLC l <* <[1;0;0;1] {{QR1}}> toRC r
+| hR111 l r => toLC l <* <[1;0;0;1;1] {{QR1}}> toRC r
+| hR' l a r => toLC l <* <[1]^^(3+a) {{QR1}}> toRC r
+| hL l r => toLC l <{{QL}} [0;0] *> toRC r
+end.
+
+Definition f x :=
+match x with
+| hR l (R1::r) => Some (hR1 l r)
+| hR l (R000::r) => Some (hL l (R100::r))
+| hR l (R100::r) => Some (hR (l<:L100) r)
+| hR l [] => Some (hL l [R100])
+| hR1 l (R1::r) => Some (hR11 l r)
+| hR1 l (R000::r) => Some (hL l (R000::R1::r))
+| hR1 l (R100::r) => Some (hR (l<:L1001) r)
+| hR1 l [] => Some (hL l [R000;R1])
+| hR11 l (R1::r) => Some (hR111 l r)
+| hR11 l (R000::r) => Some (hL l (R1::R100::R1::r))
+| hR11 l (R100::r) => Some (hR (l<:L10011) r)
+| hR11 l [] => Some (hL l [R1;R100;R1])
+| hR111 l (R1::r) => Some (hR' (l<:L100) 0 r)
+| hR111 l (R000::r) => Some (hR1 (l<:L10001) r)
+| hR111 l (R100::r) => Some (hR (l<:L100<:L111 0) r)
+| hR111 l [] => Some (hL l [R1;R100;R000;R1;R100])
+| hR' l a (R1::r) => Some (hR' l (1+a) r)
+| hR' l a (R000::r) => Some (hR1 (l<:L101 a) r)
+| hR' l a (R100::r) => Some (hR (l<:L111 (1+a)) r)
+| hL (l<:L100) r => Some (hL l (R000::r))
+| hL (l<:L1001) r => Some (hL l (R1::R100::r))
+| hL (l<:L10011) r => Some (hR (l<:L10001) r)
+| hL (l<:L10001) r => Some (hR1 (l<:L1001) r)
+| hL (l<:L111 a) r => Some (hR (l<:L101 a) r)
+| hL [] r => Some (hR1 [] r)
+| _ => None
+end.
+
+Definition cfg0 := hL <[] [R100].
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L100 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | R1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A E D.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A D F.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM64.
+
+
+Module TM65.
+Definition tm := TM_from_str "1LB0RF_1RC0LD_1RA1RC_---0LE_0LB1LA_0RE1RF".
+Definition tm' := TM_from_str "1LB0RF_1RC0LD_1RA1RC_---0LE_0LB1LA_1RC1RF".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L110(a:nat) | L110101 | L11001.
+
+Inductive RD :=
+| R1 | R000 | R100.
+
+Inductive Config :=
+| hR(l:list LD)(r:list RD)
+| hR'(l:list LD)(a:nat)(r:list RD)
+| hL(l:list LD)(r:list RD)
+.
+
+Section to_config_sec.
+Hypothesis QR QR1 QL:Q.
+
+Fixpoint toLC ls :=
+match ls with
+| L110 a::ls => toLC ls <* <[1;1;0] <* <[1]^^a
+| L110101::ls => toLC ls <* <[1;1;0;1;0;1]
+| L11001::ls => toLC ls <* <[1;1;0;0;1]
+| [] => 0inf <* <[1]
+end.
+
+Fixpoint toRC ls :=
+match ls with
+| R1::ls => [1] *> toRC ls
+| R000::ls => [0;0;0] *> toRC ls
+| R100::ls => [1;0;0] *> toRC ls
+| [] => 0inf
+end.
+
+Definition to_config x :=
+match x with
+| hR l r => toLC l <* <[1;1] {{QR}}> toRC r
+| hR' l a r => toLC l <* <[1;1;0] <* <[1]^^a {{QR1}}> toRC r
+| hL l r => toLC l <{{QL}} [0;0] *> toRC r
+end.
+
+Definition f x :=
+match x with
+| hR l (R000::r) => Some (hL l (R100::r))
+| hR l (R100::r) => Some (hR (l<:L110 0) r)
+| hR l (R1::r) => Some (hR' l 0 r)
+| hR l [] => Some (hL l [R100])
+| hR' l a (R1::r) => Some (hR' l (1+a) r)
+| hR' l a (R100::r) => Some (hR (l<:L110 (1+a)) r)
+| hR' l 0 (R000::r) => Some (hL l (R000::R1::r))
+| hR' l 1 (R000::r) => Some (hL l (R1::R100::R1::r))
+| hR' l 2 (R000::r) => Some (hR' (l<:L11001) 0 r)
+| hR' l 3 (R000::r) => Some (hR' (l<:L110101) 0 r)
+| hR' l (S(S(S(S a)))) (R000::r) => Some (hR' (l<:L110 a<:L110 1) 0 r)
+| hR' l 0 [] => Some (hL l (R000::R1::[]))
+| hR' l 1 [] => Some (hL l (R1::R100::R1::[]))
+| hR' l 2 [] => Some (hR' (l<:L11001) 0 [])
+| hR' l 3 [] => Some (hR' (l<:L110101) 0 [])
+| hR' l (S(S(S(S a)))) [] => Some (hR' (l<:L110 a<:L110 1) 0 [])
+| hL (l<:L110 0) r => Some (hL l (R000::r))
+| hL (l<:L110 1) r => Some (hL l (R1::R100::r))
+| hL (l<:L110 2) r => Some (hR (l<:L11001) r)
+| hL (l<:L110 3) r => Some (hR (l<:L110101) r)
+| hL (l<:L110 (S(S(S(S a))))) r => Some (hR (l<:L110 a<:L110 1) r)
+| hL (l<:L11001) r => Some (hR' (l<:L110 1) 0 r)
+| hL [] r => Some (hR' [] 0 r)
+| _ => None
+end.
+
+Definition cfg0 := hL <[] [R100].
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | 0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L110 _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | R1 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A F E.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A F E.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM65.
+
+

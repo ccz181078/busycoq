@@ -252,7 +252,6 @@ Proof with rw_all.
   follow' S2_Ov...
   follow' Incs1...
   rewrite <-Str_app_assoc; cbn[app].
-  Compute (rev([1; 0; 0; 0; 1; 1; 0; 0; 0; 1; 0; 1; 0; 0; 1; 0; 0; 0; 0; 1; 0; 1; 0; 1])).
   finish.
   }
   apply S1_Ov3.

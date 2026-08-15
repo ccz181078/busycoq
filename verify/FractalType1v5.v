@@ -1417,3 +1417,153 @@ Qed.
 End TM11.
 
 
+Module TM12.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_0RC1LE_0RD---_1LE0RE_1LF0RA_1RE0LB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c r :=
+  0inf <* <[1;0;1]^^a <* <[1;1] <* <[0;1;1]^^b {{E}}> [0;1;1]^^c *> r.
+
+Lemma Inc1 a b c r:
+  S1 (1+a) b (1+c) r -->*
+  S1 a (2+b) c r.
+Proof.
+  es.
+Qed.
+
+Lemma Incs1 n a b c r:
+  S1 (n+a) b (n+c) r -->*
+  S1 a (n*2+b) c r.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Definition P1 a :=
+  forall r,
+  0inf <{{B}} [0;1;1]^^(1+a) *> r -->*
+  0inf <* <[0;1;1]^^a {{E}}> r.
+
+Lemma P1_O: P1 4.
+Proof.
+  unfold P1; intros.
+  esx.
+Qed.
+
+Lemma P1_S a:
+  P1 a ->
+  P1 (a+2+a).
+Proof.
+  unfold P1; intros.
+  mid (0inf <{{B}} [0;1;1]^^(1+a) *> [0;1;1]^^(2+a) *> r).
+  1: es.
+  follow H.
+  mid (0inf <{{B}} [0;1;1]^^(1+a) *> [0] *> [0;1;1]^^(1+a) *> r).
+  1: es.
+  follow H.
+  mid (S1 a 1 a r).
+  1: es.
+  follow (Incs1 a 0 1 0 r).
+  unfold S1.
+  replace (a+2+a) with (a*2+2) by lia.
+  es.
+Qed.
+
+Definition S2 a :=
+  0inf <{{B}} [0;1;1]^^a *> [0;1] *> 0inf.
+
+Definition S3 a b :=
+  0inf <* <[1;0] <* <[1;1;0]^^a <* <[0;1;1]^^b {{E}}> 0inf.
+
+Lemma Inc3 a b:
+  S3 (1+a) b -->*
+  S3 a (5+b).
+Proof.
+  es.
+Qed.
+
+Lemma Incs3 a b:
+  S3 a b -->*
+  S3 0 (a*5+b).
+Proof.
+  gen b.
+  ind a Inc3.
+Qed.
+
+Lemma BigStep a n:
+  P1 a ->
+  n+1<=a ->
+  S2 (3+a+n) -->+
+  S2 (3+a*5-n*3).
+Proof.
+  unfold P1,S2.
+  intros H Hn.
+  mid01 (0inf <{{B}} [0;1;1]^^(1+a) *> [0;1;1]^^(2+n) *> [0;1] *> 0inf).
+  1: es.
+  follow H.
+  mid10 (0inf <{{B}} [0;1;1]^^(1+a) *> [0] *> [0;1;1]^^(1+n) *> [0;1] *> 0inf).
+  1: es.
+  follow H.
+  mid (S1 a 1 n ([0;1]*>0inf)).
+  1: es.
+  follow (Incs1 n (1+(a-n-1)) 1 0 ([0;1]*>0inf)).
+  mid (S3 (a-n-1) (3+n*2)).
+  1: unfold S1,S3; es.
+  follow Incs3.
+  unfold S3.
+  replace ((a-n-1)*5+(3+n*2)) with (a*5-n*3-2) by lia.
+  mid (S2 (5+(a*5-n*3-2))).
+  1: unfold S2; es.
+  unfold S2.
+  finish.
+Qed.
+
+Lemma BigStep' a n:
+  P1 a ->
+  3+a<=n<=2+a*2 ->
+  S2 n -->+
+  S2 (12+a*8-n*3).
+Proof.
+  intros.
+  epose proof (BigStep a (n-(a+3)) H) as I1.
+  applys_eq I1; flia.
+Qed.
+
+Ltac stepn' n0 :=
+  eapply without_counter with (n:=N.to_nat n0);
+  eapply multistep_c_spec; vm_compute; try reflexivity; st; reflexivity.
+
+Lemma init:
+  c0 -->*
+  S2 104.
+Proof.
+  stepn' 72645%N.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=fun n=>exists a, P1 a /\ 3+a<=n<=1+a*4/3).
+  2: {
+    eexists 94; split.
+    2: lia.
+    pose proof P1_O as HP1.
+    do 4 apply P1_S in HP1.
+    apply HP1.
+  }
+  intros n [a [HP1 Hn]].
+  epose proof (BigStep' _ _ HP1) as I1.
+  eexists; split.
+  - apply I1.
+    lia.
+  - do 2 apply P1_S in HP1.
+    exists (a*4+6); split.
+    1: applys_eq HP1; flia.
+    lia.
+Qed.
+
+End TM12.
+

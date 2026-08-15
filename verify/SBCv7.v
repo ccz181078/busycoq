@@ -11,54 +11,11 @@ Ltac es_v2 := ES_v2.es.
 
 Open Scope list.
 
-Ltac flia := repeat (lia || f_equal).
-
 Lemma lrcons_lpow1' h1 h2 n:
   lrcons h1 ([(h2, h1)] ^^ n) h2 = [(h1, h2)] ^^ (n+1).
 Proof.
   applys_eq lrcons_lpow1; flia.
 Qed.
-
-Lemma segRLs_trans_add tm h h' n1 n2 n1' n2' w1 w2 w3:
-  segRLs tm (h^^n1) (h'^^n1') w1 w3 ->
-  segRLs tm (h^^n2) (h'^^n2') w3 w2 ->
-  segRLs tm (h^^(n1+n2)) (h'^^(n1'+n2')) w1 w2.
-Proof.
-  intros.
-  do 2 rewrite lpow_add.
-  eapply segRLs_trans; eassumption.
-Qed.
-
-Lemma sideRLs_trans_add tm h n1 n2 w1 w2 w3:
-  sideRLs tm (h^^n1) w1 w3 ->
-  sideRLs tm (h^^n2) w3 w2 ->
-  sideRLs tm (h^^(n1+n2)) w1 w2.
-Proof.
-  intros.
-  rewrite lpow_add.
-  eapply sideRLs_trans; eassumption.
-Qed.
-
-Lemma sideRLs_trans_S tm h n w1 w2 w3:
-  sideRLs tm (h^^n) w1 w3 ->
-  sideRLs tm h w3 w2 ->
-  sideRLs tm (h^^(S n)) w1 w2.
-Proof.
-  intros.
-  replace (S n) with (n+1) by lia.
-  eapply sideRLs_trans_add.
-  - apply H.
-  - cbn.
-    rewrite app_nil_r.
-    apply H0.
-Qed.
-
-Ltac sideRLs_ind k :=
-  induction k;
-  [ try esx |
-    eapply sideRLs_trans_S;
-    [ eassumption | ];
-    try esx ].
 
 Ltac ss2 a b :=
   assert_fails (is_evar a);
@@ -85,6 +42,16 @@ Proof.
   2: apply H0.
   apply segRLs_wall'',H.
 Qed.
+
+Ltac esc :=
+  (apply BoundedConfig.segRLs_c_spec with (T:=10^3); reflexivity) ||
+  (apply BoundedConfig.sideRLs_c_spec with (T:=10^3); reflexivity) ||
+  (eapply sideRLs_c_spec with (T:=10^6); [vm_compute; reflexivity | st; reflexivity]).
+
+Ltac ec := econstructor.
+
+Ltac am a a' k b b' :=
+  applys_eq (segRLs_addmul_v2 a a' k b b'); unfold DH0; flia; esc.
 
 
 
@@ -6863,4 +6830,377 @@ Qed.
 
 End TM35.
 
+
+Module TM36.
+Definition tm := Eval compute in (TM_from_str "1LB0RC_1RC0LB_0RD1RA_0LA1RE_0RA1RF_1RC---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (B,<[0;0]).
+Notation hR := (A,<[1;0]).
+Notation hR' := (D,<[1;0;0;0]).
+Notation h := [(hR,hL)].
+Notation h' := [(hR',hL)].
+Notation ld := [1;0;1;0].
+Notation lh := (0inf<*<[1;0]).
+Notation hD := [((D,<[0;0]),hL)].
+Notation m0 := [1;0;1;0;0;1;0].
+Definition hX(a b:bool) := [((if a then A else C,if b then <[0;0;1;1;1] else <[1;0;1;1;1]),hL)].
+Definition w(a:bool) := if a then [1;0;0;1;0] else [1;0;0;0;0].
+Definition hXs a b n := hX a b ++ hD^^n.
+
+Lemma hX_w a b n c:
+  segRLs tm (hXs a b (1+n)) (hXs (negb c) a n) (w c) (w b).
+Proof.
+  destruct a,b,c;
+  unfold hXs,negb,hX,w.
+  all:
+  rewrite lpow_add,app_assoc;
+  eapply segRLs_trans;
+  [|apply segRLs_wall''; esc];
+  esc.
+Qed.
+
+Lemma hX_rh a b n:
+  sideRLs tm (hXs a b n) 0inf ((if b then (w false)^^2 else (w true))*>(w false)^^n*>0inf).
+Proof.
+  destruct a,b;
+  unfold hXs,hX,w.
+  all:
+  eapply sideRLs_trans; [esc|];
+  sideRLs_ind n.
+Qed.
+
+Close Scope sym.
+
+Lemma LIncs k:
+  segRLs tm h' (h'++h^^(2^k-1)) (ld^^k) (ld^^k).
+Proof.
+  induction k.
+  1: esc.
+  cbn[Nat.pow].
+  replace (S k) with (k+1) by lia.
+  rewrite lpow_add.
+  eapply segRLs_concat.
+  1: apply IHk.
+  replace (2*2^k-1) with (1+(2^k-1)*2) by lia.
+  rewrite lpow_add,app_assoc.
+  eapply segRLs_trans.
+  1: esx.
+  am 1 2 (2^k-1) 0 0.
+Qed.
+
+Lemma m0_Ov n a:
+  segRLs tm (h'++h^^(1+n)) (hXs (negb a) false (1+n*2)) (m0++(w a)) (ld++m0).
+Proof.
+  unfold hXs.
+  do 2 rewrite lpow_add,app_assoc.
+  destruct a.
+  all:
+  eapply segRLs_trans;
+  [|rewrite lpow_mul; eapply segRLs_wall''; esc]; esc.
+Qed.
+
+Open Scope sym.
+
+Inductive RC: nat->side->Prop :=
+| RC_O:
+  RC 0 0inf
+| RC_S n c r:
+  RC n r ->
+  RC (S n) (w c*>r)
+.
+
+Lemma RC_lpow c n:
+  RC n (w c^^n*>0inf).
+Proof.
+  induction n.
+  1: ec.
+  st; ec; trivial.
+Qed.
+
+Local Opaque w.
+
+Lemma RIncs a b m n r:
+  n<=m ->
+  RC n r ->
+  exists n' r',
+  sideRLs tm (hXs a b m) r r' /\
+  RC n' r' /\
+  m+1<=n'<=m+2.
+Proof.
+  gen a b m r.
+  induction n; intros.
+  - inverts H0.
+    destruct b; (do 3 ec; [apply hX_rh|ec]).
+    1: st; ec; ec; apply RC_lpow.
+    2: ec; apply RC_lpow.
+    all: lia.
+  - inverts H0.
+    destruct m.
+    1: lia.
+    eapply IHn with (m:=m) in H2.
+    2: lia.
+    destruct H2 as [n' [r' [I1 [I2 I3]]]].
+    do 3 ec.
+    1: eapply segRLs_sideRLs_concat.
+    1: apply hX_w.
+    1: apply I1.
+    split.
+    ec; apply I2.
+    lia.
+Qed.
+
+Lemma Incs k n r:
+  RC n r ->
+  2<=1+n<=2^k*2-2/\1<=k ->
+  exists n' r',
+  sideRLs tm h' (ld^^k*>m0*>r) (ld^^(k+1)*>m0*>r') /\
+  RC n' r' /\
+  2^k*2-2<=n'<=2^k*2-1.
+Proof.
+  intros.
+  destruct n; [lia|].
+  inverts H.
+  assert (2<=2^k) by (destruct k; cbn[Nat.pow]; lia).
+  eapply RIncs in H2.
+  2: shelve.
+  destruct H2 as [n' [r' [I1 [I2 I3]]]].
+  do 3 ec.
+  - rewrite lpow_add,Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: apply LIncs.
+    do 2 rewrite <-Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (m0_Ov (2^k-2) c); flia. 
+    apply I1.
+  - split.
+    1: apply I2.
+    lia.
+  Unshelve.
+  1: lia.
+Qed.
+
+Definition S' '(k,r) := lh {{{ (hR',R) }}} ld^^k *> m0 *> r.
+
+Lemma LRst r:
+  lh {{{ (hL,L) }}} r -->*
+  lh {{{ (hR',R) }}} r.
+Proof.
+  esx.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (2,w false^^3*>0inf)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(k,r) => exists n, RC n r /\ 2^k-1<=1+n<=2^k /\ 2<=k).
+  2:{
+    ec; ec.
+    1: apply RC_lpow.
+    lia.
+  }
+  intros [k r] [n [I1 [I2 I3]]].
+  assert (I4:2^2<=2^k) by (apply Nat.pow_le_mono_r; lia).
+  eapply Incs with (k:=k) in I1.
+  2: lia.
+  destruct I1 as [n' [r' [I5 [I6 I7]]]].
+  eapply sideRLs_1 in I5.
+  eexists (_,_); ec.
+  - unfold S'.
+    follow10 I5.
+    apply LRst.
+  - ec; ec.
+    1: apply I6.
+    rewrite Nat.pow_add_r; lia.
+Qed.
+
+End TM36.
+
+
+Module TM37.
+Definition tm := Eval compute in (TM_from_str "1RB0LA_0RC1RD_0LD1RE_1LA0RB_0RD1RF_1RB---").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Notation hL := (A,<[0;0]).
+Notation hR := (D,<[1;0]).
+Notation hR' := (C,<[1;0;0;0]).
+Notation h := [(hR,hL)].
+Notation h' := [(hR',hL)].
+Notation ld := [1;0;1;0].
+Notation lh := (0inf<*<[1;0]).
+Notation hD := [((C,<[0;0]),hL)].
+Notation m0 := [1;0;1;0;0;1;0].
+Definition hX(a b:bool) := [((if a then D else B,if b then <[0;0;1;1;1] else <[1;0;1;1;1]),hL)].
+Definition w(a:bool) := if a then [1;0;0;1;0] else [1;0;0;0;0].
+Definition hXs a b n := hX a b ++ hD^^n.
+
+Lemma hX_w a b n c:
+  segRLs tm (hXs a b (1+n)) (hXs (negb c) a n) (w c) (w b).
+Proof.
+  destruct a,b,c;
+  unfold hXs,negb,hX,w.
+  all:
+  rewrite lpow_add,app_assoc;
+  eapply segRLs_trans;
+  [|apply segRLs_wall''; esc];
+  esc.
+Qed.
+
+Lemma hX_rh a b n:
+  sideRLs tm (hXs a b n) 0inf ((if b then (w false)^^2 else (w true))*>(w false)^^n*>0inf).
+Proof.
+  destruct a,b;
+  unfold hXs,hX,w.
+  all:
+  eapply sideRLs_trans; [esc|];
+  sideRLs_ind n.
+Qed.
+
+Close Scope sym.
+
+Lemma LIncs k:
+  segRLs tm h' (h'++h^^(2^k-1)) (ld^^k) (ld^^k).
+Proof.
+  induction k.
+  1: esc.
+  cbn[Nat.pow].
+  replace (S k) with (k+1) by lia.
+  rewrite lpow_add.
+  eapply segRLs_concat.
+  1: apply IHk.
+  replace (2*2^k-1) with (1+(2^k-1)*2) by lia.
+  rewrite lpow_add,app_assoc.
+  eapply segRLs_trans.
+  1: esx.
+  am 1 2 (2^k-1) 0 0.
+Qed.
+
+Lemma m0_Ov n a:
+  segRLs tm (h'++h^^(1+n)) (hXs (negb a) false (1+n*2)) (m0++(w a)) (ld++m0).
+Proof.
+  unfold hXs.
+  do 2 rewrite lpow_add,app_assoc.
+  destruct a.
+  all:
+  eapply segRLs_trans;
+  [|rewrite lpow_mul; eapply segRLs_wall''; esc]; esc.
+Qed.
+
+Open Scope sym.
+
+Inductive RC: nat->side->Prop :=
+| RC_O:
+  RC 0 0inf
+| RC_S n c r:
+  RC n r ->
+  RC (S n) (w c*>r)
+.
+
+Lemma RC_lpow c n:
+  RC n (w c^^n*>0inf).
+Proof.
+  induction n.
+  1: ec.
+  st; ec; trivial.
+Qed.
+
+Local Opaque w.
+
+Lemma RIncs a b m n r:
+  n<=m ->
+  RC n r ->
+  exists n' r',
+  sideRLs tm (hXs a b m) r r' /\
+  RC n' r' /\
+  m+1<=n'<=m+2.
+Proof.
+  gen a b m r.
+  induction n; intros.
+  - inverts H0.
+    destruct b; (do 3 ec; [apply hX_rh|ec]).
+    1: st; ec; ec; apply RC_lpow.
+    2: ec; apply RC_lpow.
+    all: lia.
+  - inverts H0.
+    destruct m.
+    1: lia.
+    eapply IHn with (m:=m) in H2.
+    2: lia.
+    destruct H2 as [n' [r' [I1 [I2 I3]]]].
+    do 3 ec.
+    1: eapply segRLs_sideRLs_concat.
+    1: apply hX_w.
+    1: apply I1.
+    split.
+    ec; apply I2.
+    lia.
+Qed.
+
+Lemma Incs k n r:
+  RC n r ->
+  2<=1+n<=2^k*2-2/\1<=k ->
+  exists n' r',
+  sideRLs tm h' (ld^^k*>m0*>r) (ld^^(k+1)*>m0*>r') /\
+  RC n' r' /\
+  2^k*2-2<=n'<=2^k*2-1.
+Proof.
+  intros.
+  destruct n; [lia|].
+  inverts H.
+  assert (2<=2^k) by (destruct k; cbn[Nat.pow]; lia).
+  eapply RIncs in H2.
+  2: shelve.
+  destruct H2 as [n' [r' [I1 [I2 I3]]]].
+  do 3 ec.
+  - rewrite lpow_add,Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: apply LIncs.
+    do 2 rewrite <-Str_app_assoc.
+    eapply segRLs_sideRLs_concat.
+    1: applys_eq (m0_Ov (2^k-2) c); flia. 
+    apply I1.
+  - split.
+    1: apply I2.
+    lia.
+  Unshelve.
+  1: lia.
+Qed.
+
+Definition S' '(k,r) := lh {{{ (hR',R) }}} ld^^k *> m0 *> r.
+
+Lemma LRst r:
+  lh {{{ (hL,L) }}} r -->*
+  lh {{{ (hR',R) }}} r.
+Proof.
+  esx.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (2,w true*>w false*>0inf)).
+  1: esx.
+  eapply progress_nonhalt_cond with (P:=fun '(k,r) => exists n, RC n r /\ 2^k-1<=1+n<=2^k /\ 2<=k).
+  2:{
+    ec; ec.
+    1: do 3 ec.
+    lia.
+  }
+  intros [k r] [n [I1 [I2 I3]]].
+  assert (I4:2^2<=2^k) by (apply Nat.pow_le_mono_r; lia).
+  eapply Incs with (k:=k) in I1.
+  2: lia.
+  destruct I1 as [n' [r' [I5 [I6 I7]]]].
+  eapply sideRLs_1 in I5.
+  eexists (_,_); ec.
+  - unfold S'.
+    follow10 I5.
+    apply LRst.
+  - ec; ec.
+    1: apply I6.
+    rewrite Nat.pow_add_r; lia.
+Qed.
+
+End TM37.
 

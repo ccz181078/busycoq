@@ -383,3 +383,6 @@ Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
 Lemma tm165: halts_at_trans (TM_from_str "1RB1RE_1LC0RC_0RA0LD_1LB0LD_0LE1RF_0RC---") c0 (F,1).
 Proof. solve_halt' 48 20000 true 2%N (10^8)%N. Time Qed.
 
+Lemma tm166: halts_at_trans (TM_from_str "1RB1RE_1LC1LF_1LD1LC_1RA0LB_---0RF_0RD1RF") c0 (E,0).
+Proof. solve_halt' 60 20000 true 2%N (10^8)%N. Time Qed.
+

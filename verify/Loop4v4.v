@@ -3680,3 +3680,556 @@ Qed.
 End TM24.
 
 
+Module TM25.
+Definition tm := Eval compute in (TM_from_str "1RB1LD_1LC1RE_1RA0LB_1LF1LA_0RB0RC_---0RE").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c :=
+  0inf <* <[1]^^a <{{B}} [0;1]^^b *> [1]^^c *> [0;1;1] *> 0inf.
+
+Definition S2 a b :=
+  0inf <* <[1]^^a <{{B}} [0;1]^^(5+b) *> 0inf.
+
+Import ES_v3.
+Ltac es_v3_pre ::= unfold S1,S2.
+
+Lemma Inc1 a b c:
+  S1 (1+a) b (3+c) -->*
+  S1 a (2+b) c.
+Proof.
+  es' a b c.
+Qed.
+
+Lemma Incs1 n a b c:
+  S1 (n+a) b (n*3+c) -->*
+  S1 a (n*2+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma LOv1 b c:
+  S1 0 b (2+c) -->+
+  S1 (1+b*2) 2 c.
+Proof.
+  es' b c.
+Qed.
+
+Lemma ROv1_0 a b:
+  S1 (1+a) (2+b) 0 -->*
+  S2 a (8+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma ROv1_1 a b:
+  S1 (1+a) (4+b) 1 -->*
+  S2 a (30+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma ROv1_2 a b:
+  S1 (2+a) (3+b) 2 -->*
+  S2 a (18+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma Inc2 a b:
+  S2 (1+a) b -->*
+  S2 a (8+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma Incs2 a b:
+  S2 a b -->*
+  S2 0 (a*8+b).
+Proof.
+  gen b.
+  ind a Inc2.
+Qed.
+
+Lemma Ov2 b:
+  S2 0 b -->*
+  S1 0 4 (9+b*2).
+Proof.
+  es' b.
+Qed.
+
+Close Scope sym.
+
+Lemma IncsLOv1 b c:
+  5+b*6<=c ->
+  S1 0 b c -->*
+  S1 0 (4+b*4) (c-(5+b*6)).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow100 LOv1.
+  follow (Incs1 (1+b*2) 0 2 (c-(5+b*6))).
+  finish.
+Qed.
+
+Lemma IncsROv1_0 b c:
+  5<=c<=4+b*6 ->
+  c mod 3 = 0 ->
+  S1 0 b c -->+
+  S1 0 4 (77+b*32-c*4).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow10 LOv1.
+  follow (Incs1 ((c-2)/3) (1+b*2-(c-2)/3) 2 1).
+  follow (ROv1_1 (b*2-(c-2)/3) ((c-2)/3*2-2)).
+  follow Incs2.
+  follow Ov2.
+  finish.
+Qed.
+
+Lemma IncsROv1_1 b c:
+  5<=c<=b*6 ->
+  c mod 3 = 1 ->
+  S1 0 b c -->+
+  S1 0 4 (43+b*32-c*4).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow10 LOv1.
+  follow (Incs1 ((c-2)/3) (1+b*2-(c-2)/3) 2 2).
+  follow (ROv1_2 (b*2-(c-2)/3-1) ((c-2)/3*2-1)).
+  follow Incs2.
+  follow Ov2.
+  finish.
+Qed.
+
+Lemma IncsROv1_2 b c:
+  2<=c<=4+b*6 ->
+  c mod 3 = 2 ->
+  S1 0 b c -->+
+  S1 0 4 (33+b*32-c*4).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow10 LOv1.
+  follow (Incs1 ((c-2)/3) (1+b*2-(c-2)/3) 2 0).
+  follow (ROv1_0 (b*2-(c-2)/3) ((c-2)/3*2)).
+  follow Incs2.
+  follow Ov2.
+  finish.
+Qed.
+
+Fixpoint f i :=
+match i with
+| O => 0
+| S i => f i * 4 + 1
+end.
+
+Lemma f_ge i:
+  i <= f i.
+Proof.
+  induction i; cbn; lia.
+Qed.
+
+Ltac pp i := pose proof (f_ge i) as Hfge.
+
+Lemma IncsLOv1s i c:
+  (f i)*32-i*3<=c ->
+  S1 0 4 c -->*
+  S1 0 ((f i)*16+4) (c-((f i)*32-i*3)).
+Proof.
+  gen c.
+  induction i; cbn[f] in *; intros.
+  1: finish.
+  follow IHi.
+  1: lia.
+  pp i.
+  follow IncsLOv1.
+  1: lia.
+  finish.
+Qed.
+
+Lemma BigStep0 i c:
+  (f i)*32-i*3+4<=c<=(f i)*128-i*3+29 ->
+  (c-((f i)*32-i*3)) mod 3 = 0 ->
+  S1 0 4 c -->+
+  S1 0 4 (205+(f i)*640-i*12-c*4).
+Proof.
+  intros [I1 I2] I3.
+  follow (IncsLOv1s i).
+  1: lia.
+  pp i.
+  applys_eq IncsROv1_0; flia.
+Qed.
+
+Lemma BigStep1 i c:
+  (f i)*32-i*3+5<=c<=(f i)*128-i*3+24 ->
+  (c-((f i)*32-i*3)) mod 3 = 1 ->
+  S1 0 4 c -->+
+  S1 0 4 (171+(f i)*640-i*12-c*4).
+Proof.
+  intros [I1 I2] I3.
+  follow (IncsLOv1s i).
+  1: lia.
+  pp i.
+  applys_eq IncsROv1_1; flia.
+Qed.
+
+Lemma BigStep2 i c:
+  (f i)*32-i*3+0<=c<=(f i)*128-i*3+28 ->
+  (c-((f i)*32-i*3)) mod 3 = 2 ->
+  S1 0 4 c -->+
+  S1 0 4 (161+(f i)*640-i*12-c*4).
+Proof.
+  intros [I1 I2] I3.
+  follow (IncsLOv1s i).
+  1: lia.
+  pp i.
+  applys_eq IncsROv1_2; flia.
+Qed.
+
+Lemma BigStep i c:
+  (f i)*32-i*3+5<=c<=(f i)*128-i*3+24 ->
+  exists k,
+  S1 0 4 c -->+
+  S1 0 4 (k+(f i)*640-i*12-c*4) /\ 161<=k<=205.
+Proof.
+  intros.
+  destruct ((c-((f i)*32-i*3)) mod 3) as [|[|[|]]] eqn:E.
+  - eexists; split.
+    1: apply BigStep0; lia.
+    lia.
+  - eexists; split.
+    1: apply BigStep1; lia.
+    lia.
+  - eexists; split.
+    1: apply BigStep2; lia.
+    lia.
+  - lia.
+Qed.
+
+Lemma BigStep' i c:
+  (f i)*32-i*2+14<=c<=(f i)*128-i*3+24 ->
+  exists (k:nat),
+  S1 0 4 c -->+
+  S1 0 4 (k+(i*36+c*16-31)) /\ k<=220.
+Proof.
+  intros.
+  epose proof (BigStep i c ltac:(lia)) as [k [I1 I2]].
+  unshelve epose proof (BigStep (S i) (k+(f i)*640-i*12-c*4) _) as [k0 [I3 I4]].
+  1: cbn[f]; pp i; lia.
+  eexists (k0+659-k*4); split.
+  - follow11 I1.
+    follow10 I3.
+    cbn[f] in *.
+    pp i.
+    finish.
+  - lia.
+Qed.
+
+Lemma init:
+  c0 -->*
+  S1 0 4 237.
+Proof.
+  unfold c0,q0,tape0,s0.
+  es'.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=fun c=>
+  exists i, 
+  (f i)*32-i*2+14<=c<=(f i)*128-i*3+24).
+  2: exists 2; cbn[f]; lia.
+  intros c [i I0].
+  epose proof (BigStep' i c ltac:(lia)) as [k [I1 I2]].
+  eexists; split.
+  - apply I1.
+  - exists (S(S i)).
+    cbn[f]; pp i; lia.
+Qed.
+
+End TM25.
+
+
+Module TM26.
+Definition tm := Eval compute in (TM_from_str "1RB0LC_1RC0LE_1LA1RD_0RC0RA_1LF1RE_---1LB").
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 a b c :=
+  0inf <* <[1]^^a <{{C}} [0;1]^^b *> [1]^^c *> [0;1;1] *> 0inf.
+
+Definition S2 a b :=
+  0inf <* <[1]^^a <{{C}} [0;1]^^(5+b) *> 0inf.
+
+Import ES_v3.
+Ltac es_v3_pre ::= unfold S1,S2.
+
+Lemma Inc1 a b c:
+  S1 (1+a) b (3+c) -->*
+  S1 a (2+b) c.
+Proof.
+  es' a b c.
+Qed.
+
+Lemma Incs1 n a b c:
+  S1 (n+a) b (n*3+c) -->*
+  S1 a (n*2+b) c.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+Lemma LOv1 b c:
+  S1 0 b (2+c) -->+
+  S1 (1+b*2) 2 c.
+Proof.
+  es' b c.
+Qed.
+
+Lemma ROv1_0 a b:
+  S1 (1+a) (2+b) 0 -->*
+  S2 a (8+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma ROv1_1 a b:
+  S1 (1+a) (4+b) 1 -->*
+  S2 a (30+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma ROv1_2 a b:
+  S1 (2+a) (3+b) 2 -->*
+  S2 a (18+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma Inc2 a b:
+  S2 (1+a) b -->*
+  S2 a (8+b).
+Proof.
+  es' a b.
+Qed.
+
+Lemma Incs2 a b:
+  S2 a b -->*
+  S2 0 (a*8+b).
+Proof.
+  gen b.
+  ind a Inc2.
+Qed.
+
+Lemma Ov2 b:
+  S2 0 b -->*
+  S1 0 4 (9+b*2).
+Proof.
+  es' b.
+Qed.
+
+Close Scope sym.
+
+Lemma IncsLOv1 b c:
+  5+b*6<=c ->
+  S1 0 b c -->*
+  S1 0 (4+b*4) (c-(5+b*6)).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow100 LOv1.
+  follow (Incs1 (1+b*2) 0 2 (c-(5+b*6))).
+  finish.
+Qed.
+
+Lemma IncsROv1_0 b c:
+  5<=c<=4+b*6 ->
+  c mod 3 = 0 ->
+  S1 0 b c -->+
+  S1 0 4 (77+b*32-c*4).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow10 LOv1.
+  follow (Incs1 ((c-2)/3) (1+b*2-(c-2)/3) 2 1).
+  follow (ROv1_1 (b*2-(c-2)/3) ((c-2)/3*2-2)).
+  follow Incs2.
+  follow Ov2.
+  finish.
+Qed.
+
+Lemma IncsROv1_1 b c:
+  5<=c<=b*6 ->
+  c mod 3 = 1 ->
+  S1 0 b c -->+
+  S1 0 4 (43+b*32-c*4).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow10 LOv1.
+  follow (Incs1 ((c-2)/3) (1+b*2-(c-2)/3) 2 2).
+  follow (ROv1_2 (b*2-(c-2)/3-1) ((c-2)/3*2-1)).
+  follow Incs2.
+  follow Ov2.
+  finish.
+Qed.
+
+Lemma IncsROv1_2 b c:
+  2<=c<=4+b*6 ->
+  c mod 3 = 2 ->
+  S1 0 b c -->+
+  S1 0 4 (33+b*32-c*4).
+Proof.
+  intros.
+  replace c with (2+(c-2)) by lia.
+  follow10 LOv1.
+  follow (Incs1 ((c-2)/3) (1+b*2-(c-2)/3) 2 0).
+  follow (ROv1_0 (b*2-(c-2)/3) ((c-2)/3*2)).
+  follow Incs2.
+  follow Ov2.
+  finish.
+Qed.
+
+Fixpoint f i :=
+match i with
+| O => 0
+| S i => f i * 4 + 1
+end.
+
+Lemma f_ge i:
+  i <= f i.
+Proof.
+  induction i; cbn; lia.
+Qed.
+
+Ltac pp i := pose proof (f_ge i) as Hfge.
+
+Lemma IncsLOv1s i c:
+  (f i)*32-i*3<=c ->
+  S1 0 4 c -->*
+  S1 0 ((f i)*16+4) (c-((f i)*32-i*3)).
+Proof.
+  gen c.
+  induction i; cbn[f] in *; intros.
+  1: finish.
+  follow IHi.
+  1: lia.
+  pp i.
+  follow IncsLOv1.
+  1: lia.
+  finish.
+Qed.
+
+Lemma BigStep0 i c:
+  (f i)*32-i*3+4<=c<=(f i)*128-i*3+29 ->
+  (c-((f i)*32-i*3)) mod 3 = 0 ->
+  S1 0 4 c -->+
+  S1 0 4 (205+(f i)*640-i*12-c*4).
+Proof.
+  intros [I1 I2] I3.
+  follow (IncsLOv1s i).
+  1: lia.
+  pp i.
+  applys_eq IncsROv1_0; flia.
+Qed.
+
+Lemma BigStep1 i c:
+  (f i)*32-i*3+5<=c<=(f i)*128-i*3+24 ->
+  (c-((f i)*32-i*3)) mod 3 = 1 ->
+  S1 0 4 c -->+
+  S1 0 4 (171+(f i)*640-i*12-c*4).
+Proof.
+  intros [I1 I2] I3.
+  follow (IncsLOv1s i).
+  1: lia.
+  pp i.
+  applys_eq IncsROv1_1; flia.
+Qed.
+
+Lemma BigStep2 i c:
+  (f i)*32-i*3+0<=c<=(f i)*128-i*3+28 ->
+  (c-((f i)*32-i*3)) mod 3 = 2 ->
+  S1 0 4 c -->+
+  S1 0 4 (161+(f i)*640-i*12-c*4).
+Proof.
+  intros [I1 I2] I3.
+  follow (IncsLOv1s i).
+  1: lia.
+  pp i.
+  applys_eq IncsROv1_2; flia.
+Qed.
+
+Lemma BigStep i c:
+  (f i)*32-i*3+5<=c<=(f i)*128-i*3+24 ->
+  exists k,
+  S1 0 4 c -->+
+  S1 0 4 (k+(f i)*640-i*12-c*4) /\ 161<=k<=205.
+Proof.
+  intros.
+  destruct ((c-((f i)*32-i*3)) mod 3) as [|[|[|]]] eqn:E.
+  - eexists; split.
+    1: apply BigStep0; lia.
+    lia.
+  - eexists; split.
+    1: apply BigStep1; lia.
+    lia.
+  - eexists; split.
+    1: apply BigStep2; lia.
+    lia.
+  - lia.
+Qed.
+
+Lemma BigStep' i c:
+  (f i)*32-i*2+14<=c<=(f i)*128-i*3+24 ->
+  exists (k:nat),
+  S1 0 4 c -->+
+  S1 0 4 (k+(i*36+c*16-31)) /\ k<=220.
+Proof.
+  intros.
+  epose proof (BigStep i c ltac:(lia)) as [k [I1 I2]].
+  unshelve epose proof (BigStep (S i) (k+(f i)*640-i*12-c*4) _) as [k0 [I3 I4]].
+  1: cbn[f]; pp i; lia.
+  eexists (k0+659-k*4); split.
+  - follow11 I1.
+    follow10 I3.
+    cbn[f] in *.
+    pp i.
+    finish.
+  - lia.
+Qed.
+
+Lemma init:
+  c0 -->*
+  S1 0 4 71.
+Proof.
+  unfold c0,q0,tape0,s0.
+  es'.
+Qed.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt.
+  1: apply init.
+  eapply progress_nonhalt_cond with (P:=fun c=>
+  exists i, 
+  (f i)*32-i*2+14<=c<=(f i)*128-i*3+24).
+  2: exists 1; cbn[f]; lia.
+  intros c [i I0].
+  epose proof (BigStep' i c ltac:(lia)) as [k [I1 I2]].
+  eexists; split.
+  - apply I1.
+  - exists (S(S i)).
+    cbn[f]; pp i; lia.
+Qed.
+
+End TM26.
+
