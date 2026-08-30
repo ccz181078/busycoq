@@ -1184,5 +1184,14 @@ Tactic Notation "es'" constr(a) constr(b) constr(c) constr(d) constr(e) constr(f
   if s=?"g" then g else
   0inf)).
 
+Tactic Notation "es'" "&" constr(a) constr(b) :=
+  (es_v3_pre;
+  unshelve es_v3_nmp_smp (fun (s:string) =>
+  O)
+  (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  0inf); try assumption).
+
 Close Scope string.
 

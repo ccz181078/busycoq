@@ -1939,3 +1939,36 @@ Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
 Lemma nonhalt655: ~halts (TM_from_str "1RB0RA_1LC0LC_1RD0LB_0RF1RE_0RD0LE_1RA---") c0.
 Proof. solve_cert (CPS_LRU 100001 100000 100000 4 3200 2 3 1 0). Time Qed.
 
+Lemma nonhalt656: ~halts (TM_from_str "1RB0RE_1LC0LB_1RF0LD_1RE1LB_1RA1RC_---0RA") c0.
+Proof. solve_cert (NG_cr 0 100000 100000 6 8 [2]%nat 0 3). Time Qed.
+
+Lemma nonhalt657: ~halts (TM_from_str "1RB1RD_1RC0RA_1LD0LC_1RF0LE_1RA1LC_---0RB") c0.
+Proof. solve_cert (NG_cr 0 100000 100000 11 8 [2]%nat 0 3). Time Qed.
+
+Lemma nonhalt658: ~halts (TM_from_str "1RB0RE_1LC0RA_1LD0LB_1RA0LB_0RF1RA_---0RB") c0.
+Proof. solve_cert (NG_cr 0 100000 100000 3 8 [2;3;4]%nat 0 2). Time Qed.
+
+Lemma nonhalt659: ~halts (TM_from_str "1RB0RA_1LC0RE_---0LD_1LA0LF_1LF1RA_1LD1LB") c0.
+Proof. solve_cert (NG_cr 0 300000 300000 15 20 [2]%nat 1 3). Time Qed.
+
+Lemma nonhalt660: ~halts (TM_from_str "1RB---_0RC0RE_1LD0RA_1LE0LC_1RF0LD_1RD0RE") c0.
+Proof. solve_cert (NG_cr 0 300000 300000 3 30 [2]%nat 1 6). Time Qed.
+
+Lemma nonhalt661: ~halts (TM_from_str "1RB0LE_1RC0RA_1LD0RB_1LB0LC_1LF---_0LA0LC") c0.
+Proof. solve_cert (NG_cr 0 300000 300000 3 30 [2]%nat 1 6). Time Qed.
+
+Lemma nonhalt662: ~halts (TM_from_str "1RB0RD_1LC0RA_1LA0LB_1RA0LE_1LF---_0LD0LB") c0.
+Proof. solve_cert (NG_cr 0 300000 300000 3 30 [2]%nat 1 6). Time Qed.
+
+Lemma nonhalt663: ~halts (TM_from_str "1RB0LC_1RC1RE_1LD1LE_0RF1RB_1LA0RB_---1RD") c0.
+Proof. solve_cert (NG_cr 0 3000000 3000000 2 30 [1]%nat 1 3). Time Qed.
+
+Lemma nonhalt664: ~halts (TM_from_str "1RB0LE_1RC0RB_1LD1RA_1LF0LA_1LC1LA_0RB---") c0.
+Proof. solve_cert (NG_cr 0 3000000 3000000 16 60 [1]%nat 1 3). Time Qed.
+
+Lemma nonhalt665: ~halts (TM_from_str "1RB0RA_1LC1RD_1LF0LD_1RA0LE_1LB1LD_0RA---") c0.
+Proof. solve_cert (NG_cr 0 3000000 3000000 16 60 [1]%nat 1 3). Time Qed.
+
+Lemma nonhalt666: ~halts (TM_from_str "1RB0RE_1RC0RE_1LD1LC_---0LE_1RA0LF_1LE0LC") c0.
+Proof. solve_cert (CPS_LRU_BD 10001 100000 100000 4 3200 1 7). Time Qed.
+

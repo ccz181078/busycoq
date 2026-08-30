@@ -8,7 +8,7 @@ First, there are some proven correct [deciders](https://wiki.bbchallenge.org/wik
 
 Then, for the rest of the TMs, we can write individual proof for them. If a TM (up to equivalence) haven't been proven, it becomes a holdout.
 
-For BB(6), there're about 1200 holdouts, while about 30 TMs (decided by various informal deciders that are believed to be correct) haven't been translated to Rocq.
+For BB(6), there're about 1000 holdouts.
 
 For BB(2,5), there're about 70 holdouts, while about 10 individual proofs haven't been translated to Rocq.
 
@@ -72,6 +72,14 @@ This part is relatively stable, and no new decider has been proposed recently.
 
   implemented in `Inductive.v`
 
+- LongAcc
+
+  implemented in `LongAcc.v`
+
+- LongLoop
+
+  implemented in `LongLoop.v`
+
 ### CTL deciders: 
 
 see also [CTL](https://wiki.bbchallenge.org/wiki/Closed_Tape_Language_(CTL)) section "regular CTL"
@@ -80,9 +88,14 @@ see also [CTL](https://wiki.bbchallenge.org/wiki/Closed_Tape_Language_(CTL)) sec
 - RWL_mod
 - CPS_LRU
 - RNGS_mod
-- certs from FAR
+- constructed dfa from other sources
 
 implemented in `CTL.v`
+
+there're two variants of CTL:
+
+- `MitM_CTL`: use dfa generator for two sides
+- `FAR`: use dfa generator for one side, and derive an nfa from the dfa for the other side
 
 ## Individual proofs (about 3000 TMs):
 
