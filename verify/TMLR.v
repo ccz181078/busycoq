@@ -5,7 +5,7 @@ From BusyCoq Require Import HashTable.
 From BusyCoq Require Import QSymMap.
 Set Default Goal Selector "!".
 
-Module TMLRCtx(Ctx0:Ctx) <: Ctx.
+Module TMLRCtx(Ctx0:FiniteCtx) <: FiniteCtx.
   Module TM0 := TM Ctx0.
   Import TM0.
   Definition Q:Type := Ctx0.Q*dir*dir.
@@ -59,20 +59,39 @@ Module TMLRCtx(Ctx0:Ctx) <: Ctx.
   Definition sym_hash(a:Sym) :=
   let '(a0,a1):=a in Ctx0.sym_hash a0 ## hash a1.
 
-  Definition all_qs:list Q.
-  Admitted.
+  (* [Q] and [Sym] are finite whenever [Ctx0] is: both just pair [Ctx0]'s
+     carriers with [dir], which has two elements. Upstream admitted all four
+     of these; they are constructible and provable. *)
+  Definition all_dirs : list dir := [L; R].
+
+  Lemma all_dirs_spec : forall d, In d all_dirs.
+  Proof. intros d. destruct d; simpl; tauto. Qed.
+
+  Definition all_qs:list Q :=
+    list_prod (list_prod Ctx0.all_qs all_dirs) all_dirs.
 
   Lemma all_qs_spec : forall a, In a all_qs.
-  Admitted.
+  Proof.
+    intros [[q d1] d2]. unfold all_qs.
+    apply in_prod.
+    - apply in_prod.
+      + apply Ctx0.all_qs_spec.
+      + apply all_dirs_spec.
+    - apply all_dirs_spec.
+  Qed.
 
-  Definition all_syms:list Sym.
-  Admitted.
+  Definition all_syms:list Sym := list_prod Ctx0.all_syms all_dirs.
 
   Lemma all_syms_spec : forall a, In a all_syms.
-  Admitted.
+  Proof.
+    intros [s d]. unfold all_syms.
+    apply in_prod.
+    - apply Ctx0.all_syms_spec.
+    - apply all_dirs_spec.
+  Qed.
 End TMLRCtx.
 
-Module TMLR(Ctx0:Ctx).
+Module TMLR(Ctx0:FiniteCtx).
 Module Ctx1 := TMLRCtx Ctx0.
 Module QSymMap := QSymMap Ctx0 Ctx1.
 Export QSymMap.
