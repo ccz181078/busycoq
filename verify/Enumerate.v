@@ -9,7 +9,13 @@ Set Default Goal Selector "!".
 
 From Coq Require Import Arith.PeanoNat.
 
-Module Enumerate (Ctx : Ctx).
+Module Enumerate (Ctx : FiniteCtx).
+(* [TM.v] used to register these in [core] for every [Ctx], including infinite
+   ones where they were [Admitted] and false. They now live in [FiniteCtx];
+   re-hinting them here restores the [auto] steps below, but only in a context
+   where they are genuinely proved. *)
+Local Hint Resolve Ctx.all_qs_spec Ctx.all_syms_spec : core.
+
   Module Permute := Permute Ctx. Export Permute.
 
 (** To justify only enumerating machines that start with 1RB, we need
