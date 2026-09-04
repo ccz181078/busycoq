@@ -1,5 +1,5 @@
 Require Import ZArith Lia String List.
-From BusyCoq Require Import RWLAcc62 Individual62 Eqb.
+From BusyCoq Require Import RWLAcc62 Individual62 Eqb FastRev.
 
 Definition multistep' tm (p:bool) s0 s1 :=
 if p then s0-[tm]->+s1 else s0-[tm]->*s1.
@@ -49,9 +49,9 @@ match x with
   if eqb h s0 then
     vside_cons h (vside_rw_lpow_rotate_all0 t (h::x0) n)
   else
-    vside_app (x++rev x0) n vside_0inf
+    vside_app (x++fast_rev x0) n vside_0inf
 | _ =>
-    vside_app (x++rev x0) n vside_0inf
+    vside_app (x++fast_rev x0) n vside_0inf
 end.
 
 Fixpoint is_all0(x:list sym):bool :=
@@ -418,7 +418,7 @@ Lemma vside_rw_lpow_rotate_all0_spec x x0 n:
   to_side (vside_rw_lpow_rotate_all0 x x0 n) = to_side (vside_app (x++rev x0) n vside_0inf).
 Proof.
   gen x0 n.
-  induction x; cbn; intros; trivial.
+  induction x; cbn; intros; repeat rewrite fast_rev_spec; trivial.
   destruct (sym_eqb_spec a s0); trivial.
   subst; cbn.
   rewrite IHx.

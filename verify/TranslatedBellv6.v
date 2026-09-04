@@ -1,5 +1,6 @@
 From Coq Require Import Bool List Arith NArith ZArith Lia.
 From BusyCoq Require Import Eqb.
+From BusyCoq Require Import FastRev.
 Import ListNotations.
 
 Module NCount.
@@ -65,13 +66,13 @@ Definition ds_len (s : DSeq) : nat :=
   List.length (ds_front s) + List.length (ds_back s).
 
 Definition ds_list (s : DSeq) : list NCount.t :=
-  ds_front s ++ rev (ds_back s).
+  ds_front s ++ FastRev.fast_rev (ds_back s).
 
 Definition ds_rebuild (xs : list NCount.t) : DSeq :=
   let n := List.length xs in
   let nf := Nat.div (S n) 2 in
   let f := firstn nf xs in
-  let b := rev (skipn nf xs) in
+  let b := FastRev.fast_rev (skipn nf xs) in
   dseq f b.
 
 (* Kept as a compatibility name for the representation lemmas.  Unlike the
@@ -89,7 +90,7 @@ Definition ds_uncons (s : DSeq) : option (NCount.t * DSeq) :=
   match ds_front s with
   | x :: f => Some (x,dseq f (ds_back s))
   | [] =>
-      match rev (ds_back s) with
+      match FastRev.fast_rev (ds_back s) with
       | [] => None
       | x :: xs => Some (x,ds_rebuild xs)
       end
@@ -126,9 +127,9 @@ Definition ds_unsnoc (s : DSeq) : option (DSeq * NCount.t) :=
   match ds_back s with
   | x :: b => Some (dseq (ds_front s) b,x)
   | [] =>
-      match rev (ds_front s) with
+      match FastRev.fast_rev (ds_front s) with
       | [] => None
-      | x :: xs => Some (ds_rebuild (rev xs),x)
+      | x :: xs => Some (ds_rebuild (FastRev.fast_rev xs),x)
       end
   end.
 
@@ -2099,7 +2100,9 @@ Proof. cbn [valid_machine valid_side P.init P.machine]. repeat constructor. Qed.
 
 Lemma ds_rebuild_list xs : P.ds_list (P.ds_rebuild xs) = xs.
 Proof.
-  unfold P.ds_rebuild, P.ds_list; cbn.
+  unfold P.ds_rebuild, P.ds_list.
+  cbn [P.ds_front P.ds_back].
+  repeat rewrite FastRev.fast_rev_spec.
   rewrite rev_involutive, firstn_skipn. reflexivity.
 Qed.
 
@@ -2112,7 +2115,10 @@ Lemma valid_dseq_len s :
   valid_dseq s -> P.ds_len s = length (P.ds_list s).
 Proof.
   destruct s as [f b]. unfold P.ds_len, P.ds_list.
-  cbn. intros _. rewrite length_app, rev_length. reflexivity.
+  cbn [P.ds_front P.ds_back].
+  intros _.
+  rewrite FastRev.fast_rev_spec,length_app,rev_length.
+  reflexivity.
 Qed.
 
 Lemma ds_uncons_ok s :
@@ -2122,10 +2128,12 @@ Lemma ds_uncons_ok s :
   end.
 Proof.
   destruct s as [[|x f] b].
-  - unfold P.ds_uncons; cbn.
-    destruct (rev b) as [|x xs] eqn:E.
-    + reflexivity.
-    + rewrite ds_rebuild_list. reflexivity.
+  - unfold P.ds_uncons.
+    cbn [P.ds_front P.ds_back].
+    destruct (FastRev.fast_rev b) as [|x xs] eqn:E.
+    + unfold P.ds_list. cbn [P.ds_front P.ds_back]. exact E.
+    + rewrite ds_rebuild_list. unfold P.ds_list.
+      cbn [P.ds_front P.ds_back]. exact E.
   - reflexivity.
 Qed.
 
@@ -2136,16 +2144,21 @@ Lemma ds_unsnoc_ok s :
   end.
 Proof.
   destruct s as [f [|x b]].
-  - unfold P.ds_unsnoc; cbn.
-    destruct (rev f) as [|x xs] eqn:E.
-    + apply (f_equal (@rev N)) in E.
+  - unfold P.ds_unsnoc.
+    cbn [P.ds_front P.ds_back].
+    destruct (FastRev.fast_rev f) as [|x xs] eqn:E.
+    + rewrite FastRev.fast_rev_spec in E.
+      apply (f_equal (@rev N)) in E.
       rewrite rev_involutive in E. subst f. reflexivity.
     + rewrite ds_rebuild_list.
+      rewrite FastRev.fast_rev_spec.
+      rewrite FastRev.fast_rev_spec in E.
       apply (f_equal (@rev N)) in E.
       rewrite rev_involutive in E. subst f. cbn. rewrite app_nil_r.
       reflexivity.
-  - unfold P.ds_unsnoc, P.ds_list; cbn.
-    rewrite <- app_assoc. reflexivity.
+  - unfold P.ds_unsnoc, P.ds_list.
+    cbn [P.ds_front P.ds_back].
+    rewrite FastRev.fast_rev_cons,<-app_assoc. reflexivity.
 Qed.
 
 Lemma ds_list_cons x s :
@@ -2159,7 +2172,9 @@ Proof. destruct s. reflexivity. Qed.
 Lemma ds_list_rev s :
   P.ds_list (P.ds_rev s) = rev (P.ds_list s).
 Proof.
-  destruct s as [f b]. unfold P.ds_rev, P.ds_list; cbn.
+  destruct s as [f b]. unfold P.ds_rev, P.ds_list.
+  cbn [P.ds_front P.ds_back].
+  repeat rewrite FastRev.fast_rev_spec.
   rewrite rev_app_distr, rev_involutive. reflexivity.
 Qed.
 
@@ -7491,4 +7506,3 @@ Proof.
 Time Qed.
 
 Print Assumptions halt.
-
