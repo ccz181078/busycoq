@@ -7532,3 +7532,144 @@ Qed.
 End TM65.
 
 
+Module TM66.
+Definition tm := TM_from_str "1RB0LD_0LC0RE_1LA0RD_0RB1LF_1RC0RF_0RA---".
+Definition tm' := TM_from_str "1LB0RE_1RC0LE_0LA0RD_1RA0RF_0RC0LE_0RB---".
+
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Inductive LD :=
+| L00 | L01 | L010 | L011
+.
+
+Inductive Config :=
+| h01C(l:list LD)(r:side)
+| h010E(l:list LD)(r:side)
+| h0000000E(l:list LD)(n:nat)(r:side)
+| hL(l:list LD)(r:side)
+.
+
+Section to_config_sec.
+Hypothesis QA QC QE:Q.
+
+Fixpoint toLC ls :=
+match ls with
+| L00::ls => toLC ls <* <[0;0]
+| L01::ls => toLC ls <* <[0;1]
+| L010::ls => toLC ls <* <[0;1;0]
+| L011::ls => toLC ls <* <[0;1;1]
+| [] => 0inf
+end.
+
+Definition to_config x :=
+match x with
+| h01C l r => toLC l <* <[0;1] {{QC}}> r
+| h010E l r => toLC l <* <[0;1;0] {{QE}}> r
+| h0000000E l n r => toLC l <* <[0;1] <* [0]^^n <* <[0;0;0;0;0;0;0] {{QE}}> r
+| hL l r => toLC l <{{QA}} [1;0] *> r
+end.
+
+Fixpoint push0 n l :=
+match n with
+| 0%nat => l<:L01
+| 1%nat => l<:L010
+| S (S n) => (push0 n l) <: L00
+end.
+
+Fixpoint push0_spec n l:
+  toLC (push0 n l) = toLC l <* <[0;1] <* [0]^^n.
+Proof.
+  refine (
+  match n with
+  | 0%nat => _
+  | 1%nat => _
+  | S (S n) => _
+  end); cbn; trivial.
+  rewrite push0_spec; trivial.
+Qed.
+
+Definition f x :=
+match x with
+| h01C l (0>>r) => Some (hL l (1>>r))
+| h01C l (1>>0>>0>>r) => Some (h01C (l<:L011) r)
+| h01C l (1>>0>>1>>0>>r) => Some (h01C (l<:L01<:L00) r)
+| h01C l (1>>0>>1>>1>>0>>0>>0>>0>>r) => Some (h01C (l<:L01<:L00<:L00<:L01) r)
+| h01C l (1>>0>>1>>1>>0>>0>>0>>1>>r) => Some (h0000000E l 1 r)
+| h01C l (1>>0>>1>>1>>0>>0>>1>>r) => Some (h010E (l<:L01<:L00<:L00) r)
+| h01C l (1>>0>>1>>1>>0>>1>>r) => Some (h01C (l<:L01<:L00<:L01) r)
+| h01C l (1>>0>>1>>1>>1>>r) => None
+| h01C l (1>>1>>r) => Some (hL l (1>>0>>r))
+| h010E l (0>>r) => Some (h01C (l<:L01) r)
+| h010E l (1>>0>>0>>0>>0>>r) => Some (h01C (l<:L01<:L00<:L01) r)
+| h010E l (1>>0>>0>>0>>1>>0>>r) => Some (h01C (l<:L010<:L00<:L00) r)
+| h010E l (1>>0>>0>>0>>1>>1>>0>>0>>0>>0>>r) => Some (h01C (l<:L010<:L00<:L00<:L00<:L01) r)
+| h010E l (1>>0>>0>>0>>1>>1>>0>>0>>0>>1>>r) => Some (h0000000E l 4 r)
+| h010E l (1>>0>>0>>0>>1>>1>>0>>0>>1>>r) => Some (h010E (l<:L010<:L00<:L00<:L00) r)
+| h010E l (1>>0>>0>>0>>1>>1>>0>>1>>r) => Some (h01C (l<:L010<:L00<:L00<:L01) r)
+| h010E l (1>>0>>0>>0>>1>>1>>1>>r) => None
+| h010E l (1>>0>>0>>1>>r) => Some (h010E (l<:L01<:L00) r)
+| h010E l (1>>0>>1>>r) => Some (h01C (l<:L01<:L01) r)
+| h010E l (1>>1>>r) => None
+| h0000000E l n (0>>r) => Some (h01C (push0 (6+n) l) r)
+| h0000000E l n (1>>0>>0>>0>>0>>r) => Some (h01C ((push0 (8+n) l)<:L01) r)
+| h0000000E l n (1>>0>>0>>0>>1>>r) => Some (h0000000E l (5+n) r)
+| h0000000E l n (1>>0>>0>>1>>r) => Some (h010E (push0 (8+n) l) r)
+| h0000000E l n (1>>0>>1>>r) => Some (h01C ((push0 (6+n) l)<:L01) r)
+| h0000000E l n (1>>1>>r) => None
+| hL (l<:L00) r => Some (h01C (l<:L01) r)
+| hL (l<:L01) r => Some (hL l (1>>0>>r))
+| hL (l<:L010) r => Some (h01C (l<:L011) r)
+| hL (l<:L011) r => Some (hL l (0>>1>>0>>r))
+| hL [] r => Some (h01C [L01] r)
+end.
+
+Definition cfg0 := hL <[] ([1;0;1]*>0inf).
+
+End to_config_sec.
+
+Ltac des_nat :=
+match goal with
+| |- context[match ?a with | O => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | [] => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | _ >> _ => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | S0 => _ | _ => _ end] =>
+  destruct a
+| |- context[match ?a with | L01 => _ | _ => _ end] =>
+  destruct a
+end.
+
+Ltac solve_v1 p0 p1 p2 :=
+  erewrite <-(halts_iff _ _ _ f (to_config p0 p1 p2) (fun _=>True)); trivial;
+  [ apply halts_evstep_iff; esx | ];
+  intros [] _;
+  unfold f,to_config;
+  repeat des_nat;
+  try (split; trivial);
+  cbn[toLC lpow];
+  repeat rewrite push0_spec;
+  try solve[esx].
+
+Lemma eqv1:
+  halts tm c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 A C E.
+Qed.
+
+Lemma eqv2:
+  halts tm' c0 <-> iter_halts f cfg0.
+Proof.
+  solve_v1 B A D.
+Qed.
+
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  rewrite eqv1,eqv2; tauto.
+Qed.
+
+End TM66.
+
+

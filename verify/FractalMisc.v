@@ -2800,3 +2800,216 @@ Qed.
 End TM17.
 
 
+From BusyCoq Require Import ES_v3.
+
+Module TM18.
+Definition tm := Eval compute in (TM_from_str "1LB---_0RC1RD_0LD1RC_1LE0RB_0LF1LD_1LA0LD").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c r :=
+  l <* <[1;1]^^a <{{D}} [1] *> [1;1]^^b *> [0;1]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l (1+a) b (1+c) r -->*
+  S1 l a (2+b) c r.
+Proof.
+  unfold S1.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c r:
+  S1 l (n+a) b (n+c) r -->*
+  S1 l a (n*2+b) c r.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+
+Fixpoint LC(n:nat):side :=
+match n with
+| O => 0inf
+| S n0 => LC n0 <* <[0;0] <* <[1;1]^^(2^n0*2-2) <* <[1]
+end.
+
+Lemma LInc n r:
+  LC n <{{F}} [0] *> r -->*
+  LC (S n) <* <[0;0] {{C}}> r.
+Proof.
+  gen r.
+  induction n; intros; cbn[LC] in *.
+  1: es.
+  cbn[Nat.pow].
+  remember (2^n*2-2) as v1.
+  replace (2*2^n*2-2) with (2+v1*2) by lia.
+  es; er.
+  follow IHn.
+  mid (S1 (LC n<*<[0;0]) (v1+0) 2 (v1+0) ([0]*>r)).
+  1: unfold S1; es.
+  follow Incs1.
+  unfold S1.
+  es; er.
+  follow IHn.
+  es.
+Qed.
+
+Definition R0 n := [1;0;0;1;0;1;0]^^(1+n) *> [1]^^9 *> [0;0] *> [1;0]^^5 *> 0inf.
+
+Definition S' '(a,b) :=
+  LC a <{{F}} [0] *> [1;0;0] *> R0 b.
+
+Ltac es_v3_pre ::= unfold S1,R0.
+
+Lemma BigStep a b:
+  4<=2^a ->
+  S' (a,b) -->+
+  S' (2+a,2+b).
+Proof.
+  intros Ha.
+  unfold S'.
+  follow LInc.
+  cbn[Nat.add Nat.pow LC].
+  remember (2^a*2-7) as v1.
+  replace (2^a*2-2) with (5+v1) by lia.
+  replace (2*2^a*2-2) with (12+v1*2) by lia.
+  mid10 (LC a <{{F}} [0] *> [1]^^21 *> [0;0] *> [1;0]^^(v1) *> R0 b).
+  1: es' v1 b & (LC a).
+  follow LInc.
+  cbn[LC].
+  replace (2^a*2-2) with (5+v1) by lia.
+  mid (S1 (LC a<*<[0;0]) ((5+v1)+0) 2 ((5+v1)+5) ([0]*>R0 b)).
+  1: es' v1 b & (LC a).
+  follow Incs1.
+  unfold S1.
+  er.
+  follow LInc.
+  cbn[LC].
+  replace (2^a*2-2) with (5+v1) by lia.
+  es' v1 b & (LC a).
+Qed.
+
+Ltac stepn' n0 :=
+  eapply without_counter with (n:=n0);
+  eapply multistep_c_spec; vm_compute; repeat rewrite <-const_unfold; try reflexivity.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (8,O)).
+  1: stepn' 192895.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b)=>4<=2^a).
+  2: lia.
+  intros [a b] HP.
+  eexists; split.
+  1: apply BigStep; lia.
+  cbn; lia.
+Qed.
+
+End TM18.
+
+
+Module TM19.
+Definition tm := Eval compute in (TM_from_str "1LB0LE_1LC---_0RD1RE_0LE1RD_1LF0RC_0LA1LE").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+
+Definition S1 l a b c r :=
+  l <* <[1;1]^^a <{{E}} [1] *> [1;1]^^b *> [0;1]^^c *> r.
+
+Lemma Inc1 l a b c r:
+  S1 l (1+a) b (1+c) r -->*
+  S1 l a (2+b) c r.
+Proof.
+  unfold S1.
+  es.
+Qed.
+
+Lemma Incs1 n l a b c r:
+  S1 l (n+a) b (n+c) r -->*
+  S1 l a (n*2+b) c r.
+Proof.
+  gen a b c.
+  ind n Inc1.
+Qed.
+
+
+Fixpoint LC(n:nat):side :=
+match n with
+| O => 0inf
+| S n0 => LC n0 <* <[0;0] <* <[1;1]^^(2^n0*2-2) <* <[1]
+end.
+
+Lemma LInc n r:
+  LC n <{{A}} [0] *> r -->*
+  LC (S n) <* <[0;0] {{D}}> r.
+Proof.
+  gen r.
+  induction n; intros; cbn[LC] in *.
+  1: es.
+  cbn[Nat.pow].
+  remember (2^n*2-2) as v1.
+  replace (2*2^n*2-2) with (2+v1*2) by lia.
+  es; er.
+  follow IHn.
+  mid (S1 (LC n<*<[0;0]) (v1+0) 2 (v1+0) ([0]*>r)).
+  1: unfold S1; es.
+  follow Incs1.
+  unfold S1.
+  es; er.
+  follow IHn.
+  es.
+Qed.
+
+Definition R0 n := [1;0;0;1;0;1;0]^^(1+n) *> [1]^^9 *> [0;0] *> [1;0]^^5 *> 0inf.
+
+Definition S' '(a,b) :=
+  LC a <{{A}} [0] *> [1;0;0] *> R0 b.
+
+Ltac es_v3_pre ::= unfold S1,R0.
+
+Lemma BigStep a b:
+  4<=2^a ->
+  S' (a,b) -->+
+  S' (2+a,2+b).
+Proof.
+  intros Ha.
+  unfold S'.
+  follow LInc.
+  cbn[Nat.add Nat.pow LC].
+  remember (2^a*2-7) as v1.
+  replace (2^a*2-2) with (5+v1) by lia.
+  replace (2*2^a*2-2) with (12+v1*2) by lia.
+  mid10 (LC a <{{A}} [0] *> [1]^^21 *> [0;0] *> [1;0]^^(v1) *> R0 b).
+  1: es' v1 b & (LC a).
+  follow LInc.
+  cbn[LC].
+  replace (2^a*2-2) with (5+v1) by lia.
+  mid (S1 (LC a<*<[0;0]) ((5+v1)+0) 2 ((5+v1)+5) ([0]*>R0 b)).
+  1: es' v1 b & (LC a).
+  follow Incs1.
+  unfold S1.
+  er.
+  follow LInc.
+  cbn[LC].
+  replace (2^a*2-2) with (5+v1) by lia.
+  es' v1 b & (LC a).
+Qed.
+
+Ltac stepn' n0 :=
+  eapply without_counter with (n:=n0);
+  eapply multistep_c_spec; vm_compute; repeat rewrite <-const_unfold; try reflexivity.
+
+Lemma nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt with (c':=S' (7,O)).
+  1: stepn' 52519.
+  eapply progress_nonhalt_cond with (P:=fun '(a,b)=>4<=2^a).
+  2: lia.
+  intros [a b] HP.
+  eexists; split.
+  1: apply BigStep; lia.
+  cbn; lia.
+Qed.
+
+End TM19.
+

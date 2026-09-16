@@ -1002,6 +1002,8 @@ Ltac rw_mp' :=
   match goal with
   | [ fn1 := fun _ => _ |- _] =>
     progress (
+    let v1:=fresh "v1" in
+    let v2:=fresh "v2" in
     epose (fn1 "") as v1;
     unfold fn1 in v1;
     match goal with
@@ -1192,6 +1194,39 @@ Tactic Notation "es'" "&" constr(a) constr(b) :=
   if s=?"a" then a else
   if s=?"b" then b else
   0inf); try assumption).
+
+Tactic Notation "es'" constr(a) "&" constr(b) constr(c) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  O)
+  (fun s =>
+  if s=?"b" then b else
+  if s=?"c" then c else
+  0inf)).
+
+Tactic Notation "es'" constr(a) constr(b) "&" constr(c) constr(d) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  O)
+  (fun s =>
+  if s=?"c" then c else
+  if s=?"d" then d else
+  0inf)).
+
+Tactic Notation "es'" constr(a) constr(b) constr(c) "&" constr(d) constr(e) :=
+  (es_v3_pre;
+  es_v3_nmp_smp (fun s =>
+  if s=?"a" then a else
+  if s=?"b" then b else
+  if s=?"c" then c else
+  O)
+  (fun s =>
+  if s=?"d" then d else
+  if s=?"e" then e else
+  0inf)).
 
 Close Scope string.
 
