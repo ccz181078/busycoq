@@ -199,3 +199,17 @@ Proof.
   native_check_eq.
 Time Qed.
 
+Lemma tm28: ~halts (TM_from_str "1RB1LC_1LA0RE_1LD0LC_1LE0LB_0LF1RA_0RA---") c0.
+Proof.
+  eapply decide_loop' with (D:=20) (PP:=696%N) (P':=174) (P:=104230%N) (T0:=(10^5)%N) (T1:=(10^4)).
+  intros.
+  native_check_eq.
+Qed.
+
+Lemma tm29: ~halts (TM_from_str "1LB0LC_1RC1RD_1LD0RB_0RF1LE_1LA0LE_---1LB") c0.
+Proof.
+  eapply decide_loop' with (D:=18) (PP:=692%N) (P':=174) (P:=104230%N) (T0:=(10^5)%N) (T1:=(10^4)).
+  intros.
+  native_check_eq.
+Qed.
+
