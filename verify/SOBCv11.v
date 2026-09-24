@@ -1724,8 +1724,7 @@ Open Scope list.
 
 Module TM1.
 
-Definition tm := Eval compute in
-  TM_from_str "1RB1RC_1LC0RA_1RA0LD_0RE0LF_0LB---_0RF0RE".
+Definition tm := Eval compute in (TM_from_str "1RB1RC_1LC0RA_1RA0LD_0RE0LF_0LB---_0RF0RE").
 
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
@@ -2531,36 +2530,3 @@ Qed.
 
 End TM1.
 
-From BusyCoq Require Eqv_v3.
-Require Import FunctionalExtensionality.
-
-Lemma tm1_flip : flip TM1.tm = Eqv_v3.TM314.tm'.
-Proof.
-  apply functional_extensionality; intros [q s]; destruct q,s; reflexivity.
-Qed.
-
-Module TM2.
-Definition tm := Eval compute in
-  TM_from_str "1LB1LC_1RC0LA_1LA0RD_1RC0RE_0LE0LF_0RD---".
-
-Theorem nonhalt : ~halts tm c0.
-Proof.
-  intro H; apply TM1.nonhalt.
-  apply (proj2 (flip_halts_iff TM1.tm c0)).
-  change (halts (flip TM1.tm) c0).
-  rewrite tm1_flip.
-  apply (proj1 Eqv_v3.TM314.eqv), H.
-Qed.
-End TM2.
-
-Module TM3.
-Definition tm := Eval compute in
-  TM_from_str "1LB1LC_1RC0LA_1LA0RD_1RC0RE_0LE0LF_0RB---".
-
-Theorem nonhalt : ~halts tm c0.
-Proof.
-  intro H; apply TM2.nonhalt.
-  change (halts Eqv_v3.TM313.tm' c0).
-  apply (proj1 Eqv_v3.TM313.eqv), H.
-Qed.
-End TM3.
