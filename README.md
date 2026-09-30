@@ -8,9 +8,9 @@ First, there are some proven correct [deciders](https://wiki.bbchallenge.org/wik
 
 Then, for the rest of the TMs, we can write individual proof for them. If a TM (up to equivalence) haven't been proven, it becomes a holdout.
 
-For BB(6), there're about 1000 holdouts.
+For BB(6), there're about 800 holdouts.
 
-For BB(2,5), there're about 70 holdouts, while about 10 individual proofs haven't been translated to Rocq.
+For BB(2,5), there're about 40 holdouts, while about 20 individual proofs haven't been translated to Rocq.
 
 For BB(3,3), see [BB(3,3) - BusyBeaverWiki](https://wiki.bbchallenge.org/wiki/BB(3,3)).
 
