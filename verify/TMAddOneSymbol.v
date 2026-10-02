@@ -5,7 +5,7 @@ From BusyCoq Require Import HashTable.
 From BusyCoq Require Import QSymMap.
 Set Default Goal Selector "!".
 
-Module TMAddOneSymbolCtx(Ctx0:Ctx) <: Ctx.
+Module TMAddOneSymbolCtx(Ctx0:FiniteCtx) <: FiniteCtx.
   Module TM0 := TM Ctx0.
   Import TM0.
   Definition Q:Type := Ctx0.Q.
@@ -62,16 +62,22 @@ Module TMAddOneSymbolCtx(Ctx0:Ctx) <: Ctx.
 
   Definition all_qs:list Q := Ctx0.all_qs.
 
+  (* [Q] is [Ctx0.Q] and [Sym] is [option Ctx0.Sym]; both finite when [Ctx0]
+     is. Upstream admitted both specs; they follow directly. *)
   Lemma all_qs_spec : forall a, In a all_qs.
-  Admitted.
+  Proof. exact Ctx0.all_qs_spec. Qed.
 
   Definition all_syms:list Sym := [None]++(List.map Some Ctx0.all_syms).
 
   Lemma all_syms_spec : forall a, In a all_syms.
-  Admitted.
+  Proof.
+    intros [x|]; unfold all_syms; simpl.
+    - right. apply in_map. apply Ctx0.all_syms_spec.
+    - left. reflexivity.
+  Qed.
 End TMAddOneSymbolCtx.
 
-Module TMAddOneSymbol(Ctx0:Ctx).
+Module TMAddOneSymbol(Ctx0:FiniteCtx).
 Module Ctx1 := TMAddOneSymbolCtx Ctx0.
 Module QSymMap := QSymMap Ctx0 Ctx1.
 Export QSymMap.

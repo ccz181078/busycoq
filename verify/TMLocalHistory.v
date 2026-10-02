@@ -26,7 +26,7 @@ Module TMLocalHistoryCtx(Ctx0:Ctx) <: Ctx.
   Proof. apply Ctx0.q0_neq_q1. Qed.
 
   Lemma s0_neq_s1 : s0 <> s1.
-  Admitted.
+  Proof. intros H. injection H as H1. exact (Ctx0.s0_neq_s1 H1). Qed.
 
   Definition eqb_q (a b : Q): {a = b} + {a <> b}.
   destruct (eqb_spec a b); tauto.
@@ -55,16 +55,11 @@ Module TMLocalHistoryCtx(Ctx0:Ctx) <: Ctx.
 
   Definition sym_hash(a:Sym) := hash a.
 
-  Definition all_qs:list Q := Ctx0.all_qs.
-
-  Lemma all_qs_spec : forall a, In a all_qs.
-  Admitted.
-
-  Definition all_syms:list Sym.
-  Admitted.
-
-  Lemma all_syms_spec : forall a, In a all_syms.
-  Admitted.
+  (* [Sym] is [Ctx0.Sym * list (Ctx0.Q*Ctx0.Sym)], whose list component is
+     unbounded, so this context is genuinely not enumerable. It therefore
+     implements the base [Ctx] only. Upstream instead kept it a full [Ctx] and
+     [Admitted] the enumeration specs -- which, for the empty/undefined lists
+     supplied, asserted [False]. *)
 End TMLocalHistoryCtx.
 
 Module TMLocalHistory(Ctx0:Ctx).

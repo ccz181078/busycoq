@@ -8,13 +8,26 @@ From Coq Require Import Lists.List. Import ListNotations.
 From BusyCoq Require Export Flip.
 Set Default Goal Selector "!".
 
-Module BackwardsReasoning (Ctx : Ctx).
+Module BackwardsReasoning (Ctx : FiniteCtx).
+(* [TM.v] used to register these in [core] for every [Ctx], including infinite
+   ones where they were [Admitted] and false. They now live in [FiniteCtx];
+   re-hinting them here restores the [auto] steps below, but only in a context
+   where they are genuinely proved. *)
+Local Hint Resolve Ctx.all_qs_spec Ctx.all_syms_spec : core.
+
   Module Flip := Flip Ctx. Export Flip.
 
 Definition all_qs := list_prod all_qs all_syms.
 
+(* The [auto] here previously closed both goals via the [core] hints that
+   [TM.v] registered for [Ctx]'s enumeration specs. Those specs are now in
+   [FiniteCtx] and no longer hinted globally -- deliberately, since at an
+   infinite context they were [Admitted] and false. Applied explicitly. *)
 Lemma all_qs_spec : forall a, In a all_qs.
-Proof. introv. destruct a. apply in_prod; auto. Qed.
+Proof.
+  introv. destruct a.
+  apply in_prod; [apply Ctx.all_qs_spec | apply Ctx.all_syms_spec].
+Qed.
 
 Local Hint Resolve all_qs_spec : core.
 
