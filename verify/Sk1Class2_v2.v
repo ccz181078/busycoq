@@ -1,23 +1,31 @@
-(* 1RB0LE_1RC0RC_1LD0RB_1LA0LE_1LD1LF_1LD--- never halts.
-   Binary counter over a list of digits (10)^u [00] (01)^v with a re-pairing overflow
-   (Skelet 1-like Class 2, the mechanism of verify/SBCv6.v Module TM21).
-   Window lemmas S1-S6 / T1-T14 (es, shift_rule_L/R) compose into the carry M, the carry
-   with a dropping digit, and the overflow O; the per-step invariant INV = Common /\ (A \/ B \/ C)
-   of section 3 of the write-up is stated per digit through r = R of the digits above it.
-   Informal proof: the accompanying write-up.
-   Formalized with Claude Code (AI-assisted).
-   Checked: compiles against unmodified busycoq (commit 0940bb9) with Coq 8.20.1;
-   Print Assumptions nonhalt: Closed under the global context. *)
+(* Consolidated from busycoq PR #16, commit 69c43b67312d6c35e9d116b0699d4992bc1b06de.
+   Original proofs by Dennis Koshta (AI-assisted with Claude Code).
+   One rule/invariant proof; distinct blank-state initializations.
+   Module numbers follow Sk1_Class2.txt. TM8 and TM9 use the mirror.
+*)
 
 From BusyCoq Require Import Individual62.
-Require Import ZifyNat Lia.
-Require Import String.
-Require Import List.
-Require Import Arith.
+Require Import Arith Lia String List ZifyNat.
+Import ListNotations.
 
+(* The usual finite initialization check, also from a non-A blank state. *)
+Ltac sk1_init q fuel :=
+  match goal with |- _ -[ ?m ]->* ?c =>
+    change (cconfig_to_config (nil,nil,0,q) -[m]->* c)
+  end;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  repeat rewrite simpl_directed_head_l;
+  repeat rewrite simpl_directed_head_r;
+  repeat rewrite l_const0_app_nil;
+  repeat rewrite r_const0_app_nil;
+  repeat rewrite config_to_cconfig;
+  apply cconfig_evstep_dec_spec with (n:=fuel);
+  native_check_eq.
+
+Module TM10.
 Definition tm := Eval compute in (TM_from_str "1RB0LE_1RC0RC_1LD0RB_1LA0LE_1LD1LF_1LD---").
 
-Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
@@ -264,8 +272,6 @@ Proof.
   apply evstep_refl'. cbn [Oout app_ds dl ro_out]. rewrite <- Ozeq. reflexivity.
 Qed.
 
-Lemma init: c0 -->* K [d1 1 2] 8 5.
-Proof. unfold K, L0. cbn. solve_init. Qed.
 
 (* ================= abstract invariant (write-up section 3) ================= *)
 Open Scope nat_scope.
@@ -658,37 +664,85 @@ Proof.
 Qed.
 
 
-
-Lemma nonhalt: ~halts tm c0.
+Lemma initial_nonhalt v a b:
+  1 <= v -> 4 <= a -> a mod 2 = 0 -> 1 <= b -> b mod 2 = 1 ->
+  ~halts tm (K [d1 1 v] a b).
 Proof.
-  eapply multistep_nonhalt; [apply init|].
-  change (K [d1 1 2] 8 5) with (Kc ([d1 1 2], 8, 5)).
-  apply progress_nonhalt_cond with (P := INV).
-  - exact step.
-  - unfold INV. cbn. repeat split; try lia; try discriminate.
-    left. unfold PA, canon, Rd, ub, vof. cbn. repeat split; lia.
+  intros. change (K [d1 1 v] a b) with (Kc ([d1 1 v],a,b)).
+  apply progress_nonhalt_cond with (P:=INV); [exact step|].
+  unfold INV. cbn - [Nat.modulo]. repeat split; try lia; try discriminate.
+  left. unfold PA, canon, Rd, ub, vof. cbn - [Nat.modulo]. repeat split; lia.
 Qed.
 
+Lemma init: c0 -->* K [d1 1 2] 8 5.
+Proof. unfold K, L0. cbn. sk1_init A 500. Qed.
 
-(*
-```
-1RB0LE_1RC0RC_1LD0RB_1LA0LE_1LD1LF_1LD---
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  eapply multistep_nonhalt; [apply init|].
+  apply initial_nonhalt; lia.
+Qed.
+End TM10.
 
-K(d_1 .. d_m; a, b) := 0^inf 10 01 d_1 .. d_m (10)^a 000 (10)^b B> 0^inf
-digit (u,0,v) := (10)^u 00 (01)^v,   (u,1,v) := (10)^u (01)^v      (d_m least significant)
-start: 0^inf A> 0^inf  -->*  K((1,1,2); 8, 5)                       (step 483)
+Module TM8.
+Import TM10.
+Definition tm := Eval compute in (TM_from_str "1LB0RD_1LC0LE_1RD0LE_1RA0RA_1LB1LF_1LB---").
+Definition rename q := match q with
+  | A => C | B => D | C => A | D => B | E => E | F => F end.
+Lemma same_rules: Perm tm TM10.tm rename.
+Proof.
+  split; intros [] []; cbn; intros; try congruence; inversion H; reflexivity.
+Qed.
 
-M  (j* = last bit-0 digit):
-   K(.., (u,0,v), (u_j,1,v_j)_{j>j*}; a, b) -->+ K(.., (u+1,1,v-1), (u_j,0,v_j-1)_{j>j*}; a+1, b+2)
-   v = 1: (u+1,1,0) fuses into the next digit: (u',0,v'-1) becomes (u'+u+1,0,v'-1)
-O  (all bits 1):
-   K((u_1,1,v_1) .. (u_m,1,v_m); a, b) -->+ K((0,0,u_1), (v_1-1,0,u_2), .., (v_m,1,a); b+3, 1)
+Lemma init: (C;; tape0) -[TM10.tm]->* K [d1 1 9] 8 1.
+Proof. unfold K, L0. cbn. sk1_init C 700. Qed.
 
-per digit, r = R of the digits above:  R = 2r+1-bit,  ubar = u + r + 1 - bit,  vbar = v - R
-INV: m >= 1, a >= 1, b odd, a+R even, a+R+2 >= 2^(m+1), b+3+2R >= 2^(m+1), v_m >= R+1, and
-  A: every digit canonical, v >= R+1, ubar odd, ubar_1 = 1;  a+R+1 >= 2^(m+1)
-  B: every digit canonical, v+bit odd, ubar_j >= 2^(j-1), d_1 = (0,0,1)
-  C: every digit canonical, v+bit odd, ubar_j >= 2^j;  a+R+1 >= 2^(m+1), b+1+2R >= 2^(m+1)
-INV -> a macro step (M, M with a drop, or O) into INV   (A->A, A->B, B->B, B->C, C->C, C->A)
-```
-*)
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  apply (perm_nonhalt tm TM10.tm rename A tape0 same_rules).
+  eapply multistep_nonhalt; [apply init|].
+  apply initial_nonhalt; lia.
+Qed.
+End TM8.
+
+Module TM9.
+Import TM10.
+Definition tm := Eval compute in (TM_from_str "1LB0LE_1RC0LE_1RD0RD_1LA0RC_1LA1LF_1LA---").
+Definition rename q := match q with
+  | A => D | B => A | C => B | D => C | E => E | F => F end.
+Lemma same_rules: Perm tm TM10.tm rename.
+Proof.
+  split; intros [] []; cbn; intros; try congruence; inversion H; reflexivity.
+Qed.
+
+Lemma init: (D;; tape0) -[TM10.tm]->* K [d1 1 3] 4 1.
+Proof. unfold K, L0. cbn. sk1_init D 250. Qed.
+
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  apply (perm_nonhalt tm TM10.tm rename A tape0 same_rules).
+  eapply multistep_nonhalt; [apply init|].
+  apply initial_nonhalt; lia.
+Qed.
+End TM9.
+
+Module TM11.
+Import TM10.
+Definition tm := Eval compute in (TM_from_str "1RB0RB_1LC0RA_1LE0LD_1LC1LF_1RA0LD_1LC---").
+Definition rename q := match q with
+  | A => B | B => C | C => D | D => E | E => A | F => F end.
+Lemma same_rules: Perm tm TM10.tm rename.
+Proof.
+  split; intros [] []; cbn; intros; try congruence; inversion H; reflexivity.
+Qed.
+
+Lemma init: (B;; tape0) -[TM10.tm]->* K [d1 1 10] 8 1.
+Proof. unfold K, L0. cbn. sk1_init B 750. Qed.
+
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  apply (perm_nonhalt tm TM10.tm rename A tape0 same_rules).
+  eapply multistep_nonhalt; [apply init|].
+  apply initial_nonhalt; lia.
+Qed.
+End TM11.

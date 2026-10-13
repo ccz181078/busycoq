@@ -1,51 +1,39 @@
-(* 1RB0RE_1LC0RA_1LD0LB_1LA1LF_1LE1RA_0LC--- never halts.
-   Skelet 1-like Class 2.  The table is that of the kill 1RB0LD_1RC0RA_1RD1RF_1LA0LE_1RE1LD_0RB---
-   mirrored (L <-> R) and with its states renamed by phi: A->D, B->A, C->B, D->C, E->E, F->F
-   (twin row q = parent row phi q with every direction flipped; 12/12 entries).  The twin starts
-   in A = phi^-1(D), so it runs the parent machine from 0^inf D> 0^inf: a different orbit of the
-   same macro map, which reaches the parent's family K and an E-start satisfying the parent's
-   invariant J (proof.md section 3.7).
-   This file is the parent's kill file, verify/Skelet1LikeC2_1RB0LD.v, unchanged except for:
-   - the parent's table is [tm3] (the sweep lemmas, the family K, the macro rules, J and Jstep
-     are all about tm3); the top-level [tm] is the twin;
-   - a new start: [init0]/[init] from (D;; tape0) by direct execution ([solve_initD], busycoq's
-     [solve_init] started in D), base far pair (1,25,1) instead of (1,24,1); [nonhalt_D];
-   - the conjugacy (proof.md Lemma C): [Perm (flip tm) tm3 phi] by computation, then busycoq's
-     [flip_halts] (Flip.v) and [perm_halts] (Permute.v) give halts tm c0 -> halts tm3 (D;; tape0).
-   Parent structure: every macro rule (Dec, DecMerge, DecMergeTail, End, EndLast, X2, Ov, X1) is
-   a lemma [K h P T -->+ K h' P' T'].  A per-step invariant [J] (a ghost phase of the two-cycle
-   period plus, for every pair, bounds on the projected values p + Rt and q - Rt, where Rt is the
-   number of touches the pair still gets before the next re-pairing) is preserved by every
-   rule ([Jstep]) and holds at the E-start reached after 78,911 steps ([init], [J_base]);
-   [progress_nonhalt_cond] concludes.
-   Informal proof: the accompanying write-up (proof.md), a delta proof from the parent's
-   write-up (the write-up for 1RB0LD_1RC0RA_1RD1RF_1LA0LE_1RE1LD_0RB---:
-   INV+(e), section 3.8; the Rocq invariant is described in its
-   section 4, "How the .v file is organized").
-   Formalized with Claude Code (AI-assisted).
-   Checked: compiles against unmodified busycoq (commit 0940bb9) with Coq 8.20.1;
-   Print Assumptions nonhalt: Closed under the global context. *)
+(* Consolidated from busycoq PR #15, commit feeffa19218bc7081f7b3875b13a91905a1657a2.
+   Original proofs by Dennis Koshta (AI-assisted with Claude Code).
+   One rule/invariant proof; distinct blank-state initializations.
+   Module numbers follow Sk1_Class2.txt. TM4 uses the mirror.
+*)
 
 From BusyCoq Require Import Individual62.
-Require Import Arith Lia List.
-Require Import String.
+Require Import Arith Lia String List ZifyNat.
 Import ListNotations.
 
-Definition tm := Eval compute in (TM_from_str "1RB0RE_1LC0RA_1LD0LB_1LA1LF_1LE1RA_0LC---").
+(* The usual finite initialization check, also from a non-A blank state. *)
+Ltac sk1_init q fuel :=
+  match goal with |- _ -[ ?m ]->* ?c =>
+    change (cconfig_to_config (nil,nil,0,q) -[m]->* c)
+  end;
+  repeat rewrite Str_cons_def;
+  repeat rewrite <-Str_app_assoc;
+  repeat rewrite simpl_directed_head_l;
+  repeat rewrite simpl_directed_head_r;
+  repeat rewrite l_const0_app_nil;
+  repeat rewrite r_const0_app_nil;
+  repeat rewrite config_to_cconfig;
+  apply cconfig_evstep_dec_spec with (n:=fuel);
+  native_check_eq.
 
-(** The parent machine (verify/Skelet1LikeC2_1RB0LD.v).  Everything up to [nonhalt_D] is about [tm3]. *)
-Definition tm3 := Eval compute in (TM_from_str "1RB0LD_1RC0RA_1RD1RF_1LA0LE_1RE1LD_0RB---").
+Module TM2.
+Definition tm := Eval compute in (TM_from_str "1RB0LD_1RC0RA_1RD1RF_1LA0LE_1RE1LD_0RB---").
 
-Notation "c -->* c'" := (c -[ tm3 ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm3 ]->+ c') (at level 40).
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
 Open Scope list.
 
 Lemma ev_eq {c1 c2 c2'} : c1 -->* c2 -> c2 = c2' -> c1 -->* c2'.
 Proof. intros H E. subst. exact H. Qed.
 
-Lemma prog_eq {c1 c2 c2'} : c1 -->+ c2 -> c2 = c2' -> c1 -->+ c2'.
-Proof. intros H E. subst. exact H. Qed.
 
 (** * Low-level sweeps (all by [es]).
     Paper words: pair [p,q,d] = (10)^p (01)^q s(d), s(1) = 0001, s(0) = 0010.
@@ -353,39 +341,8 @@ Proof.
   cbn [RP sd]. rewrite ovpX_eq. replace (pb+4) with (S (pb+3)) by lia. rewrite tailB_eq. reflexivity.
 Qed.
 
-(** * Start (proof.md 3.7, twin column).  The twin from c0 corresponds to the parent [tm3]
-    from (D;; tape0), step for step.  That run reaches K0' = K(2; (11,12,0); -) in 1,021 steps,
-    and the base E-start after overflow 6, K(2; (95,68,0),(34,33,1),(10,15,1),(1,25,1); -), in
-    78,911 steps.  Both by direct execution.  [esx] runs its fast [vm_compute] path only from c0
-    (from another start it falls back to symbolic [es], far too slow here), so [solve_initD] is
-    busycoq's [solve_init] with the start config rewritten to [cconfig_to_config (nil,nil,0,D)]. *)
-
-Ltac solve_initD :=
-  change (D, tape0) with (cconfig_to_config (nil,nil,0,D));
-  repeat rewrite Str_cons_def;
-  repeat rewrite <-Str_app_assoc;
-  repeat rewrite simpl_directed_head_l;
-  repeat rewrite simpl_directed_head_r;
-  repeat rewrite l_const0_app_nil;
-  repeat rewrite r_const0_app_nil;
-  repeat rewrite config_to_cconfig;
-  apply cconfig_evstep_dec_spec with (n:=1000000);
-  vm_compute;
-  reflexivity.
-
-Lemma init0 : D;; tape0 -->* K 2 [(11%nat, 12%nat, false)] TN.
-Proof. unfold K. cbn [RP RT sd]. solve_initD. Qed.
-
-Definition base : list (nat*nat*bool) :=
-  [(95%nat, 68%nat, false); (34%nat, 33%nat, true); (10%nat, 15%nat, true); (1%nat, 25%nat, true)].
-
-Lemma init : D;; tape0 -->* K 2 base TN.
-Proof. unfold K, base. cbn [RP RT sd]. solve_initD. Qed.
-
-
 (** * The invariant (round 2).  Arithmetic layer, then the step lemma. *)
 
-Require Import ZifyNat.
 Import Coq.Init.Datatypes.
 
 Local Open Scope nat_scope.
@@ -858,8 +815,6 @@ Qed.
 Lemma even2 x : (2 * x) mod 2 = 0.
 Proof. lia. Qed.
 
-Lemma pc_len (Pr : nat -> tri -> list tri -> Prop) i P : AllI Pr i P -> True.
-Proof. auto. Qed.
 
 Ltac dvs := cbn [dv bv length app map] in *; repeat rewrite length_app in *; repeat rewrite length_map in *;
   cbn [length] in *.
@@ -1288,77 +1243,98 @@ Proof.
       split; [discriminate|]. split; [split; [exists (pb + 3); split; [reflexivity | lia] | reflexivity]|].
       eapply inv_X1; [exact HZ | exact HA].
 Qed.
+Definition base (v:nat) : list tri :=
+  [(95,68,false); (34,33,true); (10,15,true); (1,v,true)].
 
-Lemma J_base : J (mkst 2 base TN E1 false).
+Lemma J_base v: 3 <= v -> J (mkst 2 (base v) TN E1 false).
 Proof.
-  unfold J, base. cbn [sh sP sT sph sc4]. split; [discriminate|]. split; [split; reflexivity|].
+  intro Hv. unfold J, base. cbn [sh sP sT sph sc4].
+  split; [discriminate|]. split; [split; reflexivity|].
   cbn [AllI]. unfold PCx, Lift, PC, PN, PI. cbn. repeat split; lia.
 Qed.
 
-(** The parent never halts from 0^inf D> 0^inf. *)
-Lemma nonhalt_D : ~ halts tm3 (D;; tape0).
+Lemma J_nonhalt s: J s -> ~halts tm (Cf s).
+Proof. apply progress_nonhalt_cond. exact Jstep. Qed.
+
+Lemma base_nonhalt v: 3 <= v -> ~halts tm (K 2 (base v) TN).
+Proof. intro H. apply (J_nonhalt (mkst 2 (base v) TN E1 false)), J_base, H. Qed.
+
+Lemma init: c0 -->* K 2 (base 24) TN.
+Proof. unfold K, base. cbn [RP RT sd]. sk1_init A 80000. Qed.
+
+Theorem nonhalt: ~halts tm c0.
 Proof.
-  apply multistep_nonhalt with (c' := K 2 base TN); [exact init|].
-  change (K 2 base TN) with (Cf (mkst 2 base TN E1 false)).
-  apply progress_nonhalt_cond with (P := J); [exact Jstep | exact J_base].
+  eapply multistep_nonhalt; [apply init|].
+  apply base_nonhalt; lia.
+Qed.
+End TM2.
+
+Module TM1.
+Import TM2.
+Definition tm := Eval compute in (TM_from_str "1RB1RF_1LC0LE_1RD0LB_1RA0RC_1RE1LB_0RD---").
+Definition rename q := match q with
+  | A => C | B => D | C => A | D => B | E => E | F => F end.
+Lemma same_rules: Perm tm TM2.tm rename.
+Proof.
+  split; intros [] []; cbn; intros; try congruence; inversion H; reflexivity.
 Qed.
 
-(** * Conjugacy (proof.md section 0, Lemma C).
-    [flip tm] is the twin with every direction flipped (busycoq Flip.v); renaming its states
-    by phi gives the parent exactly ([Perm], busycoq Permute.v: both the halting entry and
-    all 11 transitions).  [flip_halts]: halts tm c -> halts (flip tm) (flip_conf c), and
-    flip_conf c0 = A;; tape0 (the blank tape is symmetric).  [perm_halts]: halts (flip tm)
-    (q;; t) -> halts tm3 (phi q;; t), and phi A = D. *)
 
-Definition phi (q : Q) : Q :=
-  match q with A => D | B => A | C => B | D => C | E => E | F => F end.
+Lemma init: (C;; tape0) -[TM2.tm]->* K 2 (base 26) TN.
+Proof. unfold K, base. cbn [RP RT sd]. sk1_init C 80000. Qed.
 
-Lemma perm_twin : Perm (flip tm) tm3 phi.
+Theorem nonhalt: ~halts tm c0.
 Proof.
-  split.
-  - intros [] [] H; cbn in *; try discriminate; reflexivity.
-  - intros [] [] s' d q' H; cbn in *; inversion H; subst; reflexivity.
+  apply (perm_nonhalt tm TM2.tm rename A tape0 same_rules).
+  eapply multistep_nonhalt; [apply init|].
+  apply base_nonhalt; lia.
+Qed.
+End TM1.
+
+Module TM3.
+Import TM2.
+Definition tm := Eval compute in (TM_from_str "1RB0RD_1RC1RF_1LD0LE_1RA0LC_1RE1LC_0RA---").
+Definition rename q := match q with
+  | A => B | B => C | C => D | D => A | E => E | F => F end.
+Lemma same_rules: Perm tm TM2.tm rename.
+Proof.
+  split; intros [] []; cbn; intros; try congruence; inversion H; reflexivity.
 Qed.
 
-Lemma nonhalt: ~halts tm c0.
+Definition initial : list tri := [(47,32,false); (40,33,true); (13,34,true)].
+
+Lemma init: (B;; tape0) -[TM2.tm]->* K 2 initial TN.
+Proof. unfold K, initial. cbn [RP RT sd]. sk1_init B 40000. Qed.
+
+Theorem nonhalt: ~halts tm c0.
 Proof.
-  intros H. apply flip_halts in H.
-  change (halts (flip tm) (A;; tape0)) in H.
-  exact (nonhalt_D (perm_halts _ _ _ _ _ perm_twin H)).
+  apply (perm_nonhalt tm TM2.tm rename A tape0 same_rules).
+  eapply multistep_nonhalt; [apply init|].
+  change (K 2 initial TN) with (Cf (mkst 2 initial TN E1 false)).
+  apply J_nonhalt. unfold J, initial. cbn [sh sP sT sph sc4].
+  split; [discriminate|]. split; [split; reflexivity|].
+  cbn [AllI]. unfold PCx, Lift, PC, PN, PI. cbn. repeat split; lia.
+Qed.
+End TM3.
+
+Module TM4.
+Import TM2.
+Definition tm := Eval compute in (TM_from_str "1LB0LE_1RC0LA_1RD0RB_1RA1RF_1RE1LA_0RC---").
+Definition rename q := match q with
+  | A => D | B => A | C => B | D => C | E => E | F => F end.
+Lemma same_rules: Perm tm TM2.tm rename.
+Proof.
+  split; intros [] []; cbn; intros; try congruence; inversion H; reflexivity.
 Qed.
 
-(*
-```
-1RB0RE_1LC0RA_1LD0LB_1LA1LF_1LE1RA_0LC---       (= mirror of 1RB0LD_1RC0RA_1RD1RF_1LA0LE_1RE1LD_0RB--- renamed by
-                                                   phi: A->D, B->A, C->B, D->C, E->E, F->F;
-                                                   tm3 below = the parent)
 
-twin c0 = 0^inf A> 0^inf  <->  parent 0^inf D> 0^inf     (flip_halts, Perm (flip tm) tm3 phi, perm_halts)
+Lemma init: (D;; tape0) -[TM2.tm]->* K 2 (base 25) TN.
+Proof. unfold K, base. cbn [RP RT sd]. sk1_init D 80000. Qed.
 
-Parent family (tm3), unchanged from the parent's kill file verify/Skelet1LikeC2_1RB0LD.v:
-[p,q,d] := (10)^p (01)^q s(d),  s(1) = 0001, s(0) = 0010                 [RP]
-K(h; P; T) := 0^inf <A (10)^h 11001 [p_1,q_1,d_1] ... [p_L,q_L,d_L] T 0^inf   [K]
-T in { -, (10)^t 1, (101)^2 (01)^k }                                       [TN, TA t, TB k]
-k := least j with d_j = 1;  Z := pairs 1..k-1 (all d = 0, q >= 2)
-touch (p,q,d) := (p+1, q-1, 1-d)
-(on the twin's tape: K' = mirror image, 0^inf T^R [p_L,q_L,d_L]^R ... [p_1,q_1,d_1]^R 10011 (01)^h B> 0^inf)
-
-Dec            K(h; Z ++ (p,q+2,1) :: R; T)        -->+ K(h+4; touch Z ++ (p+1,q+1,0) :: R; T)
-DecMerge       K(h; Z ++ (p,1,1) :: (p',q',d') :: R; T) -->+ K(h+4; touch Z ++ (p+p'+3,q',d') :: R; T)
-DecMergeTail   K(h; Z ++ [(p,1,1)]; (10)^t 1)      -->+ K(h+4; touch Z; (10)^(p+t+3) 1)
-DecMergeEmpty  K(h; Z ++ [(p,1,1)]; -)             -->+ K(h+4; touch Z; (10)^(p+2) 1)
-End            K(h; Z ++ [(p,q+2,0)]; -)           -->+ K(h+4; touch Z ++ [(p+1,q+1,0)]; (10)^1 1)
-EndLast        K(h; Z ++ [(p,1,0)]; -)             -->+ K(h+4; touch Z; (10)^(p+4) 1)
-X2             K(h; Z ++ [(p,q+2,0)]; (101)^2 (01)^(k+1))
-                                                   -->+ K(h+4; touch Z ++ [(p+1,q+1,0); (3,k+1,1)]; -)
-Ov             K(h; (p1+2,q1,0) :: Y; (10)^t 1)    -->+ K(2; (h+5,p1+1,0) :: ovp q1 Y t; -)
-               Y all d = 0, p,q >= 1, q1 >= 1;  ovp q [] t = [(q,t+1,1)],
-               ovp q ((p',q',_) :: Y) t = (q,p',1) :: ovp q' Y t
-X1             K(h; (p1+2,q1,0) :: Y ++ [(pa+1,1,0); (pb,1,0)]; -)
-                                                   -->+ K(2; (h+5,p1+1,0) :: ovpX q1 Y (pa+1); (101)^2 (01)^(pb+3))
-               ovpX q [] pa = [(q,pa,0)], ovpX q ((p',q',_) :: Y) pa = (q,p',1) :: ovpX q' Y pa
-invariant J (per pair, n = pairs to the right, tv = digit value from the pair up,
-  Rt = tv + phase term): see Definitions PN, PI, TC, J; preserved by every rule (Jstep).
-start (tm3): 0^inf D> 0^inf -->(1,021) K(2; (11,12,0); -) -->(77,890) K(2; (95,68,0),(34,33,1),(10,15,1),(1,25,1); -)
-```
-*)
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  apply (perm_nonhalt tm TM2.tm rename A tape0 same_rules).
+  eapply multistep_nonhalt; [apply init|].
+  apply base_nonhalt; lia.
+Qed.
+End TM4.
