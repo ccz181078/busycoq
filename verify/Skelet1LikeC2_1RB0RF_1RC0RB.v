@@ -6,7 +6,8 @@
    verify/Sk1like_TC_v1.v. Structure of the proof:
    - a symbolic run-length simulator whose run lengths are linear forms c + sum v_i x_i over N,
      sound for every valuation of the x_i and of abstract tape sides (sstep_spec, reach_spec);
-   - the 18 single-block runs of the chain with every gap symbolic, and the chain visit
+   - the 17 single-block runs that the proof uses (11 for m = 3 blocks with every gap symbolic,
+     6 for block 1 with concrete lengths), and the chain visit
      (Lemmas C and C') by induction on the block list (visit3_spec, cb_spec, vis_spec);
    - the left word: its 81 episodes, the last one being the left record (lw_ep);
    - Lemma T: the visits of one record interval as a computation on block labels, for every

@@ -2,12 +2,12 @@
    Skelet 1-like Class 2. The table is that of the parent
    1RB0RF_1RC0RB_1LD0RA_1LE0LD_1RB0LC_1LA--- ([tmP] below),
    the parent's table mirrored (L <-> R) with its states renamed by phi:
-   A->F, B->A, C->B, D->C, E->D, F->E (row q of this machine = parent row phi q with every direction flipped;
-   12/12 entries).
+   A->F, B->A, C->B, D->C, E->D, F->E (row q of this machine = parent row phi q with every direction flipped
+   and every target state renamed by phi; 12/12 entries).
    This machine starts in A = phi^-1(F), so it runs the parent's table from 0^inf F> 0^inf.
    That run reaches a record exit of the parent's invariant (class r5, e = 2, u = 1) after
    18,571,554 simulator steps; only the deep chain differs from the parent's own run there.
-   This file is the parent's file, verify/Skelet1LikeC2_1RB0RF_1RC0RB.v (sha256 64d69ff2...fe86),
+   This file is the parent's file, verify/Skelet1LikeC2_1RB0RF_1RC0RB.v (sha256 13db03a7...0ba4),
    unchanged except for:
    - the parent's table is [tmP]: the simulator, its soundness, every block, chain, left-word and
      right-region lemma, Lemma S, Inv and inv_step are about tmP; the top-level [tm] is this machine;
@@ -23,7 +23,8 @@
    verify/Sk1like_TC_v1.v. Structure of the proof:
    - a symbolic run-length simulator whose run lengths are linear forms c + sum v_i x_i over N,
      sound for every valuation of the x_i and of abstract tape sides (sstep_spec, reach_spec);
-   - the 18 single-block runs of the chain with every gap symbolic, and the chain visit
+   - the 17 single-block runs that the proof uses (11 for m = 3 blocks with every gap symbolic,
+     6 for block 1 with concrete lengths), and the chain visit
      (Lemmas C and C') by induction on the block list (visit3_spec, cb_spec, vis_spec);
    - the left word: its 81 episodes, the last one being the left record (lw_ep);
    - Lemma T: the visits of one record interval as a computation on block labels, for every
