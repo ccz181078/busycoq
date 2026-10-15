@@ -1,43 +1,17 @@
-(* 1RB0RD_1LC0RA_---1RD_1RA1LE_1RC0LF_1LE0LB halts.
-   Skelet 1-like Class 2.  Read at the right records in state A, the tape is a
-   binary counter of units [x, M, m1, P, ..., P, y] separated by 11-walls (lead M = 00 or 1111 is the
-   bit, the P = 1111 walls are passive, y is the fuel), a tail [t] at the head and an edge block at
-   the far end; glued walls, stacks 1^(3j+1) and the edge are classified by length mod 3.  The
-   counter runs out of fuel in a single-marker unit during increment 11,631,266,794,472,450,654,093
-   (counted from the configuration reached after 342 steps), and the next call into that unit halts
-   (F reads a 1 whose two left neighbours are 0 0).  Adapted from verify/Sk1Machines.v (Module
-   TM91 and Sk1Auto: a checked certificate runner with batch / call / check over Eqb.N_iter_until,
-   and check_spec), with the call-stream predicates of verify/Individual.v
-   (segRR/segLL/segRL/segRLs/sideRL), solve_seg and es of verify/Individual62.v, the halting
-   streams of verify/LongitudinalHalt.v (sideRLs_halt, segRLs_sideRLs_halt_concat) and flip_halts_iff.
-   Proof structure.  Everything runs in the mirrored machine tmf = flip tm, where the counter lies
-   to the right of the head.  Every increment is one call from the root into the units: the head
-   enters each unit's cut in B and leaves it in D (h = [(B,[]),(D,[])]).  A unit word is
-   [cw bs ++ leadw b a x ++ tailw g] (passive blocks root-first, lead, boundary 1^(3g+2)), and every
-   touch consumes the two root-most cells of the unit ([consume]: a passive gap shrinks, or the
-   last passive glues onto the root-side boundary, or for a single-marker unit the fuel shrinks).
-   The touch lemmas (stop, pass, unglue g=1 and g>=2, the halting call, the unit next to the edge
-   with edge growth, absorption and fossilization, the two reset increments) are parametric
-   segment lemmas proved by solve_seg/es and composed generically ([gen_RL], [gen_fwd], [gen_side]).
-   On records with N fields, [inc1] runs one increment as one call ([callN], [callN_ret],
-   [callN_halt]); [batchL] applies d increments in closed form (pair lemmas [pairK], [pair1]);
-   [propose] (untrusted) picks d.  Iterating [next] from the step-342 configuration [c342]
-   (reached by [init]) reaches the halting call after 107,781 iterations; the run is checked in 22
-   chunks of 5000 iterations ([run_ok], [run_halt], [s1] .. [s22]).
-   Informal proof: the accompanying write-up.
-   Formalized with Claude Code (AI-assisted).
-   Checked: compiles against unmodified busycoq BB6 (commit 0940bb9) with Coq 8.20.1;
-   Print Assumptions halt: functional_extensionality_dep (from flip_halts_iff) only. *)
+(* Consolidated from busycoq PR #18, commit 08db4597982005cc1fe3b2838201b97cf2d0fe18.
+   Original proof by Dennis Koshta (AI-assisted with Claude Code).
+   TM12 follows Sk1_Class2.txt numbering; the mirrored machine is defined directly.
+   One boolean computation replaces the 22 separately materialized checkpoints. *)
 
-From BusyCoq Require Import Individual62 LongitudinalHalt Flip Eqb.
+From BusyCoq Require Import Individual62 LongitudinalHalt Eqb.
 Require Import ZifyNat Lia NArith PeanoNat String List.
 Open Scope sym_scope.
 Open Scope list.
 
-Definition tm := Eval compute in (TM_from_str "1RB0RD_1LC0RA_---1RD_1RA1LE_1RC0LF_1LE0LB").
-Definition tmf := Eval compute in (flip tm).
-Notation "c -->* c'" := (c -[ tmf ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tmf ]->+ c') (at level 40).
+Module TM12.
+Definition tm := Eval compute in (TM_from_str "1LB0LD_1RC0LA_---1LD_1LA1RE_1LC0RF_1RE0RB").
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
 (** * Generic composition of one-call segments *)
 Lemma segRR_app {t h1 h2 h3 w1 w2 m1 m2}:
@@ -73,32 +47,32 @@ Definition lbw m j : list Sym := [0;1;1]^^j ++ [0;1]^^(S m).
 Definition xbmid x : list Sym := [0;0;1] ++ [0;1]^^x.
 
 (** * Block lemmas (found with solve_seg) *)
-Lemma blkRR_F m j: segRR tmf (F,[]) (F,[]) (blk m j) (bmid m j).
+Lemma blkRR_F m j: segRR tm (F,[]) (F,[]) (blk m j) (bmid m j).
 Proof. unfold blk,bmid,stack. solve_seg. Qed.
-Lemma blkRR_B m j: segRR tmf (B,[]) (F,[]) (blk m j) (bmid m j).
+Lemma blkRR_B m j: segRR tm (B,[]) (F,[]) (blk m j) (bmid m j).
 Proof. unfold blk,bmid,stack. solve_seg. Qed.
-Lemma blkLL m j: segLL tmf (D,[]) (D,[]) (lbw m j) (blk m j).
+Lemma blkLL m j: segLL tm (D,[]) (D,[]) (lbw m j) (blk m j).
 Proof. unfold blk,lbw,stack. solve_seg. Qed.
-Lemma sweepLL: segLL tmf (D,[]) (D,[]) [0;1] [0;1].
+Lemma sweepLL: segLL tm (D,[]) (D,[]) [0;1] [0;1].
 Proof. solve_seg. Qed.
-Lemma leadLL a: segLL tmf (A,[]) (D,[]) (bmid a 1) ([0;1]^^a ++ [0;0] ++ [1;0;1]).
+Lemma leadLL a: segLL tm (A,[]) (D,[]) (bmid a 1) ([0;1]^^a ++ [0;0] ++ [1;0;1]).
 Proof. unfold bmid. solve_seg. Qed.
-Lemma xbRR x: segRR tmf (F,[]) (B,[]) ([0] ++ [1;0]^^x ++ [1;1]) (xbmid x).
+Lemma xbRR x: segRR tm (F,[]) (B,[]) ([0] ++ [1;0]^^x ++ [1;1]) (xbmid x).
 Proof. unfold xbmid. solve_seg. Qed.
-Lemma xbLL x: segLL tmf (D,[]) (A,[]) (xbmid x) ([0] ++ [1;0]^^x ++ [1;1]).
+Lemma xbLL x: segLL tm (D,[]) (A,[]) (xbmid x) ([0] ++ [1;0]^^x ++ [1;1]).
 Proof. unfold xbmid. solve_seg. Qed.
-Lemma leadstopS a x: segRL tmf (F,[]) (D,[]) ([0;1]^^(S a) ++ [0;0] ++ [1;0]^^(S x))
+Lemma leadstopS a x: segRL tm (F,[]) (D,[]) ([0;1]^^(S a) ++ [0;0] ++ [1;0]^^(S x))
   ([0] ++ [1;0]^^a ++ [1;1;1;1] ++ [0] ++ [1;0]^^x).
 Proof. solve_seg. Qed.
-Lemma leadstop0 x: segRL tmf (F,[]) (D,[]) ([0;0] ++ [1;0]^^(S x)) ([1;1;1] ++ [0] ++ [1;0]^^x).
+Lemma leadstop0 x: segRL tm (F,[]) (D,[]) ([0;0] ++ [1;0]^^(S x)) ([1;1;1] ++ [0] ++ [1;0]^^x).
 Proof. solve_seg. Qed.
-Lemma stop1 c a: segRL tmf (B,[]) (D,[]) ([0;1]^^(S c) ++ [0;0] ++ [1;0]^^(S a))
+Lemma stop1 c a: segRL tm (B,[]) (D,[]) ([0;1]^^(S c) ++ [0;0] ++ [1;0]^^(S a))
   ([0] ++ [1;0]^^c ++ [1;1;1;1] ++ [0] ++ [1;0]^^a).
 Proof. solve_seg. Qed.
-Lemma edge0L x f: sideRL tmf (F,[]) (D,[]) (([0] ++ [1;0]^^(S x) ++ [1;1;1]^^f) *> const 0)
+Lemma edge0L x f: sideRL tm (F,[]) (D,[]) (([0] ++ [1;0]^^(S x) ++ [1;1;1]^^f) *> const 0)
   (([0] ++ [1;0]^^x ++ [1;1;1]^^(S f)) *> const 0).
 Proof. unfold sideRL. intros l. unfold to_DH_config. es. Qed.
-Lemma edge0E y f: sideRL tmf (B,[]) (D,[]) (([0] ++ [1;0]^^(S y) ++ [1;1;1]^^f) *> const 0)
+Lemma edge0E y f: sideRL tm (B,[]) (D,[]) (([0] ++ [1;0]^^(S y) ++ [1;1;1]^^f) *> const 0)
   (([0] ++ [1;0]^^y ++ [1;1;1]^^(S f)) *> const 0).
 Proof. unfold sideRL. intros l. unfold to_DH_config. es. Qed.
 
@@ -110,13 +84,13 @@ Fixpoint cw (ch:list (nat*nat)) : list Sym := match ch with [] => [] | p::ch => 
 Fixpoint cmid (ch:list (nat*nat)) : list Sym := match ch with [] => [] | p::ch => cmid ch ++ bmidp p end.
 Fixpoint clbw (ch:list (nat*nat)) : list Sym := match ch with [] => [] | p::ch => clbw ch ++ lbwp p end.
 
-Lemma chainRR ch: segRR tmf (F,[]) (F,[]) (cw ch) (cmid ch).
+Lemma chainRR ch: segRR tm (F,[]) (F,[]) (cw ch) (cmid ch).
 Proof.
   induction ch as [|p ch IH]; cbn [cw cmid].
   - unfold segRR. intros. cbn. finish.
   - exact (segRR_app (blkRR_F (fst p) (snd p)) IH).
 Qed.
-Lemma chainLL ch: segLL tmf (D,[]) (D,[]) (clbw ch) (cw ch).
+Lemma chainLL ch: segLL tm (D,[]) (D,[]) (clbw ch) (cw ch).
 Proof.
   induction ch as [|p ch IH]; cbn [cw clbw].
   - unfold segLL. intros. cbn. finish.
@@ -136,9 +110,9 @@ Proof. rewrite <-bmid_shift. unfold bmid. cbn [lpow]. rewrite <-!app_assoc. f_eq
 
 (** prefix = Y block (entered in B) followed by a chain *)
 Definition pw c j ch := blk c j ++ cw ch.
-Lemma prefRR c j ch: segRR tmf (B,[]) (F,[]) (pw c j ch) (cmid ch ++ bmid c j).
+Lemma prefRR c j ch: segRR tm (B,[]) (F,[]) (pw c j ch) (cmid ch ++ bmid c j).
 Proof. exact (segRR_app (blkRR_B c j) (chainRR ch)). Qed.
-Lemma prefLL c j ch: segLL tmf (D,[]) (D,[]) (cmid ch ++ bmid (S c) j) (pw c j ch ++ [0;1]).
+Lemma prefLL c j ch: segLL tm (D,[]) (D,[]) (cmid ch ++ bmid (S c) j) (pw c j ch ++ [0;1]).
 Proof.
   rewrite bmid_S, (app_assoc (cmid ch) [0;1]), cmid_shift, <-app_assoc.
   unfold pw.
@@ -160,7 +134,7 @@ Definition hB : DH0 := (B,[]).
 Definition hD : DH0 := (D,[]).
 Definition h : list (DH0*DH0) := [(hB,hD)].
 
-Lemma stopK c j ch a x: segRL tmf hB hD (pw (S c) j ch ++ lead0 a (S x)) (pw c j ch ++ lead1 a x).
+Lemma stopK c j ch a x: segRL tm hB hD (pw (S c) j ch ++ lead0 a (S x)) (pw c j ch ++ lead1 a x).
 Proof.
   destruct a as [|a].
   - pose proof (segRR_RL_LL (prefRR (S c) j ch) (leadstop0 x) (prefLL c j ch)) as H.
@@ -169,48 +143,48 @@ Proof.
     unfold lead0,lead1. applys_eq H. unfold blk,stack. cbn. rewrite <-!app_assoc. reflexivity.
 Qed.
 
-Lemma stopK1 c a: segRL tmf hB hD (lead0 (S c) (S a)) (lead1 c a).
+Lemma stopK1 c a: segRL tm hB hD (lead0 (S c) (S a)) (lead1 c a).
 Proof. unfold lead0,lead1,blk,stack. solve_seg. Qed.
 
 Definition passK_mid c j ch a x := (xbmid x ++ bmid a 1) ++ (cmid ch ++ bmid (S c) j).
-Lemma passK_RR c j ch a x: segRR tmf hB hB (pw (S c) j ch ++ lead1 a x ++ [1;1]) (passK_mid c j ch a x).
+Lemma passK_RR c j ch a x: segRR tm hB hB (pw (S c) j ch ++ lead1 a x ++ [1;1]) (passK_mid c j ch a x).
 Proof.
   unfold lead1, passK_mid. rewrite <-!app_assoc.
   pose proof (segRR_app (prefRR (S c) j ch) (segRR_app (blkRR_F a 1) (xbRR x))) as H.
   rewrite <-!app_assoc in H. exact H.
 Qed.
-Lemma passK_LL c j ch a x: segLL tmf hD hD (passK_mid c j ch a x) (pw c j ch ++ lead0 (S a) (S (S x)) ++ [1;1]).
+Lemma passK_LL c j ch a x: segLL tm hD hD (passK_mid c j ch a x) (pw c j ch ++ lead0 (S a) (S (S x)) ++ [1;1]).
 Proof.
   unfold passK_mid.
   pose proof (segLL_app (segLL_app (xbLL x) (leadLL a)) (prefLL c j ch)) as H.
   applys_eq H. unfold lead0. cbn [lpow]. rewrite <-!app_assoc. cbn. reflexivity.
 Qed.
-Lemma passK c j ch a x: segRLs tmf h h (pw (S c) j ch ++ lead1 a x ++ [1;1]) (pw c j ch ++ lead0 (S a) (S (S x)) ++ [1;1]).
+Lemma passK c j ch a x: segRLs tm h h (pw (S c) j ch ++ lead1 a x ++ [1;1]) (pw c j ch ++ lead0 (S a) (S (S x)) ++ [1;1]).
 Proof.
-  unfold h. applys_eq (segRLs_lrcons tmf [] [] [] _ _ _ _ _ hB hD hB hD
+  unfold h. applys_eq (segRLs_lrcons tm [] [] [] _ _ _ _ _ hB hD hB hD
     (passK_RR c j ch a x) (passK_LL c j ch a x) (segLRs_O _ _) (segRLs_O _ _)).
 Qed.
 
 Definition passK1_mid c x := xbmid x ++ bmid c 1.
-Lemma passK1_RR c x: segRR tmf hB hB (lead1 c x ++ [1;1]) (passK1_mid c x).
+Lemma passK1_RR c x: segRR tm hB hB (lead1 c x ++ [1;1]) (passK1_mid c x).
 Proof. unfold lead1,passK1_mid. rewrite <-!app_assoc. exact (segRR_app (blkRR_B c 1) (xbRR x)). Qed.
-Lemma passK1_LL c x: segLL tmf hD hD (passK1_mid c x) (lead0 c (S (S x)) ++ [1;1]).
+Lemma passK1_LL c x: segLL tm hD hD (passK1_mid c x) (lead0 c (S (S x)) ++ [1;1]).
 Proof.
   unfold passK1_mid. pose proof (segLL_app (xbLL x) (leadLL c)) as H.
   applys_eq H. unfold lead0. cbn [lpow]. rewrite <-!app_assoc. cbn. reflexivity.
 Qed.
-Lemma passK1 c x: segRLs tmf h h (lead1 c x ++ [1;1]) (lead0 c (S (S x)) ++ [1;1]).
+Lemma passK1 c x: segRLs tm h h (lead1 c x ++ [1;1]) (lead0 c (S (S x)) ++ [1;1]).
 Proof.
-  unfold h. applys_eq (segRLs_lrcons tmf [] [] [] _ _ _ _ _ hB hD hB hD
+  unfold h. applys_eq (segRLs_lrcons tm [] [] [] _ _ _ _ _ hB hD hB hD
     (passK1_RR c x) (passK1_LL c x) (segLRs_O _ _) (segRLs_O _ _)).
 Qed.
 
 (** halting call: a k=1 digit with lead 00 and no fuel *)
-Lemma halt0 x l r: halts tmf (l {{B}}> lead0 0 x *> r).
+Lemma halt0 x l r: halts tm (l {{B}}> lead0 0 x *> r).
 Proof. unfold lead0. cbn. solve_halt. Qed.
 
 (** * U0 (the unit next to the edge) and the edge 1^(3f) *)
-Lemma edge0L0 f: sideRL tmf (F,[]) (D,[]) (([0] ++ [1;1;1]^^f) *> const 0)
+Lemma edge0L0 f: sideRL tm (F,[]) (D,[]) (([0] ++ [1;1;1]^^f) *> const 0)
   (([1;1] ++ [1;1;1]^^f) *> const 0).
 Proof. unfold sideRL. intros l. unfold to_DH_config. es. Qed.
 Lemma segRR_sideRL_LL {t h1 h2 h3 h4 w m w' r r'}:
@@ -225,7 +199,7 @@ Proof.
 Qed.
 Definition edgew x f : list Sym := [0] ++ [1;0]^^x ++ [1;1;1]^^f.
 (** leadless U0: prefix, then the gap x (2x+1 cells), then the edge *)
-Lemma u0L c j ch x f: sideRL tmf hB hD ((pw (S c) j ch ++ edgew x f) *> const 0)
+Lemma u0L c j ch x f: sideRL tm hB hD ((pw (S c) j ch ++ edgew x f) *> const 0)
   ((pw c j ch ++ edgew x (S f)) *> const 0).
 Proof.
   rewrite !Str_app_assoc. destruct x as [|x].
@@ -235,7 +209,7 @@ Proof.
     applys_eq H. unfold edgew. rewrite <-!Str_app_assoc. f_equal. rewrite <-!app_assoc. reflexivity.
 Qed.
 (** empty U0 *)
-Lemma u0E y f: sideRL tmf hB hD (edgew (S y) f *> const 0) (edgew y (S f) *> const 0).
+Lemma u0E y f: sideRL tm hB hD (edgew (S y) f *> const 0) (edgew y (S f) *> const 0).
 Proof. unfold edgew. exact (edge0E y f). Qed.
 
 (** * The root: tail gap 2t+1 and the tail boundary 11 *)
@@ -244,21 +218,21 @@ Definition wmid t : list Sym := [0] ++ [0;1]^^t ++ [0;1;0;1].
 Lemma root_in t X: root t X -->* wmid t *> const 0 {{B}}> X.
 Proof. unfold root,wmid. es. Qed.
 Lemma sweepA: forall l r n, l <* [0;1]^^n <{{A}} r -->* l <{{A}} [0;1]^^n *> r.
-Proof. apply (shift_rule_L [] tmf [0;1] [0;1] A). intros. es. Qed.
+Proof. apply (shift_rule_L [] tm [0;1] [0;1] A). intros. es. Qed.
 Lemma root_out t X: wmid t *> const 0 <{{D}} X -->* root (S t) X.
 Proof.
   unfold root,wmid. simpl_tape. step. follow sweepA. do 4 step.
   apply evstep_refl'. cbn [lpow app Str_app].
   change (0 >> 1 >> 1 >> X) with ([0;1] *> 1 >> X). rewrite lpow_shift'. reflexivity.
 Qed.
-Lemma root_step t X X': sideRL tmf hB hD X X' -> root t X -->+ root (S t) X'.
+Lemma root_step t X X': sideRL tm hB hD X X' -> root t X -->+ root (S t) X'.
 Proof.
   intros H.
   eapply evstep_progress_trans. 1: apply root_in.
   eapply progress_evstep_trans. 1: apply (H (wmid t *> const 0)).
   apply root_out.
 Qed.
-Lemma root_steps n: forall t X X', sideRLs tmf (h^^n) X X' -> root t X -->* root (n+t) X'.
+Lemma root_steps n: forall t X X', sideRLs tm (h^^n) X X' -> root t X -->* root (n+t) X'.
 Proof.
   induction n; intros t X X' H.
   - inverts H. finish.
@@ -266,7 +240,7 @@ Proof.
     eapply evstep_trans. 1: apply progress_evstep, root_step; eassumption.
     replace (S n + t) with (n + S t) by lia. apply IHn. assumption.
 Qed.
-Lemma root_halt t X: sideRLs_halt tmf h X -> halts tmf (root t X).
+Lemma root_halt t X: sideRLs_halt tm h X -> halts tm (root t X).
 Proof. intros H. eapply halts_evstep. 2: apply root_in. apply (sideRLs_halt_single _ _ _ _ H). Qed.
 
 
@@ -284,9 +258,9 @@ Definition consume (bs: list (nat*nat)) (a:nat) : option (nat * list (nat*nat) *
 Lemma cw_app l1 l2: cw (l1 ++ l2) = cw l1 ++ cw l2.
 Proof. induction l1 as [|p l1 IH]; cbn; [reflexivity|]. rewrite IH, app_assoc. reflexivity. Qed.
 
-Lemma yLL_glue j: segLL tmf (D,[]) (D,[]) ([0;1;1]^^j) ([1;1;1]^^j).
+Lemma yLL_glue j: segLL tm (D,[]) (D,[]) ([0;1;1]^^j) ([1;1;1]^^j).
 Proof. solve_seg. Qed.
-Lemma prefLL_glue j ch: segLL tmf (D,[]) (D,[]) (cmid ch ++ bmid 0 j) ([1;1;1]^^j ++ cw ch ++ [0;1]).
+Lemma prefLL_glue j ch: segLL tm (D,[]) (D,[]) (cmid ch ++ bmid 0 j) ([1;1;1]^^j ++ cw ch ++ [0;1]).
 Proof.
   unfold bmid. cbn [lpow]. rewrite app_nil_r.
   rewrite (app_assoc (cmid ch) [0;1]), cmid_shift, <-app_assoc.
@@ -295,43 +269,43 @@ Proof.
 Qed.
 
 (** generic compositions: prefix out (B->F), a core entered in F, prefix back (D->D) *)
-Lemma gen_RL {ci co} (HF: segRL tmf hF hD ci co) c j ch:
-  segRL tmf hB hD (pw (S c) j ch ++ ci) (pw c j ch ++ [0;1] ++ co).
+Lemma gen_RL {ci co} (HF: segRL tm hF hD ci co) c j ch:
+  segRL tm hB hD (pw (S c) j ch ++ ci) (pw c j ch ++ [0;1] ++ co).
 Proof.
   pose proof (segRR_RL_LL (prefRR (S c) j ch) HF (prefLL c j ch)) as H.
   applys_eq H. rewrite <-!app_assoc. reflexivity.
 Qed.
-Lemma gen_RLg {ci co} (HF: segRL tmf hF hD ci co) j ch:
-  segRL tmf hB hD (pw 0 j ch ++ ci) ([1;1;1]^^j ++ cw ch ++ [0;1] ++ co).
+Lemma gen_RLg {ci co} (HF: segRL tm hF hD ci co) j ch:
+  segRL tm hB hD (pw 0 j ch ++ ci) ([1;1;1]^^j ++ cw ch ++ [0;1] ++ co).
 Proof.
   pose proof (segRR_RL_LL (prefRR 0 j ch) HF (prefLL_glue j ch)) as H.
   applys_eq H. rewrite <-!app_assoc. reflexivity.
 Qed.
-Lemma lrcons1 {w1 w2 m}: segRR tmf hB hB w1 m -> segLL tmf hD hD m w2 -> segRLs tmf h h w1 w2.
+Lemma lrcons1 {w1 w2 m}: segRR tm hB hB w1 m -> segLL tm hD hD m w2 -> segRLs tm h h w1 w2.
 Proof.
   intros H1 H2. unfold h.
-  applys_eq (segRLs_lrcons tmf [] [] [] _ _ _ _ _ hB hD hB hD H1 H2 (segLRs_O _ _) (segRLs_O _ _)).
+  applys_eq (segRLs_lrcons tm [] [] [] _ _ _ _ _ hB hD hB hD H1 H2 (segLRs_O _ _) (segRLs_O _ _)).
 Qed.
-Lemma gen_fwd {ci m co} (HR: segRR tmf hF hB ci m) (HL: segLL tmf hD hD m co) c j ch:
-  segRLs tmf h h (pw (S c) j ch ++ ci) (pw c j ch ++ [0;1] ++ co).
+Lemma gen_fwd {ci m co} (HR: segRR tm hF hB ci m) (HL: segLL tm hD hD m co) c j ch:
+  segRLs tm h h (pw (S c) j ch ++ ci) (pw c j ch ++ [0;1] ++ co).
 Proof.
   pose proof (lrcons1 (segRR_app (prefRR (S c) j ch) HR) (segLL_app HL (prefLL c j ch))) as H.
   applys_eq H. rewrite <-!app_assoc. reflexivity.
 Qed.
-Lemma gen_fwdg {ci m co} (HR: segRR tmf hF hB ci m) (HL: segLL tmf hD hD m co) j ch:
-  segRLs tmf h h (pw 0 j ch ++ ci) ([1;1;1]^^j ++ cw ch ++ [0;1] ++ co).
+Lemma gen_fwdg {ci m co} (HR: segRR tm hF hB ci m) (HL: segLL tm hD hD m co) j ch:
+  segRLs tm h h (pw 0 j ch ++ ci) ([1;1;1]^^j ++ cw ch ++ [0;1] ++ co).
 Proof.
   pose proof (lrcons1 (segRR_app (prefRR 0 j ch) HR) (segLL_app HL (prefLL_glue j ch))) as H.
   applys_eq H. rewrite <-!app_assoc. reflexivity.
 Qed.
-Lemma gen_side {ci co R R'} (HF: sideRL tmf hF hD (ci *> R) (co *> R')) c j ch:
-  sideRL tmf hB hD ((pw (S c) j ch ++ ci) *> R) ((pw c j ch ++ [0;1] ++ co) *> R').
+Lemma gen_side {ci co R R'} (HF: sideRL tm hF hD (ci *> R) (co *> R')) c j ch:
+  sideRL tm hB hD ((pw (S c) j ch ++ ci) *> R) ((pw c j ch ++ [0;1] ++ co) *> R').
 Proof.
   pose proof (segRR_sideRL_LL (prefRR (S c) j ch) HF (prefLL c j ch)) as H.
   applys_eq H; rewrite <-!Str_app_assoc; f_equal; rewrite <-!app_assoc; reflexivity.
 Qed.
-Lemma gen_sideg {ci co R R'} (HF: sideRL tmf hF hD (ci *> R) (co *> R')) j ch:
-  sideRL tmf hB hD ((pw 0 j ch ++ ci) *> R) (([1;1;1]^^j ++ cw ch ++ [0;1] ++ co) *> R').
+Lemma gen_sideg {ci co R R'} (HF: sideRL tm hF hD (ci *> R) (co *> R')) j ch:
+  sideRL tm hB hD ((pw 0 j ch ++ ci) *> R) (([1;1;1]^^j ++ cw ch ++ [0;1] ++ co) *> R').
 Proof.
   pose proof (segRR_sideRL_LL (prefRR 0 j ch) HF (prefLL_glue j ch)) as H.
   applys_eq H; rewrite <-!Str_app_assoc; f_equal; rewrite <-!app_assoc; reflexivity.
@@ -345,14 +319,14 @@ Ltac lnorm2 := unfold uw,leadw,pw; do 3 (rewrite ?cw_app; cbn [cw]); unfold blkp
   repeat (rewrite lpow_rotate_list; cbn [app]); try reflexivity.
 
 (** ** cores *)
-Lemma cstopF a x far: exists co, segRL tmf hF hD (lead0 a (S x) ++ far) co /\ [0;1] ++ co = lead1 a x ++ far.
+Lemma cstopF a x far: exists co, segRL tm hF hD (lead0 a (S x) ++ far) co /\ [0;1] ++ co = lead1 a x ++ far.
 Proof.
   destruct a as [|a].
   - eexists. split. 1: exact (segRL_frame far (leadstop0 x)). lnorm2.
   - eexists. split. 1: exact (segRL_frame far (leadstopS a x)). lnorm2.
 Qed.
 Lemma t_stop bs a x far ov bs' a': consume bs a = Some (ov, bs', a') ->
-  segRL tmf hB hD (uw bs false a (S x) far) ([1;1;1]^^ov ++ uw bs' true a' x far).
+  segRL tm hB hD (uw bs false a (S x) far) ([1;1;1]^^ov ++ uw bs' true a' x far).
 Proof.
   destruct (cstopF a x far) as [co [HF HE]].
   destruct bs as [|[[|c] j] r]; cbn [consume]; intros E.
@@ -363,13 +337,13 @@ Proof.
 Qed.
 
 Definition cpass_mid a x := xbmid x ++ bmid a 1.
-Lemma cpassRR a x: segRR tmf hF hB (lead1 a x ++ [1;1]) (cpass_mid a x).
+Lemma cpassRR a x: segRR tm hF hB (lead1 a x ++ [1;1]) (cpass_mid a x).
 Proof. unfold lead1,cpass_mid. rewrite <-!app_assoc. exact (segRR_app (blkRR_F a 1) (xbRR x)). Qed.
 Definition cpass_co a x := ([0;1]^^a ++ [0;0] ++ [1;0;1]) ++ ([0] ++ [1;0]^^x ++ [1;1]).
-Lemma cpassLL a x: segLL tmf hD hD (cpass_mid a x) (cpass_co a x).
+Lemma cpassLL a x: segLL tm hD hD (cpass_mid a x) (cpass_co a x).
 Proof. unfold cpass_mid,cpass_co. exact (segLL_app (xbLL x) (leadLL a)). Qed.
 Lemma t_pass bs a x ov bs' a': consume bs (S a) = Some (ov, bs', a') ->
-  segRLs tmf h h (uw bs true a x (tailw 0)) ([1;1;1]^^ov ++ uw bs' false a' (S (S x)) (tailw 0)).
+  segRLs tm h h (uw bs true a x (tailw 0)) ([1;1;1]^^ov ++ uw bs' false a' (S (S x)) (tailw 0)).
 Proof.
   destruct bs as [|[[|c] j] r]; cbn [consume]; intros E; injection E as E1 E2 E3; subst ov bs' a'.
   - pose proof (passK1 a x) as H. applys_eq H; lnorm2.
@@ -382,21 +356,21 @@ Definition um1 a x : list Sym := [0;0;1;0;1;1;0;1;0;1] ++ [0;1]^^x ++ [1] ++ [0;
 Definition um2 a x g : list Sym := [0;0;1;0;1;1;0;1;1;0;1] ++ [1;0;1]^^g ++ [0;1] ++ [0;1]^^x ++ [1] ++ [0;1]^^a.
 Definition uco1 a x : list Sym := [0;1]^^a ++ [1;1;1;0;1;0] ++ [1;0]^^x ++ [0;1;0;1;1].
 Definition uco2 a x g : list Sym := [0;1]^^a ++ [1;1;1;0;1] ++ [0;1]^^x ++ [1;1;1] ++ [1;1;1]^^g ++ [0;0;1;0;1;1].
-Lemma u1RF a x: segRR tmf hF hB (lead1 a x ++ tailw 1) (um1 a x).
+Lemma u1RF a x: segRR tm hF hB (lead1 a x ++ tailw 1) (um1 a x).
 Proof. unfold lead1,blk,stack,tailw,um1,hF,hB. solve_seg. Qed.
-Lemma u1RB a x: segRR tmf hB hB (lead1 a x ++ tailw 1) (um1 a x).
+Lemma u1RB a x: segRR tm hB hB (lead1 a x ++ tailw 1) (um1 a x).
 Proof. unfold lead1,blk,stack,tailw,um1,hB. solve_seg. Qed.
-Lemma u1L a x: segLL tmf hD hD (um1 a x) (uco1 a x).
+Lemma u1L a x: segLL tm hD hD (um1 a x) (uco1 a x).
 Proof. unfold um1,uco1,hD. solve_seg. Qed.
-Lemma u2RF a x g: segRR tmf hF hB (lead1 a x ++ tailw (S (S g))) (um2 a x g).
+Lemma u2RF a x g: segRR tm hF hB (lead1 a x ++ tailw (S (S g))) (um2 a x g).
 Proof. unfold lead1,blk,stack,tailw,um2,hF,hB. solve_seg. Qed.
-Lemma u2RB a x g: segRR tmf hB hB (lead1 a x ++ tailw (S (S g))) (um2 a x g).
+Lemma u2RB a x g: segRR tm hB hB (lead1 a x ++ tailw (S (S g))) (um2 a x g).
 Proof. unfold lead1,blk,stack,tailw,um2,hB. solve_seg. Qed.
-Lemma u2L a x g: segLL tmf hD hD (um2 a x g) (uco2 a x g).
+Lemma u2L a x g: segLL tm hD hD (um2 a x g) (uco2 a x g).
 Proof. unfold um2,uco2,hD. solve_seg. Qed.
 
 Lemma t_ungl1 bs a x ov bs' a': consume (bs ++ [(a,1%nat)]) (S x) = Some (ov, bs', a') ->
-  segRLs tmf h h (uw bs true a x (tailw 1)) ([1;1;1]^^ov ++ uw bs' false a' 1 (tailw 0)).
+  segRLs tm h h (uw bs true a x (tailw 1)) ([1;1;1]^^ov ++ uw bs' false a' 1 (tailw 0)).
 Proof.
   destruct bs as [|[[|c] j] r]; cbn [app consume].
   - destruct a as [|a]; intros E; injection E as E1 E2 E3; subst ov bs' a'.
@@ -408,7 +382,7 @@ Proof.
     pose proof (gen_fwd (u1RF a x) (u1L a x) c j r) as H. applys_eq H; unfold uco1; rewrite ?cw_app; lnorm2.
 Qed.
 Lemma t_ungl2 bs a x g ov bs' a': consume (bs ++ [(a,1%nat);(x,S g)]) 0%nat = Some (ov, bs', a') ->
-  segRLs tmf h h (uw bs true a x (tailw (S (S g)))) ([1;1;1]^^ov ++ uw bs' false a' 1 (tailw 0)).
+  segRLs tm h h (uw bs true a x (tailw (S (S g)))) ([1;1;1]^^ov ++ uw bs' false a' 1 (tailw 0)).
 Proof.
   destruct bs as [|[[|c] j] r]; cbn [app consume].
   - destruct a as [|a]; intros E; injection E as E1 E2 E3; subst ov bs' a'.
@@ -421,13 +395,13 @@ Proof.
 Qed.
 
 (** ** the halting call *)
-Lemma t_halt x far l r: halts tmf (l {{B}}> uw [] false 0 x far *> r).
+Lemma t_halt x far l r: halts tm (l {{B}}> uw [] false 0 x far *> r).
 Proof. unfold uw, leadw. cbn [cw app]. rewrite Str_app_assoc. apply halt0. Qed.
 
 (** ** U0 next to the edge.  Edge class 0: [1;1;1]^^f; class 1: [1] ++ [1;1;1]^^f *)
 Definition edge1w f : list Sym := [1] ++ [1;1;1]^^f.
 Lemma z_lead bs x f ov bs' a': bs <> [] -> consume bs 0%nat = Some (ov, bs', a') ->
-  sideRL tmf hB hD ((cw bs ++ edgew x f) *> const 0) (([1;1;1]^^ov ++ cw bs' ++ edgew x (S f)) *> const 0).
+  sideRL tm hB hD ((cw bs ++ edgew x f) *> const 0) (([1;1;1]^^ov ++ cw bs' ++ edgew x (S f)) *> const 0).
 Proof.
   intros NE. destruct bs as [|[[|c] j] r]; [congruence| |]; cbn [consume]; intros E; injection E as E1 E2 E3; subst ov bs' a'.
   - destruct x as [|x].
@@ -437,20 +411,20 @@ Proof.
     + pose proof (gen_side (edge0L0 f) c j r) as H. applys_eq H; rewrite <-?Str_app_assoc; f_equal; lnorm2.
     + pose proof (gen_side (edge0L x f) c j r) as H. applys_eq H; rewrite <-?Str_app_assoc; f_equal; lnorm2.
 Qed.
-Lemma z_empty y f: sideRL tmf hB hD (edgew (S y) f *> const 0) (edgew y (S f) *> const 0).
+Lemma z_empty y f: sideRL tm hB hD (edgew (S y) f *> const 0) (edgew y (S f) *> const 0).
 Proof. apply u0E. Qed.
-Lemma z_absorb f: sideRL tmf hB hD (edgew 0 (S f) *> const 0) (([1;1] ++ [1;1;1]^^(S f)) *> const 0).
+Lemma z_absorb f: sideRL tm hB hD (edgew 0 (S f) *> const 0) (([1;1] ++ [1;1;1]^^(S f)) *> const 0).
 Proof. unfold sideRL. intros l. unfold to_DH_config, edgew, hB, hD. es. Qed.
 Lemma z_stop bs a x f ov bs' a': consume bs a = Some (ov, bs', a') ->
-  sideRL tmf hB hD (uw bs false a (S x) (edge1w f) *> const 0) (([1;1;1]^^ov ++ uw bs' true a' x (edge1w f)) *> const 0).
+  sideRL tm hB hD (uw bs false a (S x) (edge1w f) *> const 0) (([1;1;1]^^ov ++ uw bs' true a' x (edge1w f)) *> const 0).
 Proof. intros E. apply segRL_side, t_stop, E. Qed.
 Definition zco a x f : list Sym := [0;1]^^a ++ [1;1;1;0;1] ++ [0;1]^^x ++ [1;1;1]^^f ++ [0;1;1;1].
-Lemma z1F a x f: sideRL tmf hF hD ((lead1 a x ++ edge1w f) *> const 0) (zco a x f *> const 0).
+Lemma z1F a x f: sideRL tm hF hD ((lead1 a x ++ edge1w f) *> const 0) (zco a x f *> const 0).
 Proof. unfold sideRL. intros l. unfold to_DH_config, lead1, blk, stack, edge1w, zco, hF, hD. es. Qed.
-Lemma z1B a x f: sideRL tmf hB hD ((lead1 a x ++ edge1w f) *> const 0) (zco a x f *> const 0).
+Lemma z1B a x f: sideRL tm hB hD ((lead1 a x ++ edge1w f) *> const 0) (zco a x f *> const 0).
 Proof. unfold sideRL. intros l. unfold to_DH_config, lead1, blk, stack, edge1w, zco, hB, hD. es. Qed.
 Lemma z_1111 bs a x f ov bs' a': consume (bs ++ [(a,1%nat);(x,f)]) 0%nat = Some (ov, bs', a') ->
-  sideRL tmf hB hD (uw bs true a x (edge1w f) *> const 0) (([1;1;1]^^ov ++ cw bs' ++ edgew 0 1) *> const 0).
+  sideRL tm hB hD (uw bs true a x (edge1w f) *> const 0) (([1;1;1]^^ov ++ cw bs' ++ edgew 0 1) *> const 0).
 Proof.
   unfold uw, leadw. destruct bs as [|[[|c] j] r]; cbn [app consume].
   - destruct a as [|a]; intros E; injection E as E1 E2 E3; subst ov bs' a'.
@@ -469,13 +443,13 @@ Lemma reset1_in t X: root t ([1;1;1] *> X) -->* rmid t *> const 0 {{B}}> X.
 Proof. unfold root,rmid. es. Qed.
 Lemma reset1_out t X: rmid t *> const 0 <{{D}} X -->* NT (S t) 0 X.
 Proof. unfold rmid,NT,tailw. es. Qed.
-Lemma reset1 t X X': sideRL tmf hB hD X X' -> root t ([1;1;1] *> X) -->* NT (S t) 0 X'.
+Lemma reset1 t X X': sideRL tm hB hD X X' -> root t ([1;1;1] *> X) -->* NT (S t) 0 X'.
 Proof.
   intros H. eapply evstep_trans. 1: apply reset1_in.
   eapply evstep_trans. 2: apply reset1_out.
   apply progress_evstep. apply (H (rmid t *> const 0)).
 Qed.
-Lemma reset1_halt t X: sideRLs_halt tmf h X -> halts tmf (root t ([1;1;1] *> X)).
+Lemma reset1_halt t X: sideRLs_halt tm h X -> halts tm (root t ([1;1;1] *> X)).
 Proof. intros H. eapply halts_evstep. 2: apply reset1_in. apply (sideRLs_halt_single _ _ _ _ H). Qed.
 Lemma reset2 s g X: NT (S s) g X -->* root 0 ((lead1 s 0 ++ tailw g) *> X).
 Proof. unfold NT,root,lead1,blk,stack,tailw. es. Qed.
@@ -534,7 +508,7 @@ Definition touchN u : tres :=
 
 Ltac nat_of := cbn [cvp fst snd]; rewrite ?N2Nat.inj_succ, ?N2Nat.inj_add, ?N2Nat.inj_pred.
 
-Lemma touchN_stop u ov u': touchN u = TStop ov u' -> segRL tmf hB hD (uwN u) ([1;1;1]^^(N.to_nat ov) ++ uwN u').
+Lemma touchN_stop u ov u': touchN u = TStop ov u' -> segRL tm hB hD (uwN u) ([1;1;1]^^(N.to_nat ov) ++ uwN u').
 Proof.
   destruct u as [bs [] a x g]; unfold touchN; cbn [ubit ubs ua ux ug].
   - destruct (N.eqb g 0); [|destruct (N.eqb g 1)];
@@ -549,7 +523,7 @@ Proof.
     apply N.eqb_neq in Hx. replace (N.to_nat x) with (S (N.to_nat (N.pred x))) by lia.
     apply t_stop. exact Hc.
 Qed.
-Lemma touchN_pass u ov u': touchN u = TPass ov u' -> segRLs tmf h h (uwN u) ([1;1;1]^^(N.to_nat ov) ++ uwN u') /\ ug u' = 0%N.
+Lemma touchN_pass u ov u': touchN u = TPass ov u' -> segRLs tm h h (uwN u) ([1;1;1]^^(N.to_nat ov) ++ uwN u') /\ ug u' = 0%N.
 Proof.
   destruct u as [bs [] a x g]; unfold touchN; cbn [ubit ubs ua ux ug].
   - destruct (N.eqb_spec g 0) as [Hg0|Hg0]; [|destruct (N.eqb_spec g 1) as [Hg1|Hg1]].
@@ -575,7 +549,7 @@ Proof.
       destruct (N.eqb x 0); cbn in E; try discriminate;
       destruct (consumeN _ a) as [[[o b'] a'']|]; discriminate.
 Qed.
-Lemma touchN_halt u: touchN u = THalt -> forall l r, halts tmf (l {{B}}> uwN u *> r).
+Lemma touchN_halt u: touchN u = THalt -> forall l r, halts tm (l {{B}}> uwN u *> r).
 Proof.
   destruct u as [bs [] a x g]; unfold touchN; cbn [ubit ubs ua ux ug].
   - destruct (N.eqb g 0); [|destruct (N.eqb g 1)];
@@ -597,7 +571,7 @@ Definition ztouch z : zres := match z with
       match consumeN bs a with Some (ov,bs',a') => ZRet ov (ZD bs' true a' (N.pred x) f) | None => ZFail end
   | ZD bs true a x f => match consumeN (bs ++ [(a,1%N);(x,f)]) 0%N with Some (ov,bs',_) => ZRet ov (Z0 bs' 0 1) | None => ZFail end
   end.
-Lemma ztouch_ret z ov z': ztouch z = ZRet ov z' -> sideRL tmf hB hD (zside z) ([1;1;1]^^(N.to_nat ov) *> zside z').
+Lemma ztouch_ret z ov z': ztouch z = ZRet ov z' -> sideRL tm hB hD (zside z) ([1;1;1]^^(N.to_nat ov) *> zside z').
 Proof.
   destruct z as [[|p bs] x f|bs [] a x f]; cbn [ztouch zside].
   - destruct (N.eqb_spec x 0) as [Hx|Hx]; [destruct (N.eqb f 0); discriminate|].
@@ -617,7 +591,7 @@ Proof.
     intros E; injection E as <- <-. apply consumeN_spec in Ec. cbn [zside]. rewrite <-Str_app_assoc.
     replace (N.to_nat x) with (S (N.to_nat (N.pred x))) by lia. apply z_stop, Ec.
 Qed.
-Lemma ztouch_abs z f: ztouch z = ZAbs f -> sideRL tmf hB hD (zside z) (([1;1] ++ [1;1;1]^^(N.to_nat f)) *> const 0).
+Lemma ztouch_abs z f: ztouch z = ZAbs f -> sideRL tm hB hD (zside z) (([1;1] ++ [1;1;1]^^(N.to_nat f)) *> const 0).
 Proof.
   destruct z as [[|p bs] x f'|bs [] a x f']; cbn [ztouch zside].
   - destruct (N.eqb_spec x 0) as [Hx|Hx]; [|discriminate]. destruct (N.eqb_spec f' 0) as [Hf|Hf]; [discriminate|].
@@ -649,9 +623,9 @@ Fixpoint callN (us:list unitN) (z:zN) : cres := match us with
     end
   end.
 
-Lemma side1 {w w' r r'}: segRLs tmf h h w w' -> sideRL tmf hB hD r r' -> sideRL tmf hB hD (w *> r) (w' *> r').
+Lemma side1 {w w' r r'}: segRLs tm h h w w' -> sideRL tm hB hD r r' -> sideRL tm hB hD (w *> r) (w' *> r').
 Proof.
-  intros H1 H2. assert (H3: sideRLs tmf h r r'). { unfold h. econstructor; [exact H2|constructor]. }
+  intros H1 H2. assert (H3: sideRLs tm h r r'). { unfold h. econstructor; [exact H2|constructor]. }
   pose proof (segRLs_sideRLs_concat H1 H3) as H. unfold h in H. inversion H; subst.
   match goal with Hs: sideRLs _ [] _ _ |- _ => inversion Hs; subst end. assumption.
 Qed.
@@ -665,7 +639,7 @@ Proof.
 Qed.
 
 Lemma callN_ret us: forall z ov us' z', callN us z = CRet ov us' z' ->
-  sideRL tmf hB hD (dwords us *> zside z) (([1;1;1]^^(N.to_nat ov) ++ dwords us') *> zside z').
+  sideRL tm hB hD (dwords us *> zside z) (([1;1;1]^^(N.to_nat ov) ++ dwords us') *> zside z').
 Proof.
   induction us as [|u us1 IH]; intros z ov us' z' E; cbn [callN] in E.
   - destruct (ztouch z) as [o z1|f|] eqn:Ez; try discriminate. injection E as <- <- <-.
@@ -688,7 +662,7 @@ Proof.
         cbn [dwords] in *. applys_eq H; rewrite <-?Str_app_assoc; f_equal.
         rewrite <-!app_assoc. f_equal. rewrite app_assoc, setg_word by exact Hg. reflexivity.
 Qed.
-Lemma callN_halt us: forall z, callN us z = CHalt -> sideRLs_halt tmf h (dwords us *> zside z).
+Lemma callN_halt us: forall z, callN us z = CHalt -> sideRLs_halt tm h (dwords us *> zside z).
 Proof.
   induction us as [|u us1 IH]; intros z E; cbn [callN] in E.
   - destruct (ztouch z); discriminate.
@@ -735,7 +709,7 @@ Proof.
     + apply evstep_refl.
     + cbn [dwords N.to_nat lpow app]. rewrite Str_app_assoc. reflexivity.
 Qed.
-Lemma inc1_halt c: inc1 c = IHalt -> halts tmf (denote c).
+Lemma inc1_halt c: inc1 c = IHalt -> halts tm (denote c).
 Proof.
   destruct c as [[t g|s g] us z]; unfold inc1, denote; cbn [ctl cus cz].
   - destruct (N.eqb_spec g 0) as [Hg|Hg]; [|destruct (N.eqb_spec g 1) as [Hg1|Hg1]].
@@ -751,9 +725,9 @@ Qed.
 (** * Batches: n touches of one unit with no structural event, in closed form *)
 Ltac fin := try reflexivity; cbn [lpow app]; try lia; try (f_equal; lia); try (f_equal; f_equal; lia); try (f_equal; f_equal; f_equal; lia).
 Lemma stop1s {bs a x far ov bs' a'}: consume bs a = Some (ov, bs', a') ->
-  segRLs tmf h [] (uw bs false a (S x) far) ([1;1;1]^^ov ++ uw bs' true a' x far).
+  segRLs tm h [] (uw bs false a (S x) far) ([1;1;1]^^ov ++ uw bs' true a' x far).
 Proof. intros E. unfold h. econstructor; [apply (t_stop _ _ _ _ _ _ _ E)|constructor]. Qed.
-Lemma pairK q: forall c j r a x, segRLs tmf (h^^(q*2)) (h^^q)
+Lemma pairK q: forall c j r a x, segRLs tm (h^^(q*2)) (h^^q)
   (uw ((q*2+c, j)::r) false a (S x) (tailw 0)) (uw ((c,j)::r) false (q+a) (S (q+x)) (tailw 0)).
 Proof.
   induction q as [|q IH]; intros c j r a x.
@@ -764,7 +738,7 @@ Proof.
     pose proof (segRLs_trans H1 (segRLs_trans H2 H3)) as H.
     applys_eq H; fin.
 Qed.
-Lemma pair1 q: forall a x, segRLs tmf (h^^(q*2)) (h^^q)
+Lemma pair1 q: forall a x, segRLs tm (h^^(q*2)) (h^^q)
   (uw [] false (q+a) (S x) (tailw 0)) (uw [] false a (S (q+x)) (tailw 0)).
 Proof.
   induction q as [|q IH]; intros a x.
@@ -776,7 +750,7 @@ Proof.
     applys_eq H; fin.
 Qed.
 Definition b2n (b:bool) : nat := if b then 1 else 0.
-Lemma clK0 q rb c j r a x: segRLs tmf (h^^(q*2 + b2n rb)) (h^^q)
+Lemma clK0 q rb c j r a x: segRLs tm (h^^(q*2 + b2n rb)) (h^^q)
   (uw ((q*2 + b2n rb + c, j)::r) false a (S x) (tailw 0)) (uw ((c,j)::r) rb (q+a) (q + S x - b2n rb) (tailw 0)).
 Proof.
   destruct rb; cbn [b2n].
@@ -786,14 +760,14 @@ Proof.
     rewrite app_nil_r in H. applys_eq H; fin.
   - pose proof (pairK q c j r a x) as H. applys_eq H; fin.
 Qed.
-Lemma clK1 q rb c j r a x: segRLs tmf (h^^(S (q*2 + b2n rb))) (h^^(S q))
+Lemma clK1 q rb c j r a x: segRLs tm (h^^(S (q*2 + b2n rb))) (h^^(S q))
   (uw ((S (q*2 + b2n rb + c), j)::r) true a x (tailw 0)) (uw ((c,j)::r) rb (q + S a) (q + S (S x) - b2n rb) (tailw 0)).
 Proof.
   pose proof (t_pass ((S (q*2 + b2n rb + c), j)::r) a x 0 ((q*2 + b2n rb + c, j)::r) (S a) eq_refl) as H1.
   pose proof (clK0 q rb c j r (S a) (S x)) as H2.
   exact (segRLs_trans H1 H2).
 Qed.
-Lemma cl10 q rb a x: segRLs tmf (h^^(q*2 + b2n rb)) (h^^q)
+Lemma cl10 q rb a x: segRLs tm (h^^(q*2 + b2n rb)) (h^^q)
   (uw [] false (q + b2n rb + a) (S x) (tailw 0)) (uw [] rb a (q + S x - b2n rb) (tailw 0)).
 Proof.
   destruct rb; cbn [b2n].
@@ -803,7 +777,7 @@ Proof.
     rewrite app_nil_r in H. applys_eq H; fin.
   - pose proof (pair1 q a x) as H. applys_eq H; fin.
 Qed.
-Lemma cl11 q rb a x: segRLs tmf (h^^(S (q*2 + b2n rb))) (h^^(S q))
+Lemma cl11 q rb a x: segRLs tm (h^^(S (q*2 + b2n rb))) (h^^(S q))
   (uw [] true (q + b2n rb + a) x (tailw 0)) (uw [] rb a (q + S (S x) - b2n rb) (tailw 0)).
 Proof.
   pose proof (t_pass [] (q + b2n rb + a) x 0 [] (q + b2n rb + a) eq_refl) as H1.
@@ -857,7 +831,7 @@ Ltac dif := match goal with |- context [if ?b then _ else _] => destruct b eqn:G
 Ltac weq := unfold uwN; cbn [ubs ubit ua ux ug cvl map lpow app]; try unfold cvp; cbn [fst snd]; f_equal; try f_equal; try f_equal; try lia.
 
 Lemma closedU_spec n u u' p: closedU n u = Some (u', p) ->
-  segRLs tmf (h^^(N.to_nat n)) (h^^(N.to_nat p)) (uwN u) (uwN u').
+  segRLs tm (h^^(N.to_nat n)) (h^^(N.to_nat p)) (uwN u) (uwN u').
 Proof.
   unfold closedU. destruct (N.eqb_spec n 0) as [Hn|Hn].
   { intros E; injection E as <- <-. subst n. apply segRLs_O. }
@@ -901,7 +875,7 @@ Proof.
 Qed.
 
 (** ** U0 in a batch *)
-Lemma zLs m: forall c j r x f, sideRLs tmf (h^^m) ((cw ((m+c,j)::r) ++ edgew x f) *> const 0)
+Lemma zLs m: forall c j r x f, sideRLs tm (h^^m) ((cw ((m+c,j)::r) ++ edgew x f) *> const 0)
   ((cw ((c,j)::r) ++ edgew x (m+f)) *> const 0).
 Proof.
   induction m as [|m IH]; intros c j r x f.
@@ -910,7 +884,7 @@ Proof.
     cbn [lpow app] in H1. unfold h. cbn [lpow app]. econstructor. 1: exact H1.
     replace (S m + f) with (m + S f) by lia. apply IH.
 Qed.
-Lemma zEs m: forall y f, sideRLs tmf (h^^m) (edgew (m+y) f *> const 0) (edgew y (m+f) *> const 0).
+Lemma zEs m: forall y f, sideRLs tm (h^^m) (edgew (m+y) f *> const 0) (edgew y (m+f) *> const 0).
 Proof.
   induction m as [|m IH]; intros y f.
   - constructor.
@@ -924,7 +898,7 @@ Definition closedZ (m:N) (z:zN) : option zN :=
   | Z0 ((c,j)::r) x f => if N.ltb c m then None else Some (Z0 (((c - m)%N, j)::r) x (f + m))
   | ZD _ _ _ _ _ => None
   end.
-Lemma closedZ_spec m z z': closedZ m z = Some z' -> sideRLs tmf (h^^(N.to_nat m)) (zside z) (zside z').
+Lemma closedZ_spec m z z': closedZ m z = Some z' -> sideRLs tm (h^^(N.to_nat m)) (zside z) (zside z').
 Proof.
   unfold closedZ. destruct (N.eqb_spec m 0) as [Hm|Hm].
   { intros E; injection E as <-. subst m. constructor. }
@@ -946,7 +920,7 @@ Fixpoint batchL (n:N) (us:list unitN) (z:zN) : option (list unitN * zN) := match
     | Some (u', p) => match batchL p us z with Some (us', z') => Some (u' :: us', z') | None => None end
     | None => None end end.
 Lemma batchL_spec us: forall n z us' z', batchL n us z = Some (us', z') ->
-  sideRLs tmf (h^^(N.to_nat n)) (dwords us *> zside z) (dwords us' *> zside z').
+  sideRLs tm (h^^(N.to_nat n)) (dwords us *> zside z) (dwords us' *> zside z').
 Proof.
   induction us as [|u us IH]; intros n z us' z' E; cbn [batchL] in E.
   - destruct (closedZ n z) as [z1|] eqn:Ez; [|discriminate]. injection E as <- <-. apply closedZ_spec, Ez.
@@ -991,7 +965,7 @@ Qed.
 Definition next c : cfg + unit := match batch_step c with
   | Some c' => inl c'
   | None => match inc1 c with IOk c' => inl c' | IHalt => inr tt | IFail => inl c end end.
-Lemma next_spec c: match next c with inl c' => denote c -->* denote c' | inr _ => halts tmf (denote c) end.
+Lemma next_spec c: match next c with inl c' => denote c -->* denote c' | inr _ => halts tm (denote c) end.
 Proof.
   unfold next. destruct (batch_step c) as [c'|] eqn:Eb; [apply batch_step_spec, Eb|].
   destruct (inc1 c) as [c'| |] eqn:Ei.
@@ -1001,12 +975,12 @@ Proof.
 Qed.
 Definition c342 := Cfg (NTl 1 1) [] (Z0 [(0%N,3%N)] 0 1).
 Definition check fuel := match N_iter_until next (inl c342) fuel with inl _ => false | inr _ => true end.
-Theorem check_spec fuel: check fuel = true -> halts tmf (denote c342).
+Theorem check_spec fuel: check fuel = true -> halts tm (denote c342).
 Proof.
   pose proof (@N_iter_until_spec cfg unit next (inl c342) fuel
-    (fun c => denote c342 -->* denote c) (fun _ => halts tmf (denote c342))) as H.
+    (fun c => denote c342 -->* denote c) (fun _ => halts tm (denote c342))) as H.
   assert (Hstep: forall c, denote c342 -->* denote c ->
-    match next c with inl c' => denote c342 -->* denote c' | inr _ => halts tmf (denote c342) end).
+    match next c with inl c' => denote c342 -->* denote c' | inr _ => halts tm (denote c342) end).
   { intros c E. pose proof (next_spec c) as I. destruct (next c).
     - eapply evstep_trans; eauto.
     - eapply halts_evstep; [exact I|exact E]. }
@@ -1014,129 +988,14 @@ Proof.
   destruct (N_iter_until next (inl c342) fuel); [discriminate|]. intros _. exact H.
 Qed.
 
-(** * The run, in chunks of 5000 iterations (each intermediate configuration is computed once by the VM
-    and stored; each chunk is then checked separately, which keeps kernel re-checking bounded) *)
-Ltac vm_check_eq := match goal with |- _ = ?a => vm_cast_no_check (eq_refl a) end.
-Definition run (T:N) (c:cfg) : cfg + unit := N_iter_until next (inl c) T.
-Definition unl (x:cfg + unit) : cfg := match x with inl c => c | inr _ => c342 end.
-Lemma run_ok T c c': run T c = inl c' -> denote c -->* denote c'.
-Proof.
-  intros E. pose proof (@N_iter_until_spec cfg unit next (inl c) T
-    (fun x => denote c -->* denote x) (fun _ => halts tmf (denote c))) as H.
-  assert (Hstep: forall x, denote c -->* denote x ->
-    match next x with inl x' => denote c -->* denote x' | inr _ => halts tmf (denote c) end).
-  { intros x Ex. pose proof (next_spec x) as I. destruct (next x).
-    - eapply evstep_trans; eauto.
-    - eapply halts_evstep; [exact I|exact Ex]. }
-  specialize (H Hstep (evstep_refl _ _)). unfold run in E. rewrite E in H. exact H.
-Qed.
-Lemma run_halt T c: run T c = inr tt -> halts tmf (denote c).
-Proof.
-  intros E. pose proof (@N_iter_until_spec cfg unit next (inl c) T
-    (fun x => denote c -->* denote x) (fun _ => halts tmf (denote c))) as H.
-  assert (Hstep: forall x, denote c -->* denote x ->
-    match next x with inl x' => denote c -->* denote x' | inr _ => halts tmf (denote c) end).
-  { intros x Ex. pose proof (next_spec x) as I. destruct (next x).
-    - eapply evstep_trans; eauto.
-    - eapply halts_evstep; [exact I|exact Ex]. }
-  specialize (H Hstep (evstep_refl _ _)). unfold run in E. rewrite E in H. exact H.
-Qed.
 
-Definition k1 := Eval vm_compute in unl (run 5000 c342).
-Lemma s1: run 5000 c342 = inl k1. Proof. vm_check_eq. Qed.
-Definition k2 := Eval vm_compute in unl (run 5000 k1).
-Lemma s2: run 5000 k1 = inl k2. Proof. vm_check_eq. Qed.
-Definition k3 := Eval vm_compute in unl (run 5000 k2).
-Lemma s3: run 5000 k2 = inl k3. Proof. vm_check_eq. Qed.
-Definition k4 := Eval vm_compute in unl (run 5000 k3).
-Lemma s4: run 5000 k3 = inl k4. Proof. vm_check_eq. Qed.
-Definition k5 := Eval vm_compute in unl (run 5000 k4).
-Lemma s5: run 5000 k4 = inl k5. Proof. vm_check_eq. Qed.
-Definition k6 := Eval vm_compute in unl (run 5000 k5).
-Lemma s6: run 5000 k5 = inl k6. Proof. vm_check_eq. Qed.
-Definition k7 := Eval vm_compute in unl (run 5000 k6).
-Lemma s7: run 5000 k6 = inl k7. Proof. vm_check_eq. Qed.
-Definition k8 := Eval vm_compute in unl (run 5000 k7).
-Lemma s8: run 5000 k7 = inl k8. Proof. vm_check_eq. Qed.
-Definition k9 := Eval vm_compute in unl (run 5000 k8).
-Lemma s9: run 5000 k8 = inl k9. Proof. vm_check_eq. Qed.
-Definition k10 := Eval vm_compute in unl (run 5000 k9).
-Lemma s10: run 5000 k9 = inl k10. Proof. vm_check_eq. Qed.
-Definition k11 := Eval vm_compute in unl (run 5000 k10).
-Lemma s11: run 5000 k10 = inl k11. Proof. vm_check_eq. Qed.
-Definition k12 := Eval vm_compute in unl (run 5000 k11).
-Lemma s12: run 5000 k11 = inl k12. Proof. vm_check_eq. Qed.
-Definition k13 := Eval vm_compute in unl (run 5000 k12).
-Lemma s13: run 5000 k12 = inl k13. Proof. vm_check_eq. Qed.
-Definition k14 := Eval vm_compute in unl (run 5000 k13).
-Lemma s14: run 5000 k13 = inl k14. Proof. vm_check_eq. Qed.
-Definition k15 := Eval vm_compute in unl (run 5000 k14).
-Lemma s15: run 5000 k14 = inl k15. Proof. vm_check_eq. Qed.
-Definition k16 := Eval vm_compute in unl (run 5000 k15).
-Lemma s16: run 5000 k15 = inl k16. Proof. vm_check_eq. Qed.
-Definition k17 := Eval vm_compute in unl (run 5000 k16).
-Lemma s17: run 5000 k16 = inl k17. Proof. vm_check_eq. Qed.
-Definition k18 := Eval vm_compute in unl (run 5000 k17).
-Lemma s18: run 5000 k17 = inl k18. Proof. vm_check_eq. Qed.
-Definition k19 := Eval vm_compute in unl (run 5000 k18).
-Lemma s19: run 5000 k18 = inl k19. Proof. vm_check_eq. Qed.
-Definition k20 := Eval vm_compute in unl (run 5000 k19).
-Lemma s20: run 5000 k19 = inl k20. Proof. vm_check_eq. Qed.
-Definition k21 := Eval vm_compute in unl (run 5000 k20).
-Lemma s21: run 5000 k20 = inl k21. Proof. vm_check_eq. Qed.
-Lemma s22: run 5000 k21 = inr tt. Proof. vm_check_eq. Qed.
-Lemma init: c0 -[tmf]->* denote c342.
+Lemma init: c0 -[tm]->* denote c342.
 Proof. unfold denote, c342, NT, zside; cbn. solve_init. Qed.
-Lemma halt_tmf: halts tmf c0.
+
+Theorem halt: halts tm c0.
 Proof.
-  eapply halts_evstep. 2: apply init.
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s1).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s2).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s3).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s4).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s5).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s6).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s7).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s8).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s9).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s10).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s11).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s12).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s13).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s14).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s15).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s16).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s17).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s18).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s19).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s20).
-  eapply halts_evstep. 2: apply (run_ok _ _ _ s21).
-  exact (run_halt _ _ s22).
+  eapply halts_evstep; [|apply init].
+  apply (check_spec 110000). native_check_eq.
 Qed.
+End TM12.
 
-Lemma halt: halts tm c0.
-Proof. apply flip_halts_iff. exact halt_tmf. Qed.
-
-(*
-```
-mirror tmf = flip tm; words root-first (nearest the head first)
-unit     uw bs b a x far = cw bs ++ leadw b a x ++ far,  blk c j = [0] ++ [1;0]^^c ++ [1] ++ [1;1;1]^^j
-lead     leadw true a x = blk a 1 ++ [0] ++ [1;0]^^x,  leadw false a x = [0;1]^^a ++ [0;0] ++ [1;0]^^x
-far      tailw g = [1;1] ++ [1;1;1]^^g (boundary);  edgew x f = [0] ++ [1;0]^^x ++ [1;1;1]^^f;  edge1w f = [1] ++ [1;1;1]^^f
-consume  ((S c,j)::r) a = (0, (c,j)::r, a);  ((0,j)::r) a = (j, r, a)  (j walls glue root-ward);  [] (S a) = (0, [], a)
-
-touch (call in B, return in D; [1;1;1]^^ov = walls glued onto the root-side boundary)
-stop     uw bs false a (S x) far          -> [1;1;1]^^ov ++ uw bs' true a' x far         (bs',a') from consume bs a
-pass     uw bs true a x (tailw 0)         -> [1;1;1]^^ov ++ uw bs' false a' (x+2) (tailw 0), one call forwarded; consume bs (a+1)
-unglue1  uw bs true a x (tailw 1)         -> [1;1;1]^^ov ++ uw bs' false a' 1 (tailw 0), forwarded; consume (bs++[(a,1)]) (x+1)
-unglue2  uw bs true a x (tailw (g+2))     -> [1;1;1]^^ov ++ uw bs' false 0 1 (tailw 0), forwarded; consume (bs++[(a,1);(x,g+1)]) 0
-halt     uw [] false 0 x far              -> halts
-U0       cw bs ++ edgew x f               -> [1;1;1]^^ov ++ cw bs' ++ edgew x (f+1)     (bs nonempty)
-         edgew (y+1) f -> edgew y (f+1);   edgew 0 (f+1) -> [1;1] ++ [1;1;1]^^(f+1)     (absorb: U1 becomes U0, edge class 1)
-         uw bs true a x (edge1w f)        -> [1;1;1]^^ov ++ cw bs' ++ edgew 0 1          consume (bs++[(a,1);(x,f)]) 0
-root     root t X = 0inf <{{A}} ([0;1]^^t ++ [0;1;1]) *> X:   root t X -->+ root (t+1) X'  for a call X -> X'
-reset1   root t ([1;1;1] *> X) -->* NT (t+1) 0 X'   (NT s g X = 0inf <{{A}} ([1;0]^^s ++ [1;0;0;1;0] ++ tailw g) *> X)
-reset2   NT (s+1) g X -->* root 0 ((leadw true s 0 ++ tailw g) *> X)
-start    c0 -->* NT 1 1 ((blk 0 3 ++ edgew 0 1) *> 0inf)   (342 steps)
-```
-*)

@@ -1,53 +1,19 @@
-(* 1RB0RA_1LC0RE_1LD0LC_1RA0LB_1RA0RF_1LE--- never halts.
-   Skelet 1-like Class 2. The table is that of the parent
-   1RB0RF_1RC0RB_1LD0RA_1LE0LD_1RB0LC_1LA--- ([tmP] below),
-   the parent's table with its states renamed by phi:
-   A->B, B->C, C->D, D->E, E->A, F->F (row q of this machine = parent row phi q,
-   with every target state renamed by phi; 12/12 entries).
-   This machine starts in A = phi^-1(B), so it runs the parent's table from 0^inf B> 0^inf.
-   That run reaches a record exit of the parent's invariant (class r5, e = 2, u = 1) after
-   18,571,902 simulator steps; only the deep chain differs from the parent's own run there.
-   This file is the parent's file, verify/Skelet1LikeC2_1RB0RF_1RC0RB.v (sha256 13db03a7...0ba4),
-   unchanged except for:
-   - the parent's table is [tmP]: the simulator, its soundness, every block, chain, left-word and
-     right-region lemma, Lemma S, Inv and inv_step are about tmP; the top-level [tm] is this machine;
-   - the base case: [init28 : B;; tape0 -->* record exit 28] in 38 native_compute pieces
-     (b28_i, ck_i), and the record-exit chain [L28] / gap variables [nus28] of this run;
-   - the conjugacy: [perm_phi : Perm tm tmP phi] by computation, then busycoq's
-     [perm_halts] (Permute.v) give halts tm c0 -> halts tmP (B;; tape0).
-   Parent structure (from the parent's file, whose comments cite the parent's write-up):
-   Skelet 1-like Class 2: a ternary counter on phase defects (a left word counting to 81,
-   a chain of K digit blocks, and a right region of fossils and two growing blocks X and Y).
-   Outer shape adapted from verify/SBCv6.v, Module TM21 (macro rules on a digit list, one
-   invariant, a closure lemma); the verified accelerated simulator follows the idea of
-   verify/Sk1like_TC_v1.v. Structure of the proof:
-   - a symbolic run-length simulator whose run lengths are linear forms c + sum v_i x_i over N,
-     sound for every valuation of the x_i and of abstract tape sides (sstep_spec, reach_spec);
-   - the 17 single-block runs that the proof uses (11 for m = 3 blocks with every gap symbolic,
-     6 for block 1 with concrete lengths), and the chain visit
-     (Lemmas C and C') by induction on the block list (visit3_spec, cb_spec, vis_spec);
-   - the left word: its 81 episodes, the last one being the left record (lw_ep);
-   - Lemma T: the visits of one record interval as a computation on block labels, for every
-     chain length (interval): exit phase c_K + 2 for (3^(K+1)-5)/2 visits, then c_K;
-   - the right region: a verified symbolic executor for interval programs with 4-cycle jumps
-     (exec_spec, jump_lemma), and the six interval programs, u = 1 + 8 t (int_r5 .. int_r4);
-   - the regrouping after the record visit (regroup) and the six record-exit episodes;
-   - Lemma S for the six classes (S_r5 .. S_r4), the invariant Inv and its closure (inv_step);
-   Informal proof: the accompanying write-up, a delta proof that cites the parent's write-up.
-   Formalized with Claude Code (AI-assisted).
-   Checked: compiles against unmodified busycoq BB6 (commit 0940bb9) with Coq 8.20.1;
-   Print Assumptions nonhalt: Closed under the global context *)
+(* Consolidated from busycoq PR #17, commit 7721923002811dd80c8da5794af01879a327e028.
+   Original proofs by Dennis Koshta (AI-assisted with Claude Code).
+   Shared symbolic executor and invariant; three distinct blank-state initializations.
+   Module numbers follow Sk1_Class2.txt; TM7 uses the mirror.
+   Intermediate initialization checkpoints are computed, not embedded as tape data. *)
 
 From BusyCoq Require Import Individual62.
 Require Import Lia ZifyNat String List Arith NArith ZArith.
 Import ListNotations.
 
-Definition tm := Eval compute in (TM_from_str "1RB0RA_1LC0RE_1LD0LC_1RA0LB_1RA0RF_1LE---").
-Definition tmP := Eval compute in (TM_from_str "1RB0RF_1RC0RB_1LD0RA_1LE0LD_1RB0LC_1LA---").
+Module TM6.
+Definition tm := Eval compute in (TM_from_str "1RB0RF_1RC0RB_1LD0RA_1LE0LD_1RB0LC_1LA---").
 
-Notation "c --> c'" := (c -[ tmP ]-> c')   (at level 40).
-Notation "c -->* c'" := (c -[ tmP ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tmP ]->+ c') (at level 40).
+Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
 Open Scope nat_scope.
 
@@ -175,7 +141,7 @@ Definition single (c : cfg) : option cfg :=
   | Rc q l r =>
     match pop r with
     | Some (s, r') =>
-      match tmP (q, s) with
+      match tm (q, s) with
       | Some (w, R, q') => Some (Rc q' (push w l) r')
       | Some (w, L, q') => Some (Lc q' l (push w r'))
       | None => None
@@ -185,7 +151,7 @@ Definition single (c : cfg) : option cfg :=
   | Lc q l r =>
     match pop l with
     | Some (s, l') =>
-      match tmP (q, s) with
+      match tm (q, s) with
       | Some (w, R, q') => Some (Rc q' (push w l') r)
       | Some (w, L, q') => Some (Lc q' l' (push w r))
       | None => None
@@ -385,7 +351,7 @@ Lemma cR_cases i : (i mod 4 = 0 /\ S i mod 4 = 1) \/ (i mod 4 = 1 /\ S i mod 4 =
                    (i mod 4 = 2 /\ S i mod 4 = 3) \/ (i mod 4 = 3 /\ S i mod 4 = 0).
 Proof. lia. Qed.
 
-Lemma cR_tm i : tmP (cR_st i, cR_bt i) = Some (sneg (cR_bt i), R, cR_st (S i)).
+Lemma cR_tm i : tm (cR_st i, cR_bt i) = Some (sneg (cR_bt i), R, cR_st (S i)).
 Proof.
   unfold cR_st, cR_bt. destruct (cR_cases i) as [[H1 H2]|[[H1 H2]|[[H1 H2]|[H1 H2]]]];
     rewrite H1, H2; reflexivity.
@@ -397,7 +363,7 @@ Proof.
     rewrite H1, H2; reflexivity.
 Qed.
 
-Lemma cL_tm i : tmP (cL_st i, cL_bt i) = Some (sneg (cL_bt i), L, cL_st (S i)).
+Lemma cL_tm i : tm (cL_st i, cL_bt i) = Some (sneg (cL_bt i), L, cL_st (S i)).
 Proof.
   unfold cL_st, cL_bt. destruct (cR_cases i) as [[H1 H2]|[[H1 H2]|[[H1 H2]|[H1 H2]]]];
     rewrite H1, H2; reflexivity.
@@ -462,13 +428,13 @@ Proof.
   destruct c as [q l r|q l r]; cbn [single].
   - destruct (pop r) as [[s r']|] eqn:Ep; [|discriminate].
     pose proof (pop_spec nu sg r s r' Ep) as Hr.
-    destruct (tmP (q, s)) as [[[w [|]] q']|] eqn:Et; intros H; inversion H; subst; clear H;
+    destruct (tm (q, s)) as [[[w [|]] q']|] eqn:Et; intros H; inversion H; subst; clear H;
       cbn [ev_cfg]; rewrite Hr, ?push_spec.
     + exact (step_left Et).
     + exact (step_right Et).
   - destruct (pop l) as [[s l']|] eqn:Ep; [|discriminate].
     pose proof (pop_spec nu sg l s l' Ep) as Hl.
-    destruct (tmP (q, s)) as [[[w [|]] q']|] eqn:Et; intros H; inversion H; subst; clear H;
+    destruct (tm (q, s)) as [[[w [|]] q']|] eqn:Et; intros H; inversion H; subst; clear H;
       cbn [ev_cfg]; rewrite Hl, ?push_spec.
     + exact (step_left Et).
     + exact (step_right Et).
@@ -832,7 +798,7 @@ Proof. intros H. exact (reach_spec _ _ _ H [] (fun _ => Y)). Qed.
 Definition lw_ok (i : nat) : bool := reach 1000 (Lc E (lw i, T0) ([], TV 0)) (Rc B (lw (S i), T0) ([], TV 0)).
 
 Lemma lw_all : forallb lw_ok (seq 0 81) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma lw_ok_spec i Y : lw_ok i = true ->
   ev_runs [] (lw i) (const S0) <{{E}} Y -->+ ev_runs [] (lw (S i)) (const S0) {{B}}> Y.
@@ -1786,22 +1752,22 @@ Definition Rs_r4 : list run := mkruns S0 [tl1 74804 598752; tl1 224495 1796256; 
 Definition prog_r4 : list instr := repeat (ISingle true) 4 ++ [IJump true (tl1 2457 19683)] ++ repeat (ISingle true) 7 ++ repeat (ISingle false) 6 ++ [IJump false (tl1 130397 1043199)] ++ repeat (ISingle false) 7.
 Definition Re_r5 : list run := [(S0, tl1 224492 1796256); (S1, tl1 673560 5388768); (S0, tl1 2020752 16166304); (S1, cn 4); (S0, tl1 521602 4172796)]%N.
 Lemma int_r5 : prog_check prog_r5 Rs_r5 Re_r5 (tl1 3278 26244) (tl1 173868 1390932) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Definition Re_r0 : list run := [(S0, tl1 74804 598752); (S1, tl1 224496 1796256); (S0, tl1 673560 5388768); (S1, tl1 2020751 16166304); (S1, cn 7); (S1, tl1 551120 4408992); (S0, tl1 1564798 12518388); (S1, cn 1)]%N.
 Lemma int_r0 : prog_check prog_r0 Rs_r0 Re_r0 (tl1 3278 26244) (tl1 173868 1390932) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Definition Re_r1 : list run := [(S0, tl1 2020748 16166304); (S1, cn 8); (S0, tl1 29521 236196); (S0, tl1 5826161 46609344); (S0, cn 2)]%N.
 Lemma int_r1 : prog_check prog_r1 Rs_r1 Re_r1 (tl1 9839 78732) (tl1 521601 4172796) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Definition Re_r2 : list run := [(S0, tl1 8276 66528); (S1, tl1 24912 199584); (S0, tl1 74808 598752); (S1, tl1 224495 1796256); (S1, tl1 673559 5388768); (S1, tl1 2020752 16166304); (S0, tl1 6062328 48498912); (S1, cn 3); (S1, tl1 1564801 12518388); (S1, cn 1)]%N.
 Lemma int_r2 : prog_check prog_r2 Rs_r2 Re_r2 (tl1 3278 26244) (tl1 173868 1390932) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Definition Re_r3 : list run := [(S0, tl1 224492 1796256); (S1, tl1 673560 5388768); (S0, tl1 2020752 16166304); (S1, tl1 6062327 48498912); (S1, cn 7); (S1, tl1 1653368 13226976); (S0, tl1 4694397 37555164); (S0, cn 2)]%N.
 Lemma int_r3 : prog_check prog_r3 Rs_r3 Re_r3 (tl1 9839 78732) (tl1 521601 4172796) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Definition Re_r4 : list run := [(S0, tl1 74804 598752); (S1, tl1 224496 1796256); (S0, tl1 673560 5388768); (S1, tl1 2020751 16166304); (S1, tl1 6062327 48498912); (S1, cn 7); (S1, tl1 88573 708588); (S1, tl1 17478488 139828032); (S0, cn 2)]%N.
 Lemma int_r4 : prog_check prog_r4 Rs_r4 Re_r4 (tl1 9839 78732) (tl1 521601 4172796) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 (* ===================================================================== *)
 (* The regrouping after the record visit (write-up 6.2): the chain in D2 *)
@@ -1878,7 +1844,7 @@ Definition W5s (t : N) : N := (6227 + 49896 * t)%N.
 Definition W5a (t : N) : N := (2069 + 16632 * t)%N.
 
 Lemma rec_r5_ok : reach 100000 (Rc B ([(S0, cn 1); (S0, tl1 74806 598752)], TV 0) (Re_r5, T0)) (Lc D ([], TV 0) (Rs_r0, T0)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma step_r5 t f1 deep :
   chs (repeat D2 (S (length deep))) ([W5t t; W5s t; W5a t; f1] :: deep) (b1s PD2 (LWs 81)) {{B}}> evR [t] Re_r5 -->+
@@ -1967,9 +1933,9 @@ Definition Rp_r0 : list run := [(S0, tl1 2020748 16166304); (S1, cn 7); (S1, tl1
 
 Lemma rec_r0a : reach 100000 (Rc B ([(S0, cn 1); (S0, tl1 24910 199584)], TV 0) (f4_r0, TV 1))
   (Rc A (comp_runs sig01 (blk U0), TV 0) ([], TV 1)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Lemma rec_r0b : ep_run true Rp_r0 = Some Rs_r1.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma split_r0 t : evR [t] Re_r0 = ev_runs [t] f4_r0 (evR [t] Rp_r0).
 Proof.
@@ -2000,7 +1966,7 @@ Qed.
 Definition W3t := wv 18701 149688.
 
 Lemma rec_r3_ok : reach 100000 (Rc B ([(S0, cn 1); (S0, tl1 74806 598752)], TV 0) (Re_r3, T0)) (Lc D ([], TV 0) (Rs_r4, T0)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma step_r3 t f1 f2 f3 deep :
   chs (repeat D2 (S (length deep))) ([W3t t; f1; f2; f3] :: deep) (b1s PD2 (LWs 81)) {{B}}> evR [t] Re_r3 -->+
@@ -2020,7 +1986,7 @@ Definition sig12 : list lf := [tl1 56123 449064; tl1 18701 149688; tl1 6227 4989
 
 Lemma rec_r1_ok : reach 100000 (Rc B ([(S0, cn 1); (S0, tl1 673558 5388768)] ++ comp_runs sig12 (blk U0), TV 0) (Re_r1, T0))
   (Lc D ([], TV 0) (Rs_r2, T0)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma step_r1 t f1 f2 f3 deep :
   chs (repeat D2 (S (S (length deep)))) ([W1t t; W1s t; W1a t; W1I t] :: [W1u t; f1; f2; f3] :: deep) (b1s PD2 (LWs 81))
@@ -2050,9 +2016,9 @@ Definition Rp_r2 : list run := [(S0, tl1 224492 1796256); (S1, tl1 673559 538876
 
 Lemma rec_r2a : reach 100000 (Rc B ([(S0, cn 1); (S0, xv)], TV 0) (f4_r2, TV 1))
   (Rc A (comp_runs sig23 (blk U0), TV 0) ([], TV 1)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Lemma rec_r2b : ep_run true Rp_r2 = Some Rs_r3.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma split_r2 nu : evR nu Re_r2 = ev_runs nu f4_r2 (evR nu Rp_r2).
 Proof.
@@ -2104,9 +2070,9 @@ Definition Rp_r4 : list run := [(S0, tl1 2020748 16166304); (S1, tl1 6062327 484
 
 Lemma rec_r4a : reach 100000 (Rc B ([(S0, cn 1); (S0, xv)], TV 0) (f4_r4, TV 1))
   (Rc A (comp_runs sig45 (blk U0), TV 0) ([], TV 1)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 Lemma rec_r4b : ep_run true Rp_r4 = Some (sub9 Rs_r5).
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma split_r4 nu : evR nu Re_r4 = ev_runs nu f4_r4 (evR nu Rp_r4).
 Proof.
@@ -2247,190 +2213,9 @@ Proof.
     apply step_r4.
 Qed.
 
-(* ===================================================================== *)
-(* Base case: from B;; tape0 to record exit 28.                         *)
-(* ===================================================================== *)
-
-Definition cfg28 : cfg :=
-  Rc B
-    ([(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 972); (S1, cn 36);
-      (S0, cn 37); (S0, cn 37); (S0, cn 44); (S1, cn 24); (S0, cn 17); (S0, cn 9);
-      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4);
-      (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
-      (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1);
-      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)], T0)
-    ([(S1, cn 224495); (S1, cn 673559); (S1, cn 7); (S1, cn 9841); (S1, cn 1942040); (S0, cn 2)], T0).
-
-(* The run from B;; tape0 to record exit 28, in 38 pieces of at most 500,000 simulator
-   steps (each piece is one computation; intermediate configurations written out). *)
-Definition mkc (rc : bool) (q : Q) (l r : list (Sym * N)) : cfg :=
-  let f := map (fun x : Sym * N => (fst x, cn (snd x))) in
-  if rc then Rc q (f l, T0) (f r, T0) else Lc q (f l, T0) (f r, T0).
-Definition b28_0 : cfg := mkc true B [] [].
-Definition b28_1 : cfg := mkc true A [(S0, 7%N); (S0, 24909%N); (S0, 8281%N); (S0, 2736%N); (S1, 972%N); (S0, 34%N); (S1, 40%N); (S0, 36%N); (S1, 44%N); (S0, 21%N); (S0, 21%N); (S0, 8%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 5005%N); (S1, 34784%N); (S0, 2%N)].
-Definition b28_2 : cfg := mkc false D [(S1, 20408%N); (S0, 7%N); (S0, 74807%N); (S0, 24912%N); (S1, 8280%N); (S0, 2734%N); (S1, 972%N); (S0, 36%N); (S1, 40%N); (S0, 34%N); (S1, 44%N); (S0, 24%N); (S1, 20%N); (S0, 6%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S0, 18958%N); (S1, 1%N)].
-Definition b28_3 : cfg := mkc true C [(S1, 1%N); (S1, 102601%N); (S1, 15237%N); (S1, 8%N); (S0, 74805%N); (S0, 24913%N); (S0, 8280%N); (S1, 2736%N); (S0, 969%N); (S0, 37%N); (S0, 40%N); (S1, 36%N); (S0, 41%N); (S0, 25%N); (S0, 20%N); (S1, 8%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [].
-Definition b28_4 : cfg := mkc false D [(S0, 20%N); (S1, 8%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S1, 23%N); (S1, 43%N); (S1, 36%N); (S0, 40%N); (S1, 35%N); (S1, 971%N); (S1, 2736%N); (S0, 8280%N); (S1, 24911%N); (S1, 74807%N); (S1, 8%N); (S0, 2576%N); (S1, 203893%N)].
-Definition b28_5 : cfg := mkc true B [(S1, 74808%N); (S0, 24911%N); (S0, 8279%N); (S0, 2736%N); (S1, 972%N); (S0, 33%N); (S0, 41%N); (S0, 36%N); (S1, 44%N); (S0, 23%N); (S0, 19%N); (S0, 8%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S0, 224496%N); (S1, 4%N); (S0, 47813%N); (S0, 2%N)].
-Definition b28_6 : cfg := mkc true A [(S0, 55467%N); (S0, 61233%N); (S0, 7%N); (S0, 224495%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 37%N); (S0, 37%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 1%N)].
-Definition b28_7 : cfg := mkc true B [(S1, 224496%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 37%N); (S0, 37%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S1, 1%N); (S1, 5%N); (S1, 61231%N); (S1, 126905%N); (S1, 1%N)].
-Definition b28_8 : cfg := mkc false E [(S0, 58639%N); (S0, 9%N); (S0, 224494%N); (S1, 74808%N); (S0, 24912%N); (S1, 8280%N); (S0, 2735%N); (S0, 971%N); (S0, 36%N); (S1, 40%N); (S0, 34%N); (S1, 44%N); (S0, 24%N); (S1, 20%N); (S0, 6%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 204454%N); (S0, 2%N)].
-Definition b28_9 : cfg := mkc false A [(S0, 1%N); (S0, 7%N); (S0, 224494%N); (S1, 74808%N); (S0, 24912%N); (S1, 8280%N); (S0, 2734%N); (S1, 972%N); (S0, 36%N); (S1, 40%N); (S0, 34%N); (S1, 44%N); (S0, 24%N); (S1, 20%N); (S0, 7%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 1%N); (S1, 45979%N); (S1, 305728%N); (S0, 2%N)].
-Definition b28_10 : cfg := mkc false D [(S0, 36%N); (S1, 40%N); (S0, 33%N); (S0, 45%N); (S0, 24%N); (S1, 20%N); (S0, 5%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S1, 971%N); (S1, 2735%N); (S1, 8280%N); (S0, 24912%N); (S1, 74807%N); (S1, 224495%N); (S1, 8%N); (S0, 33320%N); (S1, 407005%N)].
-Definition b28_11 : cfg := mkc true B [(S0, 224495%N); (S0, 74807%N); (S0, 24912%N); (S1, 8280%N); (S0, 2734%N); (S1, 972%N); (S0, 36%N); (S1, 40%N); (S0, 33%N); (S0, 45%N); (S0, 24%N); (S1, 20%N); (S0, 6%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S1, 8%N); (S0, 20662%N); (S1, 508272%N); (S0, 2%N)].
-Definition b28_12 : cfg := mkc true A [(S0, 609552%N); (S1, 8001%N); (S1, 8%N); (S0, 224493%N); (S0, 74809%N); (S0, 24912%N); (S1, 8280%N); (S0, 2733%N); (S0, 973%N); (S0, 36%N); (S1, 40%N); (S0, 33%N); (S0, 45%N); (S0, 24%N); (S1, 20%N); (S0, 7%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [].
-Definition b28_13 : cfg := mkc true A [(S0, 24911%N); (S0, 8280%N); (S1, 2736%N); (S0, 970%N); (S1, 36%N); (S0, 40%N); (S1, 36%N); (S0, 41%N); (S0, 25%N); (S0, 20%N); (S1, 8%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 74807%N); (S1, 224496%N); (S0, 673560%N); (S1, 4%N); (S0, 22085%N); (S0, 2%N)].
-Definition b28_14 : cfg := mkc true A [(S0, 1%N); (S0, 3%N); (S0, 673560%N); (S1, 224496%N); (S0, 74806%N); (S1, 24912%N); (S0, 8280%N); (S1, 2736%N); (S0, 971%N); (S0, 35%N); (S0, 40%N); (S1, 36%N); (S0, 43%N); (S0, 23%N); (S0, 20%N); (S1, 8%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S0, 82091%N); (S0, 2%N)].
-Definition b28_15 : cfg := mkc true B [(S1, 1%N); (S1, 36%N); (S0, 40%N); (S1, 36%N); (S0, 43%N); (S0, 23%N); (S0, 20%N); (S1, 8%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S1, 969%N); (S1, 2736%N); (S0, 8280%N); (S1, 24911%N); (S1, 74807%N); (S1, 224496%N); (S0, 673560%N); (S1, 4%N); (S0, 142098%N); (S1, 1%N)].
-Definition b28_16 : cfg := mkc true B [(S1, 1%N); (S1, 183704%N); (S0, 6%N); (S1, 673560%N); (S0, 224496%N); (S1, 74808%N); (S0, 24911%N); (S0, 8279%N); (S0, 2736%N); (S1, 972%N); (S0, 35%N); (S0, 39%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 21907%N)].
-Definition b28_17 : cfg := mkc false D [(S0, 5%N); (S0, 673561%N); (S0, 224496%N); (S1, 74808%N); (S0, 24910%N); (S1, 8280%N); (S0, 2736%N); (S1, 972%N); (S0, 35%N); (S0, 39%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 183704%N); (S0, 93338%N)].
-Definition b28_18 : cfg := mkc false E [(S0, 673561%N); (S0, 224496%N); (S1, 74808%N); (S0, 24909%N); (S0, 8281%N); (S0, 2736%N); (S1, 972%N); (S0, 35%N); (S0, 39%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 5%N); (S1, 183704%N); (S0, 164770%N); (S1, 1%N)].
-Definition b28_19 : cfg := mkc true B [(S0, 224496%N); (S1, 74808%N); (S0, 24911%N); (S0, 8279%N); (S0, 2736%N); (S1, 972%N); (S0, 34%N); (S1, 40%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S1, 673559%N); (S1, 7%N); (S1, 183703%N); (S1, 236201%N); (S1, 1%N)].
-Definition b28_20 : cfg := mkc true A [(S0, 307630%N); (S1, 183704%N); (S0, 7%N); (S0, 673559%N); (S0, 224496%N); (S1, 74808%N); (S0, 24909%N); (S0, 8281%N); (S0, 2736%N); (S1, 972%N); (S0, 34%N); (S1, 40%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S1, 1%N)].
-Definition b28_21 : cfg := mkc true C [(S1, 379065%N); (S1, 183704%N); (S0, 7%N); (S0, 673559%N); (S0, 224496%N); (S1, 74808%N); (S0, 24911%N); (S0, 8279%N); (S0, 2736%N); (S1, 972%N); (S0, 33%N); (S0, 41%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S0, 2%N)].
-Definition b28_22 : cfg := mkc true C [(S1, 450496%N); (S0, 183703%N); (S0, 6%N); (S1, 673560%N); (S0, 224496%N); (S1, 74808%N); (S0, 24910%N); (S1, 8280%N); (S0, 2736%N); (S1, 972%N); (S0, 33%N); (S0, 41%N); (S0, 36%N); (S1, 44%N); (S0, 22%N); (S1, 20%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S0, 2%N)].
-Definition b28_23 : cfg := mkc false D [(S1, 521925%N); (S1, 183704%N); (S0, 7%N); (S0, 673559%N); (S0, 224496%N); (S1, 74808%N); (S0, 24911%N); (S0, 8279%N); (S0, 2736%N); (S1, 972%N); (S0, 35%N); (S0, 39%N); (S0, 36%N); (S1, 44%N); (S0, 21%N); (S0, 21%N); (S0, 8%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 6%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S0, 2%N)].
-Definition b28_24 : cfg := mkc false D [(S1, 611003%N); (S1, 176220%N); (S0, 9%N); (S0, 673557%N); (S0, 224497%N); (S0, 74808%N); (S1, 24912%N); (S0, 8278%N); (S1, 2736%N); (S0, 972%N); (S1, 36%N); (S0, 39%N); (S0, 35%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 1%N)].
-Definition b28_25 : cfg := mkc false D [(S1, 712271%N); (S1, 163561%N); (S1, 8%N); (S0, 673558%N); (S1, 224496%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 38%N); (S1, 36%N); (S0, 44%N); (S1, 24%N); (S0, 17%N); (S0, 9%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 1%N); (S1, 1%N)].
-Definition b28_26 : cfg := mkc false D [(S0, 224495%N); (S0, 74808%N); (S1, 24912%N); (S0, 8277%N); (S0, 2737%N); (S0, 972%N); (S1, 36%N); (S0, 38%N); (S1, 36%N); (S0, 44%N); (S1, 24%N); (S0, 18%N); (S1, 8%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 673559%N); (S1, 8%N); (S0, 150901%N); (S0, 813545%N); (S0, 2%N)].
-Definition b28_27 : cfg := mkc false E [(S0, 138245%N); (S0, 9%N); (S0, 673559%N); (S0, 224495%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 37%N); (S0, 37%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N)] [(S1, 914807%N); (S1, 1%N)].
-Definition b28_28 : cfg := mkc false D [(S1, 24912%N); (S0, 8277%N); (S0, 2737%N); (S0, 972%N); (S1, 36%N); (S0, 37%N); (S0, 37%N); (S0, 44%N); (S1, 24%N); (S0, 17%N); (S0, 9%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S0, 74808%N); (S1, 224495%N); (S1, 673559%N); (S1, 8%N); (S0, 125586%N); (S1, 1016072%N); (S0, 2%N)].
-Definition b28_29 : cfg := mkc false D [(S1, 1117353%N); (S1, 112925%N); (S1, 8%N); (S0, 673558%N); (S1, 224496%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 39%N); (S0, 35%N); (S0, 44%N); (S1, 24%N); (S0, 17%N); (S0, 9%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S0, 2%N)].
-Definition b28_30 : cfg := mkc false D [(S0, 673557%N); (S0, 224497%N); (S0, 74808%N); (S1, 24912%N); (S0, 8278%N); (S1, 2736%N); (S0, 972%N); (S1, 36%N); (S0, 39%N); (S0, 35%N); (S0, 44%N); (S1, 24%N); (S0, 18%N); (S1, 8%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S1, 7%N); (S1, 100269%N); (S1, 1218616%N); (S0, 2%N)].
-Definition b28_31 : cfg := mkc true C [(S1, 1319883%N); (S1, 87611%N); (S1, 8%N); (S0, 673559%N); (S0, 224495%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 38%N); (S1, 36%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [].
-Definition b28_32 : cfg := mkc true C [(S1, 1421142%N); (S0, 74953%N); (S0, 9%N); (S0, 673557%N); (S0, 224497%N); (S0, 74808%N); (S1, 24912%N); (S0, 8278%N); (S1, 2736%N); (S0, 972%N); (S1, 36%N); (S0, 38%N); (S1, 36%N); (S0, 44%N); (S1, 24%N); (S0, 17%N); (S0, 9%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 2%N)] [(S0, 2%N)].
-Definition b28_33 : cfg := mkc true C [(S1, 1%N); (S1, 1522414%N); (S0, 62294%N); (S1, 8%N); (S0, 673558%N); (S1, 224496%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 37%N); (S0, 37%N); (S0, 44%N); (S1, 24%N); (S0, 18%N); (S1, 8%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 2%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [].
-Definition b28_34 : cfg := mkc true B [(S0, 673557%N); (S0, 224497%N); (S0, 74808%N); (S1, 24912%N); (S0, 8278%N); (S1, 2736%N); (S0, 972%N); (S1, 36%N); (S0, 37%N); (S0, 37%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S1, 8%N); (S0, 49633%N); (S0, 1623689%N); (S0, 2%N)].
-Definition b28_35 : cfg := mkc true B [(S0, 1724963%N); (S0, 36973%N); (S0, 9%N); (S0, 673559%N); (S0, 224495%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 39%N); (S0, 35%N); (S0, 44%N); (S1, 24%N); (S0, 19%N); (S0, 7%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [].
-Definition b28_36 : cfg := mkc true C [(S1, 1%N); (S1, 1826222%N); (S0, 24318%N); (S1, 8%N); (S0, 673557%N); (S0, 224497%N); (S0, 74808%N); (S1, 24912%N); (S0, 8278%N); (S1, 2736%N); (S0, 972%N); (S1, 36%N); (S0, 39%N); (S0, 35%N); (S0, 44%N); (S1, 24%N); (S0, 17%N); (S0, 9%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 1%N); (S0, 5%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [].
-Definition b28_37 : cfg := mkc false D [(S1, 8%N); (S0, 673559%N); (S0, 224495%N); (S0, 74808%N); (S1, 24912%N); (S0, 8279%N); (S0, 2735%N); (S0, 972%N); (S1, 36%N); (S0, 38%N); (S1, 36%N); (S0, 44%N); (S1, 24%N); (S0, 18%N); (S1, 8%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 2%N); (S1, 4%N); (S0, 4%N); (S1, 4%N); (S0, 1%N); (S0, 5%N); (S0, 4%N); (S1, 4%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 3%N); (S0, 2%N)] [(S0, 11658%N); (S1, 1927496%N); (S0, 2%N)].
-Lemma ck_0 : runp 500000 b28_0 = Some (b28_1, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_1 : runp 500000 b28_1 = Some (b28_2, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_2 : runp 500000 b28_2 = Some (b28_3, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_3 : runp 500000 b28_3 = Some (b28_4, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_4 : runp 500000 b28_4 = Some (b28_5, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_5 : runp 500000 b28_5 = Some (b28_6, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_6 : runp 500000 b28_6 = Some (b28_7, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_7 : runp 500000 b28_7 = Some (b28_8, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_8 : runp 500000 b28_8 = Some (b28_9, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_9 : runp 500000 b28_9 = Some (b28_10, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_10 : runp 500000 b28_10 = Some (b28_11, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_11 : runp 500000 b28_11 = Some (b28_12, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_12 : runp 500000 b28_12 = Some (b28_13, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_13 : runp 500000 b28_13 = Some (b28_14, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_14 : runp 500000 b28_14 = Some (b28_15, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_15 : runp 500000 b28_15 = Some (b28_16, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_16 : runp 500000 b28_16 = Some (b28_17, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_17 : runp 500000 b28_17 = Some (b28_18, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_18 : runp 500000 b28_18 = Some (b28_19, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_19 : runp 500000 b28_19 = Some (b28_20, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_20 : runp 500000 b28_20 = Some (b28_21, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_21 : runp 500000 b28_21 = Some (b28_22, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_22 : runp 500000 b28_22 = Some (b28_23, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_23 : runp 500000 b28_23 = Some (b28_24, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_24 : runp 500000 b28_24 = Some (b28_25, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_25 : runp 500000 b28_25 = Some (b28_26, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_26 : runp 500000 b28_26 = Some (b28_27, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_27 : runp 500000 b28_27 = Some (b28_28, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_28 : runp 500000 b28_28 = Some (b28_29, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_29 : runp 500000 b28_29 = Some (b28_30, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_30 : runp 500000 b28_30 = Some (b28_31, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_31 : runp 500000 b28_31 = Some (b28_32, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_32 : runp 500000 b28_32 = Some (b28_33, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_33 : runp 500000 b28_33 = Some (b28_34, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_34 : runp 500000 b28_34 = Some (b28_35, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_35 : runp 500000 b28_35 = Some (b28_36, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_36 : runp 500000 b28_36 = Some (b28_37, true).
-Proof. native_compute. reflexivity. Qed.
-Lemma ck_37 : runp 71902 b28_37 = Some (cfg28, true).
-Proof. native_compute. reflexivity. Qed.
 Lemma ck_ev p c c' : runp p c = Some (c', true) ->
   ev_cfg [] (fun _ => const S0) c -->* ev_cfg [] (fun _ => const S0) c'.
 Proof. intros H. apply progress_evstep. exact (runp_spec [] (fun _ => const S0) _ _ _ _ H). Qed.
-
-Lemma init28 : B;; tape0 -->* ev_cfg [] (fun _ => const S0) cfg28.
-Proof.
-  change (B;; tape0) with (ev_cfg [] (fun _ => const S0) b28_0).
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_0)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_1)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_2)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_3)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_4)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_5)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_6)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_7)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_8)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_9)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_10)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_11)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_12)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_13)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_14)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_15)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_16)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_17)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_18)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_19)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_20)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_21)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_22)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_23)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_24)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_25)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_26)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_27)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_28)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_29)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_30)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_31)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_32)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_33)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_34)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_35)|].
-  eapply evstep_trans; [exact (ck_ev _ _ _ ck_36)|].
-  exact (ck_ev _ _ _ ck_37).
-Qed.
-
-
-(* ===================================================================== *)
-(* The invariant at the start of every record interval, and its closure. *)
-(* ===================================================================== *)
 
 Inductive cls := C5 | C0 | C1 | C2 | C3 | C4.
 
@@ -2495,20 +2280,32 @@ Proof.
       * exists (nth 0 q 0%N), (rshift (q :: deep) 0%N). split; [reflexivity|]. rewrite shift_len. cbn [length]. lia.
 Qed.
 
-(* ===================================================================== *)
-(* From record exit 28 to the invariant (class r5, e = 2, u = 1).        *)
-(* ===================================================================== *)
+
+Definition cfg28 : cfg :=
+  Rc B
+    ([(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 972); (S1, cn 36);
+      (S0, cn 37); (S0, cn 37); (S0, cn 44); (S1, cn 24); (S0, cn 13); (S0, cn 9);
+      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
+      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1);
+      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)], T0)
+    ([(S1, cn 224495); (S1, cn 673559); (S1, cn 7); (S1, cn 9841); (S1, cn 1942040); (S0, cn 2)], T0).
+
+Lemma init_check : runp 18571896 (Rc A ([], T0) ([], T0)) = Some (cfg28, true).
+Proof. native_check_eq. Qed.
+
+Lemma init28 : A;; tape0 -[TM6.tm]->* ev_cfg [] (fun _ => const S0) cfg28.
+Proof. exact (ck_ev _ _ _ init_check). Qed.
 
 Definition L28 : list run :=
   [(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 972); (S1, cn 36);
-      (S0, cn 37); (S0, cn 37); (S0, cn 44); (S1, cn 24); (S0, cn 17); (S0, cn 9);
-      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4);
-      (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
-      (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1);
-      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)]%N.
+   (S0, cn 37); (S0, cn 37); (S0, cn 44); (S1, cn 24); (S0, cn 13); (S0, cn 9);
+   (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
+   (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1);
+   (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)]%N.
 Definition R28 : list run := [(S0, cn 224492); (S1, cn 673559); (S1, cn 7); (S1, cn 9841); (S1, cn 1942040); (S0, cn 2)]%N.
+
 Definition nus28 : list (list N) :=
-  [[18701; 6227; 2069; 683]; [242; 8; 9; 8]; [10; 5; 4; 1]; [0; 0; 0; 0]; [0; 0; 0; 0]; [0; 0; 0; 0]]%N.
+  [[18701; 6227; 2069; 683]; [242; 8; 9; 8]; [10; 5; 3; 1]; [0; 0; 0; 0]; [0; 0; 0; 0]; [0; 0; 0; 0]]%N.
 
 Lemma inv28 : Inv (C5, 2, 0%N, nus28).
 Proof.
@@ -2525,10 +2322,10 @@ Proof.
 Qed.
 
 Lemma b28a : reach 1000 (Rc B (L28, T0) ([(S1, cn 3)], TV 1)) (Rc A ((S0, cn 3) :: L28, T0) ([], TV 1)) = true.
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma b28b : ep_run true R28 = Some (map (fun r => (fst r, cn (evN [0%N] (snd r)))) Rs_r5).
-Proof. vm_compute. reflexivity. Qed.
+Proof. vm_check_eq. Qed.
 
 Lemma b28_chain : ev_runs [] ((S0, cn 3) :: L28) (const S0) = chs (repeat U0 6) nus28 (b1s P0 (LWs 0)).
 Proof. reflexivity. Qed.
@@ -2555,68 +2352,189 @@ Qed.
 (* The machine never halts.                                              *)
 (* ===================================================================== *)
 
-Lemma nonhalt_P : ~ halts tmP (B;; tape0).
+Theorem nonhalt : ~ halts tm c0.
 Proof.
   eapply multistep_nonhalt.
   - eapply evstep_trans; [apply init28 | exact base28].
-  - apply (progress_nonhalt_cond tmP ist (C5, 2, 0%N, nus28) cfgI Inv inv_step inv28).
+  - apply (progress_nonhalt_cond tm ist (C5, 2, 0%N, nus28) cfgI Inv inv_step inv28).
+Qed.
+
+End TM6.
+
+Module TM5.
+Import TM6.
+Definition tm := Eval compute in (TM_from_str "1RB0RA_1LC0RE_1LD0LC_1RA0LB_1RA0RF_1LE---").
+
+Definition cfg28 : cfg :=
+  Rc B
+    ([(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 972); (S1, cn 36);
+      (S0, cn 37); (S0, cn 37); (S0, cn 44); (S1, cn 24); (S0, cn 17); (S0, cn 9);
+      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4);
+      (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
+      (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1);
+      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)], T0)
+    ([(S1, cn 224495); (S1, cn 673559); (S1, cn 7); (S1, cn 9841); (S1, cn 1942040); (S0, cn 2)], T0).
+
+Lemma init_check : runp 18571902 (Rc B ([], T0) ([], T0)) = Some (cfg28, true).
+Proof. native_check_eq. Qed.
+
+Lemma init28 : B;; tape0 -[TM6.tm]->* ev_cfg [] (fun _ => const S0) cfg28.
+Proof. exact (ck_ev _ _ _ init_check). Qed.
+
+Definition L28 : list run :=
+  [(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 972); (S1, cn 36);
+      (S0, cn 37); (S0, cn 37); (S0, cn 44); (S1, cn 24); (S0, cn 17); (S0, cn 9);
+      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4);
+      (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
+      (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1);
+      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)]%N.
+Definition nus28 : list (list N) :=
+  [[18701; 6227; 2069; 683]; [242; 8; 9; 8]; [10; 5; 4; 1]; [0; 0; 0; 0]; [0; 0; 0; 0]; [0; 0; 0; 0]]%N.
+
+Lemma inv28 : Inv (C5, 2, 0%N, nus28).
+Proof.
+  cbn [Inv win]. split; [lia|]. split; [reflexivity|].
+  exists 683%N, (tl nus28). split; reflexivity.
+Qed.
+
+
+Lemma b28a : reach 1000 (Rc B (L28, T0) ([(S1, cn 3)], TV 1)) (Rc A ((S0, cn 3) :: L28, T0) ([], TV 1)) = true.
+Proof. vm_check_eq. Qed.
+
+
+Lemma b28_chain : ev_runs [] ((S0, cn 3) :: L28) (const S0) = chs (repeat U0 6) nus28 (b1s P0 (LWs 0)).
+Proof. reflexivity. Qed.
+
+
+Lemma base28 :
+  ev_runs [] L28 (const S0) {{B}}> ev_runs [] ((S1, cn 224495) :: tl R28) (const S0) -->*
+  cfgI (C5, 2, 0%N, nus28).
+Proof.
+  change (cn 224495) with (LF (3 + 224492) []).
+  rewrite split1.
+  eapply evstep_trans.
+  - apply progress_evstep. exact (reach_spec _ _ _ b28a [] (sg2 (const S0) (evR [] R28))).
+  - change (ev_runs [] ((S0, cn 3) :: L28) (const S0) {{A}}> evR [] R28 -->* cfgI (C5, 2, 0%N, nus28)).
+    replace (cfgI (C5, 2, 0%N, nus28))
+      with (ev_runs [] ((S0, cn 3) :: L28) (const S0) <{{D}} evR [] (map (fun r => (fst r, cn (evN [0%N] (snd r)))) Rs_r5)).
+    + apply (ep_run_spec _ _ _ b28b []).
+    + unfold cfgI, Gc. rewrite b28_chain, b28_right. reflexivity.
+Qed.
+
+(* ===================================================================== *)
+(* The machine never halts.                                              *)
+(* ===================================================================== *)
+
+Lemma nonhalt_P : ~ halts TM6.tm (B;; tape0).
+Proof.
+  eapply multistep_nonhalt.
+  - eapply evstep_trans; [apply init28 | exact base28].
+  - apply (progress_nonhalt_cond TM6.tm ist (C5, 2, 0%N, nus28) cfgI Inv inv_step inv28).
 Qed.
 
 Definition phi (q : Q) : Q :=
   match q with A => B | B => C | C => D | D => E | E => A | F => F end.
 
-Lemma perm_phi : Perm tm tmP phi.
+Lemma perm_phi : Perm tm TM6.tm phi.
 Proof.
   split.
   - intros [] [] H; cbn in *; try discriminate; reflexivity.
   - intros [] [] s' d q' H; cbn in *; inversion H; subst; reflexivity.
 Qed.
 
-Lemma nonhalt : ~ halts tm c0.
+Theorem nonhalt : ~ halts tm c0.
 Proof.
   intros H.
   change (halts tm (A;; tape0)) in H.
   exact (nonhalt_P (perm_halts _ _ _ _ _ perm_phi H)).
 Qed.
+End TM5.
+
+Module TM7.
+Import TM6.
+Definition tm := Eval compute in (TM_from_str "1LB---_1RC0RA_1RD0RC_1LE0RB_1LF0LE_1RC0LD").
+
+Definition cfg28 : cfg :=
+  Rc B
+    ([(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 936); (S1, cn 36);
+      (S0, cn 37); (S0, cn 37); (S0, cn 52); (S1, cn 8); (S0, cn 1); (S0, cn 5);
+      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4);
+      (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
+      (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1);
+      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)], T0)
+    ([(S1, cn 224495); (S1, cn 673559); (S1, cn 7); (S1, cn 9841); (S1, cn 1942040); (S0, cn 2)], T0).
+
+Lemma init_check : runp 18571554 (Rc F ([], T0) ([], T0)) = Some (cfg28, true).
+Proof. native_check_eq. Qed.
+
+Lemma init28 : F;; tape0 -[TM6.tm]->* ev_cfg [] (fun _ => const S0) cfg28.
+Proof. exact (ck_ev _ _ _ init_check). Qed.
+
+Definition L28 : list run :=
+  [(S0, cn 74808); (S1, cn 24912); (S0, cn 8277); (S0, cn 2737); (S0, cn 936); (S1, cn 36);
+      (S0, cn 37); (S0, cn 37); (S0, cn 52); (S1, cn 8); (S0, cn 1); (S0, cn 5);
+      (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4);
+      (S0, cn 1); (S0, cn 5); (S0, cn 4); (S1, cn 4); (S0, cn 1); (S0, cn 5);
+      (S0, cn 1); (S0, cn 6); (S1, cn 4); (S0, cn 1); (S0, cn 5); (S0, cn 1);
+      (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 1); (S0, cn 5); (S0, cn 2)]%N.
+Definition nus28 : list (list N) :=
+  [[18701; 6227; 2069; 683]; [233; 8; 9; 8]; [12; 1; 0; 0]; [0; 0; 0; 0]; [0; 0; 0; 0]; [0; 0; 0; 0]]%N.
+
+Lemma inv28 : Inv (C5, 2, 0%N, nus28).
+Proof.
+  cbn [Inv win]. split; [lia|]. split; [reflexivity|].
+  exists 683%N, (tl nus28). split; reflexivity.
+Qed.
 
 
-(*
-```
-1RB0RA_1LC0RE_1LD0LC_1RA0LB_1RA0RF_1LE---
+Lemma b28a : reach 1000 (Rc B (L28, T0) ([(S1, cn 3)], TV 1)) (Rc A ((S0, cn 3) :: L28, T0) ([], TV 1)) = true.
+Proof. vm_check_eq. Qed.
 
-      tm   0     1               tmP  0     1
-      A   1RB   0RA               A   1RB   0RF
-      B   1LC   0RE               B   1RC   0RB
-      C   1LD   0LC               C   1LD   0RA
-      D   1RA   0LB               D   1LE   0LD
-      E   1RA   0RF               E   1RB   0LC
-      F   1LE   ---               F   1LA   ---
 
- tm c0 = 0^inf A> 0^inf  <->  tmP from 0^inf B> 0^inf   (Perm tm tmP phi, perm_halts)
- record exit 28 of this start: 18,571,902 simulator steps; chain gap variables nus28 =
-   [18701; 6227; 2069; 683] [242; 8; 9; 8] [10; 5; 4; 1] [0; 0; 0; 0] [0; 0; 0; 0] [0; 0; 0; 0]
+Lemma b28_chain : ev_runs [] ((S0, cn 3) :: L28) (const S0) = chs (repeat U0 6) nus28 (b1s P0 (LWs 0)).
+Proof. reflexivity. Qed.
 
- parent structure (unchanged):
 
-sweep cycles (alternating cells, every cell complemented):
-  right:  B0 C1 A0 B1   (1RC 0RA 1RB 0RB)
-  left :  D1 D0 E1 C0   (0LD 1LE 0LC 1LD)
+Lemma base28 :
+  ev_runs [] L28 (const S0) {{B}}> ev_runs [] ((S1, cn 224495) :: tl R28) (const S0) -->*
+  cfgI (C5, 2, 0%N, nus28).
+Proof.
+  change (cn 224495) with (LF (3 + 224492) []).
+  rewrite split1.
+  eapply evstep_trans.
+  - apply progress_evstep. exact (reach_spec _ _ _ b28a [] (sg2 (const S0) (evR [] R28))).
+  - change (ev_runs [] ((S0, cn 3) :: L28) (const S0) {{A}}> evR [] R28 -->* cfgI (C5, 2, 0%N, nus28)).
+    replace (cfgI (C5, 2, 0%N, nus28))
+      with (ev_runs [] ((S0, cn 3) :: L28) (const S0) <{{D}} evR [] (map (fun r => (fst r, cn (evN [0%N] (snd r)))) Rs_r5)).
+    + apply (ep_run_spec _ _ _ b28b []).
+    + unfold cfgI, Gc. rewrite b28_chain, b28_right. reflexivity.
+Qed.
 
-configuration at the start of a record interval (cfgI):
-  chs (U0^m) nus (b1s P0 (LWs 0)) <{{D}} evR [t] (Rs r)
-  chain: m = K - 1 blocks with m = 3 (gap variables nus, nearest the head first), block 1
-         (m = 1), left word W_1; right region: run list Rs r, linear in t, u = 9^(e-2) = 1 + 8 t.
+(* ===================================================================== *)
+(* The machine never halts.                                              *)
+(* ===================================================================== *)
 
-block rules (all gaps symbolic, both sides abstract), entering from the right at phase c (D):
-  U0 -> U1, U1 -> U2, W0 -> W1, W1 -> D0       leave right at c + 2 (A)
-  D1 -> D0, D2 -> D1                           leave right at c     (B)
-  U2, D0 passed                                leave left  at c + 2 (D)
-entering from the left: U2 at c -> U0 (A), U2 at c + 2 -> W0 (A), D0 at c + 2 -> D2 (B)
-block 1: P0 -> P1 -> PD0 (A), PD2 -> PD1 -> PD0 (B), PD0 passed (E), PD0 from the left -> PD2.
+Lemma nonhalt_P : ~ halts TM6.tm (F;; tape0).
+Proof.
+  eapply multistep_nonhalt.
+  - eapply evstep_trans; [apply init28 | exact base28].
+  - apply (progress_nonhalt_cond TM6.tm ist (C5, 2, 0%N, nus28) cfgI Inv inv_step inv28).
+Qed.
 
-one interval (S_r):  (81 * 3^K - 1) visits + episodes (interval_tm, int_r),
-  record visit: carry-out at all D0, left record, carry back to all D2 (record_visit),
-  regrouping one defect later (regroup), record-exit episode (step_r).
-classes r5 -> r0 -> r1 -> r2 -> r3 -> r4 -> r5 (e + 1, t -> 1 + 9 t); K0 = 3 3 4 3 4 4.
-```
-*)
+Definition phi (q : Q) : Q :=
+  match q with A => F | B => A | C => B | D => C | E => D | F => E end.
+
+Lemma perm_phi : Perm tm TM6.tm phi.
+Proof.
+  split.
+  - intros [] [] H; cbn in *; try discriminate; reflexivity.
+  - intros [] [] s' d q' H; cbn in *; inversion H; subst; reflexivity.
+Qed.
+
+Theorem nonhalt : ~ halts tm c0.
+Proof.
+  intros H.
+  change (halts tm (A;; tape0)) in H.
+  exact (nonhalt_P (perm_halts _ _ _ _ _ perm_phi H)).
+Qed.
+End TM7.
