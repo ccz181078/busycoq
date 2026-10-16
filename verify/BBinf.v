@@ -53,11 +53,20 @@ Module BBinf <: Ctx.
 
   Definition all_qs : list Q := [].
 
+  (* WARNING: [Q] is [N] and [all_qs] is [], so [In a all_qs] is [False].
+     This is not merely unproven -- [all_qs_spec q0] is a proof of [False],
+     and TM.v:57 registers it in the [core] hint database, so a stray [auto]
+     or [trivial] inside the [Inductive] functor body can discharge any goal
+     with it and leave no trace in the source.  [Inductive_inf.v:5] applies
+     that functor to this module, so every lemma behind the extracted
+     `decider` must be checked with [Print Assumptions]; see Assumptions.v,
+     where the ones currently relied on all come out clean. *)
   Lemma all_qs_spec : forall a, In a all_qs.
   Admitted.
 
   Definition all_syms : list Sym := [].
 
+  (* WARNING: false for the same reason as [all_qs_spec] above. *)
   Lemma all_syms_spec : forall a, In a all_syms.
   Admitted.
 End BBinf.
