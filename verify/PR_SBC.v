@@ -1,35 +1,7 @@
-(* 1RB0LF_0RC---_1RD0RA_1LE0RC_0LA0LE_1LE1LB never halts.
-
-   Spread-digit binary bouncer counter.  A left bouncer lead a feeds a right binary counter whose
-   digits b 100 01 (100)^g sit at unary gaps g; at the right end of the counter a block of gap-1
-   digits (the R block) is followed by a finite "tail".  At each overflow the carry runs into the
-   tail, which answers either S (the counter wraps silently) or N (the left part freezes into a
-   wall that a long pause eats two increments at a time, rebuilding every gap and inserting new
-   digits).  See the accompanying write-up (1RB0LF_0RC---_1RD0RA_1LE0RC_0LA0LE_1LE1LB_writeup.md) for the full mechanism.
-
-   Adapted from verify/CounterClass3v2.v, Module TM1 (a hand-written multi-level counter: sweep
-   lemmas, a carry lemma by induction on the carry depth, macro lemmas, then nonhalt by an
-   invariant).
-
-   Structure of this file.
-   - Token view (write-up section 0): right of the lead the tape is a word over T0 = 00, T1 = 01,
-     TZ = 100; processed tokens are P = (10), PZ = (010).  ctr gs v is the counter, LSB first.
-   - Window lemmas by es; Csweep, IncC, IncL (one increment), Inc1/Incs (normal mode), and the
-     pause rules as three generic wall lemmas TwoInc (P100, P010, WX, ZXP1), ZXg (ZX, ZXN),
-     ZXP2g.
-   - The overflow return is the finite token transducer retf (retf_spec), so the write-up's
-     16,384-entry tail table is not needed: TailRet + Tail10, Tail0z, Tail11 (one leaf per
-     position of the first 0 of the tail, plus the end-unit carry Tail11_end) give the tail's
-     answer for every tail in L* (Lst) and the TAILFRONT closure.
-   - OvN1, OvN0, OvS1: sweep, tail, R-block return (RB_* lemmas), boundary.  NOrb, POrb,
-     SILENT, SILENTP add the wall bookkeeping and the zone rebuild (Zones).
-   - pathS, pathP1, pathP1S, pathP3: the four paths between normal-mode overflows; INV is the
-     interval invariant of write-up section 5.3 (M = 4 * 2 ^ (length G + r1)); step shows INV is
-     closed; init is the 92,299-step initial segment; nonhalt by progress_nonhalt_cond.
-
-   Formalized with Claude Code (AI-assisted).
-   Checked: compiles against unmodified busycoq BB6 (commit 0940bb9) with Coq 8.20.1;
-   Print Assumptions nonhalt: Closed under the global context. *)
+(* Classification: SBC.
+   Consolidated from busycoq PR #26, pinned in PR19_28_INVENTORY.json.
+   Original proofs: Dennis Koshta.
+   Common declarations are reused; each blank-state initialization is checked separately. *)
 
 From BusyCoq Require Import Individual62.
 Require Import Lia.
@@ -37,52 +9,81 @@ Require Import String.
 Require Import List.
 Require Import Arith.
 
+Module TM1.
+Import BusyCoq.Individual62.
+
+Import Lia.
+
+Import String.
+
+Import List.
+
+Import Arith.
+
 Definition tm := Eval compute in (TM_from_str "1RB0LF_0RC---_1RD0RA_1LE0RC_0LA0LE_1LE1LB").
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
+
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
 
 Open Scope list.
 
-(** ** Tokens *)
 Inductive tok := T0 | T1 | TZ.
+
 Definition tokw (t : tok) : list Sym :=
   match t with T0 => [0;0] | T1 => [0;1] | TZ => [1;0;0] end.
+
 Fixpoint tw (ts : list tok) : list Sym :=
   match ts with [] => [] | t :: ts => tokw t ++ tw ts end.
 
 Inductive ptok := P | PZ.
+
 Definition pw (p : ptok) : list Sym := match p with P => [0;1] | PZ => [0;1;0] end.
+
 Fixpoint pl (ps : list ptok) : list Sym :=
   match ps with [] => [] | p :: ps => pw p ++ pl ps end.
+
 Definition proc (t : tok) : ptok := match t with TZ => PZ | _ => P end.
 
 Lemma tw_app xs ys : tw (xs ++ ys) = tw xs ++ tw ys.
 Proof. induction xs; cbn; [reflexivity|]. rewrite IHxs, app_assoc. reflexivity. Qed.
+
 Lemma tw_cons x xs : tw (x :: xs) = tokw x ++ tw xs.
 Proof. reflexivity. Qed.
+
 Lemma pl_app xs ys : pl (xs ++ ys) = pl xs ++ pl ys.
 Proof. induction xs; cbn; [reflexivity|]. rewrite IHxs, app_assoc. reflexivity. Qed.
 
-(** ** Window lemmas *)
 Lemma AT0 l r : l {{A}}> [0;0] *> r -->* l <* [0;1] {{C}}> r.  Proof. es. Qed.
+
 Lemma CT1 l r : l {{C}}> [0;1] *> r -->* l <* [0;1] {{C}}> r.  Proof. es. Qed.
+
 Lemma CTZ l r : l {{C}}> [1;0;0] *> r -->* l <* [0;1;0] {{C}}> r.  Proof. es. Qed.
+
 Lemma CT0 l r : l {{C}}> [0;0] *> r -->* l <{{E}} [0;1] *> r.  Proof. es. Qed.
+
 Lemma EPZ l r : l <* [0;1;0] <{{E}} r -->* l <{{E}} [1;0;0] *> r.  Proof. es. Qed.
+
 Lemma EP l r : l <* [0;1] <{{E}} r -->* l <{{F}} [0;0] *> r.  Proof. es. Qed.
+
 Lemma FP l r : l <* [0;1] <{{F}} r -->* l <{{E}} [0;1] *> r.  Proof. es. Qed.
+
 Lemma FPZP l r : l <* [0;1] <* [0;1;0] <{{F}} [0;0] *> r -->*
   l <{{E}} [0;0] *> [1;0;0] *> [0;1] *> r.  Proof. es. Qed.
+
 Lemma ENDl l r : l <* [0;0] <{{F}} r -->* l <{{A}} [0;1] *> r.  Proof. es. Qed.
+
 Lemma B1 l r : l <* [1;0] <{{F}} r -->* l <* [0;0] {{A}}> r.  Proof. es. Qed.
+
 Lemma BN l r : l <* [0;1;0;0;1;0] <{{F}} [0;0] *> r -->* l <{{A}} [0;0;0;1;0;0;0;1] *> r.  Proof. es. Qed.
+
 Lemma ENDZX l r : l <* [0;0;1;0;0;1;0;1;0;0;1;0] <{{F}} r -->* l <{{A}} [0;0;0;1;0;0;0;1;1;0;0;1] *> r.  Proof. es. Qed.
 
-(** ** C sweep over T1/TZ tokens *)
 Fixpoint noT0 (ts : list tok) : Prop :=
   match ts with [] => True | T0 :: _ => False | _ :: ts => noT0 ts end.
+
 Definition prc (ts : list tok) : list ptok := rev (map proc ts).
 
 Lemma Csweep ts : noT0 ts -> forall l r,
@@ -96,7 +97,6 @@ Proof.
   - follow CTZ. follow (IH H). cbn [pl proc]. rewrite Str_app_assoc. finish.
 Qed.
 
-(** ** The leftward return over processed tokens *)
 Fixpoint retf (m : Q) (ps : list ptok) (rs : list tok) {struct ps} : Q * list ptok * list tok :=
   match m, ps with
   | E, PZ :: ps' => retf E ps' (TZ :: rs)
@@ -121,16 +121,16 @@ Proof.
     { destruct m; cbn in Hr; inversion Hr; subst; finish. }
     cbn in Hn.
     destruct m, p; cbn in Hr; try (inversion Hr; subst; solve [finish]).
-    + (* E, P *)
+    +  
       cbn [pl]. rewrite Str_app_assoc. cbn [pw].
       follow EP. apply (IH ps ltac:(lia) _ _ _ _ _ Hr).
-    + (* E, PZ *)
+    +  
       cbn [pl]. rewrite Str_app_assoc. cbn [pw].
       follow EPZ. apply (IH ps ltac:(lia) _ _ _ _ _ Hr).
-    + (* F, P *)
+    +  
       cbn [pl]. rewrite Str_app_assoc. cbn [pw].
       follow FP. apply (IH ps ltac:(lia) _ _ _ _ _ Hr).
-    + (* F, PZ *)
+    +  
       destruct ps as [|[|] ps]; try (inversion Hr; subst; solve [finish]).
       destruct rs as [|[| |] rs]; try (inversion Hr; subst; solve [finish]).
       cbn [pl tw]. rewrite !Str_app_assoc. cbn [pw tokw].
@@ -145,17 +145,19 @@ Lemma retf_spec ps m rs m' ps' rs' :
   l <* pl ps <{{m}} tw rs *> r -->* l <* pl ps' <{{m'}} tw rs' *> r.
 Proof. intros. eapply retf_spec_n; [apply le_n|eassumption]. Qed.
 
-(** ** Shift rules *)
 Lemma CTZ' l r : l <* [] {{C}}> [1;0;0] *> r -->* l <* [0;1;0] <* [] {{C}}> r.  Proof. es. Qed.
+
 Definition CTZs := shift_rule_R _ _ _ _ _ CTZ'.
+
 Lemma EPZ' l r : l <* [0;1;0] <{{E}} [] *> r -->* l <{{E}} [] *> [1;0;0] *> r.  Proof. es. Qed.
+
 Definition EPZs := shift_rule_L _ _ _ _ _ EPZ'.
 
 Lemma tw_Z g : tw (repeat TZ g) = [1;0;0]^^g.
 Proof. induction g; cbn; [reflexivity|]. rewrite IHg. reflexivity. Qed.
 
-(** ** The counter: digits b Z 1 Z^g, LSB first; the last digit is its bit only *)
 Definition bit (v : nat) : tok := if Nat.odd v then T1 else T0.
+
 Fixpoint ctr (gs : list nat) (v : nat) : list tok :=
   match gs with
   | [] => [bit v]
@@ -164,11 +166,13 @@ Fixpoint ctr (gs : list nat) (v : nat) : list tok :=
 
 Lemma bit_even w : bit (2*w) = T0.
 Proof. unfold bit. rewrite Nat.odd_even. reflexivity. Qed.
+
 Lemma bit_odd w : bit (S (2*w)) = T1.
 Proof. unfold bit. replace (S (2*w)) with (2*w+1) by lia. rewrite Nat.odd_odd. reflexivity. Qed.
 
 Lemma ctr_even g gs w : ctr (g :: gs) (2*w) = T0 :: TZ :: T1 :: repeat TZ g ++ ctr gs w.
 Proof. cbn [ctr]. rewrite bit_even, Nat.div2_double. reflexivity. Qed.
+
 Lemma ctr_odd g gs w : ctr (g :: gs) (S (2*w)) = T1 :: TZ :: T1 :: repeat TZ g ++ ctr gs w.
 Proof. cbn [ctr]. rewrite bit_odd, Nat.div2_succ_double. reflexivity. Qed.
 
@@ -214,26 +218,21 @@ Proof.
   follow EPZs. follow EP. finish.
 Qed.
 
-(** ** The left bounce: F at the edge adds one 100 to the lead and returns to A *)
 Lemma Bnc X : (const 0) <{{F}} [0;0] *> [1;0;0] *> X -->*
   (const 0) {{A}}> [0;0] *> [1;0;0] *> [1;0;0] *> X.
 Proof. rewrite (const_unfold _ 0) at 1. es. Qed.
 
-(** ** Normal-mode increment: one bounce, lead a -> a+1, counter v -> v+1 *)
 Lemma Inc gs v a : S v < 2 ^ S (length gs) -> forall t,
   (const 0) {{A}}> tw (T0 :: repeat TZ (S a) ++ ctr gs v ++ t) *> (const 0) -->*
   (const 0) {{A}}> tw (T0 :: repeat TZ (S (S a)) ++ ctr gs (S v) ++ t) *> (const 0).
 Proof.
   intros Hv t.
   follow (IncL gs v (S a) Hv).
-  (* 0inf <F tw(T0 :: 100^(S a) ++ ctr(Sv) ++ t) ; peel 00 100 and bounce *)
+   
   cbn [repeat app]. rewrite !tw_cons. cbn [tokw]. rewrite !Str_app_assoc.
   follow Bnc. finish.
 Qed.
 
-(** ** Overflow return: C sweeps a T0-free word, turns at the next 0, then retf returns.
-    This is the whole tail table T(f) of the write-up, with no 2^14-entry table: the head
-    stops at the first 0 of the tail and the leftward return is the finite automaton [retf]. *)
 Lemma OvRet w rest : noT0 w ->
   forall m' ps' rs', retf E (prc w ++ [P]) (T1 :: rest) = (m', ps', rs') ->
   forall l r,
@@ -246,7 +245,7 @@ Proof.
   follow (Csweep w Hw).
   rewrite tw_cons. cbn [tokw]. rewrite Str_app_assoc.
   follow CT0.
-  (* now:  l <* [0;1] <* pl (prc w) <{{E}} [0;1] *> tw rest *> r *)
+   
   assert (H := retf_spec (prc w ++ [P]) E (T1 :: rest) m' ps' rs' Hr l r).
   rewrite pl_app in H. cbn [pl pw] in H.
   cbn [tw tokw] in H.
@@ -254,7 +253,6 @@ Proof.
   follow H. finish.
 Qed.
 
-(** ** Pause rules (proof.md section 3) *)
 Ltac tnorm := rewrite <- ?app_assoc; repeat (rewrite ?tw_cons, ?tw_app, ?tw_Z); cbn [tokw]; rewrite ?Str_app_assoc.
 
 Lemma TwoInc gs v p t L r : S (S v) < 2 ^ S (length gs) ->
@@ -295,16 +293,16 @@ Proof.
   finish.
 Qed.
 
-(** ** The tail (proof.md sections 1.2, 4.2, 4.4) *)
 Definition bt (b : bool) : tok := if b then T1 else T0.
+
 Definition tailx (y z b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 : bool) (e : list bool) : list tok :=
   bt y :: bt z :: TZ :: T1 :: bt b4 :: bt b5 :: TZ :: T1 :: bt b6 :: TZ :: bt b7 :: TZ :: T1 ::
   bt b8 :: bt b9 :: TZ :: bt b10 :: TZ :: T1 :: bt b11 :: TZ :: bt b12 :: TZ :: bt b13 :: TZ ::
   bt b14 :: TZ :: bt b15 :: TZ :: T1 :: map bt e ++ [T1].
+
 Definition tailw (x y z b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 : bool) (e : list bool) : list tok :=
   bt x :: tailx y z b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e.
 
-(** L*: x = 1, front unit (y, z); the stream is the tail followed by blank tape. *)
 Definition Lst (y z : bool) (S : Stream Sym) : Prop :=
   exists b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e,
   S = tw (tailw true y z b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e) *> const 0.
@@ -337,28 +335,39 @@ Proof.
 Qed.
 
 Definition F1 : list tok := [T1; T1; T1; TZ; T1; T1; T1; TZ; T1; T1; TZ; T1; TZ; T1; T1; T1; TZ; T1; TZ; T1; T1; TZ; T1; TZ; T1; TZ; T1; TZ; T1; TZ; T1].
+
 Definition F1E : list tok := [T1; T0; T0; TZ; T1; T1; T0; TZ; T1; T0; TZ; T0; TZ; T1; T1; T0; TZ; T0; TZ; T1; T0; TZ; T1; TZ; T0; TZ; T1; TZ; T0; TZ; T1].
+
 Definition F1F : list tok := [T0; T1; T0; TZ; T1; T0; T0; TZ; T1; T0; TZ; T1; TZ; T1; T0; T0; TZ; T1; TZ; T1; T0; TZ; T0; TZ; T1; TZ; T0; TZ; T1; TZ; T1].
+
 Lemma F1E_ret X : retf E (prc F1) X = (E, [], F1E ++ X).  Proof. reflexivity. Qed.
+
 Lemma F1F_ret X : retf F (prc F1) X = (F, [], F1F ++ X).  Proof. reflexivity. Qed.
+
 Lemma tailw_ones e : tailw true true true true true true true true true true true true true true true e = F1 ++ map bt e ++ [T1].
 Proof. reflexivity. Qed.
 
 Lemma prc_app xs ys : prc (xs ++ ys) = prc ys ++ prc xs.
 Proof. unfold prc. rewrite map_app, rev_app_distr. reflexivity. Qed.
+
 Lemma repeat_snoc {X} (x : X) n : repeat x n ++ [x] = x :: repeat x n.
 Proof. induction n as [|n IH]; cbn; [|rewrite IH]; reflexivity. Qed.
+
 Lemma prc_T1s j : prc (repeat T1 j) = repeat P j.
 Proof.
   unfold prc. induction j as [|j IH]; [reflexivity|].
   cbn [repeat map rev]. rewrite IH. apply repeat_snoc.
 Qed.
+
 Lemma noT0_app xs ys : noT0 xs -> noT0 ys -> noT0 (xs ++ ys).
 Proof. induction xs as [|[] xs IH]; cbn; tauto. Qed.
+
 Lemma noT0_T1s j : noT0 (repeat T1 j).
 Proof. induction j; cbn; auto. Qed.
+
 Lemma map_bt_true j : map bt (repeat true j) = repeat T1 j.
 Proof. induction j; cbn; [|rewrite IHj]; reflexivity. Qed.
+
 Lemma map_bt_alt i : map bt ([true; false]^^i) = [T1; T0]^^i.
 Proof. induction i; cbn; [|rewrite IHi]; reflexivity. Qed.
 
@@ -369,6 +378,7 @@ Proof.
   rewrite IH. f_equal. change (T1 :: T0 :: rs) with ([T1;T0] ++ rs).
   rewrite app_assoc, lpow_shift. reflexivity.
 Qed.
+
 Lemma retf_PPP i ps rs : retf E (repeat P (S (2 * i)) ++ ps) rs = retf F ps (T0 :: [T1;T0]^^i ++ rs).
 Proof.
   replace (repeat P (S (2 * i)) ++ ps) with (repeat P (2 * i) ++ P :: ps).
@@ -497,7 +507,6 @@ Proof.
   apply Tail11_end.
 Qed.
 
-(** ** Composition of the return automaton *)
 Lemma retf_app_n n : forall ps1, length ps1 <= n -> forall m ps2 rs m1 rs1,
   retf m ps1 rs = (m1, [], rs1) -> retf m (ps1 ++ ps2) rs = retf m1 ps2 rs1.
 Proof.
@@ -515,11 +524,11 @@ Proof.
       destruct rs as [|[| |] rs]; try discriminate.
       cbn [app retf]. cbn in Hn. apply (IH ps1 ltac:(lia) _ _ _ _ _ Hr).
 Qed.
+
 Lemma retf_app m ps1 ps2 rs m1 rs1 :
   retf m ps1 rs = (m1, [], rs1) -> retf m (ps1 ++ ps2) rs = retf m1 ps2 rs1.
 Proof. intros. eapply retf_app_n; [apply le_n|eassumption]. Qed.
 
-(** ** Lemma RB: the return over the R block (proof.md section 4.3) *)
 Lemma RB_E2 n : forall rs, retf E ([PZ;P]^^(2*n)) rs = (E, [], [T0;TZ;T1;TZ]^^n ++ rs).
 Proof.
   induction n as [|n IH]; intros rs; [reflexivity|].
@@ -527,6 +536,7 @@ Proof.
   rewrite IH. f_equal. f_equal. change (T0 :: TZ :: T1 :: TZ :: rs) with ([T0;TZ;T1;TZ] ++ rs).
   rewrite app_assoc, lpow_shift. reflexivity.
 Qed.
+
 Lemma RB_F2 n : forall rs, retf F ([PZ;P]^^(2*n)) (T0 :: rs) = (F, [], T0 :: [TZ;T0;TZ;T1]^^n ++ rs).
 Proof.
   induction n as [|n IH]; intros rs; [reflexivity|].
@@ -534,8 +544,10 @@ Proof.
   rewrite IH. f_equal. f_equal. f_equal. change (TZ :: T0 :: TZ :: T1 :: rs) with ([TZ;T0;TZ;T1] ++ rs).
   rewrite app_assoc, lpow_shift. reflexivity.
 Qed.
+
 Lemma RB_E1 n rs : retf E ([PZ;P]^^(S (2*n))) rs = (F, [], T0 :: [TZ;T0;TZ;T1]^^n ++ TZ :: rs).
 Proof. cbn [lpow app retf]. apply RB_F2. Qed.
+
 Lemma RB_F1 n rs : retf F ([PZ;P]^^(S (2*n))) (T0 :: rs) = (E, [], [T0;TZ;T1;TZ]^^n ++ T0 :: TZ :: T1 :: rs).
 Proof. cbn [lpow app retf]. apply RB_E2. Qed.
 
@@ -547,13 +559,14 @@ Proof.
   rewrite IH, app_assoc. reflexivity.
 Qed.
 
-(** ** Digits, all-ones and all-zeros counters *)
 Definition dig (b : tok) (g : nat) : list tok := b :: TZ :: T1 :: repeat TZ g.
+
 Fixpoint LD (b : tok) (G : list nat) : list tok :=
   match G with [] => [] | g :: G' => dig b g ++ LD b G' end.
 
 Lemma LD_app b G1 G2 : LD b (G1 ++ G2) = LD b G1 ++ LD b G2.
 Proof. induction G1; cbn; [|rewrite IHG1, app_assoc]; reflexivity. Qed.
+
 Lemma LD_ones b r : LD b (repeat 1%nat r) = [b;TZ;T1;TZ]^^r.
 Proof. induction r; cbn; [|rewrite IHr]; reflexivity. Qed.
 
@@ -562,6 +575,7 @@ Proof.
   induction gs as [|g gs IH]; [reflexivity|]. cbn [ctr LD dig].
   change (Nat.div2 O) with O. rewrite IH, <- !app_assoc. reflexivity.
 Qed.
+
 Lemma ctr_ones gs : ctr gs (2 ^ S (length gs) - 1) = LD T1 gs ++ [T1].
 Proof.
   induction gs as [|g gs IH]; [reflexivity|].
@@ -575,8 +589,10 @@ Proof.
   induction G as [|g G IH]; [exact I|]. cbn [LD dig].
   cbn [app noT0]. induction g; cbn; auto.
 Qed.
+
 Lemma noT0_U q : noT0 ([T1;TZ]^^q).
 Proof. induction q; cbn; auto. Qed.
+
 Lemma noT0_TZ a : noT0 (repeat TZ a).
 Proof. induction a; cbn; auto. Qed.
 
@@ -585,22 +601,24 @@ Proof.
   unfold prc. induction a as [|a IH]; [reflexivity|].
   cbn [repeat map rev]. rewrite IH. apply repeat_snoc.
 Qed.
+
 Lemma prc_U q : prc ([T1;TZ]^^q) = [PZ;P]^^q.
 Proof.
   induction q as [|q IH]; [reflexivity|].
   cbn [lpow]. rewrite prc_app, IH. change (prc [T1;TZ]) with [PZ;P].
   rewrite lpow_shift. reflexivity.
 Qed.
+
 Lemma prc_dig g : prc (dig T1 g) = repeat PZ g ++ [P; PZ; P].
 Proof. unfold dig. change (T1 :: TZ :: T1 :: repeat TZ g) with ([T1;TZ;T1] ++ repeat TZ g).
   rewrite prc_app, prc_TZ. reflexivity. Qed.
+
 Lemma prc_LD G : prc (LD T1 G) = flat_map (fun g => repeat PZ g ++ [P; PZ; P]) (rev G).
 Proof.
   induction G as [|g G IH]; [reflexivity|].
   cbn [LD rev]. rewrite prc_app, IH, prc_dig, flat_map_app. cbn. rewrite app_nil_r. reflexivity.
 Qed.
 
-(** the S-return through the processed large digits and the lead *)
 Lemma retf_dig g ps rs : retf E (repeat PZ g ++ [P; PZ; P] ++ ps) rs =
   retf E ps (dig T0 g ++ rs).
 Proof.
@@ -608,12 +626,14 @@ Proof.
   cbn [repeat app retf]. rewrite IH. f_equal. unfold dig. cbn [app repeat].
   change (TZ :: rs) with ([TZ] ++ rs). rewrite app_assoc, repeat_snoc. reflexivity.
 Qed.
+
 Lemma retf_LD G : forall ps rs, retf E (prc (LD T1 G) ++ ps) rs = retf E ps (LD T0 G ++ rs).
 Proof.
   induction G as [|g G IH]; intros ps rs; [reflexivity|].
   cbn [LD]. rewrite prc_app, <- app_assoc, IH, prc_dig, <- app_assoc, retf_dig.
   rewrite app_assoc. reflexivity.
 Qed.
+
 Lemma retf_lead a rs : retf E (repeat PZ a ++ [P]) rs = (F, [], T0 :: repeat TZ a ++ rs).
 Proof.
   revert rs. induction a as [|a IH]; intros rs; [reflexivity|].
@@ -622,6 +642,7 @@ Proof.
 Qed.
 
 Lemma AT0p l r : l {{A}}> [0;0] *> r -->+ l <* [0;1] {{C}}> r.  Proof. es. Qed.
+
 Lemma OvSweep w : noT0 w -> forall l S,
   l {{A}}> tw (T0 :: w) *> S -->+ l <* pl (prc w ++ [P]) {{C}}> S.
 Proof.
@@ -632,10 +653,12 @@ Proof.
   rewrite pl_app, Str_app_assoc. finish.
 Qed.
 
-(** ** The overflow core: sweep, tail, R block, boundary (proof.md 4.1-4.3) *)
 Definition sfx (H : bool) : list tok := if H then [TZ] else [TZ;T1;TZ].
+
 Definition gsof (G : list nat) (r1 : nat) : list nat := G ++ 2%nat :: repeat 1%nat r1.
+
 Definition qof (H : bool) (r1 : nat) : nat := if H then S (2 * r1) else 2 * S r1.
+
 Definition ones (gs : list nat) : nat := 2 ^ S (length gs) - 1.
 
 Lemma U2 r : [T1;TZ;T1;TZ]^^r = [T1;TZ]^^(2*r).
@@ -750,9 +773,9 @@ Qed.
 
 Ltac fw H := eapply evstep_trans; [exact H|].
 
-(** ** Macro steps: configurations IR in normal mode (W = 0inf) and pause mode *)
 Definition KP (W : side) (p : nat) (gs : list nat) (v : nat) (H : bool) (St : side) : Q * tape :=
   W {{A}}> tw (T0 :: repeat TZ p ++ ctr gs v ++ sfx H) *> St.
+
 Definition NN (gs : list nat) : nat := 2 ^ S (length gs).
 
 Lemma wall0 : (const 0 <* [1] : side) = Str_app [1;0] (Str_app [0] (const 0)).
@@ -797,13 +820,15 @@ Proof.
   finish.
 Qed.
 
-(** zones: Zn(g) 1001 packed in the wall, innermost first *)
 Fixpoint zw (L : list nat) : list Sym :=
   match L with [] => [] | g :: L' => [1;0;0;1] ++ [0;1;0]^^(S g) ++ zw L' end.
+
 Fixpoint zv (L : list nat) (v : nat) : nat :=
   match L with [] => v | g :: L' => zv L' (2 * v + 2 * g) end.
+
 Fixpoint zg (L : list nat) (p : nat) (gs : list nat) : list nat :=
   match L with [] => gs | g :: L' => zg L' (g - 2) (S (S p) :: gs) end.
+
 Fixpoint zp (L : list nat) (p : nat) : nat :=
   match L with [] => p | g :: L' => zp L' (g - 2) end.
 
@@ -835,6 +860,7 @@ Proof.
   induction L as [|g L IH]; intros v; cbn [zv length]; [rewrite Nat.pow_0_r; lia|].
   specialize (IH (2 * v + 2 * g)). rewrite pow2S. nia.
 Qed.
+
 Lemma zg_len L : forall p gs, length (zg L p gs) = length L + length gs.
 Proof. induction L as [|g L IH]; intros p gs; cbn [zg length]; [|rewrite IH; cbn [length]]; lia. Qed.
 
@@ -861,31 +887,39 @@ Proof.
   replace (S (S (length gs)) + length L) with (S (length gs) + S (length L)) by lia. exact Hv.
 Qed.
 
-(** ** Wall bookkeeping *)
 Fixpoint gval (G : list nat) : nat := match G with [] => 0 | g :: G' => 2 * (g + gval G') end.
 
 Lemma zv_app L1 : forall L2 v, zv (L1 ++ L2) v = zv L2 (zv L1 v).
 Proof. induction L1; intros; cbn; auto. Qed.
+
 Lemma zp_app L1 : forall L2 p, zp (L1 ++ L2) p = zp L2 (zp L1 p).
 Proof. induction L1; intros; cbn; auto. Qed.
+
 Lemma zg_app L1 : forall L2 p gs, zg (L1 ++ L2) p gs = zg L2 (zp L1 p) (zg L1 p gs).
 Proof. induction L1; intros; cbn; auto. Qed.
+
 Lemma zw_app L1 L2 : zw (L1 ++ L2) = zw L1 ++ zw L2.
 Proof. induction L1; cbn; [|rewrite IHL1, <- !app_assoc]; reflexivity. Qed.
+
 Lemma zv_rev G : zv (rev G) 0 = gval G.
 Proof. induction G as [|g G IH]; [reflexivity|]. cbn [rev gval]. rewrite zv_app, IH. cbn. lia. Qed.
+
 Lemma zg_rev G gs0 : Forall (le 2) G -> S (S (zp (rev G) 0)) :: zg (rev G) 0 gs0 = G ++ 2%nat :: gs0.
 Proof.
   induction G as [|g G IH]; intros HG; [reflexivity|].
   inversion HG; subst. cbn [rev]. rewrite zp_app, zg_app. cbn [zp zg].
   rewrite (IH H2). cbn [app]. f_equal. lia.
 Qed.
+
 Lemma zp_rev_last G p : zp (rev G ++ [p]) 0 = p - 2.
 Proof. rewrite zp_app. reflexivity. Qed.
+
 Lemma zv_rev_last G p : zv (rev G ++ [p]) 0 = 2 * gval G + 2 * p.
 Proof. rewrite zv_app, zv_rev. reflexivity. Qed.
+
 Lemma zg_rev_last G p gs0 : Forall (le 2) G -> zg (rev G ++ [p]) 0 gs0 = G ++ 2%nat :: gs0.
 Proof. intros HG. rewrite zg_app. cbn [zg]. apply zg_rev, HG. Qed.
+
 Lemma zg_len' L p gs : length (zg L p gs) = length L + length gs.
 Proof. apply zg_len. Qed.
 
@@ -922,7 +956,6 @@ Proof.
   rewrite app_assoc, lpow_shift. reflexivity.
 Qed.
 
-(** ends of the rebuild *)
 Lemma ZXN a l p gs v H St : S (S v) < NN gs ->
   KP (Str_app ([1;0] ++ [1;0;0;1] ++ pl (repeat PZ (S (S a)) ++ [P])) l) p gs v H St -->*
   KP (Str_app ([1] ++ [0;0;1]^^a) l) 0 (S (S p) :: gs) (2 * S (S v)) H St.
@@ -940,25 +973,28 @@ Proof.
   exact (ZXP2g gs (S (S v)) (S p) (sfx H) (Str_app ([1] ++ [0;0;1]^^n) l) St Hv).
 Qed.
 
-(** ** NO, PO, SILENT, SILENTP with their rebuilds (proof.md 4.3, 5.2) *)
 Definition OvNp (H : bool) (r1 : nat) (St : side) (H' : bool) (r1' : nat) (St' : side) : Prop :=
   forall G a l, l {{A}}> tw (T0 :: repeat TZ a ++ ctr (gsof G r1) (ones (gsof G r1)) ++ sfx H) *> St -->+
     l <* pl (prc (LD T1 G) ++ repeat PZ a ++ [P]) <* [1;0;1;0;0;1] {{A}}>
     tw (T0 :: ctr (repeat 1%nat r1') 0 ++ sfx H') *> St'.
+
 Definition OvSp (r1 : nat) (St St' : side) : Prop :=
   forall G a l, l {{A}}> tw (T0 :: repeat TZ a ++ ctr (gsof G r1) (ones (gsof G r1)) ++ sfx true) *> St -->+
     l <{{F}} tw (T0 :: repeat TZ a ++ ctr (gsof G r1) 0 ++ sfx true) *> St'.
 
 Lemma OvNp1 r1 St St' : (forall l', l' {{C}}> St -->* l' <{{E}} St') -> OvNp true r1 St false r1 St'.
 Proof. intros Ht G a l. apply OvN1, Ht. Qed.
+
 Lemma OvNp0 r1 St S0 : (forall l', l' {{C}}> St -->* l' <{{F}} [0;0] *> S0) ->
   OvNp false r1 St true (S r1) ([0;1] *> S0).
 Proof. intros Ht G a l. apply OvN0, Ht. Qed.
+
 Lemma OvSp1 r1 St S0 : (forall l', l' {{C}}> St -->* l' <{{F}} [0;0] *> S0) -> OvSp r1 St ([0;1] *> S0).
 Proof. intros Ht G a l. apply OvS1, Ht. Qed.
 
 Lemma len_gsof G r1 : length (gsof G r1) = length G + S r1.
 Proof. unfold gsof. rewrite length_app. cbn [length]. rewrite repeat_length. lia. Qed.
+
 Lemma pow_pos n : 0 < 2 ^ n.
 Proof. apply Nat.neq_0_lt_0, Nat.pow_nonzero. lia. Qed.
 
@@ -985,6 +1021,7 @@ Qed.
 
 Lemma ones_S gs : S (ones gs - 1) = ones gs.
 Proof. unfold ones. assert (H := pow_pos (S (length gs))). rewrite pow2S in *. lia. Qed.
+
 Lemma ones_lt gs : ones gs < NN gs.
 Proof. unfold ones, NN. assert (H := pow_pos (S (length gs))). lia. Qed.
 
@@ -1040,16 +1077,18 @@ Proof.
   follow Bnc. finish.
 Qed.
 
-(** ** The four paths between normal-mode overflows (proof.md section 5.2) *)
 Definition KX (a : nat) (G : list nat) (r1 : nat) (St : side) : Q * tape :=
   KP (const 0) a (gsof G r1) (ones (gsof G r1)) true St.
 
 Lemma pS k r : 2 ^ (k + S r) = 2 * 2 ^ (k + r).
 Proof. rewrite Nat.add_succ_r. apply Nat.pow_succ_r'. Qed.
+
 Lemma NN_gsof G r1 : NN (gsof G r1) = 4 * 2 ^ (length G + r1).
 Proof. unfold NN. rewrite len_gsof, <- Nat.add_succ_r, pS, pS. lia. Qed.
+
 Lemma ones_gsof G r1 : ones (gsof G r1) = 4 * 2 ^ (length G + r1) - 1.
 Proof. rewrite <- NN_gsof. reflexivity. Qed.
+
 Lemma Q_cons (g : nat) (G : list nat) r1 : 2 ^ (length (g :: G) + S r1) = 4 * 2 ^ (length G + r1).
 Proof. cbn [length]. rewrite pS. rewrite Nat.add_succ_l, Nat.pow_succ_r'. lia. Qed.
 
@@ -1068,7 +1107,6 @@ Proof.
   finish.
 Qed.
 
-(** NO with e0, then the pause up to PO#1 and PO#1 with e1: common prefix of P1, P1S, P3 *)
 Lemma pre1 a G r1 St St1 S0 kap s : let Q := 2 ^ (length G + r1) in
   OvNp true r1 St false r1 St1 -> (forall l', l' {{C}}> St1 -->* l' <{{F}} [0;0] *> S0) ->
   Forall (le 2) G -> gval G + 6 + kap = Q -> a = s + Q + kap -> 8 <= s ->
@@ -1154,7 +1192,7 @@ Proof.
   assert (HG' : Forall (le 2) G') by (constructor; [lia | exact HG]).
   assert (HV' : gval G' = 4 * Q - 8) by (unfold G'; rewrite gval_cons; lia).
   assert (HL' : length G' = S (length G)) by reflexivity.
-  (* pause up to PO#2 *)
+   
   replace (s - 8) with ((4 * Q + 2) + S (S (S (s - 4 * Q - 13)))) at 1 by lia.
   fw (P100s (4 * Q + 2) (S (S (S (s - 4 * Q - 13)))) (const 0) 0 (gsof G' (S r1)) (8 * Q - 6) true ([0;1] *> S0) ltac:(lia)).
   rewrite (KP_eq _ _ (4 * Q + 2) _ _ (ones (gsof G' (S r1)) - 1)) by lia.
@@ -1188,7 +1226,6 @@ Proof.
   finish.
 Qed.
 
-(** ** The invariant (proof.md section 5.3) and the induction step *)
 Definition INV (a : nat) (G : list nat) (r1 : nat) (St : side) : Prop :=
   Forall (le 2) G /\ 64 <= 2 ^ (length G + r1) /\
   exists kap s, (kap = 2 \/ kap = 8) /\ gval G + 6 + kap = 2 ^ (length G + r1) /\
@@ -1206,6 +1243,7 @@ Qed.
 
 Lemma Q1 (g : nat) G r1 : 2 ^ (length (g :: G) + S r1) = 4 * 2 ^ (length G + r1).
 Proof. apply Q_cons. Qed.
+
 Lemma Q3 (g1 g2 g3 : nat) G r1 : 2 ^ (length (g1 :: g2 :: g3 :: G) + S (S r1)) = 32 * 2 ^ (length G + r1).
 Proof. cbn [length]. rewrite !Nat.add_succ_l, !Nat.pow_succ_r', !pS. lia. Qed.
 
@@ -1215,10 +1253,10 @@ Proof.
   intros (HG & HQ & kap & s & Hk & HV & Ha & Ht).
   set (Q := 2 ^ (length G + r1)) in *.
   destruct Ht as [(HL & Hs) | (HL & Hs)].
-  - (* front unit 11 *)
+  -  
     destruct HL as (b4 & b5 & b6 & b7 & b8 & b9 & b10 & b11 & b12 & b13 & b14 & b15 & e & ->).
     destruct (Tail11 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e) as [(S' & HE & HL') | (S0 & HF & HL')].
-    + (* N: path P1 *)
+    +  
       destruct HL' as (c4 & c5 & c6 & c7 & c8 & c9 & c10 & c11 & c12 & c13 & c14 & c15 & e' & ->).
       set (S0 := tw (tailx true false c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 e') *> const 0).
       assert (Ht2 : TailF (tw (tailw true false false c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 e') *> const 0) S0)
@@ -1228,13 +1266,13 @@ Proof.
       * split; [constructor; [lia|exact HG]|]. rewrite Q1. fold Q. split; [lia|].
         exists 2, (4 * Q + 10 - s). split; [auto|]. rewrite gval_cons. split; [lia|]. split; [lia|].
         right. split; [exact (Lst_intro true false c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 e')|]. lia.
-    + (* S: path S *)
+    +  
       exists (a + 4 * Q), G, r1, ([0;1] *> S0). split.
       * apply (pathS a G r1 _ _ (OvSp1 r1 _ S0 HF)); lia.
       * split; [exact HG|]. fold Q. split; [lia|].
         exists kap, (s + 4 * Q). split; [auto|]. split; [lia|]. split; [lia|].
         right. split; [exact HL'|]. lia.
-  - (* front unit 10 *)
+  -  
     destruct HL as (b4 & b5 & b6 & b7 & b8 & b9 & b10 & b11 & b12 & b13 & b14 & b15 & e & ->).
     set (St1 := tw (tailw true false true b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e) *> const 0).
     assert (HE : forall l, l {{C}}> tw (tailw true true false b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e) *> const 0 -->* l <{{E}} St1)
@@ -1242,14 +1280,14 @@ Proof.
     set (S0 := tw (tailx true true b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e) *> const 0).
     assert (Ht2 : TailF St1 S0) by (intros l; apply Tail0z).
     destruct Hs as [Hs | Hs].
-    + (* path P1 *)
+    +  
       exists (8 * Q + 12 - s), ((Q + 2 + kap) :: G), (S r1), ([0;1] *> S0). split.
       * apply (pathP1 a G r1 _ St1 S0 kap s (OvNp1 r1 _ _ HE) Ht2 HG HV Ha); lia.
       * split; [constructor; [lia|exact HG]|]. rewrite Q1. fold Q. split; [lia|].
         exists 2, (4 * Q + 10 - s). split; [auto|]. rewrite gval_cons. split; [lia|]. split; [lia|].
         left. split; [exact (Lst_intro true true b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e)|]. lia.
     + destruct (Tail11 b4 b5 b6 b7 b8 b9 b10 b11 b12 b13 b14 b15 e) as [(S3 & HE3 & HL3) | (S3 & HF3 & HL3)].
-      * (* path P3 *)
+      *  
         destruct HL3 as (c4 & c5 & c6 & c7 & c8 & c9 & c10 & c11 & c12 & c13 & c14 & c15 & e' & ->).
         set (S4 := tw (tailx true false c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 e') *> const 0).
         assert (Ht4 : TailF (tw (tailw true false false c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 e') *> const 0) S4)
@@ -1259,7 +1297,7 @@ Proof.
         -- split; [repeat constructor; try lia; exact HG|]. rewrite Q3. fold Q. split; [lia|].
            exists 8, (36 * Q + 32 - s). split; [auto|]. rewrite !gval_cons. split; [lia|]. split; [lia|].
            right. split; [exact (Lst_intro true false c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 e')|]. lia.
-      * (* path P1S *)
+      *  
         exists (24 * Q + 12 - s), ((Q + 2 + kap) :: G), (S r1), ([0;1] *> S3). split.
         -- apply (pathP1S a G r1 _ St1 S0 _ kap s (OvNp1 r1 _ _ HE) Ht2 (OvSp1 (S r1) _ S3 HF3) HG HV Ha); lia.
         -- split; [constructor; [lia|exact HG]|]. rewrite Q1. fold Q. split; [lia|].
@@ -1267,7 +1305,6 @@ Proof.
            right. split; [exact HL3|]. lia.
 Qed.
 
-(** ** Initial segment and the theorem *)
 Definition St0 : side :=
   tw (tailw true true true true true true false true true true true false true false true [false; true; false]) *> const 0.
 
@@ -1281,7 +1318,7 @@ Proof.
   left. split; [exact (Lst_intro true true true true true false true true true true false true false true [false; true; false])|]. lia.
 Qed.
 
-Lemma nonhalt : ~ halts tm c0.
+Theorem nonhalt: ~ halts tm c0.
 Proof.
   apply multistep_nonhalt with (c' := KX 121 [28%nat] 5 St0); [exact init|].
   apply (progress_nonhalt_cond tm _ (121, [28%nat], 5, St0)
@@ -1292,36 +1329,5 @@ Proof.
   - exact INV0.
 Qed.
 
-
-(*
-```
-     0    1
-A   1RB  0LF
-B   0RC  ---        halting transition: B reads 1
-C   1RD  0RA
-D   1LE  0RC
-E   0LA  0LE
-F   1LE  1LB
-
-Token view (right of the lead):  T0 = 00,  T1 = 01,  TZ = 100 ;  processed  P = (10),  PZ = (010).
-counter  ctr gs v  =  digits  b 100 01 (100)^g  with LSB leftmost (last digit = its bit only).
-KP W p gs v H St :=  W A> 00 (100)^p <ctr gs v> <sfx H> St      (W = 0^inf: normal mode)
-KX a G r1 St     :=  KP 0^inf a (G ++ 2 :: 1^r1) (all ones) 1 St (normal-mode overflow)
-
-Inc1     KP 0^inf (a+1) gs v            -->*  KP 0^inf (a+2) gs (v+1)         (v+1 < 2^N)
-P100     (100)^(n+1) 1 | p, v           -->*  (100)^n 1 | p+1, v+2
-WX       1 | p, v                       -->*  0^inf | p+1, v+2  (normal mode)
-Zone g   Y Zn(g) 1001 01 | p, gs, v     -->*  Y 01 | g-2, (p+2)::gs, 2v+2g
-ZXN      (100)^(a+2) 10100101 | p, gs, v -->*  (100)^a 1 | 0, (p+2)::gs, 2v+4
-ZXP      (100)^(n+3) 01 | p, gs, v      -->*  (100)^n 1 | 0, (p+1)::gs, 2v+6
-NO/PO    overflow, tail answers N       -->+  wall of zones, then Zones, ZXN / ZXP
-SILENT   overflow, tail answers S       -->+  KP 0^inf (a+1) gs 0
-SILENTP  overflow in a pause, S         -->*  (100)^n 1 | p+1, 0
-
-pathS    KX a G r1 St  -->+  KX (a+M) G r1 St'                                  front 11 -> 10
-pathP1   KX a G r1 St  -->+  KX (2M+12-s) ((Q+2+k)::G) (r1+1) St''              10 -> 11, 11 -> 10
-pathP1S  KX a G r1 St  -->+  KX (6M+12-s) ((Q+2+k)::G) (r1+1) St''              10 -> 10
-pathP3   KX a G r1 St  -->+  KX (17M+40-s) (7::(4Q+1)::(Q+2+k)::G) (r1+2) St''   10 -> 10
-         (Q = 2^(length G + r1), M = 4Q, k in {2,8}, a = s + Q + k)
-```
-*)
+End TM1.
+Print Assumptions TM1.nonhalt.
