@@ -22,6 +22,8 @@ Require Import String List Lia NArith.
 Import ListNotations.
 Set Default Goal Selector "1".
 
+Module TM1.
+
 Definition tm := Eval compute in (TM_from_str "1RB1LE_0RC0LC_1LD0RA_0LA0LF_0LC0LE_0LD---").
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
@@ -1653,16 +1655,22 @@ Proof.
   native_check_eq.
 Qed.
 
-Definition tm_twin := Eval compute in (TM_from_str "1RB0LC_0RC0RF_1LD1RE_0LA0RA_0RA0RE_0RB---").
+End TM1.
 
-(* state q here is state ren q of tm_twin, with left and right swapped *)
+Module TM2.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LC_0RC0RF_1LD1RE_0LA0RA_0RA0RE_0RB---").
+
 Definition ren (q : Q) : Q := match q with A => C | B => D | C => A | D => B | E => E | F => F end.
-Lemma ren_perm : Perm (flip tm) tm_twin ren.
+Lemma ren_perm : Perm (flip TM1.tm) tm ren.
 Proof.
   split.
   - intros [] [] H; unfold flip in H; cbn in H; try discriminate; reflexivity.
   - intros [] [] s' d q' H; unfold flip in H; cbn in H; inversion H; reflexivity.
 Qed.
 
-Theorem halt_twin : halts tm_twin c0.
-Proof. exact (perm_halts _ _ ren C tape0 ren_perm (flip_halts tm cC halt_C)). Qed.
+Theorem halt : halts tm c0.
+Proof. exact (perm_halts _ _ ren C tape0 ren_perm (flip_halts TM1.tm TM1.cC TM1.halt_C)). Qed.
+
+End TM2.
+

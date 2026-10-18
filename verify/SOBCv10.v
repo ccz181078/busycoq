@@ -4224,11 +4224,11 @@ Proof.
         unfold half_parameter; lia)).
 Qed.
 
-Theorem sobc1_nonhalt : ~ halts tm c0.
+Theorem nonhalt : ~ halts tm c0.
 Proof.
   intro Hhalt.
   apply (sobc1_canonical_nonhalt _ _ _ sobc1_entry_invariant).
   apply (proj1 (halts_evstep_iff tm c0 _ sobc1_c0_to_entry_post)), Hhalt.
 Qed.
 
-Print Assumptions sobc1_nonhalt.
+Print Assumptions nonhalt.
