@@ -1,3 +1,7 @@
+(* Classification: SOBC. Source: BusyCoq PR #34,
+   commit 9cf9e8327ec04c3b5807cc39bed2ad3e41bc34f5.
+   Original proof bodies preserved; local packaging only. *)
+
 (* At its left records the tape is 0 0 1 1 (0 1)^N followed by a region of 1-runs (rec N zs). Most sweeps act
    on the region by one of three rules (R1, R2, RB), which give two absorption macros (binary counters). A
    computable driver applies them, runs each other sweep concretely on the last pairs of the long run and the
@@ -262,5 +266,3 @@ Proof.
 Qed.
 
 End TM1.
-
-Print Assumptions TM1.nonhalt.

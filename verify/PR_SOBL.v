@@ -1,3 +1,7 @@
+(* Classification: SOBL. Source: BusyCoq PR #35,
+   commit 0913bd4fc552cc8213e7ecd9d39a224663a1481d.
+   Original proof bodies preserved; local packaging only. *)
+
 (* 1RB0RC_1RC0LD_1LD1RA_1LF0LE_---0RD_1LB0LA halts. *)
 
 From BusyCoq Require Import Individual62.
@@ -7,8 +11,8 @@ Import ListNotations.
 Open Scope list.
 Open Scope sym.
 
-Definition tm : TM := Eval compute in
-  (TM_from_str "1RB0RC_1RC0LD_1LD1RA_1LF0LE_---0RD_1LB0LA").
+Module TM1.
+Definition tm := Eval compute in (TM_from_str "1RB0RC_1RC0LD_1LD1RA_1LF0LE_---0RD_1LB0LA").
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
@@ -2542,7 +2546,7 @@ Proof.
   - exact (towerA3_halt (ks_p ++ ks) hne_all (runSubSim_sound_halt hsim)).
 Qed.
 
-Lemma halt : halts tm c0.
+Theorem halt: halts tm c0.
 Proof.
   destruct phase1_reach as [ks0 [hks0 h_p1]].
   destruct (body_cycles_all 7029 0 0 hks0) as [ks1 [hks1 h_p2]].
@@ -2554,3 +2558,5 @@ Proof.
   pose proof (runPhase3_sound 186 (bodyStackRLE 1 21090) runPhase3_eq ks1 hks1) as h_p3.
   eapply halts_evstep; [exact h_p3 | exact (etrans h_p1 h_p2)].
 Qed.
+
+End TM1.

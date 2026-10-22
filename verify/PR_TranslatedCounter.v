@@ -1,3 +1,7 @@
+(* Classification: translated counter. Source: BusyCoq PR #37,
+   commit bea67188b999166fca661da2f659f267eb7630ed.
+   Original proof bodies preserved; local packaging only. *)
+
 (* #428 1RB0LA_1RC---_0LD1RD_1RA0RE_0RF1RC_1LF0LA and #513 1RB0RD_1RC---_0LA1RA_0RE1RC_1LE0LF_0RC0LF:
    translated base-4 counters with lazy carries. Each level m (17, 35, 71, 143, then 288 4^j - 1 and 576 4^j - 1)
    counts to its overflow; the erase leaves the blank tape one cell left of the old trail, so the machine replays its
@@ -4430,7 +4434,7 @@ Notation Y1 := [0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;0;1;1;1;0;0;1;1;1;0;1;1;
 Notation Y2 := [0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;0;0;0;0;1;1;1;1;1;1;1].
 Notation Y3 := [0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;1].
 Notation YR := [1;0;1;1;0;1;1;0;1;1;0;1;1;1;0;1;1;0;1;1;1;0;1;1;0;1;1;0;1;1;0;1;1;1;0;1;1;0;1;1;0;1;1;0;1;1;1;0;1].
-Lemma nonhalt: ~halts tm c0.
+Theorem nonhalt: ~halts tm c0.
 Proof.
   apply (nonhalt_of_base tm A [0;1;1;1] 6 [D2;D0;D2;D0;D2;D2] D0 Y0 YR [Y1;Y2;Y3])
     with (W := [D0;D2;D0;D2;D0;Dm;D1;D0;D0;D2;D0;D2;D0;D2;D2]) (d := D0) (N := 108059) (R := 107991).
@@ -4446,7 +4450,7 @@ Notation Y0 := [0;1;1;1;1;1;1;0;1;1;1;0;0;1;1;1;0;1;1;1;1;1;1;0;1;1;1;0;0;1;1;1;
 Notation Y1 := [0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;0;1;1;1;0;0;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1].
 Notation Y2 := [0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1;1;1;1;1;1;0;1;1;1;1;1;1;1].
 Notation YR := [1;0;1;1;0;1;1;1;0;1;1;0;1;1;0;1;1;0;1;1;1;0;1;1;0;1;1;0;1;1;0;1;1;1;0;1;1;0;1;1;0;1;1;0;1;1;1;0;1].
-Lemma nonhalt: ~halts tm c0.
+Theorem nonhalt: ~halts tm c0.
 Proof.
   apply (nonhalt_of_base tm F [1;1;1;0] 3 [D2;D0;D2;D0;D2;D0] D2 Y0 YR [Y1;Y2])
     with (W := [D0;D2;D0;D2;D0;Dm;D1;D0;D0;D2;D0;D2;D0;D2;D0]) (d := D2) (N := 108062) (R := 107994).
@@ -4455,6 +4459,3 @@ Proof.
   - base 24009260%N.
 Qed.
 End TM2.
-
-Print Assumptions TM1.nonhalt.
-Print Assumptions TM2.nonhalt.
