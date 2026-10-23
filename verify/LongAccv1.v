@@ -213,3 +213,17 @@ Proof.
   native_check_eq.
 Qed.
 
+Lemma tm30: ~halts (TM_from_str "1LB0LA_1LC0LD_0RB0RD_1RE0LC_1RF---_1LA0RC") c0.
+Proof.
+  eapply decide_loop' with (D:=100) (PP:=1612%N) (P':=142) (P:=770%N) (T0:=(10^5)%N) (T1:=10000).
+  intros.
+  native_check_eq.
+Qed.
+
+Lemma tm31: ~halts (TM_from_str "1LB0LC_0RA0RC_1RD0LB_1RE---_1LF0RB_1LA0LF") c0.
+Proof.
+  eapply decide_loop' with (D:=100) (PP:=1610%N) (P':=142) (P:=770%N) (T0:=(10^5)%N) (T1:=10000).
+  intros.
+  native_check_eq.
+Qed.
+
