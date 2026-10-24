@@ -7,7 +7,7 @@ From BusyCoq Require Export Permute.
 From BusyCoq Require Export Enumerate.
 Set Default Goal Selector "!".
 
-Module Individual (Ctx : Ctx).
+Module Individual (Ctx : FiniteCtx).
   Module Enumerate := Enumerate Ctx. Export Enumerate.
 
 (** Trivial lemmas, but [simpl] in these situations leaves a mess. *)
