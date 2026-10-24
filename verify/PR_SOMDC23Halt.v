@@ -1253,7 +1253,7 @@ From Coq Require Import String.
 Local Open Scope sym_scope.
 
 Module TM1. (* #229 *)
-Definition tm := Eval compute in (TM_from_str "1RB0LE_1LC0RE_0RA0LD_1LA0LF_0LC0RE_0LB---"%string).
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1LC0RE_0RA0LD_1LA0LF_0LC0RE_0LB---").
 Lemma facts : Facts tm.
 Proof. repeat split; intros; execute. Qed.
 Lemma run : N_iter_until (step tm) (inl (s0 A)) (2 ^ 32)%N = inr tt.
@@ -1263,7 +1263,7 @@ Proof. exact (halts_of_run tm _ _ facts (WF0 A) run). Qed.
 End TM1.
 
 Module TM2. (* #412 *)
-Definition tm := Eval compute in (TM_from_str "1RB0LE_1LC0RE_0RA0LD_1LA1LF_0LC0RA_1LB---"%string).
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1LC0RE_0RA0LD_1LA1LF_0LC0RA_1LB---").
 Lemma facts : Facts tm.
 Proof. repeat split; intros; execute. Qed.
 Lemma run : N_iter_until (step tm) (inl (s0 A)) (2 ^ 32)%N = inr tt.
@@ -1273,7 +1273,7 @@ Proof. exact (halts_of_run tm _ _ facts (WF0 A) run). Qed.
 End TM2.
 
 Module TM3. (* #636: TM2's table mirrored, started in TM2's state F *)
-Definition tm := Eval compute in (TM_from_str "1RB---_1RC0LE_0LD0RF_1LB0RE_0RC0LD_1RD1RA"%string).
+Definition tm := Eval compute in (TM_from_str "1RB---_1RC0LE_0LD0RF_1LB0RE_0RC0LD_1RD1RA").
 Lemma run : N_iter_until (step TM2.tm) (inl (s0 F)) (2 ^ 28)%N = inr tt.
 Proof. native_check_eq. Time Qed.
 Definition ren (q : Q) : Q := match q with A => D | B => B | C => C | D => F | E => E | F => A end.
@@ -1291,8 +1291,9 @@ Qed.
 End TM3.
 
 Module TM4. (* #145, run as [tmc]: the same table with its states renamed so that [Facts] holds *)
-Definition tm := Eval compute in (TM_from_str "1RB0LF_0LC---_0LA0RD_1RE0LC_1LA0RC_1LD0LB"%string).
-Definition tmc := Eval compute in (TM_from_str "1RB0LE_1LC0RE_1RF0LD_1LA0LF_0LC0RA_0LE---"%string).
+Definition tm := Eval compute in (TM_from_str "1RB0LF_0LC---_0LA0RD_1RE0LC_1LA0RC_1LD0LB").
+Definition tmc :=
+  Eval compute in (TM_from_str "1RB0LE_1LC0RE_1RF0LD_1LA0LF_0LC0RA_0LE---").
 Lemma facts : Facts tmc.
 Proof. repeat split; intros; execute. Qed.
 Lemma run : N_iter_until (step tmc) (inl (s0 C)) (2 ^ 32)%N = inr tt.
