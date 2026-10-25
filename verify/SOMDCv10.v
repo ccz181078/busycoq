@@ -4,9 +4,10 @@ Require Import List String NArith Lia ZifyNat ZifyN.
 Import ListNotations.
 Open Scope sym.
 
-(* Shared word/signal checker for SOC31/Long57, SOC33/Long51 and SOC34/N79.
+(* Shared word/signal checker for SOC31/Long57, SOC33/Long51, SOC34/N79
+   and SOC35/N76.
    All machine-specific rules, native seeds and final halting theorems are
-   contained in TM1/TM2/TM3 below.  No local library dependency is needed. *)
+   contained in TM1/TM2/TM3/TM4 below.  No local library dependency is needed. *)
 
 Module BinaryHaltRules.
 Inductive signal := H | K | J | U | V | W | X.
@@ -792,3 +793,73 @@ Proof.
   - native_check_eq.
 Qed.
 End TM3.
+
+(* N76 has Long57's complete ordered table, but its own native c0 seed and
+   physical head encodings.  In particular U/V end in 00/001, not 01/011. *)
+Module TM4.
+Definition tm := Eval compute in (TM_from_str "1RB0LB_0RC0LD_1LD1RE_0LA0RB_0RD0RF_0RA---").
+Definition head s : DH0 * DH0 :=
+  match s with
+  | H => ((C,<[0]),(A,[0]))
+  | K => ((E,<[0;1]),(A,[0]))
+  | J => ((D,<[0;1;0]),(A,[0]))
+  | U => ((A,<[0;1;0;0]),(A,[0]))
+  | V => ((B,<[0;1;0;0;1]),(A,[0]))
+  | W => ((B,<[0;1;0;0]),(A,[0]))
+  | X => ((F,<[0;1;0]),(A,[0]))
+  end.
+Definition hR s := fst (head s).
+Definition hL := snd (head H).
+Definition f1 := f1_57.
+Definition f0 := f0_57.
+Definition seed := [D1].
+
+Lemma kernels s w out hs : f1 s w=Some(out,hs) ->
+  segRLs tm [head s] (map head hs) (bits w) (cells out).
+Proof.
+  destruct s,w; cbn [f1 f1_57]; intro E; try discriminate;
+    inversion E; subst; clear E;
+    apply BoundedConfig.segRLs_c_spec with (T:=1000%nat);
+    vm_compute; reflexivity.
+Qed.
+
+Lemma blank s : sideRLs tm [head s] 0inf (cells(f0 s)*>0inf).
+Proof.
+  change (sideRLs tm [head s] ([]*>0inf) (cells(f0 s)*>0inf)).
+  destruct s; apply BoundedConfig.sideRLs_c_spec with (T:=1000%nat);
+    vm_compute; reflexivity.
+Qed.
+
+Lemma halt_kernel s w : halt_cell s w=true -> forall l r,
+  halts tm (l {{{(hR s,R)}}} (bits w*>r)).
+Proof.
+  destruct s,w; cbn [halt_cell]; intro E; try discriminate; intros l r.
+  unfold halts, halts_in; exists 0%nat; eexists; split;
+    [constructor|reflexivity].
+Qed.
+
+Lemma source r :
+  lh {{{(hL,L)}}} r -[tm]->+ lh {{{(hR J,R)}}} r.
+Proof. unfold lh, hL, hR, head, to_DH_config; es. Qed.
+
+Lemma init : c0 -[tm]->*
+  lh {{{(hR J,R)}}} (cells seed*>0inf).
+Proof. unfold lh, hR, head, to_DH_config, cells, seed, bits; es. Qed.
+
+Theorem halt : halts tm c0.
+Proof.
+  eapply BinaryHaltSmart.checker_halts with
+    (head:=head) (f1:=f1)
+    (f0:=f0) (seed:=seed)
+    (n:=2198%N) (fuel:=321000000%N).
+  - exact kernels.
+  - exact (kernels H T [T] [H;H] eq_refl).
+  - exact (kernels H D0 [D1] [] eq_refl).
+  - exact (kernels H D1 [D0] [H] eq_refl).
+  - exact blank.
+  - exact halt_kernel.
+  - exact source.
+  - exact init.
+  - native_check_eq.
+Qed.
+End TM4.
