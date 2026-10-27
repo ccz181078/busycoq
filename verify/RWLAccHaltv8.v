@@ -78,5 +78,8 @@ Proof. solve_halt' 19 10000 false 2%N (10^10)%N. Time Qed.
 Lemma tm28: halts_at_trans (TM_from_str "1RB0RF_1RC0LE_1LD0LC_1RE0RD_1LB0RA_0LE---") c0 (F,1).
 Proof. solve_halt' 19 10000 false 2%N (10^10)%N. Time Qed.
 
+Lemma tm29: halts_at_trans (TM_from_str "1RB1RE_1LC1LE_0RD0LB_1RF1RA_0RC0RE_0RA---") c0 (F,1).
+Proof. solve_halt' 42 10000 false 2%N (10^10)%N. Time Qed.
+
 
 
