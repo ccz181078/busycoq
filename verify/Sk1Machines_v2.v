@@ -1,4 +1,4 @@
-(* Sk1 Class1 TM25 and TM26: compact reconstruction of PR42.
+(* Sk1 Class1 TM23, TM25 and TM26; TM25/26 reconstruct PR42.
    Ten local counter rules + RLE/affine symbolic execution, in the style of
    Sk1Machines.v. No PR execution trace or block certificate is imported.
    Counts are binary N; expansion to nat occurs only in specifications. *)
@@ -744,3 +744,39 @@ Proof.
   exact Sk1Shared.blank_D_nonhalt.
 Qed.
 End TM26.
+
+From BusyCoq Require Import Eqv_WordPairs.
+
+Module TM23.
+Import AffineMachine Sk1Program.
+Definition tm := Eval compute in (TM_from_str "1RB1LC_1RC0LE_1RD1RF_1LE0LB_1RF1LB_0RA---").
+Definition initial_E := Cfg [] [] E R.
+
+Lemma checked_init_E : check 31 700000 initial_E (Nport (Affine.const 72180622))=true.
+Proof. native_check_eq. Qed.
+
+Lemma blank_E_nonhalt : ~halts Sk1Rules.tm (denote [] initial_E).
+Proof.
+  eapply multistep_nonhalt; [exact (check_spec 31 [] _ _ _ checked_init_E)|].
+  exact (Sk1Shared.N_nonhalt 72179622).
+Qed.
+
+(* The already-proved TM24/TM23 equivalence reduces TM23 to the shared table
+   starting in E. Only the state map, not a relabelled machine code, is used. *)
+Definition rename (q:Q) := match q with
+  | A=>E | B=>F | C=>B | BB62.D=>C | E=>BB62.D | F=>A end.
+Lemma same_rules : Perm Eqv_WordPairs.TM79.tm Sk1Rules.tm rename.
+Proof.
+  split.
+  - intros [] []; cbn; discriminate || reflexivity.
+  - intros [] [] s d q H; cbn in H; inverts H; reflexivity.
+Qed.
+
+Theorem nonhalt: ~halts tm c0.
+Proof.
+  change (~halts Eqv_WordPairs.TM79.tm' c0).
+  rewrite <-Eqv_WordPairs.TM79.eqv.
+  apply (perm_nonhalt _ Sk1Rules.tm rename A _ same_rules).
+  exact blank_E_nonhalt.
+Qed.
+End TM23.
