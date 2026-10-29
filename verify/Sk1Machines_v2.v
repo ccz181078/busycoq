@@ -272,7 +272,8 @@ Proof.
 Qed.
 
 Module Sk1Rules.
-Definition tm := Eval compute in (TM_from_str "1RB1LB_1RC0LA_1RD0RE_1LA0LB_1RF---_1RB1LD").
+Definition tm :=
+  Eval compute in (TM_from_str "1RB1LB_1RC0LA_1RD0RE_1LA0LB_1RF---_1RB1LD").
 Notation "c -->* c'" := (c -[tm]->* c') (at level 40).
 Notation "c -->+ c'" := (c -[tm]->+ c') (at level 40).
 

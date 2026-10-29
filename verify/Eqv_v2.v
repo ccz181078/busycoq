@@ -27065,3 +27065,13 @@ Time Qed.
 End TM2694.
 
 
+Module TM2695.
+Definition tm := TM_from_str "1RB1LB_1RC---_1LD1LF_1LE0LD_0LA1RF_1LC0RE".
+Definition tm' := TM_from_str "1LB1LF_1LC0LB_0LD1RF_1RE1LE_1RA---_1LA0RC".
+Lemma eqv: halts tm c0 <-> halts tm' c0.
+Proof.
+  solve_eqv tm tm' (mp_from_str "DEABCF") 8277490 7454917.
+Time Qed.
+End TM2695.
+
+
