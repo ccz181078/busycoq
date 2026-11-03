@@ -43,18 +43,26 @@ Module Type Ctx.
   Parameter q_hash : Q->HashConcat.hash_t.
   Parameter sym_hash : Sym->HashConcat.hash_t.
 
-  (** It is also useful, in some situations, to be able to enumerate
-      all the symbols and states. *)
+End Ctx.
+
+(** Enumerability is only meaningful when [Q] and [Sym] are finite. Keeping it
+    out of [Ctx] means contexts with unbounded carriers ([BBinf], [TMLR],
+    [TMAddOneSymbol], [TMLocalHistory]) need not assert something false: with
+    these in [Ctx], each of them had to [Admit] [all_qs_spec], which for an
+    empty [all_qs] over an inhabited [Q] is a proof of [False] -- and the
+    [Hint Resolve] below put it in the [core] database, where [auto] could
+    apply it silently. Only [Enumerate] and [BackwardsReasoning] need it, and
+    both are used exclusively at finite contexts. *)
+Module Type FiniteCtx.
+  Include Ctx.
   Parameter all_qs : list Q.
   Parameter all_qs_spec : forall a, In a all_qs.
   Parameter all_syms : list Sym.
   Parameter all_syms_spec : forall a, In a all_syms.
-End Ctx.
+End FiniteCtx.
 
 Module TM (Ctx : Ctx).
   Export Ctx.
-
-#[export] Hint Resolve all_qs_spec all_syms_spec : core.
 
 (** A Turing machine is a function mapping each [(state, symbol)] pair
     to one of

@@ -202,7 +202,7 @@ match goal with
   apply Ndivpow2_spec in H; subst
 end.
 
-Module LongLoop(Ctx:Ctx).
+Module LongLoop(Ctx:FiniteCtx).
 Module TM := Individual Ctx.
 Export TM.
 Import Eqb.
