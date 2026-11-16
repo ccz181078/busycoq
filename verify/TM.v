@@ -6,6 +6,7 @@ From Coq Require Import Lists.Streams.
 From Coq Require Import PeanoNat.
 From Coq Require Import Lia.
 From BusyCoq Require Export Helper.
+From BusyCoq Require Import HashTable.
 Set Default Goal Selector "!".
 
 (** The direction a Turing machine can step in. *)
@@ -34,6 +35,13 @@ Module Type Ctx.
   (** Moreover we want decidable equality for [Q] and [Sym]. *)
   Parameter eqb_q : forall (a b : Q), {a = b} + {a <> b}.
   Parameter eqb_sym : forall (a b : Sym), {a = b} + {a <> b}.
+
+  Parameter q_eqb : Q->Q->bool.
+  Parameter sym_eqb : Sym->Sym->bool.
+  Parameter q_eqb_spec : forall a b:Q, Bool.reflect (a=b) (q_eqb a b).
+  Parameter sym_eqb_spec : forall a b:Sym, Bool.reflect (a=b) (sym_eqb a b).
+  Parameter q_hash : Q->HashConcat.hash_t.
+  Parameter sym_hash : Sym->HashConcat.hash_t.
 
   (** It is also useful, in some situations, to be able to enumerate
       all the symbols and states. *)
@@ -209,6 +217,20 @@ Definition halts (tm : TM) (c0 : Q * tape) :=
   exists n, halts_in tm c0 n.
 
 #[export] Hint Unfold halts halts_in : core.
+
+Inductive halts_at: TM->Q*tape->nat->Q*Sym->Prop :=
+| halts_at_intro tm c n q l m r:
+  c -[ tm ]->> n / (q,(l,m,r)) ->
+  halted tm (q,(l,m,r)) ->
+  halts_at tm c n (q,m).
+
+Definition halts_at_trans tm c1 tr := exists n, halts_at tm c1 n tr.
+
+Inductive DecideResult :=
+| Halt(h:Q*Sym)
+| NonHalt
+| Unknown
+.
 
 Lemma move_left_tape0 :
   move_left tape0 = tape0.
@@ -416,6 +438,18 @@ Proof.
     eauto.
 Qed.
 
+Lemma multistep_evstep_iff:
+  forall {tm c c'},
+  c -[ tm ]->* c' <->
+  exists n, c -[ tm ]->> n / c'.
+Proof.
+  intros.
+  split; intro.
+  - apply with_counter; auto.
+  - destruct H as [n H].
+    apply without_counter in H; auto.
+Qed.
+
 Lemma evstep_progress :
   forall tm c c',
   c -[ tm ]->* c' ->
@@ -607,4 +641,611 @@ Proof with eauto.
     destruct (Hstep i HP) as [i' [Hi' HP']]...
 Qed.
 
+Lemma nonhalt_iff {tm c}:
+  ~halts tm c <->
+  forall n, exists c', c -[ tm ]->> n / c'.
+Proof.
+  split; intros H.
+  - unfold halts,halts_in in H.
+    intros n.
+    induction n.
+    + exists c. constructor.
+    + destruct IHn as [c' IHn].
+      epose proof (no_halted_step tm c' _) as H0.
+      destruct H0 as [c'0 H0].
+      eexists.
+      replace (S n) with (n+1) by lia.
+      eapply multistep_trans; eauto.
+      Unshelve.
+      intros H0.
+      apply H.
+      exists n c'; tauto.
+  - intros H0.
+    destruct H0 as [n H0].
+    specialize (H (n+1)).
+    destruct H as [c' H].
+    eapply exceeds_halt.
+    1: apply H0.
+    2: apply H.
+    lia.
+Qed.
+
+Definition step_c(tm:TM)(c:Q*tape):option (Q*tape) :=
+let '(q,(l,m,r)):=c in
+match tm (q,m) with
+| None => None
+| Some (m',L,q') => Some (q',move_left (l,m',r))
+| Some (m',R,q') => Some (q',move_right (l,m',r))
+end.
+
+Fixpoint multistep_c(tm:TM)(n:nat)(c:Q*tape) :=
+match n with
+| O => Some c
+| S n =>
+  match step_c tm c with
+  | Some c =>multistep_c tm n c
+  | None => None
+  end
+end.
+
+Definition halts_in' tm c n :=
+exists ch, multistep_c tm n c = Some ch /\ halted tm ch.
+
+Definition halts' tm c :=
+exists n, halts_in' tm c n.
+
+Lemma step_c_spec tm c c':
+  step_c tm c = Some c' <->
+  c -[ tm ]-> c'.
+Proof.
+  split; intros H.
+  - destruct c as [q [[l m] r]].
+    cbn in H.
+    destruct (tm (q,m)) as [[[m' d] q']|] eqn:E.
+    2: congruence.
+    destruct d; inverts H; constructor; auto.
+  - inverts H;
+    cbn; rewrite H0; reflexivity.
+Qed.
+
+Lemma multistep_c_spec tm n c c':
+  multistep_c tm n c = Some c' <->
+  c -[ tm ]->> n / c'.
+Proof.
+  gen c c'.
+  induction n; intros.
+  - split; intros H; inverts H; constructor.
+  - split; intros H.
+    + cbn in H.
+      destruct (step_c tm c) eqn:E; try congruence.
+      rewrite step_c_spec in E.
+      rewrite IHn in H.
+      eauto.
+    + inverts H. cbn.
+      rewrite <-step_c_spec in H1.
+      rewrite H1,IHn.
+      assumption.
+Qed.
+
+Lemma evstep_c_spec tm c c':
+  (exists n, multistep_c tm n c = Some c') <->
+  c -[ tm ]->* c'.
+Proof.
+  rewrite multistep_evstep_iff.
+  split; intros [n H]; exists n; apply multistep_c_spec,H.
+Qed.
+
+Lemma halts_in_halts_in' {tm c n}:
+  halts_in tm c n <-> halts_in' tm c n.
+Proof.
+  unfold halts_in,halts_in'.
+  split; intros [ch [H H0]]; exists ch; (split;[|tauto]).
+  - rewrite multistep_c_spec.
+    apply H.
+  - rewrite <-multistep_c_spec.
+    apply H.
+Qed.
+
+Lemma halts_halts' {tm c}:
+  halts tm c <-> halts' tm c.
+Proof.
+  unfold halts,halts'.
+  split; intros [n H]; exists n.
+  - rewrite <-halts_in_halts_in'.
+    apply H.
+  - rewrite halts_in_halts_in'.
+    apply H.
+Qed.
+
+Lemma evstep_multistep tm c c':
+  c -[ tm ]->* c' ->
+  exists n, c -[ tm ]->> n / c'.
+Proof.
+  intro H.
+  induction H.
+  - exists O.
+    constructor.
+  - destruct IHevstep as [n IH].
+    exists (S n).
+    econstructor; eauto.
+Qed.
+
+Lemma halts_evstep tm c c':
+  halts tm c' ->
+  c -[ tm ]->* c' -> halts tm c.
+Proof.
+  intros H H0.
+  destruct (evstep_multistep _ _ _ H0) as [n H1].
+  eapply halts_multistep; eauto.
+Qed.
+
+Lemma halts_at_trans_evstep tm c1 c2 tr:
+  c1 -[ tm ]->* c2 ->
+  halts_at_trans tm c2 tr ->
+  halts_at_trans tm c1 tr.
+Proof.
+  intros.
+  inverts H0.
+  inverts H1.
+  destruct (with_counter H) as [n I1].
+  econstructor.
+  econstructor.
+  2: eassumption.
+  eapply multistep_trans.
+  2: eassumption.
+  apply I1.
+Qed.
+
+Lemma halts_step_iff tm c1 c2:
+  c1 -[ tm ]-> c2 ->
+  halts tm c1 <-> halts tm c2.
+Proof.
+  intros H.
+  split; intro H0.
+  - unfold halts in *.
+    destruct H0 as [n [c [I1 I2]]].
+    inverts I1.
+    1: eapply halted_no_step in I2; apply I2 in H; destruct H.
+    exists n0,c; split; eauto.
+  - eapply halts_step; eauto.
+Qed.
+
+Lemma halts_evstep_iff tm c1 c2:
+  c1 -[ tm ]->* c2 ->
+  halts tm c1 <-> halts tm c2.
+Proof.
+  intros H.
+  induction H.
+  1: tauto.
+  apply halts_step_iff in H.
+  tauto.
+Qed.
+
+Lemma halts_iff : forall tm (A : Type) (i0 : A) (f: A -> option A)
+  (C : A -> Q * tape) (P : A -> Prop),
+  (forall i, P i ->
+  match f i with
+  | Some i' => C i -[ tm ]->+ C i' /\ P i'
+  | None => halts tm (C i)
+  end) ->
+  P i0 ->
+  halts tm (C i0) <-> iter_halts f i0.
+Proof.
+  introv Hstep Hi0.
+  split; intro I1.
+  - destruct I1 as [n [c [I1 I2]]].
+    gen i0.
+    induction n using Wf_nat.lt_wf_ind; intros.
+    apply Hstep in Hi0.
+    destruct (f i0) eqn:E.
+    * destruct Hi0 as [Hi0 HP].
+      apply progress_multistep in Hi0.
+      destruct Hi0 as [n' Hi0].
+      assert (I3:halts_in tm (C i0) n) by eauto.
+      assert (I4:S n'<=n). {
+        assert (n<S n'->False). {
+          intro.
+          unshelve epose proof (exceeds_halt _ _ _ _ _ I3 _ Hi0); [lia|tauto].
+        }
+        lia.
+      }
+      replace n with (S n'+(n-(S n'))) in I1 by lia.
+      apply rewind_split in I1.
+      destruct I1 as [c' [I5 I6]].
+      multistep_deterministic.
+      eapply iter_halts_S.
+      1: apply E.
+      eapply H.
+      3: apply I6.
+      2: eauto.
+      lia.
+    * econstructor; eauto.
+  - induction I1.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eauto.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eapply halts_evstep.
+      1: apply IHI1,Hstep.
+      eapply progress_evstep,Hstep.
+Qed.
+
+Lemma halts_if : forall tm (A : Type) (i0 : A) (f: A -> option A)
+  (C : A -> Q * tape) (P : A -> Prop),
+  (forall i, P i ->
+  match f i with
+  | Some i' => C i -[ tm ]->* C i' /\ P i'
+  | None => halts tm (C i)
+  end) ->
+  P i0 ->
+  iter_halts f i0 ->
+  halts tm (C i0).
+Proof.
+  introv Hstep Hi0.
+  intro I1.
+  - induction I1.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eauto.
+    + specialize (Hstep _ Hi0).
+      rewrite H in Hstep.
+      eapply halts_evstep.
+      1: apply IHI1,Hstep.
+      eapply Hstep.
+Qed.
+
+Lemma halts_if_simple : forall tm (A : Type) (i0 : A) (f: A -> option A)
+  (C : A -> Q * tape),
+  (forall i,
+  match f i with
+  | Some i' => C i -[ tm ]->* C i'
+  | None => halts tm (C i)
+  end) ->
+  iter_halts f i0 ->
+  halts tm (C i0).
+Proof.
+  intros.
+  eapply halts_if with (P:=fun _=>True) (f:=f) (C:=C).
+  - intros.
+    specialize (H i).
+    destruct (f i); tauto.
+  - trivial.
+  - apply H0.
+Qed.
+
+Fixpoint iter_halts_c{A}(f:A->option A)(x:A)(T:nat) :=
+match T with
+| O => false
+| S T0 =>
+  match f x with
+  | Some x' => iter_halts_c f x' T0
+  | None => true
+  end
+end.
+
+Lemma iter_halts_c_spec {A} f (x:A) T:
+  iter_halts_c f x T = true ->
+  iter_halts f x.
+Proof.
+  gen x.
+  induction T; cbn; intros.
+  - congruence.
+  - destruct (f x) eqn:E.
+    + eapply iter_halts_S; eauto.
+    + econstructor; eauto.
+Qed.
+
+Definition sigma_score_sym: Sym->nat :=
+  fun s =>
+  (if sym_eqb s s0 then 0 else 1)%nat.
+
+Fixpoint sigma_score_seg(ls:list Sym):nat :=
+match ls with
+| nil => 0
+| h::t => sigma_score_sym h + sigma_score_seg t
+end.
+
+Inductive sigma_score_side: side->nat->Prop :=
+| sigma_score_side_O:
+    sigma_score_side (const s0) 0
+| sigma_score_side_S h t n1 n2:
+    sigma_score_sym h = n1 ->
+    sigma_score_side t n2 ->
+    sigma_score_side (h>>t) (n1+n2).
+
+Inductive sigma_score: (Q*tape)->nat->Prop :=
+| sigma_score_intro q l m r n1 n2 n3:
+    sigma_score_side l n1 ->
+    sigma_score_sym m = n2 ->
+    sigma_score_side r n3 ->
+    sigma_score (q,(l,m,r)) (n1+n2+n3).
+
+Lemma sigma_score_s0:
+  sigma_score_sym s0 = O.
+Proof.
+  unfold sigma_score_sym.
+  destruct (sym_eqb_spec s0 s0); congruence.
+Qed.
+
+Lemma sigma_score_side_const0_0 n:
+  sigma_score_side (const s0) n ->
+  n = O.
+Proof.
+  intro H.
+  remember (const s0) as s1.
+  induction H.
+  1: reflexivity.
+  rewrite const_unfold in Heqs1.
+  inverts Heqs1.
+  rewrite IHsigma_score_side.
+  2: reflexivity.
+  rewrite <-H.
+  rewrite sigma_score_s0.
+  reflexivity.
+Qed.
+
+Lemma sigma_score_side_unique s1 n1 n2:
+  sigma_score_side s1 n1 ->
+  sigma_score_side s1 n2 ->
+  n1 = n2.
+Proof.
+  intro H1.
+  gen n2.
+  induction H1; intros.
+  - rewrite sigma_score_side_const0_0; auto.
+  - inverts H0.
+    + rewrite const_unfold in H3.
+      inverts H3.
+      rewrite <-H.
+      rewrite sigma_score_s0.
+      rewrite (sigma_score_side_const0_0 n2); auto.
+    + rewrite  <-(IHsigma_score_side _ H6).
+      congruence.
+Qed.
+
+Lemma sigma_score_unique c1 n1 n2:
+  sigma_score c1 n1 ->
+  sigma_score c1 n2 ->
+  n1 = n2.
+Proof.
+  intros H1 H2.
+  inverts H1.
+  inverts H2.
+  f_equal.
+  2: eapply sigma_score_side_unique; eauto.
+  f_equal.
+  1: eapply sigma_score_side_unique; eauto.
+Qed.
+
+Lemma sigma_score_sym_bounded m:
+  (0 <= sigma_score_sym m <= 1)%nat.
+Proof.
+  unfold sigma_score_sym.
+  destruct (sym_eqb m s0); lia.
+Qed.
+
+Lemma sigma_score_step_bounded tm c1 c2 n1:
+  c1 -[ tm ]-> c2 ->
+  sigma_score c1 n1 ->
+  exists n2,
+  sigma_score c2 n2 /\
+  n2 <= n1+1.
+Proof.
+  intros H H1.
+  inverts H1.
+  inverts H.
+  - inverts H0.
+    + cbn.
+      eexists. split.
+      1: econstructor.
+      1: constructor.
+      1: reflexivity.
+      1: econstructor; eauto.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      rewrite sigma_score_s0.
+      lia.
+    + cbn.
+      eexists. split.
+      1: econstructor; eauto.
+      1: econstructor; eauto.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      lia.
+  - inverts H3.
+    + cbn.
+      eexists. split.
+      1: econstructor.
+      1: econstructor; eauto.
+      1: reflexivity.
+      1: econstructor.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      rewrite sigma_score_s0.
+      lia.
+    + cbn.
+      eexists. split.
+      1: econstructor; eauto.
+      1: econstructor; eauto.
+      cbn.
+      pose proof (sigma_score_sym_bounded s').
+      lia.
+Qed.
+
+Lemma sigma_score_bounded tm c1 c2 n n1 n2:
+  c1 -[ tm ]->> n / c2 ->
+  sigma_score c1 n1 ->
+  sigma_score c2 n2 ->
+  n2 <= n1+n.
+Proof.
+  intro H.
+  gen n1 n2.
+  induction H; intros.
+  - replace n2 with n1 by (eapply sigma_score_unique; eauto).
+    lia.
+  - epose proof (sigma_score_step_bounded _ _ _ _ H H1) as [n' [Ha Hb]].
+    specialize (IHmultistep _ _ Ha H2).
+    lia.
+Qed.
+
+Lemma sigma_score_bounded_fromc0 tm c2 n n2:
+  c0 -[ tm ]->> n / c2 ->
+  sigma_score c2 n2 ->
+  n2 <= n.
+Proof.
+  intros H H0.
+  eapply sigma_score_bounded with (c1:=c0) (n1:=O); eauto.
+  change O with (O+O+O).
+  econstructor.
+  1,3: econstructor.
+  apply sigma_score_s0.
+Qed.
+
+Lemma sigma_score_unbounded_nonhalt tm:
+  (forall n, exists c1 n', c0 -[ tm ]->* c1 /\ sigma_score c1 n' /\ n<=n') ->
+  ~halts tm c0.
+Proof.
+  intros h [n [c1 [Hm Hh]]].
+  destruct (h (S n)) as [c1' [n' [He' [Hs Hle]]]].
+  epose proof (evstep_multistep _ _ _ He') as [n'' Hm'].
+  epose proof (sigma_score_bounded_fromc0 _ _ _ _ Hm' Hs).
+  eapply exceeds_halt with (k:=n).
+  3: apply Hm'.
+  2: lia.
+  eauto.
+Qed.
+
+Lemma sigma_score_Str_app a b n1 n2:
+  sigma_score_seg a = n1 ->
+  sigma_score_side b n2 ->
+  sigma_score_side (a *> b) (n1 + n2).
+Proof.
+  gen b n1 n2.
+  induction a; intros.
+  - cbn in H.
+    rewrite <-H.
+    apply H0.
+  - cbn.
+    cbn in H.
+    rewrite <-H.
+    rewrite <-Nat.add_assoc.
+    econstructor; eauto.
+Qed.
+
+Lemma sigma_score_app a b:
+  sigma_score_seg (a++b) =
+  sigma_score_seg a + sigma_score_seg b.
+Proof.
+  induction a.
+  1: reflexivity.
+  cbn.
+  lia.
+Qed.
+
+Lemma sigma_score_lpow a n n1:
+  sigma_score_seg a = n1 ->
+  sigma_score_seg (a^^n) = n1*n.
+Proof.
+  gen a n1.
+  induction n; intros.
+  1: cbn; lia.
+  cbn.
+  rewrite sigma_score_app,H.
+  erewrite IHn; eauto.
+  lia.
+Qed.
+
+Lemma sigma_score_headL q a b n1 n2:
+  sigma_score_side a n1 ->
+  sigma_score_side b n2 ->
+  sigma_score (a <{{ q }} b) (n1+n2).
+Proof.
+  intros.
+  inverts H.
+  - cbn.
+    replace n2 with (O+O+n2) by lia.
+    econstructor; eauto.
+    2: apply sigma_score_s0.
+    constructor.
+  - cbn.
+    rewrite (Nat.add_comm _ n3).
+    econstructor; eauto.
+Qed.
+
+Lemma sigma_score_headR q a b n1 n2:
+  sigma_score_side a n1 ->
+  sigma_score_side b n2 ->
+  sigma_score (a {{ q }}> b) (n1+n2).
+Proof.
+  intros.
+  inverts H0.
+  - cbn.
+    replace n1 with (n1+(O+O)) by lia.
+    econstructor; eauto.
+    1: apply sigma_score_s0.
+    constructor.
+  - cbn.
+    rewrite (Nat.add_assoc).
+    econstructor; eauto.
+Qed.
+
+Ltac solve_sigma_score :=
+  (apply sigma_score_headL ||
+  apply sigma_score_headR ||
+  apply sigma_score_intro);
+  repeat (
+  apply sigma_score_side_O ||
+  apply sigma_score_lpow ||
+  apply sigma_score_Str_app ||
+  (cbn; reflexivity)
+  ).
+
+
+
+#[export] Instance Q_Eqb:
+  Eqb Q.
+Proof.
+  esplit; intros.
+  eapply q_eqb_spec.
+Defined.
+
+#[export] Instance Sym_Eqb:
+  Eqb Sym.
+Proof.
+  esplit; intros.
+  eapply sym_eqb_spec.
+Defined.
+
+Import HashConcat.
+#[export] Instance Q_Hash: Hash Q := (ltac:(split; apply q_hash)).
+#[export] Instance Sym_Hash: Hash Sym := (ltac:(split; apply sym_hash)).
 End TM.
+
+Definition dir_rev(sgn:dir):=
+match sgn with
+| L => R
+| R => L
+end.
+
+Definition dir_eqb(d1 d2:dir) :=
+match d1,d2 with
+| L,L | R,R => true
+| _,_ => false
+end.
+
+Lemma dir_eqb_spec d1 d2: Bool.reflect (d1=d2) (dir_eqb d1 d2).
+Proof.
+  destruct d1,d2; solve_Bool_reflect.
+Qed.
+
+#[export] Instance dir_Eqb: Eqb dir := Build_Eqb _ dir_eqb dir_eqb_spec.
+
+Definition dir_hash(x:dir) :=
+match x with
+| L => HashConcat.hv1
+| R => HashConcat.hv2
+end.
+
+#[export] Instance dir_Hash: HashConcat.Hash dir := HashConcat.Build_Hash _ dir_hash.
+
