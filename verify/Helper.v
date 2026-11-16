@@ -72,6 +72,16 @@ Proof.
     rewrite app_assoc. reflexivity.
 Qed.
 
+Lemma lpow_mul{A} (a:list A) b n:
+  a^^(b*n) = (a^^n)^^b.
+Proof.
+  induction b.
+  - reflexivity.
+  - cbn.
+    rewrite lpow_add.
+    congruence.
+Qed.
+
 Lemma app_cons_r : forall {A} xs (x : A) ys,
   xs ++ x :: ys = (xs ++ [x]) ++ ys.
 Proof.
@@ -89,6 +99,28 @@ Proof.
   - destruct xs.
     + repeat rewrite skipn_nil. reflexivity.
     + apply IHn.
+Qed.
+
+Lemma lpow_rotate_list {A} (a0:list A) a1 b n:
+  (a1::a0)^^n ++ a1::b = a1::(a0++[a1])^^n++b.
+Proof.
+  induction n; cbn.
+  - trivial.
+  - repeat rewrite <-List.app_assoc.
+    rewrite IHn.
+    trivial.
+Qed.
+
+Lemma lpow_rotate_list'{A}(a b:list A) n:
+  (a++b)^^n++a = a++(b++a)^^n.
+Proof.
+  gen b.
+  induction a; intros.
+  - repeat rewrite app_nil_r; trivial.
+  - cbn.
+    specialize (IHa (b++[a])).
+    rewrite lpow_rotate_list,<-app_assoc,IHa,<-app_assoc.
+    trivial.
 Qed.
 
 #[export] Hint Rewrite firstn_nil skipn_nil skipn_all firstn_all
@@ -300,3 +332,23 @@ Program Fixpoint strip_prefix (xs ys : list A) : {zs | ys = xs ++ zs} + {True} :
 End StripPrefix.
 
 Arguments strip_prefix {A} eqb !xs !ys.
+
+Inductive iter_halts{A}(f:A->option A):A->Prop :=
+| iter_halts_O x:
+  f x = None -> iter_halts f x
+| iter_halts_S x y:
+  f x = Some y -> iter_halts f y -> iter_halts f x
+.
+
+Ltac flia := repeat (lia || f_equal).
+
+Ltac native_check_eq :=
+match goal with
+| |- _ = ?a => native_cast_no_check (Logic.eq_refl a)
+end.
+
+Ltac vm_check_eq :=
+match goal with
+| |- _ = ?a => vm_cast_no_check (Logic.eq_refl a)
+end.
+
