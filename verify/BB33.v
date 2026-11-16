@@ -2,6 +2,7 @@
 
 From Coq Require Import Lists.List. Import ListNotations.
 From BusyCoq Require Export Flip.
+From BusyCoq Require Import HashTable.
 Set Default Goal Selector "!".
 
 Inductive state := A | B | C.
@@ -29,6 +30,45 @@ Module BB33 <: Ctx.
     decide equality.
   Defined.
 
+  Definition q_eqb(a b:Q):bool:=
+  match a,b with
+  | A,A | B,B | C,C => true
+  | _,_ => false
+  end.
+
+  Lemma q_eqb_spec a b:
+    Bool.reflect (a=b) (q_eqb a b).
+  Proof.
+    destruct a,b; cbn; constructor; congruence.
+  Qed.
+
+  Definition sym_eqb(a b:Sym):bool:=
+  match a,b with
+  | S0,S0 | S1,S1 | S2,S2 => true
+  | _,_ => false
+  end.
+
+  Lemma sym_eqb_spec a b:
+    Bool.reflect (a=b) (sym_eqb a b).
+  Proof.
+    destruct a,b; cbn; constructor; congruence.
+  Qed.
+
+  Import HashConcat.
+
+  Definition q_hash(a:Q) :=
+  match a with
+  | A => hv1
+  | B => hv2
+  | C => hv3
+  end.
+
+  Definition sym_hash(a:sym) :=
+  match a with
+  | S0 => hv1
+  | S1 => hv2
+  | S2 => hv3
+  end.
   Definition all_qs := [A; B; C].
 
   Lemma all_qs_spec : forall a, In a all_qs.

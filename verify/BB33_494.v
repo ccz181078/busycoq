@@ -3,15 +3,10 @@
 
 From BusyCoq Require Import Individual33.
 From Coq Require Import PeanoNat Decidable.
-From Coq Require Import Lia.
+From Coq Require Import Lia String.
 Set Default Goal Selector "!".
 
-Definition tm : TM := fun '(q, s) =>
-  match q, s with
-  | A, 0 => Some (1, R, B)  | A, 1 => Some (2, L, A)  | A, 2 => Some (0, L, A)
-  | B, 0 => Some (2, L, C)  | B, 1 => None            | B, 2 => Some (2, R, A)
-  | C, 0 => Some (0, R, A)  | C, 1 => Some (2, R, C)  | C, 2 => Some (1, L, C)
-  end.
+Definition tm := Eval compute in (TM_from_str "1RB2LA0LA_2LC---2RA_0RA2RC1LC").
 
 Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
 Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
@@ -39,16 +34,14 @@ Lemma l12_r20 : forall (t : nat) (l r : side),
   l <* <[1; 2]^^t <{{A}} r -->*
   l <{{A}} [2; 0]^^t *> r.
 Proof.
-  induction t. { execute. }
-  execute. follow IHt. rewrite merge_2. finish.
+  es.
 Qed.
 
 Lemma r20_2_l12 : forall (t : nat) (r : side),
   const 0 <{{A}} [2; 0]^^t *> 2 >> r -->*
   const 0 <* [2; 1]^^(S t) {{A}}> r.
 Proof.
-  induction t. { execute. }
-  intros. rewrite <- merge_2. follow IHt. execute.
+  es.
 Qed.
 
 (* 0^∞ (12)^t A> 1^(u+1) => 0^∞ (12)^(t+1) A> 1^u *)
@@ -56,7 +49,7 @@ Lemma R2 : forall (t u : nat) (r : side),
   const 0 <* [2; 1]^^t {{A}}> [1]^^(S u) *> r -->*
   const 0 <* [2; 1]^^(S t) {{A}}> [1]^^u *> r.
 Proof.
-  execute. follow l12_r20. follow r20_2_l12. trivial.
+  es.
 Qed.
 
 (* 0^∞ A> 1^s => 0^∞ (12)^s A> *)
@@ -101,8 +94,7 @@ Lemma l2_r1 : forall (n : nat) (l r : side),
   l <* [2]^^n <{{C}} r -->*
   l <{{C}} [1]^^n *> r.
 Proof.
-  induction n. { execute. }
-  intros. execute. follow IHn. rewrite merge_1. trivial.
+  es.
 Qed.
 
 (* C(0,b,c) -> C(b+2,1,c-1)         [c ≥ 1] *)
@@ -118,8 +110,7 @@ Lemma r1_l2 : forall (n : nat) (l r : side),
   l {{C}}> [1]^^n *> r -->*
   l <* [2]^^n {{C}}> r.
 Proof.
-  induction n. { execute. }
-  intros. execute. follow IHn. rewrite merge_1. trivial.
+  es.
 Qed.
 
 (* C(1,b,c) -> C(b+5,1,c-1)         [c ≥ 1] *)
@@ -137,8 +128,7 @@ Lemma l2_r0 : forall (n : nat) (l r : side),
   l <* [2]^^n <{{A}} r -->*
   l <{{A}} [0]^^n *> r.
 Proof.
-  induction n. { execute. }
-  intros. execute. follow IHn. rewrite merge_1. trivial.
+  es.
 Qed.
 
 (* C(a,b,0) -> C(1,5,a-3) 0^b 202   [a ≥ 3] *)
@@ -321,9 +311,10 @@ Lemma nonhalt : ~ halts tm c0.
 Proof.
   apply multistep_nonhalt with (D (a 0) (cc 0 - c 0) (const 0)).
   { apply evstep_trans with (C 1 5 (0+1) (const 0)).
-    { unfold C. do 105 step. finish. }
+    { es. }
     follow C_1b1. finish. }
   apply progress_nonhalt_simple with (i0 := (0%nat, const 0))
     (C := fun '(i, r) => D (a 0) (cc i - c 0) r).
   intros [i r]. destruct (D_next i r) as [r' H]. exists (S i, r'). exact H.
 Qed.
+
