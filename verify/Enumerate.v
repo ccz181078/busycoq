@@ -351,3 +351,5 @@ Proof.
   - replace c0 with (f q0;; tape0) in H by now rewrite Hq0.
     unfold c0. eauto.
 Qed.
+
+End Enumerate.
