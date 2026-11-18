@@ -5726,3 +5726,5 @@ End H155900.
 
 Theorem halt : halts tm c0.
 Proof. exact (H155900.halts_iso H155900.src_halt). Qed.
+
+Print Assumptions halt.
