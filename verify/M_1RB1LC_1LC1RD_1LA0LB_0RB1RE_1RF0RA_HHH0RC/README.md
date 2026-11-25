@@ -55,3 +55,9 @@ time with exact step counts.
 Run `M_1RB1LC_1LC1RD_1LA0LB_0RB1RE_1RF0RA_HHH0RC/build.sh` from `verify/` after `make`. It needs Coq 8.20 built with
 the native compiler. Everything except the segments takes a few minutes. Each segment takes about 37 minutes, so the
 400 segments are about 250 core-hours; they are independent, and `JOBS` sets how many run at once.
+
+## Checked
+
+All 400 segments were checked with Coq 8.20.1 (native compiler), each in 15 to 50 minutes, and `Final.v` compiles.
+`Print Assumptions halts_tm` lists only the axioms of Coq's primitive 63-bit integers and arrays (`PrimInt63.*`,
+`Uint63.*_spec`, `PArray.*`); the segments also trust `native_compute`.
