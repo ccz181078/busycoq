@@ -12,60 +12,12 @@ Local Open Scope bool_scope.
 Local Open Scope list_scope.
 Local Open Scope nat_scope.
 
-(** ** 1. Elementary 11-Rule Micro-Steps *)
-
 Notation f0 := S0.
 Notation f1 := S1.
 Notation blank := (const S0).
 
 Lemma z00 : f0 >> blank = blank.
 Proof. symmetry. exact (const_unfold Sym f0). Qed.
-
-Lemma stepB_1 (l r : side) :
-  (l {{A}}> (f1 >> r)) -[ tm ]->+ ((f0 >> l) {{A}}> r).
-Proof. start_progress. Qed.
-
-Lemma stepB_01 (l r : side) :
-  (l {{A}}> (f0 >> f1 >> r)) -[ tm ]->+ ((f1 >> l) <{{D}} (f1 >> r)).
-Proof. start_progress. Qed.
-
-Lemma stepB_000 (l r : side) :
-  (l {{A}}> (f0 >> f0 >> f0 >> r)) -[ tm ]->+ ((f0 >> f1 >> l) <{{D}} (f0 >> r)).
-Proof. start_progress. Qed.
-
-Lemma stepB_0010 (l r : side) :
-  (l {{A}}> (f0 >> f0 >> f1 >> f0 >> r)) -[ tm ]->+ ((f1 >> f0 >> f0 >> f1 >> l) {{A}}> r).
-Proof. start_progress. Qed.
-
-Lemma stepB_0011 (l r : side) :
-  (l {{A}}> (f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->+ ((f1 >> l) <{{D}} (f0 >> f0 >> f0 >> r)).
-Proof. start_progress. Qed.
-
-Lemma stepE_01 (l r : side) :
-  ((f0 >> f1 >> l) <{{D}} r) -[ tm ]->+ (l <{{D}} (f1 >> f1 >> r)).
-Proof. start_progress. Qed.
-
-Lemma stepE_00_0 (l r : side) :
-  ((f0 >> f0 >> l) <{{D}} (f0 >> r)) -[ tm ]->+ ((f1 >> f0 >> f0 >> l) {{A}}> r).
-Proof. start_progress. Qed.
-
-Lemma stepE_00_1 (l r : side) :
-  ((f0 >> f0 >> l) <{{D}} (f1 >> r)) -[ tm ]->+ (l <{{D}} (f0 >> f0 >> f0 >> r)).
-Proof. start_progress. Qed.
-
-Lemma stepE_10 (l r : side) :
-  ((f1 >> f0 >> l) <{{D}} r) -[ tm ]->+ ((f0 >> f1 >> l) {{A}}> r).
-Proof. start_progress. Qed.
-
-Lemma stepE_1100 (l r : side) :
-  ((f1 >> f1 >> f0 >> f0 >> l) <{{D}} r) -[ tm ]->+ (l <{{D}} (f0 >> f0 >> f0 >> f1 >> r)).
-Proof. start_progress. Qed.
-
-Lemma stepE_1101 (l r : side) :
-  ((f1 >> f1 >> f0 >> f1 >> l) <{{D}} r) -[ tm ]->+ ((f1 >> f0 >> l) {{A}}> (f0 >> f1 >> r)).
-Proof. start_progress. Qed.
-
-(** ** 2. Exact Bit-List Micro-Executor ([sim1] / [simN]) *)
 
 Definition finOfBool (b : bool) : Sym := if b then f1 else f0.
 
@@ -87,69 +39,146 @@ Proof.
   destruct x; cbn [app decBits]; rewrite IH; reflexivity.
 Qed.
 
-Inductive SimState : Type :=
-  | Sim_mk : bool -> list bool -> list bool -> SimState.
+(** Finite local execution: frame both unknown tape tails, and run only
+    transitions that read an explicit symbol in the current window. *)
+Module Window := BoundedConfig.
 
-Definition decSim (l0 r0 : side) (s : SimState) : Q * tape :=
-  match s with
-  | Sim_mk false l r => decBits l l0 {{A}}> decBits r r0
-  | Sim_mk true  l r => decBits l l0 <{{D}} decBits r r0
-  end.
+Definition sameWindow (x y : Window.T) : bool :=
+  andb (Eqb.list_eqb Eqb.eqb (Window.l x) (Window.l y))
+  (andb (Eqb.list_eqb Eqb.eqb (Window.r x) (Window.r y))
+  (andb (Eqb.eqb (Window.s x) (Window.s y))
+             (Eqb.eqb (Window.sgn x) (Window.sgn y)))).
 
-Definition sim1 (s : SimState) : SimState :=
-  match s with
-  | Sim_mk false l (true :: r) => Sim_mk false (false :: l) r
-  | Sim_mk false l (false :: true :: r) => Sim_mk true (true :: l) (true :: r)
-  | Sim_mk false l (false :: false :: false :: r) => Sim_mk true (false :: true :: l) (false :: r)
-  | Sim_mk false l (false :: false :: true :: false :: r) => Sim_mk false (true :: false :: false :: true :: l) r
-  | Sim_mk false l (false :: false :: true :: true :: r) => Sim_mk true (true :: l) (false :: false :: false :: r)
-  | Sim_mk true (false :: true :: l) r => Sim_mk true l (true :: true :: r)
-  | Sim_mk true (false :: false :: l) (false :: r) => Sim_mk false (true :: false :: false :: l) r
-  | Sim_mk true (false :: false :: l) (true :: r) => Sim_mk true l (false :: false :: false :: r)
-  | Sim_mk true (true :: false :: l) r => Sim_mk false (false :: true :: l) r
-  | Sim_mk true (true :: true :: false :: false :: l) r => Sim_mk true l (false :: false :: false :: true :: r)
-  | Sim_mk true (true :: true :: false :: true :: l) r => Sim_mk false (true :: false :: l) (false :: true :: r)
-  | _ => s
-  end.
-
-Fixpoint simN (n : nat) (s : SimState) : SimState :=
-  match n with
-  | 0 => s
-  | S n' => simN n' (sim1 s)
-  end.
-
-Lemma sim1_sound (l0 r0 : side) (s : SimState) :
-  decSim l0 r0 s -[ tm ]->* decSim l0 r0 (sim1 s).
+Lemma sameWindow_eq x y : sameWindow x y = true -> x = y.
 Proof.
-  destruct s as [[|] l r].
-  - destruct l as [|[|] l]; [apply evstep_refl | | ].
-    + destruct l as [|[|] l]; [apply evstep_refl | | ].
-      * destruct l as [|[|] l]; [apply evstep_refl | apply evstep_refl | ].
-        destruct l as [|[|] l];
-          [apply evstep_refl | apply progress_evstep, stepE_1101 | apply progress_evstep, stepE_1100].
-      * apply progress_evstep, stepE_10.
-    + destruct l as [|[|] l]; [apply evstep_refl | apply progress_evstep, stepE_01 | ].
-      destruct r as [|[|] r];
-        [apply evstep_refl | apply progress_evstep, stepE_00_1 | apply progress_evstep, stepE_00_0].
-  - destruct r as [|[|] r]; [apply evstep_refl | apply progress_evstep, stepB_1 | ].
-    destruct r as [|[|] r]; [apply evstep_refl | apply progress_evstep, stepB_01 | ].
-    destruct r as [|[|] r]; [apply evstep_refl | | apply progress_evstep, stepB_000].
-    destruct r as [|[|] r];
-      [apply evstep_refl | apply progress_evstep, stepB_0011 | apply progress_evstep, stepB_0010].
+  destruct x as [xl xr xq xd], y as [yl yr yq yd].
+  cbv beta iota delta [sameWindow Window.l Window.r Window.s Window.sgn].
+  destruct (Eqb.list_eqb_spec Eqb.eqb xl yl Eqb.eqb_spec),
+    (Eqb.list_eqb_spec Eqb.eqb xr yr Eqb.eqb_spec),
+    (Eqb.eqb_spec xq yq), (Eqb.eqb_spec xd yd);
+    intro H; try discriminate H; subst; reflexivity.
 Qed.
 
-Lemma simN_sound (l0 r0 : side) (n : nat) (s : SimState) :
-  decSim l0 r0 s -[ tm ]->* decSim l0 r0 (simN n s).
+Fixpoint windowReach (fuel : nat) (x y : Window.T) : bool :=
+  if sameWindow x y then true else
+  match fuel with
+  | 0 => false
+  | S fuel' =>
+      match Window.step tm x with
+      | Some x' => windowReach fuel' x' y
+      | None => false
+      end
+  end.
+
+Lemma windowReach_sound fuel x y :
+  windowReach fuel x y = true -> forall l r,
+  Window.to_config x l r -[ tm ]->* Window.to_config y l r.
 Proof.
-  revert s. induction n as [|n IH]; intros s; [apply evstep_refl |].
-  cbn [simN]. eapply evstep_trans; [apply sim1_sound | apply IH].
+  revert x; induction fuel as [|fuel IH]; intros x;
+    cbn [windowReach]; destruct (sameWindow x y) eqn:E;
+    try (intros _ l r; apply sameWindow_eq in E; subst; apply evstep_refl);
+    try discriminate.
+  pose proof (Window.step_spec tm x) as Hstep.
+  destruct (Window.step tm x) eqn:Hnext; [|discriminate].
+  intros H l r. eapply evstep_step; [apply Hstep | now apply IH].
 Qed.
 
-Lemma simN_eq {l0 r0 : side} (n : nat) (s1 s2 : SimState) (H : simN n s1 = s2) :
-  decSim l0 r0 s1 -[ tm ]->* decSim l0 r0 s2.
-Proof. subst s2. apply simN_sound. Qed.
+Definition windowProgress fuel x y : bool :=
+  match Window.step tm x with
+  | Some x' => windowReach fuel x' y
+  | None => false
+  end.
 
-(** ** 3. Finite Macro Rules via [simN_eq] *)
+Lemma windowProgress_sound fuel x y :
+  windowProgress fuel x y = true -> forall l r,
+  Window.to_config x l r -[ tm ]->+ Window.to_config y l r.
+Proof.
+  unfold windowProgress. pose proof (Window.step_spec tm x) as Hstep.
+  destruct (Window.step tm x); [|discriminate].
+  intros H l r. eapply progress_intro; [apply Hstep | now apply windowReach_sound with (fuel := fuel)].
+Qed.
+
+Local Ltac windowSide xs :=
+  lazymatch xs with
+  | ?a >> ?rest =>
+    let p := windowSide rest in
+    lazymatch p with (?word, ?tail) => constr:((a :: word, tail)) end
+  | decBits ?bs ?tail => constr:((map finOfBool bs, tail))
+  | _ => constr:((@nil Sym, xs))
+  end.
+
+Local Ltac windowConfig cfg :=
+  lazymatch cfg with
+  | ?l {{A}}> ?r =>
+    let wl := windowSide l in let wr := windowSide r in
+    lazymatch wl with (?u, ?l0) => lazymatch wr with (?v, ?r0) =>
+      constr:((Window.Build_T u v A R, l0, r0)) end end
+  | ?l <{{D}} ?r =>
+    let wl := windowSide l in let wr := windowSide r in
+    lazymatch wl with (?u, ?l0) => lazymatch wr with (?v, ?r0) =>
+      constr:((Window.Build_T v u D L, l0, r0)) end end
+  end.
+
+Local Ltac replayWindow fuel :=
+  lazymatch goal with
+  | |- ?x -[ tm ]->* ?y =>
+    let wx := windowConfig x in let wy := windowConfig y in
+    lazymatch wx with (?a, ?l, ?r) => lazymatch wy with (?b, _, _) =>
+      exact (windowReach_sound fuel a b ltac:(vm_compute; reflexivity) l r)
+    end end
+  | |- ?x -[ tm ]->+ ?y =>
+    let wx := windowConfig x in let wy := windowConfig y in
+    lazymatch wx with (?a, ?l, ?r) => lazymatch wy with (?b, _, _) =>
+      exact (windowProgress_sound fuel a b ltac:(vm_compute; reflexivity) l r)
+    end end
+  end.
+
+(** ** 1. Local machine fragments *)
+
+Lemma stepB_1 (l r : side) :
+  (l {{A}}> (f1 >> r)) -[ tm ]->+ ((f0 >> l) {{A}}> r).
+Proof. replayWindow 32. Qed.
+
+Lemma stepB_01 (l r : side) :
+  (l {{A}}> (f0 >> f1 >> r)) -[ tm ]->+ ((f1 >> l) <{{D}} (f1 >> r)).
+Proof. replayWindow 32. Qed.
+
+Lemma stepB_000 (l r : side) :
+  (l {{A}}> (f0 >> f0 >> f0 >> r)) -[ tm ]->+ ((f0 >> f1 >> l) <{{D}} (f0 >> r)).
+Proof. replayWindow 32. Qed.
+
+Lemma stepB_0010 (l r : side) :
+  (l {{A}}> (f0 >> f0 >> f1 >> f0 >> r)) -[ tm ]->+ ((f1 >> f0 >> f0 >> f1 >> l) {{A}}> r).
+Proof. replayWindow 32. Qed.
+
+Lemma stepB_0011 (l r : side) :
+  (l {{A}}> (f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->+ ((f1 >> l) <{{D}} (f0 >> f0 >> f0 >> r)).
+Proof. replayWindow 32. Qed.
+
+Lemma stepE_01 (l r : side) :
+  ((f0 >> f1 >> l) <{{D}} r) -[ tm ]->+ (l <{{D}} (f1 >> f1 >> r)).
+Proof. replayWindow 32. Qed.
+
+Lemma stepE_00_0 (l r : side) :
+  ((f0 >> f0 >> l) <{{D}} (f0 >> r)) -[ tm ]->+ ((f1 >> f0 >> f0 >> l) {{A}}> r).
+Proof. replayWindow 32. Qed.
+
+Lemma stepE_00_1 (l r : side) :
+  ((f0 >> f0 >> l) <{{D}} (f1 >> r)) -[ tm ]->+ (l <{{D}} (f0 >> f0 >> f0 >> r)).
+Proof. replayWindow 32. Qed.
+
+Lemma stepE_10 (l r : side) :
+  ((f1 >> f0 >> l) <{{D}} r) -[ tm ]->+ ((f0 >> f1 >> l) {{A}}> r).
+Proof. replayWindow 32. Qed.
+
+Lemma stepE_1100 (l r : side) :
+  ((f1 >> f1 >> f0 >> f0 >> l) <{{D}} r) -[ tm ]->+ (l <{{D}} (f0 >> f0 >> f0 >> f1 >> r)).
+Proof. replayWindow 32. Qed.
+
+Lemma stepE_1101 (l r : side) :
+  ((f1 >> f1 >> f0 >> f1 >> l) <{{D}} r) -[ tm ]->+ ((f1 >> f0 >> l) {{A}}> (f0 >> f1 >> r)).
+Proof. replayWindow 32. Qed.
+
 
 Lemma br1_step (l r : side) :
   ((f1 >> f1 >> f0 >> f0 >> l) <{{D}} r) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> r)).
@@ -161,171 +190,115 @@ Proof. apply progress_evstep, stepB_0010. Qed.
 
 Lemma br2_step (l r : side) :
   ((f0 >> f1 >> f0 >> f0 >> l) <{{D}} r) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 2 (Sim_mk true [false; true; false; false] []) (Sim_mk true [] [false; false; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma br4_step (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{D}} (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false] [true; true; true; false; true]) (Sim_mk true [true; false; false; false; false; true; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma br5_step (l r : side) :
   (l {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 18 (Sim_mk false [] [true; true; true; true; false; true; false; true; false; false; false; true]) (Sim_mk false [false; true; false; false] [true; true; true; true; false; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma br6_step (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> l) <{{D}} (f1 >> f0 >> f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 18 (Sim_mk true [true; false; false; false] [true; false; true; false; false; false; true; false]) (Sim_mk true [true; false; false; false; false; false; true; false] [true; false; true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma br7_step (l r : side) :
   ((f0 >> f1 >> f0 >> f1 >> f1 >> f0 >> f0 >> f1 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f1 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 18 (Sim_mk true [false; true; false; true; true; false; false; true] [false; false; false; true; false; false; false; true]) (Sim_mk true [false; true; false; true] [false; false; false; true; false; false; false; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lpa_0 (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false] [false; false; false]) (Sim_mk true [] [false; false; false; true; true; true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lpa_1 (l r : side) :
   ((f0 >> f1 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 2 (Sim_mk true [false; true; false; false] [false; false; false]) (Sim_mk true [] [false; false; false; true; false; false; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lb_p0_q1_t (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false; true; false] [false; false; false; true]) (Sim_mk true [true; false] [false; false; false; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lb_p0_q1_f (l r : side) :
   ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 6 (Sim_mk true [true; false; false; true; false; false] [false; false; false; true]) (Sim_mk true [] [false; false; false; true; true; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lb_p1_base (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f1 >> f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 11 (Sim_mk true [true; false; false; false; true; false; false; true; false; false] [false; false; false]) (Sim_mk true [] [false; false; false; true; true; true; true; true; false; true; true; true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lb_p1_true (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false; true; false; false] [false; false; false]) (Sim_mk true [true; false; false] [false; false; false; true; true; true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma lb_p1_false (l r : side) :
   ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* ((f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 6 (Sim_mk true [true; false; false; true; false; false; false] [false; false; false]) (Sim_mk true [false] [false; false; false; true; true; true; true; true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_entry (l r : side) :
   (l {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 9 (Sim_mk false [] [true; true; true; true; false; true; false; true]) (Sim_mk false [false; true; false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_mid_zero (l r : side) :
   ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{A}}> (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 9 (Sim_mk false [false; true; false; true; false; false; false] [true; false; false; false; true]) (Sim_mk false [false; true; false; false] [true; true; true; true; false; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_mid_1011 (l r : side) :
   ((f0 >> f1 >> f0 >> l) {{A}}> (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk false [false; true; false] [true; true; true; false; true]) (Sim_mk false [false; true; false; false; false; true; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_mid_1000_t (l r : side) :
   ((f0 >> f1 >> f0 >> l) {{A}}> (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 4 (Sim_mk false [false; true; false] [true; false; false; false; true]) (Sim_mk true [true; false] [false; false; false; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_back_end (l r : side) :
   ((f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; true; false; false; false] [false; false; false; true]) (Sim_mk false [false; true; false; false] [true; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma fwd_101111 (l r : side) :
   (l {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 6 (Sim_mk false [] [true; true; true; true; false; true]) (Sim_mk false [false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_fwd_step (l r : side) :
   ((f0 >> l) {{A}}> (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk false [false] [true; true; true; false; true]) (Sim_mk false [false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma rp_fwd_fin (l r : side) :
   ((f0 >> l) {{A}}> (f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 3 (Sim_mk false [false] [true; false; true]) (Sim_mk false [false; true; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma sb_fwd_step (l r : side) :
   (l {{A}}> (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk false [] [true; true; true; false; true]) (Sim_mk false [false; true; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma sb_fwd_fin (l r : side) :
   (l {{A}}> (f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 4 (Sim_mk false [] [true; true; true; false; true; false]) (Sim_mk true [true; false; false; false] [true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma p4_turn (l r : side) :
   ((f0 >> l) {{A}}> (f1 >> f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f0 >> r)).
-Proof.
-  exact (@simN_eq l r 4 (Sim_mk false [false] [true; false; false; false]) (Sim_mk true [] [false; false; false; true; false]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma p4_back_0001 (l r : side) :
   ((f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false] [false; false; false; true]) (Sim_mk true [] [false; false; false; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma p4_bounce_0101 (l r : side) :
   ((f1 >> f0 >> f1 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> l) {{A}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
-Proof.
-  exact (@simN_eq l r 5 (Sim_mk true [true; false; true; false] [false; false; false; true]) (Sim_mk false [false; true] [true; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma p4_finish_01 (l r : side) :
   (l {{A}}> (f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> l) <{{D}} (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 2 (Sim_mk false [] [true; false; true]) (Sim_mk true [true; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma p4b_true (l r : side) :
   ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{D}} (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 18 (Sim_mk true [true; false; false; true; false; false; false] [true; false; false; false; true]) (Sim_mk true [true; false; false; true; false; false; false; false; true; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 Lemma p4b_false_enter (l r : side) :
   ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{D}} (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{A}}> (f1 >> r)).
-Proof.
-  exact (@simN_eq l r 6 (Sim_mk true [true; false; false; true; false; false; false] [true; true; true; false; true]) (Sim_mk false [false; true; false; false; false; true; false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. replayWindow 128. Qed.
 
 
 (** ** 4. Bit-Block Repetition, Word Encodings, and Shift Identities *)
@@ -561,45 +534,55 @@ Qed.
 
 (** ** 5. Loop & SafeWord Transducer Soundness Proofs *)
 
+(** A local transfer repeated across a homogeneous run. [at] puts the
+    source first regardless of the physical direction of the sweep. *)
+Lemma repeatSweep
+  (view : side -> side -> Q * tape)
+  (take put : side -> side) (src dst : nat -> side -> side)
+  (src0 : forall l, src 0 l = l) (dst0 : forall r, dst 0 r = r)
+  (srcS : forall n l, src (S n) l = take (src n l))
+  (dstS : forall n r, dst (S n) r = dst n (put r))
+  (move : forall l r, view (take l) r -[ tm ]->* view l (put r))
+  n l r : view (src n l) r -[ tm ]->* view l (dst n r).
+Proof.
+  revert r; induction n as [|n IH]; intros r.
+  - rewrite src0, dst0. apply evstep_refl.
+  - rewrite srcS, dstS. eapply evstep_trans; [apply move | apply IH].
+Qed.
+
+Lemma repeatBitsSweep (view : side -> side -> Q * tape) u v
+  (move : forall l r,
+    view (decBits u l) r -[ tm ]->* view l (decBits v r)) k l r :
+  view (repBits u k l) r -[ tm ]->* view l (repBits v k r).
+Proof.
+  apply (repeatSweep view (decBits u) (decBits v) (repBits u) (repBits v));
+    try reflexivity; [apply repBits_succ_right | exact move].
+Qed.
+
 Lemma loop_br1 (k : nat) (l r : side) :
   (repBits [true; true; false; false] k l <{{D}} r) -[ tm ]->*
     (l <{{D}} repBits [false; false; false; true] k r).
-Proof.
-  revert r. induction k as [|k IH]; intros r; [apply evstep_refl |].
-  rewrite (repBits_succ_right [false; false; false; true]). eapply evstep_trans; [apply br1_step | apply IH].
-Qed.
+Proof. eapply repeatBitsSweep with (view := fun l r => l <{{D}} r); exact br1_step. Qed.
 
 Lemma loop_br2 (k : nat) (l r : side) :
   (repBits [false; true; false; false] k l <{{D}} r) -[ tm ]->*
     (l <{{D}} repBits [false; false; false; true] k r).
-Proof.
-  revert r. induction k as [|k IH]; intros r; [apply evstep_refl |].
-  rewrite (repBits_succ_right [false; false; false; true]). eapply evstep_trans; [apply br2_step | apply IH].
-Qed.
+Proof. eapply repeatBitsSweep with (view := fun l r => l <{{D}} r); exact br2_step. Qed.
 
 Lemma loop_br3 (k : nat) (l r : side) :
   (l {{A}}> repBits [false; false; true; false] k r) -[ tm ]->*
     (repBits [true; false; false; true] k l {{A}}> r).
-Proof.
-  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
-  rewrite (repBits_succ_right [true; false; false; true]). eapply evstep_trans; [apply br3_step | apply IH].
-Qed.
+Proof. eapply repeatBitsSweep with (view := fun r l => l {{A}}> r); exact (fun r l => br3_step l r). Qed.
 
 Lemma loop_q1_t (m : nat) (l r : side) :
   ((f1 >> f0 >> repBits [false; false; true; false] m l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
     ((f1 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> repBits [true; true; false; true] m r)).
-Proof.
-  revert r. induction m as [|m IH]; intros r; [apply evstep_refl |].
-  rewrite (repBits_succ_right [true; true; false; true]). eapply evstep_trans; [apply lb_p0_q1_t | apply IH].
-Qed.
+Proof. eapply repeatBitsSweep with (view := fun l r => (f1 >> f0 >> l) <{{D}} (f0 >> f0 >> f0 >> f1 >> r)); exact lb_p0_q1_t. Qed.
 
 Lemma loop_p4_back (m : nat) (l r : side) :
   (repBits [true; false; false; false] m l <{{D}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> f1 >> repBits [true; true; false; true] m r)).
-Proof.
-  revert r. induction m as [|m IH]; intros r; [apply evstep_refl |].
-  rewrite (repBits_succ_right [true; true; false; true]). eapply evstep_trans; [apply p4_back_0001 | apply IH].
-Qed.
+Proof. eapply repeatBitsSweep with (view := fun l r => l <{{D}} (f0 >> f0 >> f0 >> f1 >> r)); exact p4_back_0001. Qed.
 
 Lemma loop_sb_fwd (k : nat) (l r : side) :
   (l {{A}}> repBits [true; true; true; false] k (f1 >> r)) -[ tm ]->*
@@ -628,10 +611,7 @@ Qed.
 Lemma loop_rp_mid_1011 (k : nat) (l r : side) :
   ((f0 >> f1 >> f0 >> l) {{A}}> (f1 >> repBits [true; true; false; true] k r)) -[ tm ]->*
     ((f0 >> f1 >> f0 >> repBits [false; false; true; false] k l) {{A}}> (f1 >> r)).
-Proof.
-  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
-  rewrite (repBits_succ_right [false; false; true; false]). eapply evstep_trans; [apply rp_mid_1011 | apply IH].
-Qed.
+Proof. eapply repeatBitsSweep with (view := fun r l => (f0 >> f1 >> f0 >> l) {{A}}> (f1 >> r)); exact (fun r l => rp_mid_1011 l r). Qed.
 
 Lemma leftPassA_reaches (w : list bool) (l r : side) :
   (encWL w l <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
@@ -1168,99 +1148,71 @@ Qed.
 Lemma p66_L16 (l r : side) :
   (pLBits 16 l <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> pRBits 64 r)).
-Proof.
-  change (f0 >> f0 >> f0 >> pRBits 64 r) with (decBits ([false; false; false] ++ pRList 64) r).
-  exact (@simN_eq l r 69 (Sim_mk true (pLList 16) [false; false; false])
-                         (Sim_mk true [] ([false; false; false] ++ pRList 64))
-                         ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. unfold pLBits, pRBits; replayWindow 1024. Qed.
 
 Lemma p66_L9 (l r : side) :
   (pLBits 9 l <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> pRBits 36 r)).
-Proof.
-  change (f0 >> f0 >> f0 >> pRBits 36 r) with (decBits ([false; false; false] ++ pRList 36) r).
-  exact (@simN_eq l r 77 (Sim_mk true (pLList 9) [false; false; false])
-                         (Sim_mk true [] ([false; false; false] ++ pRList 36))
-                         ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. unfold pLBits, pRBits; replayWindow 1024. Qed.
 
 Lemma p66_L29 (l r : side) :
   (pLBits 29 l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> pRBits 14 r)).
-Proof.
-  change (f0 >> f0 >> f0 >> f1 >> f1 >> pRBits 14 r)
-    with (decBits ([false; false; false; true; true] ++ pRList 14) r).
-  exact (@simN_eq l r 77 (Sim_mk true (pLList 29) [false; false; false; true; true])
-                         (Sim_mk true [] ([false; false; false; true; true] ++ pRList 14))
-                         ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. unfold pLBits, pRBits; replayWindow 1024. Qed.
 
 Lemma p66_R63 (l r : side) :
   ((f1 >> f0 >> f0 >> f1 >> f0 >> l) <{{D}} (f1 >> pRBits 63 r)) -[ tm ]->*
     ((f1 >> f0 >> f0 >> f1 >> f0 >> pLBits 14 l) <{{D}} (f1 >> r)).
-Proof.
-  change (f1 >> f0 >> f0 >> f1 >> f0 >> pLBits 14 l)
-    with (decBits ([true; false; false; true; false] ++ pLList 14) l).
-  exact (@simN_eq l r 261 (Sim_mk true [true; false; false; true; false] (true :: pRList 63))
-                          (Sim_mk true ([true; false; false; true; false] ++ pLList 14) [true])
-                          ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. unfold pLBits, pRBits; replayWindow 1024. Qed.
 
 Lemma p66_R4 (l r : side) :
   ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) <{{D}} (f0 >> pRBits 4 r)) -[ tm ]->*
     ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> pLBits 4 l) <{{D}} (f0 >> r)).
-Proof.
-  change (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> pLBits 4 l)
-    with (decBits ([false; true; false; false; true; false; true; false] ++ pLList 4) l).
-  exact (@simN_eq l r 261 (Sim_mk true [false; true; false; false; true; false; true; false] (false :: pRList 4))
-                          (Sim_mk true ([false; true; false; false; true; false; true; false] ++ pLList 4) [false])
-                          ltac:(vm_compute; reflexivity)).
-Qed.
+Proof. unfold pLBits, pRBits; replayWindow 1024. Qed.
 
 Lemma p66_L16_rep (c : nat) (l r : side) :
   (repPL 16 c l <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> repPR 64 c r)).
 Proof.
-  revert r. induction c as [|c IH]; intros r; [apply evstep_refl |].
-  cbn [repPL]. rewrite <- repPR_succ_right.
-  eapply evstep_trans; [apply p66_L16 | apply IH].
+  exact (repeatSweep (fun l r => l <{{D}} (f0 >> f0 >> f0 >> r)) (pLBits 16) (pRBits 64)
+    (repPL 16) (repPR 64) (fun _ => eq_refl) (fun _ => eq_refl)
+    (fun _ _ => eq_refl) (fun n r => eq_sym (repPR_succ_right 64 n r)) p66_L16 c l r).
 Qed.
 
 Lemma p66_L9_rep (c : nat) (l r : side) :
   (repPL 9 c l <{{D}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> repPR 36 c r)).
 Proof.
-  revert r. induction c as [|c IH]; intros r; [apply evstep_refl |].
-  cbn [repPL]. rewrite <- repPR_succ_right.
-  eapply evstep_trans; [apply p66_L9 | apply IH].
+  exact (repeatSweep (fun l r => l <{{D}} (f0 >> f0 >> f0 >> r)) (pLBits 9) (pRBits 36)
+    (repPL 9) (repPR 36) (fun _ => eq_refl) (fun _ => eq_refl)
+    (fun _ _ => eq_refl) (fun n r => eq_sym (repPR_succ_right 36 n r)) p66_L9 c l r).
 Qed.
 
 Lemma p66_L29_rep (c : nat) (l r : side) :
   (repPL 29 c l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->*
     (l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> repPR 14 c r)).
 Proof.
-  revert r. induction c as [|c IH]; intros r; [apply evstep_refl |].
-  cbn [repPL]. rewrite <- repPR_succ_right.
-  eapply evstep_trans; [apply p66_L29 | apply IH].
+  exact (repeatSweep (fun l r => l <{{D}} (f0 >> f0 >> f0 >> f1 >> f1 >> r)) (pLBits 29) (pRBits 14)
+    (repPL 29) (repPR 14) (fun _ => eq_refl) (fun _ => eq_refl)
+    (fun _ _ => eq_refl) (fun n r => eq_sym (repPR_succ_right 14 n r)) p66_L29 c l r).
 Qed.
 
 Lemma p66_R63_rep (c : nat) (l r : side) :
   ((f1 >> f0 >> f0 >> f1 >> f0 >> l) <{{D}} (f1 >> repPR 63 c r)) -[ tm ]->*
     ((f1 >> f0 >> f0 >> f1 >> f0 >> repPL 14 c l) <{{D}} (f1 >> r)).
 Proof.
-  revert l. induction c as [|c IH]; intros l; [apply evstep_refl |].
-  cbn [repPR]. rewrite <- repPL_succ_right.
-  eapply evstep_trans; [apply p66_R63 | apply IH].
+  exact (repeatSweep (fun r l => (f1 >> f0 >> f0 >> f1 >> f0 >> l) <{{D}} (f1 >> r)) (pRBits 63) (pLBits 14)
+    (repPR 63) (repPL 14) (fun _ => eq_refl) (fun _ => eq_refl)
+    (fun _ _ => eq_refl) (fun n r => eq_sym (repPL_succ_right 14 n r)) (fun r l => p66_R63 l r) c r l).
 Qed.
 
 Lemma p66_R4_rep (c : nat) (l r : side) :
   ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) <{{D}} (f0 >> repPR 4 c r)) -[ tm ]->*
     ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> repPL 4 c l) <{{D}} (f0 >> r)).
 Proof.
-  revert l. induction c as [|c IH]; intros l; [apply evstep_refl |].
-  cbn [repPR]. rewrite <- repPL_succ_right.
-  eapply evstep_trans; [apply p66_R4 | apply IH].
+  exact (repeatSweep (fun r l => (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) <{{D}} (f0 >> r)) (pRBits 4) (pLBits 4)
+    (repPR 4) (repPL 4) (fun _ => eq_refl) (fun _ => eq_refl)
+    (fun _ _ => eq_refl) (fun n r => eq_sym (repPL_succ_right 4 n r)) (fun r l => p66_R4 l r) c r l).
 Qed.
 
 (** ** 7. Symbolic [Chunk] / [RState] Representation & [stepFast] Engine *)
@@ -1363,45 +1315,23 @@ Definition preR14 (tl : list Chunk) : list Chunk := preBits pR14_66 tl.
 Definition preP14 (tl : list Chunk) : list Chunk := preBits pL14_66 tl.
 Definition prePL0 (tl : list Chunk) : list Chunk := preBits pL0_66 tl.
 
-Fixpoint loopP16 (k : nat) (xs acc : list Chunk) : OptPair :=
+(** Consume explicit copies of a finite period. A failed prefix match
+    stops normally and leaves both the remaining tape and accumulator. *)
+Fixpoint loopSweep (strip : list Chunk -> OptList)
+    (push : list Chunk -> list Chunk) (k : nat) (xs acc : list Chunk) : OptPair :=
   match k with
   | 0 => OptPair_some xs acc
   | S k' =>
-    match stripP16 xs with
-    | OptList_some xs' => loopP16 k' xs' (preR64 acc)
+    match strip xs with
+    | OptList_some xs' => loopSweep strip push k' xs' (push acc)
     | OptList_none => OptPair_some xs acc
     end
   end.
 
-Fixpoint loopP9 (k : nat) (xs acc : list Chunk) : OptPair :=
-  match k with
-  | 0 => OptPair_some xs acc
-  | S k' =>
-    match stripP9 xs with
-    | OptList_some xs' => loopP9 k' xs' (preR36 acc)
-    | OptList_none => OptPair_some xs acc
-    end
-  end.
-
-Fixpoint loopP29 (k : nat) (xs acc : list Chunk) : OptPair :=
-  match k with
-  | 0 => OptPair_some xs acc
-  | S k' =>
-    match stripP29 xs with
-    | OptList_some xs' => loopP29 k' xs' (preR14 acc)
-    | OptList_none => OptPair_some xs acc
-    end
-  end.
-
-Fixpoint loopR63 (k : nat) (xs acc : list Chunk) : OptPair :=
-  match k with
-  | 0 => OptPair_some xs acc
-  | S k' =>
-    match stripR63 xs with
-    | OptList_some xs' => loopR63 k' xs' (preP14 acc)
-    | OptList_none => OptPair_some xs acc
-    end
-  end.
+Definition loopP16 := loopSweep stripP16 preR64.
+Definition loopP9 := loopSweep stripP9 preR36.
+Definition loopP29 := loopSweep stripP29 preR14.
+Definition loopR63 := loopSweep stripR63 preP14.
 
 Fixpoint scanLeftB_p0 (k : nat) (xs accR : list Chunk) : OptPair :=
   match xs with
@@ -1500,47 +1430,47 @@ Fixpoint scanSuperBounce (xs : list Chunk) : OptList :=
   | _ => OptList_none
   end.
 
-Fixpoint br1Loop (l r : list Chunk) : RState :=
-  match l with
-  | b1 :: b1 :: b0 :: b0 :: l' => br1Loop l' (b0 :: b0 :: b0 :: b1 :: r)
-  | _ => RState_mk true l r
+(* A bridge consumes one literal quartet and pushes one output block.
+   The view chooses the scanned side and restores the fixed hub collars. *)
+Definition literalChunk (b : bool) : Chunk := if b then b1 else b0.
+
+Fixpoint bridgeSweep (view : list Chunk -> list Chunk -> RState)
+    (a b d e : bool) (out : list Chunk) (xs acc : list Chunk) : RState :=
+  match xs with
+  | x :: y :: z :: t :: rest =>
+      if matchBit a x && matchBit b y && matchBit d z && matchBit e t
+      then bridgeSweep view a b d e out rest (out ++ acc)
+      else view xs acc
+  | _ => view xs acc
   end.
 
-Fixpoint br2Loop (l r : list Chunk) : RState :=
-  match l with
-  | b0 :: b1 :: b0 :: b0 :: l' => br2Loop l' (b0 :: b0 :: b0 :: b1 :: r)
-  | _ => RState_mk true l r
-  end.
+Definition br1Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun l r => RState_mk true l r)
+    true true false false [b0;b0;b0;b1] l r.
 
-Fixpoint br3Loop (l r : list Chunk) : RState :=
-  match r with
-  | b0 :: b0 :: b1 :: b0 :: r' => br3Loop (b1 :: b0 :: b0 :: b1 :: l) r'
-  | _ => RState_mk false l r
-  end.
+Definition br2Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun l r => RState_mk true l r)
+    false true false false [b0;b0;b0;b1] l r.
 
-Fixpoint br4Loop (l r : list Chunk) : RState :=
-  match r with
-  | b1 :: b1 :: b0 :: b1 :: r' => br4Loop (b0 :: b1 :: b0 :: b0 :: l) r'
-  | _ => RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: r)
-  end.
+Definition br3Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun r l => RState_mk false l r)
+    false false true false [b1;b0;b0;b1] r l.
 
-Fixpoint br5Loop (l r : list Chunk) : RState :=
-  match r with
-  | b0 :: b0 :: b0 :: b1 :: r' => br5Loop (b0 :: b1 :: b0 :: b0 :: l) r'
-  | _ => RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: r)
-  end.
+Definition br4Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun r l => RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: r))
+    true true false true [b0;b1;b0;b0] r l.
 
-Fixpoint br6Loop (l r : list Chunk) : RState :=
-  match r with
-  | b0 :: b0 :: b1 :: b0 :: r' => br6Loop (b0 :: b0 :: b1 :: b0 :: l) r'
-  | _ => RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b0 :: b1 :: b0 :: r)
-  end.
+Definition br5Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun r l => RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: r))
+    false false false true [b0;b1;b0;b0] r l.
 
-Fixpoint br7Loop (l r : list Chunk) : RState :=
-  match l with
-  | b1 :: b0 :: b0 :: b1 :: l' => br7Loop l' (b1 :: b1 :: b0 :: b1 :: r)
-  | _ => RState_mk true (b0 :: b1 :: b0 :: b1 :: l) (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r)
-  end.
+Definition br6Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun r l => RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b0 :: b1 :: b0 :: r))
+    false false true false [b0;b0;b1;b0] r l.
+
+Definition br7Loop (l r : list Chunk) : RState :=
+  bridgeSweep (fun l r => RState_mk true (b0 :: b1 :: b0 :: b1 :: l) (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r))
+    true false false true [b1;b1;b0;b1] l r.
 
 Definition peelPLStep (r : nat) (b : Chunk) (rest : list Chunk) : OptList :=
   if Nat.leb r 65 then
@@ -2049,18 +1979,28 @@ Lemma prePL0_spec (w : list bool) (c : nat) (tl : list Chunk) (lb : side) :
   decodeList w c (prePL0 tl) lb = pLBits 0 (decodeList w c tl lb).
 Proof. unfold prePL0, pLBits. rewrite <- pL0_66_eq. apply preBits_spec. Qed.
 
+Lemma loopSweep_sound (strip : list Chunk -> OptList)
+  (push : list Chunk -> list Chunk) (view : list Chunk -> list Chunk -> Q * tape)
+  (move : forall xs rest acc, strip xs = OptList_some rest ->
+      view xs acc -[ tm ]->* view rest (push acc))
+  k xs acc l' r' (H : loopSweep strip push k xs acc = OptPair_some l' r') :
+  view xs acc -[ tm ]->* view l' r'.
+Proof.
+  revert xs acc H; induction k as [|k IH]; intros xs acc H; cbn [loopSweep] in H.
+  - inversion H; subst. apply evstep_refl.
+  - destruct (strip xs) as [|rest] eqn:E.
+    + inversion H; subst. apply evstep_refl.
+    + eapply evstep_trans; [eapply move; exact E | eapply IH; exact H].
+Qed.
+
 Lemma loopP16_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
   (H : loopP16 k xs acc = OptPair_some l' r') :
   decode w c (RState_mk true xs (b0 :: b0 :: b0 :: acc)) -[ tm ]->*
     decode w c (RState_mk true l' (b0 :: b0 :: b0 :: r')).
 Proof.
-  revert xs acc H. induction k as [|k IH]; intros xs acc H.
-  - cbn [loopP16] in H. inversion H; subst. apply evstep_refl.
-  - cbn [loopP16] in H. destruct (stripP16 xs) as [|xs'] eqn:Hst.
-    + inversion H; subst. apply evstep_refl.
-    + eapply evstep_trans; [| exact (IH xs' (preR64 acc) H)].
-      cbn [decode decodeList]. rewrite (stripP16_spec w c xs xs' blank Hst), preR64_spec.
-      apply p66_L16.
+  eapply (loopSweep_sound stripP16 preR64 (fun xs acc => decode w c (RState_mk true xs (b0 :: b0 :: b0 :: acc)))); [|exact H].
+  intros src rest dst E. cbn [decode decodeList].
+  rewrite (stripP16_spec w c src rest blank E), preR64_spec. apply p66_L16.
 Qed.
 
 Lemma loopP9_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
@@ -2068,13 +2008,9 @@ Lemma loopP9_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
   decode w c (RState_mk true xs (b0 :: b0 :: b0 :: acc)) -[ tm ]->*
     decode w c (RState_mk true l' (b0 :: b0 :: b0 :: r')).
 Proof.
-  revert xs acc H. induction k as [|k IH]; intros xs acc H.
-  - cbn [loopP9] in H. inversion H; subst. apply evstep_refl.
-  - cbn [loopP9] in H. destruct (stripP9 xs) as [|xs'] eqn:Hst.
-    + inversion H; subst. apply evstep_refl.
-    + eapply evstep_trans; [| exact (IH xs' (preR36 acc) H)].
-      cbn [decode decodeList]. rewrite (stripP9_spec w c xs xs' blank Hst), preR36_spec.
-      apply p66_L9.
+  eapply (loopSweep_sound stripP9 preR36 (fun xs acc => decode w c (RState_mk true xs (b0 :: b0 :: b0 :: acc)))); [|exact H].
+  intros src rest dst E. cbn [decode decodeList].
+  rewrite (stripP9_spec w c src rest blank E), preR36_spec. apply p66_L9.
 Qed.
 
 Lemma loopP29_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
@@ -2082,13 +2018,9 @@ Lemma loopP29_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
   decode w c (RState_mk true xs (b0 :: b0 :: b0 :: b1 :: b1 :: acc)) -[ tm ]->*
     decode w c (RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: r')).
 Proof.
-  revert xs acc H. induction k as [|k IH]; intros xs acc H.
-  - cbn [loopP29] in H. inversion H; subst. apply evstep_refl.
-  - cbn [loopP29] in H. destruct (stripP29 xs) as [|xs'] eqn:Hst.
-    + inversion H; subst. apply evstep_refl.
-    + eapply evstep_trans; [| exact (IH xs' (preR14 acc) H)].
-      cbn [decode decodeList]. rewrite (stripP29_spec w c xs xs' blank Hst), preR14_spec.
-      apply p66_L29.
+  eapply (loopSweep_sound stripP29 preR14 (fun xs acc => decode w c (RState_mk true xs (b0 :: b0 :: b0 :: b1 :: b1 :: acc)))); [|exact H].
+  intros src rest dst E. cbn [decode decodeList].
+  rewrite (stripP29_spec w c src rest blank E), preR14_spec. apply p66_L29.
 Qed.
 
 Lemma loopR63_sound (w : list bool) (c k : nat) (xs acc r' l' : list Chunk)
@@ -2096,13 +2028,9 @@ Lemma loopR63_sound (w : list bool) (c k : nat) (xs acc r' l' : list Chunk)
   decode w c (RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: acc) (b1 :: xs)) -[ tm ]->*
     decode w c (RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: l') (b1 :: r')).
 Proof.
-  revert xs acc H. induction k as [|k IH]; intros xs acc H.
-  - cbn [loopR63] in H. inversion H; subst. apply evstep_refl.
-  - cbn [loopR63] in H. destruct (stripR63 xs) as [|xs'] eqn:Hst.
-    + inversion H; subst. apply evstep_refl.
-    + eapply evstep_trans; [| exact (IH xs' (preP14 acc) H)].
-      cbn [decode decodeList]. rewrite (stripR63_spec w c xs xs' blank Hst), preP14_spec.
-      apply p66_R63.
+  eapply (loopSweep_sound stripR63 preP14 (fun xs acc => decode w c (RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: acc) (b1 :: xs)))); [|exact H].
+  intros src rest dst E. cbn [decode decodeList].
+  rewrite (stripR63_spec w c src rest blank E), preP14_spec. apply p66_R63.
 Qed.
 
 Local Ltac slb0_true IH H :=
@@ -2385,82 +2313,63 @@ Proof.
     exists 0, (decodeList w c restL blank). split; reflexivity.
 Qed.
 
+Lemma matchBit_literal b x :
+  matchBit b x = true -> x = literalChunk b.
+Proof. destruct b, x; cbn; congruence. Qed.
+
+Lemma bridgeSweep_sound w c (view : list Chunk -> list Chunk -> RState)
+    a b d e out
+    (Hop : forall xs acc,
+      decode w c (view (literalChunk a :: literalChunk b ::
+                        literalChunk d :: literalChunk e :: xs) acc)
+      -[ tm ]->* decode w c (view xs (out ++ acc))) :
+  forall xs acc, decode w c (view xs acc)
+    -[ tm ]->* decode w c (bridgeSweep view a b d e out xs acc).
+Proof.
+  induction xs as [xs IH] using list_strong_ind; intros acc.
+  destruct xs as [|x [|y [|z [|t rest]]]]; try apply evstep_refl.
+  cbn [bridgeSweep].
+  destruct (_ && _ && _ && _) eqn:H; [|apply evstep_refl].
+  repeat rewrite Bool.andb_true_iff in H.
+  destruct H as [[[Hx Hy] Hz] Ht].
+  apply matchBit_literal in Hx, Hy, Hz, Ht; subst.
+  eapply evstep_trans; [apply Hop | apply IH; cbn; lia].
+Qed.
+
+Ltac proveBridge step :=
+  lazymatch goal with
+  | |- _ -[ _ ]->* decode ?w ?c (bridgeSweep ?v ?a ?b ?d ?e ?out ?xs ?acc) =>
+      refine (bridgeSweep_sound w c v a b d e out _ xs acc);
+      intros; apply step
+  end.
+
 Lemma br1Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk true l r) -[ tm ]->* decode w c (br1Loop l r).
-Proof.
-  revert r. induction l as [l IH] using list_strong_ind; intros r.
-  destruct l as [|[] l1]; try apply evstep_refl.
-  destruct l1 as [|[] l2]; try apply evstep_refl.
-  destruct l2 as [|[] l3]; try apply evstep_refl.
-  destruct l3 as [|[] l4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br1_step | exact (IH l4 ltac:(cbn; lia) (b0 :: b0 :: b0 :: b1 :: r))].
-Qed.
+Proof. unfold br1Loop; proveBridge br1_step. Qed.
 
 Lemma br2Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk true l r) -[ tm ]->* decode w c (br2Loop l r).
-Proof.
-  revert r. induction l as [l IH] using list_strong_ind; intros r.
-  destruct l as [|[] l1]; try apply evstep_refl.
-  destruct l1 as [|[] l2]; try apply evstep_refl.
-  destruct l2 as [|[] l3]; try apply evstep_refl.
-  destruct l3 as [|[] l4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br2_step | exact (IH l4 ltac:(cbn; lia) (b0 :: b0 :: b0 :: b1 :: r))].
-Qed.
+Proof. unfold br2Loop; proveBridge br2_step. Qed.
 
 Lemma br3Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk false l r) -[ tm ]->* decode w c (br3Loop l r).
-Proof.
-  revert l. induction r as [r IH] using list_strong_ind; intros l.
-  destruct r as [|[] r1]; try apply evstep_refl.
-  destruct r1 as [|[] r2]; try apply evstep_refl.
-  destruct r2 as [|[] r3]; try apply evstep_refl.
-  destruct r3 as [|[] r4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br3_step | exact (IH r4 ltac:(cbn; lia) (b1 :: b0 :: b0 :: b1 :: l))].
-Qed.
+Proof. unfold br3Loop; proveBridge br3_step. Qed.
 
 Lemma br4Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: r)) -[ tm ]->* decode w c (br4Loop l r).
-Proof.
-  revert l. induction r as [r IH] using list_strong_ind; intros l.
-  destruct r as [|[] r1]; try apply evstep_refl.
-  destruct r1 as [|[] r2]; try apply evstep_refl.
-  destruct r2 as [|[] r3]; try apply evstep_refl.
-  destruct r3 as [|[] r4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br4_step | exact (IH r4 ltac:(cbn; lia) (b0 :: b1 :: b0 :: b0 :: l))].
-Qed.
+Proof. unfold br4Loop; proveBridge br4_step. Qed.
 
 Lemma br5Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: r)) -[ tm ]->* decode w c (br5Loop l r).
-Proof.
-  revert l. induction r as [r IH] using list_strong_ind; intros l.
-  destruct r as [|[] r1]; try apply evstep_refl.
-  destruct r1 as [|[] r2]; try apply evstep_refl.
-  destruct r2 as [|[] r3]; try apply evstep_refl.
-  destruct r3 as [|[] r4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br5_step | exact (IH r4 ltac:(cbn; lia) (b0 :: b1 :: b0 :: b0 :: l))].
-Qed.
+Proof. unfold br5Loop; proveBridge br5_step. Qed.
 
 Lemma br6Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b0 :: b1 :: b0 :: r)) -[ tm ]->* decode w c (br6Loop l r).
-Proof.
-  revert l. induction r as [r IH] using list_strong_ind; intros l.
-  destruct r as [|[] r1]; try apply evstep_refl.
-  destruct r1 as [|[] r2]; try apply evstep_refl.
-  destruct r2 as [|[] r3]; try apply evstep_refl.
-  destruct r3 as [|[] r4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br6_step | exact (IH r4 ltac:(cbn; lia) (b0 :: b0 :: b1 :: b0 :: l))].
-Qed.
+Proof. unfold br6Loop; proveBridge br6_step. Qed.
 
 Lemma br7Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk true (b0 :: b1 :: b0 :: b1 :: l) (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r)) -[ tm ]->* decode w c (br7Loop l r).
-Proof.
-  revert r. induction l as [l IH] using list_strong_ind; intros r.
-  destruct l as [|[] l1]; try apply evstep_refl.
-  destruct l1 as [|[] l2]; try apply evstep_refl.
-  destruct l2 as [|[] l3]; try apply evstep_refl.
-  destruct l3 as [|[] l4]; try apply evstep_refl.
-  eapply evstep_trans; [apply br7_step | exact (IH l4 ltac:(cbn; lia) (b1 :: b1 :: b0 :: b1 :: r))].
-Qed.
+Proof. unfold br7Loop; proveBridge br7_step. Qed.
 
 Lemma br1_enter (w : list bool) (c : nat) (l r : list Chunk) :
   decode w c (RState_mk true (b1 :: b1 :: b0 :: b0 :: l) r) -[ tm ]->*
@@ -3700,3 +3609,5 @@ Proof.
            (w0, c0_idx)
            M390.attractor_step).
 Qed.
+
+Print Assumptions nonhalt.
