@@ -1,4 +1,6 @@
-(** * Non-halting proof for 1RB1RF_1LC0RF_1LE0LD_1RC0LB_---1RA_1LB1RA *)
+(** Shared counter-wall invariant for PRs 115–119.
+    Two machines use a four-mode transducer; three use a six-mode
+    transducer that is related to the same [BigF]/[BigD1] rules. *)
 
 From Coq Require Import Bool List Lists.Streams PeanoNat Compare_dec Lia String.
 From BusyCoq Require Import Individual62.
@@ -6,10 +8,7 @@ Import ListNotations.
 
 Set Default Goal Selector "!".
 
-Definition tm : TM := TM_from_str "1RB1RF_1LC0RF_1LE0LD_1RC0LB_---1RA_1LB1RA".
-Arguments tm _ : simpl never.
-
-Module Internal.
+Module CounterWall.
 
 Close Scope sym_scope.
 Open Scope list_scope.
@@ -526,141 +525,69 @@ Qed.
 (* Structural Properties: Bounds, Determinism, NoNonlast0F                    *)
 (* ========================================================================== *)
 
+Scheme BI_F := Induction for BigF Sort Prop
+  with BI_D := Induction for BigD1 Sort Prop.
+Combined Scheme BI_FD from BI_F, BI_D.
+
+(* Structural recursion follows the two actual calls. Their particular
+   rank formula is irrelevant to bounds and functional determinism. *)
+Local Lemma FD_bounds :
+  (forall s rs d R, BigF s rs d R -> d <> 1 /\ R <> []) /\
+  (forall s rs d R, BigD1 s rs d R -> (rs <> [] -> 2 <= d) /\ R <> []).
+Proof.
+  apply BI_FD; intros;
+    try solve [split; [lia | discriminate]];
+    try solve [split; [lia | apply bumpR_nonempty]];
+    try solve [split; [intro h; contradiction (h eq_refl) | discriminate]];
+    try solve [split; [intro; lia | tauto]].
+  all: match goal with
+  | H : (ones _ ++ ?X <> [] -> _) /\ _, Hx : _ /\ ?X <> [] |- _ =>
+      pose proof (proj1 H (append_nonempty_of_right _ _ (proj2 Hx)));
+      split; [lia | exact (proj2 H)]
+  end.
+Qed.
+
 Lemma bigFD_bounds (s : nat) :
   (forall rs dlt R_fin, BigF s rs dlt R_fin -> dlt <> 1 /\ R_fin <> []) /\
   (forall rs dlt' R_fin, BigD1 s rs dlt' R_fin -> (rs <> [] -> 2 <= dlt') /\ R_fin <> []).
+Proof. split; [apply (proj1 FD_bounds) | apply (proj2 FD_bounds)]. Qed.
+
+Local Lemma FD_det :
+  (forall k X d Y, BigF k X d Y -> forall s e Z, BigF s X e Z -> d = e /\ Y = Z) /\
+  (forall k X d Y, BigD1 k X d Y -> forall s e Z, BigD1 s X e Z -> d = e /\ Y = Z).
 Proof.
-  induction s as [m ih] using strong_induction.
-  assert (ihF : forall k rs dlt R_fin, BigF k rs dlt R_fin -> k < m -> dlt <> 1 /\ R_fin <> [])
-    by (intros k ? ? ? h hk; exact (proj1 (ih k hk) _ _ _ h)).
-  assert (ihD : forall k rs dlt' R_fin, BigD1 k rs dlt' R_fin -> k < m -> (rs <> [] -> 2 <= dlt') /\ R_fin <> [])
-    by (intros k ? ? ? h hk; exact (proj2 (ih k hk) _ _ _ h)).
-  clear ih.
-  split.
-  - intros rs dlt R_fin hF.
-    inverts hF as h1 hrem h2.
-    + split; [lia | discriminate].
-    + split; [lia | exact (bumpR_nonempty (bumpR _))].
-    + split; [lia | discriminate].
-    + split; [lia | discriminate].
-    + split; [lia | discriminate].
-    + destruct (ihF _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + destruct (ihF _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + split; [lia | discriminate].
-    + destruct (ihF _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + destruct (ihF _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + split; [lia | discriminate].
-    + destruct (ihF _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + destruct (ihF _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + split; [lia | discriminate].
-    + destruct (ihD _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-    + destruct (ihD _ _ _ _ h1 ltac:(lia)) as [_ hne1].
-      destruct (ihD _ _ _ _ h2 ltac:(lia)) as [hge2 hne2].
-      pose proof (hge2 (append_nonempty_of_right _ _ hne1)).
-      split; [lia | exact hne2].
-  - intros rs dlt' R_fin hD.
-    inverts hD as h1.
-    + split; [intro h; contradiction (h eq_refl) | discriminate].
-    + split; [intro; lia | exact (proj2 (ihF _ _ _ _ h1 ltac:(lia)))].
-    + split; [intro; lia | exact (bumpR_nonempty _)].
-    + split; [intro; lia | exact (proj2 (ihF _ _ _ _ h1 ltac:(lia)))].
-    + split; [intro; lia | exact (proj2 (ihF _ _ _ _ h1 ltac:(lia)))].
-    + split; [intro; lia | exact (proj2 (ihD _ _ _ _ h1 ltac:(lia)))].
+  apply BI_FD;
+    repeat lazymatch goal with
+    | |- forall s e Z, BigF s _ e Z -> _ =>
+      intros s_other e_other Z_other h_other
+    | |- forall s e Z, BigD1 s _ e Z -> _ =>
+      intros s_other e_other Z_other h_other
+    | |- forall _, _ => intro
+    end;
+    inverts h_other as h1 hrem h2;
+    try solve [split; reflexivity].
+  all: try (lazymatch type of h1 with
+    | BigF _ ?X _ _ =>
+      match goal with
+      | IH : forall s e Z, BigF s X e Z -> _ |- _ => destruct (IH _ _ _ h1) as [-> ->]
+      end
+    | BigD1 _ ?X _ _ =>
+      match goal with
+      | IH : forall s e Z, BigD1 s X e Z -> _ |- _ => destruct (IH _ _ _ h1) as [-> ->]
+      end
+  end); try solve [split; reflexivity | lia].
+  all: lazymatch type of h2 with BigD1 _ ?X _ _ =>
+    match goal with IH : forall s e Z, BigD1 s X e Z -> _ |- _ =>
+      destruct (IH _ _ _ h2) as [-> ->]; split; reflexivity
+    end
+  end.
 Qed.
 
 Lemma bigFD_det (s1 : nat) :
   (forall s2 rs dlt1 dlt2 R1 R2, BigF s1 rs dlt1 R1 -> BigF s2 rs dlt2 R2 -> dlt1 = dlt2 /\ R1 = R2) /\
   (forall s2 rs dlt1 dlt2 R1 R2, BigD1 s1 rs dlt1 R1 -> BigD1 s2 rs dlt2 R2 -> dlt1 = dlt2 /\ R1 = R2).
-Proof.
-  induction s1 as [m ih] using strong_induction.
-  assert (ihF : forall k s2 rs dlt1 dlt2 R1 R2,
-    BigF k rs dlt1 R1 -> BigF s2 rs dlt2 R2 -> k < m -> dlt1 = dlt2 /\ R1 = R2)
-    by (intros k ? ? ? ? ? ? ha hb hk; exact (proj1 (ih k hk) _ _ _ _ _ _ ha hb)).
-  assert (ihD : forall k s2 rs dlt1 dlt2 R1 R2,
-    BigD1 k rs dlt1 R1 -> BigD1 s2 rs dlt2 R2 -> k < m -> dlt1 = dlt2 /\ R1 = R2)
-    by (intros k ? ? ? ? ? ? ha hb hk; exact (proj2 (ih k hk) _ _ _ _ _ _ ha hb)).
-  clear ih.
-  split.
-  - intros s2 rs dlt1 dlt2 R1 R2 h1 h2.
-    inverts h1 as ha hr hd; inverts h2 as hb hr2 hd2;
-      try (exact (conj eq_refl eq_refl)).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      exact (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      destruct (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)) as [-> ->].
-      exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      exact (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      destruct (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)) as [-> ->].
-      exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      exact (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      destruct (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)) as [-> ->].
-      exact (conj eq_refl eq_refl).
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      exact (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)).
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; lia.
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->].
-      destruct (ihD _ _ _ _ _ _ _ hd hd2 ltac:(lia)) as [-> ->].
-      exact (conj eq_refl eq_refl).
-  - intros s2 rs dlt1 dlt2 R1 R2 h1 h2.
-    inverts h1 as ha; inverts h2 as hb;
-      try (exact (conj eq_refl eq_refl)).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihF _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-    + destruct (ihD _ _ _ _ _ _ _ ha hb ltac:(lia)) as [-> ->]; exact (conj eq_refl eq_refl).
-Qed.
+Proof. split; intros; [eapply (proj1 FD_det) | eapply (proj2 FD_det)]; eassumption. Qed.
+
 
 Fixpoint NoNonlast0F (rs : list Seg) : Prop :=
   match rs with
@@ -735,58 +662,39 @@ Proof.
   destruct rs as [| x xs]; [exact I | exact (noNonlast0F_tail h)].
 Qed.
 
+(* The tail invariant follows the same mutual call tree as the bounds. *)
+Local Lemma FD_nnf :
+  (forall s X d Y, BigF s X d Y -> NoNonlast0F X -> NoNonlast0F Y) /\
+  (forall s X d Y, BigD1 s X d Y -> NoInterior0F X -> NoNonlast0F Y).
+Proof.
+  apply BI_FD; intros.
+  all: try solve [exact I].
+  all: try match goal with H : NoNonlast0F (_ :: _) |- _ =>
+    pose proof (noNonlast0F_tail H)
+  end.
+  all: repeat match goal with
+  | H : NoNonlast0F ?X -> NoNonlast0F ?Y |- _ =>
+    let S := fresh "hnf" in
+    assert (S : NoNonlast0F Y) by (apply H; solve [eauto 4 using nnf_1F, noNonlast0F_bumpR]);
+    clear H
+  | H : NoInterior0F ?X -> NoNonlast0F ?Y |- _ =>
+    let S := fresh "hnd" in
+    assert (S : NoNonlast0F Y) by
+      (apply H; solve [eauto 4 using noNonlast0F_ones_append, noNonlast0F_imp_noInterior0F]);
+    clear H
+  end.
+  all: try solve [eauto 5 using nnf_0T, nnf_1F, noNonlast0F_tail,
+      noNonlast0F_bumpR, noNonlast0F_ones_append, noNonlast0F_imp_noInterior0F].
+  all: match goal with H : NoNonlast0F ((0,false) :: ?X) |- _ =>
+    destruct X; [exact I | contradiction H]
+  end.
+Qed.
+
 Lemma bigFD_noNonlast0F (s : nat) :
   (forall rs dlt R_fin, BigF s rs dlt R_fin -> NoNonlast0F rs -> NoNonlast0F R_fin) /\
   (forall rs dlt' R_fin, BigD1 s rs dlt' R_fin -> NoInterior0F rs -> NoNonlast0F R_fin).
-Proof.
-  induction s as [m ih] using strong_induction.
-  assert (ihF : forall k rs dlt R_fin,
-    BigF k rs dlt R_fin -> NoNonlast0F rs -> k < m -> NoNonlast0F R_fin)
-    by (intros k ? ? ? h hN hk; exact (proj1 (ih k hk) _ _ _ h hN)).
-  assert (ihD : forall k rs dlt' R_fin,
-    BigD1 k rs dlt' R_fin -> NoInterior0F rs -> k < m -> NoNonlast0F R_fin)
-    by (intros k ? ? ? h hI hk; exact (proj2 (ih k hk) _ _ _ h hI)).
-  clear ih.
-  split.
-  - intros rs dlt R_fin hF hN.
-    inverts hF as h1 hrem h2.
-    + exact I.
-    + match type of hN with NoNonlast0F ((0, false) :: ?Y) => destruct Y; [exact I | contradiction hN] end.
-    + exact (nnf_1F (noNonlast0F_tail hN)).
-    + exact (nnf_0T (noNonlast0F_bumpR (noNonlast0F_tail hN))).
-    + pose proof (ihF _ _ _ _ h1 (noNonlast0F_tail hN) ltac:(lia)) as h1N.
-      exact (nnf_0T (noNonlast0F_ones_append _ h1N)).
-    + pose proof (ihF _ _ _ _ h1 (noNonlast0F_tail hN) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihF _ _ _ _ h1 (noNonlast0F_tail hN) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihF _ _ _ _ h1 (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) ltac:(lia)) as h1N.
-      exact (nnf_0T (noNonlast0F_ones_append _ h1N)).
-    + pose proof (ihF _ _ _ _ h1 (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihF _ _ _ _ h1 (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihF _ _ _ _ h1 (nnf_1F (noNonlast0F_tail hN)) ltac:(lia)) as h1N.
-      exact (nnf_0T (noNonlast0F_ones_append _ h1N)).
-    + pose proof (ihF _ _ _ _ h1 (nnf_1F (noNonlast0F_tail hN)) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihF _ _ _ _ h1 (nnf_1F (noNonlast0F_tail hN)) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihD _ _ _ _ h1 (noNonlast0F_tail hN) ltac:(lia)) as h1N.
-      exact (nnf_0T (noNonlast0F_ones_append _ h1N)).
-    + pose proof (ihD _ _ _ _ h1 (noNonlast0F_tail hN) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-    + pose proof (ihD _ _ _ _ h1 (noNonlast0F_tail hN) ltac:(lia)) as h1N.
-      exact (ihD _ _ _ _ h2 (noNonlast0F_imp_noInterior0F (noNonlast0F_ones_append _ h1N)) ltac:(lia)).
-  - intros rs dlt' R_fin hD hI.
-    inverts hD as h1.
-    + exact I.
-    + exact (ihF _ _ _ _ h1 hI ltac:(lia)).
-    + exact (noNonlast0F_bumpR hI).
-    + exact (ihF _ _ _ _ h1 (noNonlast0F_bumpR (noNonlast0F_bumpR hI)) ltac:(lia)).
-    + exact (ihF _ _ _ _ h1 (nnf_1F hI) ltac:(lia)).
-    + exact (ihD _ _ _ _ h1 hI ltac:(lia)).
-Qed.
+Proof. split; [apply (proj1 FD_nnf) | apply (proj2 FD_nnf)]. Qed.
+
 
 (* ========================================================================== *)
 (* Basic Algebraic Identities and Head Constraints                            *)
@@ -1172,6 +1080,78 @@ Ltac run_steps :=
   [prove_step | fast_simpl_tape];
   repeat (try solve [fast_finish]; fast_step).
 
+Fixpoint rep1 (n : nat) (s : side) : side :=
+  match n with
+  | 0 => s
+  | S n' => S1 >> rep1 n' s
+  end.
+
+Fixpoint encLeft581 (ls : list nat) : side :=
+  match ls with
+  | [] => 0inf
+  | a :: ls' => S1 >> rep1 a (S0 >> encLeft581 ls')
+  end.
+
+Fixpoint encRight581 (rs : list Seg) : side :=
+  match rs with
+  | [] => 0inf
+  | (d, false) :: rs' => S1 >> rep1 d (S0 >> encRight581 rs')
+  | (d, true) :: rs' => S1 >> rep1 d (S0 >> S0 >> encRight581 rs')
+  end.
+
+Definition evalCfg581 (fr bl dl : Q) (c : Cfg581) : Q * tape :=
+  match cfg_mode c with
+  | FR0 => encLeft581 (cfg_L c) {{fr}}> encRight581 (cfg_R c)
+  | BL0 => encLeft581 (cfg_L c) <{{bl}} encRight581 (cfg_R c)
+  | DR0 => encLeft581 (cfg_L c) {{dl}}> encRight581 (cfg_R c)
+  | DL0 => encLeft581 (cfg_L c) <{{dl}} encRight581 (cfg_R c)
+  end.
+
+Lemma encLeft581_bumpL (ls : list nat) :
+  encLeft581 (bumpL ls) = S1 >> encLeft581 ls.
+Proof.
+  destruct ls as [| a ls']; cbn; [rewrite zero_cons_default581 |]; reflexivity.
+Qed.
+
+Lemma encRight581_bumpR (rs : list Seg) :
+  encRight581 (bumpR rs) = S1 >> encRight581 rs.
+Proof.
+  destruct rs as [| [d b] rs']; cbn.
+  - rewrite zero_cons_default581. reflexivity.
+  - destruct b; reflexivity.
+Qed.
+
+Tactic Notation "prove_step581" hyp(c) hyp(h) :=
+  (
+  destruct c as [m ls rs];
+  destruct m;
+  [ destruct rs as [| [d b] rs2];
+    [ idtac | destruct d as [| [| [| d3]]]; destruct b ]
+  | destruct ls as [| [| [| [| a3]]] ls2]; try discriminate h;
+    [ idtac | idtac | destruct ls2 as [| a' ls3] | idtac ]
+  | destruct rs as [| [d b] rs2];
+    [ idtac | destruct d as [| [| [| d3]]]; destruct b ]
+  | destruct ls as [| a ls2];
+    [ idtac | destruct rs as [| [d b] rs2];
+      [ destruct a as [| a1]; [destruct ls2 as [| a' ls3] | idtac]
+      | (* Expose the right-hand digit before reducing the left encoding. *)
+        destruct a as [| a1]; [destruct ls2 as [| a' ls3] | idtac];
+        destruct d as [| [| d2]]; destruct b ] ] ];
+  cbn [step581 cfg_mode cfg_L cfg_R] in h; try discriminate h;
+  inversion h; subst; clear h;
+  unfold evalCfg581;
+  cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1];
+  repeat rewrite encLeft581_bumpL;
+  repeat rewrite encRight581_bumpR;
+  run_steps).
+
+Section Soundness.
+
+Context (tm : TM) (interpret : Cfg581 -> Q * tape).
+
+Hypothesis step581_sound : forall c c', step581 c = Some c' ->
+  interpret c -[ tm ]->+ interpret c'.
+
 Definition Safe (k : nat) (c : Q * tape) : Prop :=
   forall j, j <= k -> ~ halts_in tm c j.
 
@@ -1203,146 +1183,8 @@ Proof.
     exact (Hsafe k k (Nat.le_refl k) Hhalt).
 Qed.
 
-Fixpoint rep1 (n : nat) (s : side) : side :=
-  match n with
-  | 0 => s
-  | S n' => S1 >> rep1 n' s
-  end.
-
-Fixpoint encLeft581 (ls : list nat) : side :=
-  match ls with
-  | [] => 0inf
-  | a :: ls' => S1 >> rep1 a (S0 >> encLeft581 ls')
-  end.
-
-Fixpoint encRight581 (rs : list Seg) : side :=
-  match rs with
-  | [] => 0inf
-  | (d, false) :: rs' => S1 >> rep1 d (S0 >> encRight581 rs')
-  | (d, true) :: rs' => S1 >> rep1 d (S0 >> S0 >> encRight581 rs')
-  end.
-
-Definition evalCfg581 (c : Cfg581) : Q * tape :=
-  match cfg_mode c with
-  | FR0 => encLeft581 (cfg_L c) {{B}}> encRight581 (cfg_R c)
-  | BL0 => encLeft581 (cfg_L c) <{{C}} encRight581 (cfg_R c)
-  | DR0 => encLeft581 (cfg_L c) {{A}}> encRight581 (cfg_R c)
-  | DL0 => encLeft581 (cfg_L c) <{{A}} encRight581 (cfg_R c)
-  end.
-
-Lemma encLeft581_bumpL (ls : list nat) :
-  encLeft581 (bumpL ls) = S1 >> encLeft581 ls.
-Proof.
-  destruct ls as [| a ls']; cbn; [rewrite zero_cons_default581 |]; reflexivity.
-Qed.
-
-Lemma encRight581_bumpR (rs : list Seg) :
-  encRight581 (bumpR rs) = S1 >> encRight581 rs.
-Proof.
-  destruct rs as [| [d b] rs']; cbn.
-  - rewrite zero_cons_default581. reflexivity.
-  - destruct b; reflexivity.
-Qed.
-
-Lemma step581_sound (c c' : Cfg581) (h : step581 c = Some c') :
-  evalCfg581 c -[ tm ]->+ evalCfg581 c'.
-Proof.
-  destruct c as [m ls rs].
-  destruct m.
-  - (* FR0 *)
-    destruct rs as [| [d b] rs2].
-    + cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1]. run_steps.
-    + destruct d as [| [| [| d3]]].
-      * destruct b.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1]. run_steps.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1].
-           repeat rewrite encRight581_bumpR. run_steps.
-      * destruct b.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1].
-           repeat rewrite encRight581_bumpR. run_steps.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-      * cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-        destruct b; unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]; run_steps.
-      * cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-        destruct b; unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]; run_steps.
-  - (* BL0 *)
-    destruct ls as [| a ls2]; [discriminate h |].
-    destruct a as [| [| [| a3]]].
-    + cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 rep1].
-      repeat rewrite encLeft581_bumpL. run_steps.
-    + cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-    + destruct ls2 as [| a' ls3]; [discriminate h |].
-      cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-    + cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-  - (* DR0 *)
-    destruct rs as [| [d b] rs2].
-    + cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581].
-      repeat rewrite encLeft581_bumpL. run_steps.
-    + destruct d as [| [| [| d3]]].
-      * destruct b.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1]. run_steps.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1].
-           repeat rewrite encRight581_bumpR. run_steps.
-      * destruct b.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1].
-           repeat rewrite encLeft581_bumpL. repeat rewrite encRight581_bumpR. run_steps.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1].
-           repeat rewrite encLeft581_bumpL. run_steps.
-      * cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-        destruct b; unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1];
-          repeat rewrite encLeft581_bumpL; run_steps.
-      * cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-        destruct b; unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encRight581 rep1];
-          repeat rewrite encLeft581_bumpL; run_steps.
-  - (* DL0 *)
-    destruct ls as [| a ls2].
-    + cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-      unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 rep1]. run_steps.
-    + destruct rs as [| [d b] rs2].
-      * destruct a as [| a1].
-        -- destruct ls2 as [| a' ls3]; [discriminate h |].
-           cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-        -- cbn [step581 cfg_mode cfg_L cfg_R] in h. inversion h; subst; clear h.
-           unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-      * assert (h_dl :
-          match d, b with
-          | 0, false => Some (mkCfg581 FR0 (S (S a) :: ls2) rs2)
-          | 0, true => Some (mkCfg581 BL0 (S (S a) :: ls2) (bumpR rs2))
-          | 1, _ => Some (mkCfg581 DR0 (S a :: ls2) ((0, b) :: rs2))
-          | S (S d2), _ => Some (mkCfg581 DL0 (S (S a) :: ls2) ((d2, b) :: rs2))
-          end = Some c')
-          by (rewrite <- h; destruct a as [| ?]; [destruct ls2 |]; destruct d as [| [| ?]]; destruct b; reflexivity).
-        clear h; rename h_dl into h.
-        destruct d as [| [| d2]].
-        -- destruct b.
-           ++ inversion h; subst; clear h.
-              unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1].
-              repeat rewrite encRight581_bumpR. run_steps.
-           ++ inversion h; subst; clear h.
-              unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]. run_steps.
-        -- inversion h; subst; clear h.
-           destruct b; unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]; run_steps.
-        -- inversion h; subst; clear h.
-           destruct b; unfold evalCfg581; cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1]; run_steps.
-Qed.
-
 Lemma run581_evstep (k : nat) :
-  forall c c', run581 k c = Some c' -> evalCfg581 c -[ tm ]->* evalCfg581 c'.
+  forall c c', run581 k c = Some c' -> interpret c -[ tm ]->* interpret c'.
 Proof.
   induction k as [| k' ih]; intros c c' h.
   - cbn in h. inversion h; subst. apply evstep_refl.
@@ -1354,37 +1196,8 @@ Proof.
     + exact (ih c1 c' h).
 Qed.
 
-Lemma init_reaches_start_local :
-  c0 -[ tm ]->+ evalCfg581 (mkCfg581 BL0 [0] [(1, false); (0, false)]).
-Proof.
-  unfold c0, tape0, evalCfg581.
-  cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1].
-  run_steps.
-Qed.
-
-Definition wallR0_local : list Seg :=
-  [(0, true); (1, false); (1, false); (2, false);
-   (1, false); (2, false); (1, false); (1, false); (2, false);
-   (0, true); (0, true); (1, false); (1, true); (2, false);
-   (1, false); (1, false); (2, false)].
-
-Lemma start_reaches_wall_local :
-  run581 760 (mkCfg581 BL0 [0] [(1, false); (0, false)]) =
-    Some (mkCfg581 BL0 [1; 3; 2] wallR0_local).
-Proof.
-  vm_compute. reflexivity.
-Qed.
-
-Lemma init_reaches_wall_local :
-  c0 -[ tm ]->+ evalCfg581 (mkCfg581 BL0 [1; 3; 2] wallR0_local).
-Proof.
-  eapply progress_evstep_trans.
-  - exact init_reaches_start_local.
-  - exact (run581_evstep 760 _ _ start_reaches_wall_local).
-Qed.
-
 Lemma safe_of_run581_no_halt (k : nat) :
-  forall c, (forall n, run581 n c <> None) -> Safe k (evalCfg581 c).
+  forall c, (forall n, run581 n c <> None) -> Safe k (interpret c).
 Proof.
   induction k as [k ih] using strong_induction.
   intros c hno.
@@ -1401,13 +1214,16 @@ Proof.
 Qed.
 
 Lemma nonhalt_of_run581_no_halt (c_wall : Cfg581)
-    (hreach : c0 -[ tm ]->+ evalCfg581 c_wall)
+    (hreach : c0 -[ tm ]->+ interpret c_wall)
     (hno : forall n, run581 n c_wall <> None) :
   ~ halts tm c0.
 Proof.
-  exact (nonhalt_of_forall_safe (evalCfg581 c_wall) hreach
+  exact (nonhalt_of_forall_safe (interpret c_wall) hreach
     (fun k => safe_of_run581_no_halt k c_wall hno)).
 Qed.
+
+End Soundness.
+
 
 (* ========================================================================== *)
 (* Master Inversion and Existence Lemmas                                      *)
@@ -1544,146 +1360,94 @@ Proof.
     end.
 Qed.
 
-Lemma disp_of_bigF_aux {s2 dlt1 dlt2 : nat} {R1 R_fin : list Seg}
-    (hrem0 : dlt1 mod 3 = 0)
-    (h2 : BigD1 s2 (ones (dlt1 / 3) ++ R1) dlt2 R_fin) :
-  (dlt1 = 0 /\ BigD1 s2 R1 dlt2 R_fin) \/
-  (dlt1 = 3 /\ exists s', s' < s2 /\ exists dlt3, dlt2 = dlt3 + 2 /\ BigF s' (bumpR (bumpR R1)) dlt3 R_fin) \/
-  (dlt1 mod 3 = 0 /\ 6 <= dlt1 /\ exists s', s' < s2 /\ exists dlt3, dlt2 = dlt3 + 2 /\
-    BigF s' ((3, false) :: ones (dlt1 / 3 - 2) ++ R1) dlt3 R_fin).
+(* The continuation sees only how many 1 blocks were put back on
+   the right. One 1 bumps the following block, two make a leading 3.
+   These are independent of which first call produced the increment. *)
+Definition BurstD1 (s q : nat) (Y : list Seg) (d : nat) (Z : list Seg) : Prop :=
+  match q with
+  | 0 => exists k, k < s /\ BigD1 k Y d Z
+  | 1 => exists k, k < s /\ exists e, d = e + 2 /\ BigF k (bumpR (bumpR Y)) e Z
+  | S (S r) => exists k, k < s /\ exists e, d = e + 2 /\ BigF k ((3,false)::ones r ++ Y) e Z
+  end.
+
+Lemma burstD1_inv {s k q Y d Z} (hk : k < s) (h : BigD1 k (ones q ++ Y) d Z) :
+  BurstD1 s q Y d Z.
 Proof.
-  destruct (Nat.eq_dec dlt1 0) as [-> | h0].
-  - cbn in h2. left. exact (conj eq_refl h2).
-  - destruct (Nat.eq_dec dlt1 3) as [-> | h3].
-    + change (3 / 3) with 1 in h2.
-      destruct (bigD1_oneF_inv h2) as [s' [hs' [dlt3 [hEq hF']]]].
-      right. left. split; [reflexivity |].
-      exists s'. split; [exact hs' | exists dlt3; exact (conj hEq hF')].
-    + assert (hge6 : 6 <= dlt1) by dlia.
-      assert (hdiv : dlt1 / 3 = S (S (dlt1 / 3 - 2))) by dlia.
-      rewrite hdiv in h2.
-      destruct (bigD1_1_1_inv h2) as [s' [hs' [dlt3 [hEq hF']]]].
-      right. right. split; [exact hrem0 | split; [exact hge6 |]].
-      exists s'. split; [exact hs' | exists dlt3; exact (conj hEq hF')].
+  destruct q as [|[|q]]; cbn [BurstD1 ones app] in *.
+  - exists k; auto.
+  - destruct (bigD1_oneF_inv h) as [p [? [e [? ?]]]]. exists p; split; [lia | eauto].
+  - destruct (bigD1_1_1_inv h) as [p [? [e [? ?]]]]. exists p; split; [lia | eauto].
 Qed.
 
-Lemma disp_rem2_of_bigF_aux {s2 dlt1 dlt2 : nat} {R1 R_fin : list Seg}
-    (hrem2 : dlt1 mod 3 = 2)
-    (h2 : BigD1 s2 (ones (S (dlt1 / 3)) ++ R1) dlt2 R_fin) :
-  (dlt1 = 2 /\ exists s', s' < s2 /\ exists dlt3, dlt2 = dlt3 + 2 /\ BigF s' (bumpR (bumpR R1)) dlt3 R_fin) \/
-  (dlt1 mod 3 = 2 /\ 5 <= dlt1 /\ exists s', s' < s2 /\ exists dlt3, dlt2 = dlt3 + 2 /\
-    BigF s' ((3, false) :: ones (dlt1 / 3 - 1) ++ R1) dlt3 R_fin).
+Definition FrontAfter s v Y d Z : Prop :=
+  (v mod 3 = 1 /\ 4 <= v /\ d = 0 /\ Z = (0, true) :: ones (v / 3) ++ Y) \/
+  (v = 2 /\ exists k, k < s /\ exists e, d = e + 2 /\ BigF k (bumpR (bumpR Y)) e Z) \/
+  (v mod 3 = 2 /\ 5 <= v /\ exists k, k < s /\ exists e, d = e + 2 /\
+    BigF k ((3, false) :: ones (v / 3 - 1) ++ Y) e Z) \/
+  (v = 0 /\ exists k, k < s /\ exists e, d = e + 1 /\ BigD1 k Y e Z) \/
+  (v = 3 /\ exists k, k < s /\ exists e, d = e + 3 /\ BigF k (bumpR (bumpR Y)) e Z) \/
+  (v mod 3 = 0 /\ 6 <= v /\ exists k, k < s /\ exists e, d = e + 3 /\
+    BigF k ((3, false) :: ones (v / 3 - 2) ++ Y) e Z).
+
+Lemma frontAfter_two {s k v Y d Z}
+  (hk : k < s) (hv : v mod 3 = 2)
+  (h : BigD1 k (ones (S (v / 3)) ++ Y) d Z) : FrontAfter s v Y d Z.
 Proof.
-  destruct (Nat.eq_dec dlt1 2) as [-> | h2ne].
-  - change (S (2 / 3)) with 1 in h2.
-    destruct (bigD1_oneF_inv h2) as [s' [hs' [dlt3 [hEq hF']]]].
-    left. split; [reflexivity |].
-    exists s'. split; [exact hs' | exists dlt3; exact (conj hEq hF')].
-  - assert (hge5 : 5 <= dlt1) by dlia.
-    assert (hdiv : S (dlt1 / 3) = S (S (dlt1 / 3 - 1))) by dlia.
-    rewrite hdiv in h2.
-    destruct (bigD1_1_1_inv h2) as [s' [hs' [dlt3 [hEq hF']]]].
-    right. split; [exact hrem2 | split; [exact hge5 |]].
-    exists s'. split; [exact hs' | exists dlt3; exact (conj hEq hF')].
+  assert (H := burstD1_inv hk h).
+  destruct (Nat.eq_dec v 2) as [-> | Hne].
+  - right; left. exact (conj eq_refl H).
+  - assert (Hq : S (v / 3) = S (S (v / 3 - 1))) by dlia.
+    rewrite Hq in H. right; right; left. split; [exact hv|split; [dlia|exact H]].
+Qed.
+
+Lemma frontAfter_zero {s k v Y d Z}
+  (hk : k < s) (hv : v mod 3 = 0)
+  (h : BigD1 k (ones (v / 3) ++ Y) d Z) : FrontAfter s v Y (d + 1) Z.
+Proof.
+  assert (H := burstD1_inv hk h).
+  do 3 right.
+  destruct (Nat.eq_dec v 0) as [-> | H0].
+  - left. destruct H as [p [Hp Hd]]. split; [reflexivity| eauto].
+  - right; destruct (Nat.eq_dec v 3) as [-> | H3].
+    + left. destruct H as [p [Hp [e [-> HF]]]].
+      split; [reflexivity|]. exists p; split; [lia | exists e; split; [lia | exact HF]].
+    + assert (Hq : v / 3 = S (S (v / 3 - 2))) by dlia.
+      rewrite Hq in H. destruct H as [p [Hp [e [-> HF]]]].
+      right; split; [exact hv | split; [dlia |]].
+      exists p; split; [lia | exists e; split; [lia | exact HF]].
+Qed.
+
+Lemma bigF_two_inv {s dlt b Y Z} (h : BigF s ((2,b) :: Y) dlt Z) :
+  exists k, k < s /\ exists v X,
+    BigF k (if b then (1,false)::Y else bumpR (bumpR Y)) v X /\
+    FrontAfter s v X dlt Z.
+Proof.
+  destruct b; inverts h as h1 hr h2.
+  all: lazymatch type of h1 with BigF ?k _ ?v ?X =>
+    exists k; split; [lia | exists v, X; split; [exact h1|]] end.
+  all: first [
+    lazymatch goal with |- FrontAfter ?s _ _ _ _ =>
+      lazymatch type of h2 with BigD1 ?k _ _ _ =>
+        let Hk := fresh "Hk" in assert (Hk : k < s) by lia;
+        first [exact (frontAfter_two Hk hr h2) | exact (frontAfter_zero Hk hr h2)]
+      end
+    end
+  | left; pose proof (proj1 (proj1 (bigFD_bounds _) _ _ _ h1));
+    split; [exact hr | split; [dlia | split; reflexivity]]].
 Qed.
 
 Lemma bigF_2_inv {s dlt : nat} {Y R_fin : list Seg}
     (h : BigF s ((2, false) :: Y) dlt R_fin) :
   exists s1, s1 < s /\ exists dlt1 R1, BigF s1 (bumpR (bumpR Y)) dlt1 R1 /\
-    ( (dlt1 mod 3 = 1 /\ 4 <= dlt1 /\ dlt = 0 /\ R_fin = (0, true) :: ones (dlt1 / 3) ++ R1) \/
-      (dlt1 = 2 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 2 /\ BigF s2 (bumpR (bumpR R1)) dlt3 R_fin) \/
-      (dlt1 mod 3 = 2 /\ 5 <= dlt1 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 2 /\
-        BigF s2 ((3, false) :: ones (dlt1 / 3 - 1) ++ R1) dlt3 R_fin) \/
-      (dlt1 = 0 /\ exists s2, s2 < s /\ exists dlt2, dlt = dlt2 + 1 /\ BigD1 s2 R1 dlt2 R_fin) \/
-      (dlt1 = 3 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 3 /\ BigF s2 (bumpR (bumpR R1)) dlt3 R_fin) \/
-      (dlt1 mod 3 = 0 /\ 6 <= dlt1 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 3 /\
-        BigF s2 ((3, false) :: ones (dlt1 / 3 - 2) ++ R1) dlt3 R_fin) ).
-Proof.
-  inverts h as h1 hrem h2.
-  - match type of h1 with
-    | BigF ?k1 _ ?dlt1 ?R1 =>
-      pose proof (proj1 (proj1 (bigFD_bounds _) _ _ _ h1));
-      exists k1; split; [lia |];
-      exists dlt1, R1; split; [exact h1 |];
-      left; split; [exact hrem | split; [dlia | exact (conj eq_refl eq_refl)]]
-    end.
-  - match type of h1 with
-    | BigF ?k1 _ ?dlt1 ?R1 =>
-      destruct (disp_rem2_of_bigF_aux hrem h2)
-        as [[-> [s' [hs' [dlt3 [-> hF']]]]] | [hr [hg [s' [hs' [dlt3 [-> hF']]]]]]];
-      [ exists k1; split; [lia | exists 2, R1; split; [exact h1 |
-          right; left; split; [reflexivity | exists s'; split; [lia | exists dlt3; exact (conj eq_refl hF')]]]]
-      | exists k1; split; [lia | exists dlt1, R1; split; [exact h1 |
-          right; right; left; split; [exact hr | split; [exact hg |
-            exists s'; split; [lia | exists dlt3; exact (conj eq_refl hF')]]]]] ]
-    end.
-  - match type of h1 with
-    | BigF ?k1 _ ?dlt1 ?R1 =>
-      match type of h2 with
-      | BigD1 ?k2 _ ?dlt2 _ =>
-        destruct (disp_of_bigF_aux hrem h2)
-          as [[-> hD] | [[-> [s' [hs' [dlt3 [-> hF']]]]] | [hr [hg [s' [hs' [dlt3 [-> hF']]]]]]]];
-        [ exists k1; split; [lia | exists 0, R1; split; [exact h1 |
-            right; right; right; left; split; [reflexivity |
-              exists k2; split; [lia | exists dlt2; exact (conj eq_refl hD)]]]]
-        | exists k1; split; [lia | exists 3, R1; split; [exact h1 |
-            right; right; right; right; left; split; [reflexivity |
-              exists s'; split; [lia | exists dlt3; split; [lia | exact hF']]]]]
-        | exists k1; split; [lia | exists dlt1, R1; split; [exact h1 |
-            right; right; right; right; right; split; [exact hr | split; [exact hg |
-              exists s'; split; [lia | exists dlt3; split; [lia | exact hF']]]]]] ]
-      end
-    end.
-Qed.
+    FrontAfter s dlt1 R1 dlt R_fin.
+Proof. exact (bigF_two_inv h). Qed.
 
 Lemma bigF_2s_inv {s dlt : nat} {Y R_fin : list Seg}
     (h : BigF s ((2, true) :: Y) dlt R_fin) :
-  exists s1, s1 < s /\ exists dlt1 R1, BigF s1 ((1, false) :: Y) dlt1 R1 /\
-    ( (dlt1 mod 3 = 1 /\ 4 <= dlt1 /\ dlt = 0 /\ R_fin = (0, true) :: ones (dlt1 / 3) ++ R1) \/
-      (dlt1 = 2 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 2 /\ BigF s2 (bumpR (bumpR R1)) dlt3 R_fin) \/
-      (dlt1 mod 3 = 2 /\ 5 <= dlt1 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 2 /\
-        BigF s2 ((3, false) :: ones (dlt1 / 3 - 1) ++ R1) dlt3 R_fin) \/
-      (dlt1 = 0 /\ exists s2, s2 < s /\ exists dlt2, dlt = dlt2 + 1 /\ BigD1 s2 R1 dlt2 R_fin) \/
-      (dlt1 = 3 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 3 /\ BigF s2 (bumpR (bumpR R1)) dlt3 R_fin) \/
-      (dlt1 mod 3 = 0 /\ 6 <= dlt1 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 3 /\
-        BigF s2 ((3, false) :: ones (dlt1 / 3 - 2) ++ R1) dlt3 R_fin) ).
-Proof.
-  inverts h as h1 hrem h2.
-  - match type of h1 with
-    | BigF ?k1 _ ?dlt1 ?R1 =>
-      pose proof (proj1 (proj1 (bigFD_bounds _) _ _ _ h1));
-      exists k1; split; [lia |];
-      exists dlt1, R1; split; [exact h1 |];
-      left; split; [exact hrem | split; [dlia | exact (conj eq_refl eq_refl)]]
-    end.
-  - match type of h1 with
-    | BigF ?k1 _ ?dlt1 ?R1 =>
-      destruct (disp_rem2_of_bigF_aux hrem h2)
-        as [[-> [s' [hs' [dlt3 [-> hF']]]]] | [hr [hg [s' [hs' [dlt3 [-> hF']]]]]]];
-      [ exists k1; split; [lia | exists 2, R1; split; [exact h1 |
-          right; left; split; [reflexivity | exists s'; split; [lia | exists dlt3; exact (conj eq_refl hF')]]]]
-      | exists k1; split; [lia | exists dlt1, R1; split; [exact h1 |
-          right; right; left; split; [exact hr | split; [exact hg |
-            exists s'; split; [lia | exists dlt3; exact (conj eq_refl hF')]]]]] ]
-    end.
-  - match type of h1 with
-    | BigF ?k1 _ ?dlt1 ?R1 =>
-      match type of h2 with
-      | BigD1 ?k2 _ ?dlt2 _ =>
-        destruct (disp_of_bigF_aux hrem h2)
-          as [[-> hD] | [[-> [s' [hs' [dlt3 [-> hF']]]]] | [hr [hg [s' [hs' [dlt3 [-> hF']]]]]]]];
-        [ exists k1; split; [lia | exists 0, R1; split; [exact h1 |
-            right; right; right; left; split; [reflexivity |
-              exists k2; split; [lia | exists dlt2; exact (conj eq_refl hD)]]]]
-        | exists k1; split; [lia | exists 3, R1; split; [exact h1 |
-            right; right; right; right; left; split; [reflexivity |
-              exists s'; split; [lia | exists dlt3; split; [lia | exact hF']]]]]
-        | exists k1; split; [lia | exists dlt1, R1; split; [exact h1 |
-            right; right; right; right; right; split; [exact hr | split; [exact hg |
-              exists s'; split; [lia | exists dlt3; split; [lia | exact hF']]]]]] ]
-      end
-    end.
-Qed.
+  exists s1, s1 < s /\ exists dlt1 R1, BigF s1 ((1,false)::Y) dlt1 R1 /\
+    FrontAfter s dlt1 R1 dlt R_fin.
+Proof. exact (bigF_two_inv h). Qed.
+
 
 Lemma bigF_3s_inv {s dlt : nat} {Y R_fin : list Seg}
     (h : BigF s ((3, true) :: Y) dlt R_fin) :
@@ -2380,51 +2144,6 @@ Proof.
     + right; right; right; reflexivity.
 Qed.
 
-Lemma d1_rem2_258 {m s2 q dlt : nat} {R1 R_fin : list Seg}
-    (ih : InvLt m) (hs2 : s2 < m)
-    (h2 : BigD1 s2 (ones (S q) ++ R1) dlt R_fin)
-    (hN1 : NoNonlast0F R1)
-    (hdlt : dlt = 2 \/ dlt = 5 \/ dlt = 8)
-    (hq0 : q = 0 -> forall s3 dlt3, s3 < s2 -> BigF s3 (bumpR (bumpR R1)) dlt3 R_fin ->
-      (dlt3 = 0 /\ Safe0s R_fin) \/ dlt3 = 4 \/ dlt3 = 10 \/ dlt3 = 13) :
-  Head0s11 R_fin.
-Proof.
-  inverts h2 as hF.
-  match type of hF with
-  | BigF ?s3 _ ?dlt3 _ =>
-    destruct q as [| q'];
-    [ cbn [ones app] in hF;
-      destruct (hq0 eq_refl s3 dlt3 ltac:(lia) hF) as [[? hS] | [h4 | [h10 | h13]]];
-      [ exact (safe0s_to_head0s11 hS) | lia | lia | lia ]
-    | cbn [ones app bumpR] in hF;
-      destruct hdlt as [h2e | [h5e | h8e]];
-      [ assert (dlt3 = 0) by lia; subst dlt3; exact (bigF_3_zero_prefix hF)
-      | eapply (f3_36 (ih s3 ltac:(lia)) hF (noNonlast0F_ones_append q' hN1)); lia
-      | eapply (f3_36 (ih s3 ltac:(lia)) hF (noNonlast0F_ones_append q' hN1)); lia ] ]
-  end.
-Qed.
-
-Lemma d1_rem0_258 {m s2 q dlt2 : nat} {R1 R_fin : list Seg}
-    (ih : InvLt m) (hs2 : s2 < m)
-    (h2 : BigD1 s2 (ones q ++ R1) dlt2 R_fin)
-    (hN1 : NoNonlast0F R1) (hne1 : R1 <> [])
-    (hdlt : dlt2 + 1 = 2 \/ dlt2 + 1 = 5 \/ dlt2 + 1 = 8)
-    (hq0 : q = 0 -> exists Z, R1 = (0, true) :: Z) :
-  Head0s11 R_fin.
-Proof.
-  pose proof (bigD1_ge2_of_ne_nil h2 (append_nonempty_of_right _ _ hne1)) as hge2.
-  destruct q as [| q'].
-  - destruct (hq0 eq_refl) as [Z ->].
-    cbn [ones app] in h2. inverts h2. lia.
-  - inverts h2 as hF.
-    match type of hF with
-    | BigF ?s3 _ ?dlt3 _ =>
-      assert (hN' : NoNonlast0F (bumpR (bumpR (ones q' ++ R1))))
-        by exact (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_ones_append q' hN1)));
-      exact (f_258 (ih s3 ltac:(lia)) hF hN' ltac:(lia))
-    end.
-Qed.
-
 (* ========================================================================== *)
 (* Constructive Helpers and Shorthands                                        *)
 (* ========================================================================== *)
@@ -2469,84 +2188,6 @@ Proof. destruct xs; [exact I | exact h]. Qed.
 Lemma nnf_2T {xs : list Seg} (h : NoNonlast0F xs) : NoNonlast0F ((2, true) :: xs).
 Proof. destruct xs; [exact I | exact h]. Qed.
 
-(* ========================================================================== *)
-(* Group 1 Step Lemmas                                                        *)
-(* ========================================================================== *)
-
-Lemma step_f_258 {m : nat} (ih : InvLt m)
-    {rs : list Seg} {dlt : nat} {R_fin : list Seg}
-    (h : BigF m rs dlt R_fin) (hN : NoNonlast0F rs)
-    (hdlt : dlt = 2 \/ dlt = 5 \/ dlt = 8) : Head0s11 R_fin.
-Proof.
-  inverts h as h1 hrem h2; try lia.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply d1_rem2_258; [exact ih | | exact h2 | exact hN1 | exact hdlt |]; [lia |].
-    intros hq0 ? ? ? ?.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 1) by dlia; subst dlt1 end.
-    contradiction (bigF_ne_one h1).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply d1_rem0_258; [exact ih | | exact h2 | exact hN1 | exact (bigF_out_ne_nil h1) | exact hdlt |]; [lia |].
-    intro hq0; dlia.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply d1_rem2_258; [exact ih | | exact h2 | exact hN1 | exact hdlt |]; [lia |].
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_b2 (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]].
-    + right; left; exact h4.
-    + right; right; left; exact h10.
-    + right; right; right; exact h13.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply d1_rem0_258; [exact ih | | exact h2 | exact hN1 | exact (bigF_out_ne_nil h1) | exact hdlt |]; [lia |].
-    intro hq0.
-    match type of h1 with
-    | BigF _ (bumpR (bumpR ?Y)) ?dlt1 _ =>
-      assert (dlt1 = 0) by dlia; subst dlt1;
-      destruct Y as [| [dx bx] xs];
-      [ exact (bigF_oneF_zero_head h1)
-      | destruct (bigF_ge2_zero_head h1) as [Z hZ]; exists ((1, false) :: Z); exact hZ ]
-    end.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply d1_rem2_258; [exact ih | | exact h2 | exact hN1 | exact hdlt |]; [lia |].
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_1Y (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]].
-    + right; left; exact h4.
-    + right; right; left; exact h10.
-    + right; right; right; exact h13.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply d1_rem0_258; [exact ih | | exact h2 | exact hN1 | exact (bigF_out_ne_nil h1) | exact hdlt |]; [lia |].
-    intro hq0.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 0) by dlia; subst dlt1 end.
-    exact (bigF_oneF_zero_head h1).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    eapply d1_rem2_258; [exact ih | | exact h2 | exact hN1 | exact hdlt |]; [lia |].
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigD1 _ _ ?dlt1 _ => assert (dlt1 = 2) by dlia; subst dlt1 end.
-    exact (bigF_bump2_of_d1_two (s3 := s3) ih ltac:(lia) h1 hNY hF).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    pose proof (bigD1_ge2_of_ne_nil h1 ltac:(discriminate)) as hge2.
-    eapply d1_rem0_258; [exact ih | | exact h2 | exact hN1 | exact (bigD1_out_ne_nil h1) | exact hdlt |]; [lia |].
-    intro hq0; dlia.
-Qed.
-
 Lemma bigF_3_zero_goodF2U {m s : nat} (ih : InvLt m) (hs : s < m)
     {Y R_fin : list Seg} (h : BigF s ((3, false) :: Y) 0 R_fin) (hN : NoNonlast0F Y) :
   exists U, R_fin = (0, true) :: (1, false) :: (1, false) :: U /\ GoodF2U U.
@@ -2565,479 +2206,262 @@ Proof.
     split; [reflexivity | left; exists (ones (dlt4 / 3 - 2) ++ R4); reflexivity].
 Qed.
 
-Lemma step_f_25_goodF2U {m : nat} (ih : InvLt m)
-    {rs : list Seg} {dlt : nat} {R_fin : list Seg}
-    (h : BigF m rs dlt R_fin) (hN : NoNonlast0F rs)
-    (hdlt : dlt = 2 \/ dlt = 5) :
-  exists U, R_fin = (0, true) :: (1, false) :: (1, false) :: U /\ GoodF2U U.
-Proof.
-  assert (hrem2 : forall s2 q R1, BigD1 s2 (ones (S q) ++ R1) dlt R_fin ->
-    s2 < m -> NoNonlast0F R1 ->
-    (q = 0 -> forall s3 dlt3, s3 < s2 -> BigF s3 (bumpR (bumpR R1)) dlt3 R_fin ->
-      (dlt3 = 0 /\ Safe0s R_fin) \/ dlt3 = 4 \/ dlt3 = 10 \/ dlt3 = 13) ->
-    exists U, R_fin = (0, true) :: (1, false) :: (1, false) :: U /\ GoodF2U U).
-  { intros s2 q R1 h2 hs2 hN1 hq0.
-    inverts h2 as hF.
-    match type of hF with BigF ?s3 _ ?dlt3 _ =>
-      destruct q as [| q'];
-      [ cbn [ones app] in hF;
-        destruct (hq0 eq_refl s3 dlt3 ltac:(lia) hF) as [[? [U [-> hSU]]] | [h4 | [h10 | h13]]];
-        [ exists U; exact (conj eq_refl (safeU_to_goodF2U hSU)) | lia | lia | lia ]
-      | cbn [ones app bumpR] in hF;
-        pose proof (noNonlast0F_ones_append q' hN1) as hN_in;
-        destruct hdlt as [h2e | h5e];
-        [ assert (dlt3 = 0) by lia; subst dlt3;
-          exact (bigF_3_zero_goodF2U (s := s3) ih ltac:(lia) hF hN_in)
-        | assert (dlt3 = 3) by lia; subst dlt3;
-          destruct (ones q' ++ R1) as [| [dx bx] xs] eqn:hq';
-          [ destruct (f3_3_non0s (ih s3 ltac:(lia)) hF I (fun _ hEq => ltac:(discriminate hEq))) as [U [-> hSU]];
-            exists U; exact (conj eq_refl (safeU_to_goodF2U hSU))
-          | destruct (dec_seg_0s dx bx) as [[-> ->] | h0s];
-            [ destruct (bigF_3_0s_inv hF) as [s4 [hs4 [dlt4 [hadd4 hF4]]]];
-              assert (dlt4 = 0) by lia; subst dlt4;
-              exact (bigF_3_zero_goodF2U (s := s4) ih ltac:(lia) hF4 (noNonlast0F_tail hN_in))
-            | destruct (f3_3_non0s (ih s3 ltac:(lia)) hF hN_in
-                (fun Z hEq => ltac:(inversion hEq; subst; exact (h0s (conj eq_refl eq_refl))))) as [U [-> hSU]];
-              exists U; exact (conj eq_refl (safeU_to_goodF2U hSU)) ] ] ] ]
-    end. }
-  assert (hrem0 : forall s2 q dlt2 R1, BigD1 s2 (ones q ++ R1) dlt2 R_fin ->
-    s2 < m -> NoNonlast0F R1 -> R1 <> [] ->
-    dlt2 + 1 = dlt ->
-    (q = 0 -> exists Z, R1 = (0, true) :: Z) ->
-    exists U, R_fin = (0, true) :: (1, false) :: (1, false) :: U /\ GoodF2U U).
-  { intros s2 q dlt2 R1 h2 hs2 hN1 hne1 hEqd hq0.
-    pose proof (bigD1_ge2_of_ne_nil h2 (append_nonempty_of_right _ _ hne1)) as hge2.
-    destruct q as [| q'].
-    - destruct (hq0 eq_refl) as [Z ->].
-      cbn [ones app] in h2. inverts h2. lia.
-    - inverts h2 as hF.
-      match type of hF with BigF ?s3 _ ?dlt3 _ =>
-        pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_ones_append q' hN1))) as hN';
-        eapply (f_25_goodF2U (ih s3 ltac:(lia)) hF hN'); lia
-      end. }
-  inverts h as h1 hrem h2; try lia.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 ? ? ? ?.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 1) by dlia; subst dlt1 end.
-    contradiction (bigF_ne_one h1).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1 (bigF_out_ne_nil h1) eq_refl).
-    intro hq0; dlia.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_b2 (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1 (bigF_out_ne_nil h1) eq_refl).
-    intro hq0.
-    match type of h1 with
-    | BigF _ (bumpR (bumpR ?Y)) ?dlt1 _ =>
-      assert (dlt1 = 0) by dlia; subst dlt1;
-      destruct Y as [| [dx bx] xs];
-      [ exact (bigF_oneF_zero_head h1)
-      | destruct (bigF_ge2_zero_head h1) as [Z hZ]; exists ((1, false) :: Z); exact hZ ]
-    end.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_1Y (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1 (bigF_out_ne_nil h1) eq_refl).
-    intro hq0.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 0) by dlia; subst dlt1 end.
-    exact (bigF_oneF_zero_head h1).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigD1 _ _ ?dlt1 _ => assert (dlt1 = 2) by dlia; subst dlt1 end.
-    exact (bigF_bump2_of_d1_two (s3 := s3) ih ltac:(lia) h1 hNY hF).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    pose proof (bigD1_ge2_of_ne_nil h1 ltac:(discriminate)) as hge2.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1 (bigD1_out_ne_nil h1) eq_refl).
-    intro hq0; dlia.
-Qed.
-
 Lemma head0s11_to_head0s1 {rs : list Seg} (h : Head0s11 rs) :
   exists Z, rs = (0, true) :: (1, false) :: Z.
 Proof.
   destruct h as [Z ->]. exists ((1, false) :: Z). reflexivity.
 Qed.
 
-Lemma step_f_pos_0s {m : nat} (ih : InvLt m)
-    {rs : list Seg} {dlt : nat} {R_fin W : list Seg}
-    (h : BigF m rs dlt R_fin) (hN : NoNonlast0F rs) (hpos : 0 < dlt)
-    (h0s : R_fin = (0, true) :: W) :
-  exists Z, R_fin = (0, true) :: (1, false) :: Z.
+(* What the first subcall can hand to the dispatcher. *)
+Inductive Incoming (m : nat) : nat -> list Seg -> Prop :=
+| in_one s i X Y : s < m -> NoNonlast0F X -> BigF s X i Y ->
+    Incoming m (1 + i) Y
+| in_twoF s i X Y : s < m -> NoNonlast0F X -> BigF s (bumpR (bumpR X)) i Y ->
+    Incoming m i Y
+| in_twoT s i X Y : s < m -> NoNonlast0F X -> BigF s ((1,false)::X) i Y ->
+    Incoming m i Y
+| in_three s i d c X Y : s < m -> NoNonlast0F X -> BigD1 s ((d,c)::X) i Y ->
+    Incoming m i Y.
+
+Inductive PostCall (m v : nat) (Y : list Seg) : nat -> list Seg -> Prop :=
+| post_two s i Z : v mod 3 = 2 -> s < m -> BigD1 s (ones (S (v/3)) ++ Y) i Z ->
+    PostCall m v Y i Z
+| post_zero s i Z : v mod 3 = 0 -> s < m -> BigD1 s (ones (v/3) ++ Y) i Z ->
+    PostCall m v Y (i + 1) Z.
+
+Lemma bigF_dispatch m X i Z : BigF m X i Z -> NoNonlast0F X ->
+  i = 0 \/ exists v Y, Incoming m v Y /\ PostCall m v Y i Z.
 Proof.
-  assert (hrem2 : forall s2 q R1, BigD1 s2 (ones (S q) ++ R1) dlt R_fin ->
-    s2 < m -> NoNonlast0F R1 ->
-    (q = 0 -> forall s3 dlt3, s3 < s2 -> BigF s3 (bumpR (bumpR R1)) dlt3 R_fin ->
-      (dlt3 = 0 /\ Safe0s R_fin) \/ dlt3 = 4 \/ dlt3 = 10 \/ dlt3 = 13) ->
-    exists Z, R_fin = (0, true) :: (1, false) :: Z).
-  { intros s2 q R1 h2 hs2 hN1 hq0.
-    inverts h2 as hF.
-    match type of hF with BigF ?s3 _ ?dlt3 _ =>
-      destruct q as [| q'];
-      [ cbn [ones app] in hF;
-        destruct (hq0 eq_refl s3 dlt3 ltac:(lia) hF) as [[? hS] | [-> | [-> | ->]]];
-        [ exact (head0s11_to_head0s1 (safe0s_to_head0s11 hS))
-        | exact (f_pos_0s (ih s3 ltac:(lia)) hF (noNonlast0F_bumpR (noNonlast0F_bumpR hN1)) ltac:(lia) h0s)
-        | exact (f_pos_0s (ih s3 ltac:(lia)) hF (noNonlast0F_bumpR (noNonlast0F_bumpR hN1)) ltac:(lia) h0s)
-        | exact (f_pos_0s (ih s3 ltac:(lia)) hF (noNonlast0F_bumpR (noNonlast0F_bumpR hN1)) ltac:(lia) h0s) ]
-      | cbn [ones app bumpR] in hF;
-        destruct (Nat.eq_dec dlt3 0) as [-> | h0ne];
-        [ exact (head0s11_to_head0s1 (bigF_3_zero_prefix hF))
-        | exact (f_pos_0s (ih s3 ltac:(lia)) hF (nnf_3F (noNonlast0F_ones_append q' hN1)) ltac:(lia) h0s) ] ]
-    end. }
-  assert (hrem0 : forall s2 q dlt2 R1, BigD1 s2 (ones q ++ R1) dlt2 R_fin ->
-    s2 < m -> NoNonlast0F R1 ->
-    (q = 0 -> exists U, R1 = (0, true) :: U) ->
-    (q = 1 -> forall s3, s3 < s2 -> BigF s3 (bumpR (bumpR R1)) 0 R_fin ->
-      exists Z, R_fin = (0, true) :: (1, false) :: Z) ->
-    exists Z, R_fin = (0, true) :: (1, false) :: Z).
-  { intros s2 q dlt2 R1 h2 hs2 hN1 hq0 hq1.
-    destruct q as [| q'].
-    - destruct (hq0 eq_refl) as [U ->].
-      cbn [ones app] in h2. destruct (bigD1_zeroT_inv h2) as [_ hR].
-      rewrite hR in h0s. contradiction (bumpR_head_ne_zeroT _ _ h0s).
-    - inverts h2 as hF.
-      match type of hF with BigF ?s3 _ ?dlt3 _ =>
-        pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_ones_append q' hN1))) as hN';
-        destruct (Nat.eq_dec dlt3 0) as [-> | h0ne];
-        [ destruct q' as [| q''];
-          [ cbn [ones app] in hF; exact (hq1 eq_refl s3 ltac:(lia) hF)
-          | cbn [ones app bumpR] in hF; exact (head0s11_to_head0s1 (bigF_3_zero_prefix hF)) ]
-        | exact (f_pos_0s (ih s3 ltac:(lia)) hF hN' ltac:(lia) h0s) ]
-      end. }
-  inverts h as h1 hrem h2; try lia.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 ? ? ? ?.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 1) by dlia; subst dlt1 end.
-    contradiction (bigF_ne_one h1).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1); [intro hq0; dlia |].
-    intros hq1 s3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hNY (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; lia.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_b2 (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1).
-    + intro hq0.
-      match type of h1 with
-      | BigF _ (bumpR (bumpR ?Y)) ?dlt1 _ =>
-        assert (dlt1 = 0) by dlia; subst dlt1;
-        destruct Y as [| [dx bx] xs];
-        [ exact (bigF_oneF_zero_head h1)
-        | destruct (bigF_ge2_zero_head h1) as [Z hZ]; exists ((1, false) :: Z); exact hZ ]
-      end.
-    + intros hq1 s3 hs3 hF.
-      match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 3) by dlia; subst dlt1 end.
-      destruct (bigF_three_head h1) as [Z ->].
-      cbn [bumpR] in hF.
-      exact (head0s11_to_head0s1 (safe0s_to_head0s11
-        (proj1 (proj2 (proj2 (f2s (ih s3 ltac:(lia)) hF (noNonlast0F_tail hN1)))) eq_refl))).
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_1Y (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1).
-    + intro hq0.
-      match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 0) by dlia; subst dlt1 end.
-      exact (bigF_oneF_zero_head h1).
-    + intros hq1 s3 hs3 hF.
-      match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-        assert (dlt1 = 3) by dlia; subst dlt1;
-        contradiction (proj1 (f1 (ih s1 ltac:(lia)) h1 (noNonlast0F_tail hN)) eq_refl)
-      end.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigD1 _ _ ?dlt1 _ => assert (dlt1 = 2) by dlia; subst dlt1 end.
-    exact (bigF_bump2_of_d1_two (s3 := s3) ih ltac:(lia) h1 hNY hF).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    pose proof (bigD1_ge2_of_ne_nil h1 ltac:(discriminate)) as hge2.
-    eapply (hrem0 _ _ _ _ h2 ltac:(lia) hN1); [intro hq0; dlia |].
-    intros hq1 s3 hs3 hF.
-    match type of h1 with BigD1 _ _ ?dlt1 _ => assert (dlt1 = 3) by dlia; subst dlt1 end.
-    remember 3 as d3 eqn:hd3; inverts h1 as h0f heq; subst; try lia.
-    + match type of h0f with BigF _ _ ?dlt0 _ => assert (dlt0 = 0) by lia; subst dlt0 end.
-      destruct (bigF_zero_head_3 h0f hNY) as [-> | [[Z ->] | [Z ->]]].
-      * cbn [bumpR] in hF.
-        destruct bigF_2_nil_exists as [? hEx].
-        destruct (bigF_det hF hEx) as [h4 _]; lia.
-      * cbn [bumpR] in hF.
-        exact (head0s11_to_head0s1 (safe0s_to_head0s11
-          (proj1 (proj2 (proj2 (f2s (ih s3 ltac:(lia)) hF (noNonlast0F_tail hN1)))) eq_refl))).
-      * cbn [bumpR] in hF.
-        exact (head0s11_to_head0s1 (bigF_3_zero_prefix hF)).
-    + match type of hF with
-      | BigF _ (bumpR (bumpR (bumpR ?Y0))) _ _ =>
-        destruct Y0 as [| [d' b'] xs];
-        [ cbn [bumpR] in hF;
-          destruct bigF_2_nil_exists as [? hEx];
-          destruct (bigF_det hF hEx) as [h4 _]; lia
-        | cbn [bumpR] in hF;
-          destruct (bigF_ge3_zero_prefix hF) as [[Z ->] | [Z ->]];
-          eexists; reflexivity ]
-      end.
-    + match type of h0f with BigF _ _ ?dlt0 _ => assert (dlt0 = 1) by lia; subst dlt0 end.
-      contradiction (bigF_ne_one h0f).
-    + match type of h0f with BigF _ _ ?dlt0 _ => assert (dlt0 = 1) by lia; subst dlt0 end.
-      contradiction (bigF_ne_one h0f).
-    + match type of h0f with BigD1 _ _ ?dlt0 _ => assert (dlt0 = 1) by lia; subst dlt0 end.
-      pose proof (bigD1_ge2_of_ne_nil h0f ltac:(discriminate)); lia.
+  intros hf hn. inverts hf as h1 hrem h2; try (left; reflexivity).
+  all: right; eexists; eexists; split;
+    [ | first [solve [eapply post_two; [exact hrem | | exact h2]; lia]
+              | solve [eapply post_zero; [exact hrem | | exact h2]; lia]] ].
+  all: first [ solve [eapply in_one; [| | exact h1]; [lia | exact (noNonlast0F_tail hn)]]
+             | solve [eapply in_twoF; [| | exact h1]; [lia | exact (noNonlast0F_tail hn)]]
+             | solve [eapply in_twoT; [| | exact h1]; [lia | exact (noNonlast0F_tail hn)]]
+             | solve [eapply in_three; [| | exact h1]; [lia | exact (noNonlast0F_tail hn)]] ].
 Qed.
 
-Lemma step_f_4_head {m : nat} (ih : InvLt m)
-    {rs R_fin : list Seg} (h : BigF m rs 4 R_fin) (hN : NoNonlast0F rs) :
-  R_fin = [(1, false)] \/ (exists W, R_fin = (1, true) :: W) \/ (exists W, R_fin = (2, false) :: W).
+Lemma incoming_nnf m v Y : Incoming m v Y -> NoNonlast0F Y.
 Proof.
-  assert (hrem2_imp : forall s2 q R1, BigD1 s2 (ones (S q) ++ R1) 4 R_fin ->
-    s2 < m -> NoNonlast0F R1 ->
-    (q = 0 -> forall s3 dlt3, s3 < s2 -> BigF s3 (bumpR (bumpR R1)) dlt3 R_fin ->
-      (dlt3 = 0 /\ Safe0s R_fin) \/ dlt3 = 4 \/ dlt3 = 10 \/ dlt3 = 13) ->
-    False).
-  { intros s2 q R1 h2 hs2 hN1 hq0.
-    inverts h2 as hF heq.
-    match type of hF with BigF ?s3 _ ?dlt3 _ =>
-      assert (dlt3 = 2) by lia; subst dlt3;
-      destruct q as [| q'];
-      [ cbn [ones app] in hF;
-        destruct (hq0 eq_refl s3 2 ltac:(lia) hF) as [[h0 _] | [h4 | [h10 | h13]]]; lia
-      | cbn [ones app bumpR] in hF;
-        exact (proj1 (f3_ne24 (ih s3 ltac:(lia)) hF (noNonlast0F_ones_append q' hN1)) eq_refl) ]
-    end. }
-  assert (hrem0_ok : forall s2 q R1,
-    BigD1 s2 (ones q ++ R1) 3 R_fin ->
-    (q = 0 -> R1 = [(0, true); (0, false)] \/ (exists W, R1 = (0, true) :: (0, true) :: W) \/
-      (exists W, R1 = (0, true) :: (1, false) :: W)) ->
-    R_fin = [(1, false)] \/ (exists W, R_fin = (1, true) :: W) \/ (exists W, R_fin = (2, false) :: W)).
-  { intros s2 q R1 h2 hq0.
-    destruct q as [| q'].
-    - cbn [ones app] in h2.
-      destruct (hq0 eq_refl) as [-> | [[W ->] | [W ->]]];
-        remember 3 as d3 eqn:hd3; inverts h2.
-      + left; reflexivity.
-      + right; left; exists W; reflexivity.
-      + right; right; exists W; reflexivity.
-    - remember 3 as d3 eqn:hd3; inverts h2 as hF heq; subst.
-      match type of hF with BigF _ _ ?dlt0 _ => assert (dlt0 = 1) by lia; subst dlt0 end.
-      contradiction (bigF_ne_one hF). }
-  inverts h as h1 hrem h2 heq; try lia.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    exfalso; eapply (hrem2_imp _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 ? ? ? ?.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 1) by dlia; subst dlt1 end.
-    contradiction (bigF_ne_one h1).
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 3) by lia; subst dlt2 end.
-    eapply (hrem0_ok _ _ _ h2). intro hq0; dlia.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    exfalso; eapply (hrem2_imp _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_b2 (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 3) by lia; subst dlt2 end.
-    eapply (hrem0_ok _ _ _ h2). intro hq0.
-    match type of h1 with
-    | BigF _ (bumpR (bumpR ?Y)) ?dlt1 _ =>
-      assert (dlt1 = 0) by dlia; subst dlt1;
-      destruct Y as [| [dx bx] xs];
-      [ cbn [bumpR] in h1;
-        inverts h1 as h0f hrem0f h02 heq2; try lia;
-        [ inverts h0f; left; reflexivity
-        | pose proof (bigD1_ge2_of_ne_nil h02 (append_nonempty_of_right _ _ (bigF_out_ne_nil h0f))); lia ]
-      | destruct (bigF_ge2_zero_head h1) as [W hW];
-        right; right; exists W; exact hW ]
-    end.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    exfalso; eapply (hrem2_imp _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_1Y (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 3) by lia; subst dlt2 end.
-    pose proof (noNonlast0F_tail hN) as hNY.
-    eapply (hrem0_ok _ _ _ h2). intro hq0.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 0) by dlia; subst dlt1 end.
-    inverts h1 as h0f hrem0f h02 heq2; try lia.
-    + match type of h0f with
-      | BigF _ _ ?dlt0 ?R0 =>
-        destruct (Nat.eq_dec dlt0 0) as [-> | h0ne];
-        [ destruct (bigF_zero_head_3 h0f hNY) as [-> | [[W ->] | [W ->]]];
-          [ left; reflexivity
-          | right; left; exists W; reflexivity
-          | right; right; exists W; reflexivity ]
-        | assert (hq0' : 1 <= (1 + dlt0) / 3) by dlia;
-          destruct (ones_pos_cons hq0' R0) as [W hW];
-          right; right; exists W; cbn [app]; rewrite hW; reflexivity ]
-      end.
-    + pose proof (bigD1_ge2_of_ne_nil h02 (append_nonempty_of_right _ _ (bigF_out_ne_nil h0f))); lia.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    exfalso; eapply (hrem2_imp _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigD1 _ _ ?dlt1 _ => assert (dlt1 = 2) by dlia; subst dlt1 end.
-    exact (bigF_bump2_of_d1_two (s3 := s3) ih ltac:(lia) h1 hNY hF).
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 3) by lia; subst dlt2 end.
-    pose proof (bigD1_ge2_of_ne_nil h1 ltac:(discriminate)).
-    eapply (hrem0_ok _ _ _ h2). intro hq0; dlia.
+  intro h. destruct h; eauto using bigF_nnf, bigD1_nnf, nnf_1F, noNonlast0F_bumpR.
 Qed.
 
-Lemma step_f_11 {m : nat} (ih : InvLt m)
-    {rs R_fin : list Seg} (h : BigF m rs 11 R_fin) (hN : NoNonlast0F rs) :
-  Head0s11 R_fin \/ Strong2 R_fin.
+Definition BeforeZero Y :=
+  Y = [(0,true);(0,false)] \/ (exists W, Y = (0,true)::(0,true)::W) \/
+  (exists W, Y = (0,true)::(1,false)::W).
+Definition FourHead Z :=
+  Z = [(1,false)] \/ (exists W, Z = (1,true)::W) \/ (exists W, Z = (2,false)::W).
+Definition ZeroOne Z := exists W, Z = (0,true)::(1,false)::W.
+Definition SmallTwo n Z := (n = 0 /\ Safe0s Z) \/ n = 4 \/ n = 10 \/ n = 13.
+
+Lemma incoming_zero m Y : Incoming m 0 Y -> BeforeZero Y.
 Proof.
-  assert (hrem2 : forall s2 q R1, BigD1 s2 (ones (S q) ++ R1) 11 R_fin ->
-    s2 < m -> NoNonlast0F R1 ->
-    (q = 0 -> forall s3 dlt3, s3 < s2 -> BigF s3 (bumpR (bumpR R1)) dlt3 R_fin ->
-      (dlt3 = 0 /\ Safe0s R_fin) \/ dlt3 = 4 \/ dlt3 = 10 \/ dlt3 = 13) ->
-    Head0s11 R_fin \/ Strong2 R_fin).
-  { intros s2 q R1 h2 hs2 hN1 hq0.
-    inverts h2 as hF heq.
-    match type of hF with BigF ?s3 _ ?dlt3 _ =>
-      assert (dlt3 = 9) by lia; subst dlt3;
-      destruct q as [| q'];
-      [ cbn [ones app] in hF;
-        destruct (hq0 eq_refl s3 9 ltac:(lia) hF) as [[h0 _] | [h4 | [h10 | h13]]]; lia
-      | cbn [ones app bumpR] in hF;
-        exact (f3_9 (ih s3 ltac:(lia)) hF (noNonlast0F_ones_append q' hN1)) ]
-    end. }
-  assert (hrem0 : forall s2 q R1, BigD1 s2 (ones q ++ R1) 10 R_fin ->
-    s2 < m -> NoNonlast0F R1 ->
-    (q = 0 -> exists W, R1 = (0, true) :: W) ->
-    Head0s11 R_fin \/ Strong2 R_fin).
-  { intros s2 q R1 h2 hs2 hN1 hq0.
-    destruct q as [| q'].
-    - destruct (hq0 eq_refl) as [W ->].
-      cbn [ones app] in h2. inverts h2.
-    - inverts h2 as hF heq.
-      match type of hF with BigF ?s3 _ ?dlt3 _ =>
-        assert (dlt3 = 8) by lia; subst dlt3;
-        pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_ones_append q' hN1))) as hN';
-        left; exact (f_258 (ih s3 ltac:(lia)) hF hN' (or_intror (or_intror eq_refl)))
-      end. }
-  inverts h as h1 hrem h2 heq; try lia.
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigF_nnf h1 hNY) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 ? ? ? ?.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 1) by dlia; subst dlt1 end.
-    contradiction (bigF_ne_one h1).
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 10) by lia; subst dlt2 end.
-    pose proof (bigF_nnf h1 (noNonlast0F_tail hN)) as hN1.
-    eapply (hrem0 _ _ _ h2 ltac:(lia) hN1). intro hq0; dlia.
-  - pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_b2 (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 10) by lia; subst dlt2 end.
-    pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    eapply (hrem0 _ _ _ h2 ltac:(lia) hN1). intro hq0.
-    match type of h1 with
-    | BigF _ (bumpR (bumpR ?Y)) ?dlt1 _ =>
-      assert (dlt1 = 0) by dlia; subst dlt1;
-      destruct Y as [| [dx bx] xs];
-      [ exact (bigF_oneF_zero_head h1)
-      | destruct (bigF_ge2_zero_head h1) as [W hW]; exists ((1, false) :: W); exact hW ]
-    end.
-  - pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigF ?s1 _ ?dlt1 _ =>
-      assert (dlt1 = 2) by dlia; subst dlt1;
-      destruct (f_258 (ih s1 ltac:(lia)) h1 hN_1Y (or_introl eq_refl)) as [U ->]
-    end.
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1))) as hNU.
-    cbn [bumpR] in hF.
-    destruct (f2s_11 (ih s3 ltac:(lia)) hF hNU) as [[h4 _] | [[h10 _] | h13]]; auto.
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 10) by lia; subst dlt2 end.
-    pose proof (nnf_1F (noNonlast0F_tail hN)) as hN_1Y.
-    pose proof (bigF_nnf h1 hN_1Y) as hN1.
-    eapply (hrem0 _ _ _ h2 ltac:(lia) hN1). intro hq0.
-    match type of h1 with BigF _ _ ?dlt1 _ => assert (dlt1 = 0) by dlia; subst dlt1 end.
-    exact (bigF_oneF_zero_head h1).
-  - pose proof (noNonlast0F_tail hN) as hNY.
-    pose proof (bigD1_nnf h1 hNY) as hN1.
-    eapply (hrem2 _ _ _ h2 ltac:(lia) hN1).
-    intros hq0 s3 dlt3 hs3 hF.
-    match type of h1 with BigD1 _ _ ?dlt1 _ => assert (dlt1 = 2) by dlia; subst dlt1 end.
-    exact (bigF_bump2_of_d1_two (s3 := s3) ih ltac:(lia) h1 hNY hF).
-  - match type of h2 with BigD1 _ _ ?dlt2 _ => assert (dlt2 = 10) by lia; subst dlt2 end.
-    pose proof (bigD1_nnf h1 (noNonlast0F_tail hN)) as hN1.
-    pose proof (bigD1_ge2_of_ne_nil h1 ltac:(discriminate)) as hge2.
-    eapply (hrem0 _ _ _ h2 ltac:(lia) hN1). intro hq0; dlia.
+  intro h. inverts h as hs hn h.
+  - destruct X as [|[d b] X].
+    + change (BigF s [(1,false)] 0 Y) in h.
+      destruct (bigF_det h (BF_oneF_rem1 BF_nil eq_refl)) as [_ ->].
+      left; reflexivity.
+    + destruct (bigF_ge2_zero_head h) as [W ->]. right; right; eauto.
+  - inverts h as h1 hrem h2; try lia.
+    + match type of h1 with BigF _ _ ?i _ => destruct (Nat.eq_dec i 0) as [-> | hne] end.
+      * destruct (bigF_zero_head_3 h1 hn) as [-> | [[W ->] | [W ->]]].
+        -- left; reflexivity.
+        -- right; left; exists W; reflexivity.
+        -- right; right; exists W; reflexivity.
+      * assert (hq : 1 <= (1 + dlt1) / 3) by dlia.
+        destruct (ones_pos_cons hq R1) as [W ->]. right; right; eauto.
+    + pose proof (bigD1_ge2_of_ne_nil h2 (append_nonempty_of_right _ _ (bigF_out_ne_nil h1))). lia.
+  - pose proof (bigD1_ge2_of_ne_nil h ltac:(discriminate)). lia.
+Qed.
+
+Lemma incoming_two {m Y s n Z} (ih : InvLt m) :
+  Incoming m 2 Y -> s < m -> BigF s (bumpR (bumpR Y)) n Z -> SmallTwo n Z.
+Proof.
+  intros h hs hf. inverts h as ht hn htape.
+  - contradiction (bigF_ne_one htape).
+  - pose proof (bigF_nnf htape (noNonlast0F_bumpR (noNonlast0F_bumpR hn))) as hy.
+    destruct (f_258 (ih _ ht) htape (noNonlast0F_bumpR (noNonlast0F_bumpR hn)) (or_introl eq_refl)) as [W ->].
+    cbn [bumpR] in hf.
+    destruct (f2s_11 (ih _ hs) hf (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hy))))
+      as [[h4 _] | [[h10 _] | h13]]; unfold SmallTwo; auto.
+  - pose proof (bigF_nnf htape (nnf_1F hn)) as hy.
+    destruct (f_258 (ih _ ht) htape (nnf_1F hn) (or_introl eq_refl)) as [W ->].
+    cbn [bumpR] in hf.
+    destruct (f2s_11 (ih _ hs) hf (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hy))))
+      as [[h4 _] | [[h10 _] | h13]]; unfold SmallTwo; auto.
+  - exact (bigF_bump2_of_d1_two ih hs htape hn hf).
+Qed.
+
+Lemma incoming_three {m Y s Z} (ih : InvLt m) :
+  Incoming m 3 Y -> s < m -> BigF s (bumpR (bumpR Y)) 0 Z -> ZeroOne Z.
+Proof.
+  intros h hs hf. inverts h as ht hn htape.
+  - pose proof (bigF_nnf htape hn) as hy.
+    destruct (f_258 (ih _ ht) htape hn (or_introl eq_refl)) as [W ->].
+    cbn [bumpR] in hf.
+    destruct (f2s_11 (ih _ hs) hf (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hy))))
+      as [[h4 _] | [[h10 _] | h13]]; lia.
+  - pose proof (bigF_nnf htape (noNonlast0F_bumpR (noNonlast0F_bumpR hn))) as hy.
+    destruct (bigF_three_head htape) as [W ->]. cbn [bumpR] in hf.
+    exact (head0s11_to_head0s1 (safe0s_to_head0s11
+      (proj1 (proj2 (proj2 (f2s (ih _ hs) hf (noNonlast0F_tail hy)))) eq_refl))).
+  - contradiction (proj1 (f1 (ih _ ht) htape hn) eq_refl).
+  - pose proof (bigD1_nnf htape hn) as hy.
+    remember 3 as d3 eqn:hd3; inverts htape as h0f heq; subst; try lia.
+    + match type of h0f with BigF _ _ ?i _ => assert (i = 0) by lia; subst i end.
+      destruct (bigF_zero_head_3 h0f hn) as [-> | [[W ->] | [W ->]]]; cbn [bumpR] in hf.
+      * destruct bigF_2_nil_exists as [? he]. destruct (bigF_det hf he) as [h4 _]. lia.
+      * exact (head0s11_to_head0s1 (safe0s_to_head0s11
+          (proj1 (proj2 (proj2 (f2s (ih _ hs) hf (noNonlast0F_tail hy)))) eq_refl))).
+      * exact (head0s11_to_head0s1 (bigF_3_zero_prefix hf)).
+    + match type of hf with BigF _ (bumpR (bumpR (bumpR ?Y))) _ _ => destruct Y as [|[d b] Y] end;
+        cbn [bumpR] in hf.
+      * destruct bigF_2_nil_exists as [? he]. destruct (bigF_det hf he) as [h4 _]. lia.
+      * destruct (bigF_ge3_zero_prefix hf) as [[W ->] | [W ->]]; unfold ZeroOne; eauto.
+    + match type of h0f with BigF _ _ ?i _ => assert (i = 1) by lia; subst i end.
+      contradiction (bigF_ne_one h0f).
+    + match type of h0f with BigF _ _ ?i _ => assert (i = 1) by lia; subst i end.
+      contradiction (bigF_ne_one h0f).
+    + pose proof (bigD1_ge2_of_ne_nil h0f ltac:(discriminate)). lia.
+Qed.
+
+(* All five general F invariants see only this view of the last call:
+   many ones become a leading 3; short dispatches use their own contracts. *)
+Inductive ReturnView (m : nat) : nat -> list Seg -> Prop :=
+| rv_zero Z : ReturnView m 0 Z
+| rv_four Z : FourHead Z -> ReturnView m 4 Z
+| rv_three s n a X Z : (a = 2 \/ a = 3) -> s < m -> NoNonlast0F X ->
+    BigF s ((3,false)::X) n Z -> ReturnView m (n+a) Z
+| rv_small_two s n X Z : s < m -> NoNonlast0F X -> BigF s X n Z ->
+    SmallTwo n Z -> ReturnView m (n+2) Z
+| rv_small_zero s n X Z : s < m -> NoNonlast0F X -> BigF s X n Z ->
+    (n = 0 -> ZeroOne Z) -> ReturnView m (n+3) Z.
+
+Lemma last_call_view {m v Y i Z} (ih : InvLt m) :
+  Incoming m v Y -> PostCall m v Y i Z -> ReturnView m i Z.
+Proof.
+  intros hin hp. pose proof (incoming_nnf _ _ _ hin) as hy.
+  destruct hp as [s i Z hmod hs hd | s i Z hmod hs hd].
+  - destruct (v / 3) as [| q] eqn:hq.
+    + destruct (bigD1_oneF_inv hd) as [t [ht [n [-> hf]]]].
+      eapply rv_small_two; [| | exact hf |].
+      1: lia. 1: now repeat apply noNonlast0F_bumpR.
+      assert (v = 2) by dlia. subst v.
+      exact (incoming_two (s := t) ih hin ltac:(lia) hf).
+    + destruct (bigD1_1_1_inv hd) as [t [ht [n [-> hf]]]].
+      eapply rv_three with (s := t) (n := n) (a := 2);
+        [now left | lia | | exact hf]. now apply noNonlast0F_ones_append.
+  - destruct (v / 3) as [| [| q]] eqn:hq.
+    + assert (v = 0) by dlia. subst v. cbn [ones app] in hd.
+      destruct (incoming_zero _ _ hin) as [-> | [[W ->] | [W ->]]];
+        destruct (bigD1_zeroT_inv hd) as [-> ->]; apply rv_four; unfold FourHead;
+        cbn [bumpR]; eauto.
+    + destruct (bigD1_oneF_inv hd) as [t [ht [n [-> hf]]]].
+      replace (n+2+1) with (n+3) by lia.
+      eapply rv_small_zero; [| | exact hf |].
+      1: lia. 1: now repeat apply noNonlast0F_bumpR.
+      intros ->. assert (v = 3) by dlia. subst v.
+      exact (incoming_three (s := t) ih hin ltac:(lia) hf).
+    + destruct (bigD1_1_1_inv hd) as [t [ht [n [-> hf]]]].
+      replace (n+2+1) with (n+3) by lia.
+      eapply rv_three with (s := t) (n := n) (a := 3);
+        [now right | lia | | exact hf]. now apply noNonlast0F_ones_append.
+Qed.
+
+Lemma bigF_return_view {m X i Z} (ih : InvLt m) :
+  BigF m X i Z -> NoNonlast0F X -> ReturnView m i Z.
+Proof.
+  intros hf hn. destruct (bigF_dispatch _ _ _ _ hf hn) as [-> | [v [Y [hin hp]]]].
+  - apply rv_zero.
+  - exact (last_call_view ih hin hp).
+Qed.
+
+Lemma step_f_258 {m X i Z} (ih : InvLt m) :
+  BigF m X i Z -> NoNonlast0F X -> i = 2 \/ i = 5 \/ i = 8 -> Head0s11 Z.
+Proof.
+  intros hf hn hi. destruct (bigF_return_view ih hf hn) as [| |s n a Y Z ha hs hN h|s n Y Z hs hN h hr|s n Y Z hs hN h hr]; try lia.
+  - destruct ha as [-> | ->].
+    + destruct (Nat.eq_dec n 0) as [-> | hn0].
+      * exact (bigF_3_zero_prefix h).
+      * eapply (f3_36 (ih _ hs) h hN); lia.
+    + eapply (f_258 (ih _ hs) h (nnf_3F hN)); lia.
+  - destruct hr as [[-> hS] | [-> | [-> | ->]]]; try lia.
+    exact (safe0s_to_head0s11 hS).
+  - eapply (f_258 (ih _ hs) h hN); lia.
+Qed.
+
+Lemma f3_three_qualified {m s Y Z} (ih : InvLt m) :
+  s < m -> BigF s ((3,false)::Y) 3 Z -> NoNonlast0F Y ->
+  exists U, Z = (0,true)::(1,false)::(1,false)::U /\ GoodF2U U.
+Proof.
+  intros hs hf hn.
+  destruct (dec_head_0s Y) as [[W ->] | hn0].
+  - destruct (bigF_3_0s_inv hf) as [t [ht [n [he h]]]].
+    assert (n=0) by lia. subst n.
+    exact (bigF_3_zero_goodF2U (s := t) ih ltac:(lia) h (noNonlast0F_tail hn)).
+  - destruct (f3_3_non0s (ih _ hs) hf hn hn0) as [W [-> h]].
+    exists W. exact (conj eq_refl (safeU_to_goodF2U h)).
+Qed.
+
+Lemma step_f_25_goodF2U {m X i Z} (ih : InvLt m) :
+  BigF m X i Z -> NoNonlast0F X -> i = 2 \/ i = 5 ->
+  exists U, Z = (0,true)::(1,false)::(1,false)::U /\ GoodF2U U.
+Proof.
+  intros hf hn hi. destruct (bigF_return_view ih hf hn) as [| |s n a Y Z ha hs hN h|s n Y Z hs hN h hr|s n Y Z hs hN h hr]; try lia.
+  - destruct ha as [-> | ->].
+    + destruct (Nat.eq_dec n 0) as [-> | hn0].
+      * exact (bigF_3_zero_goodF2U ih hs h hN).
+      * assert (n=3) by lia. subst n. exact (f3_three_qualified ih hs h hN).
+    + assert (n=2) by lia. subst n.
+      contradiction (proj1 (f3_ne24 (ih _ hs) h hN) eq_refl).
+  - destruct hr as [[-> [W [-> hS]]] | [-> | [-> | ->]]]; try lia.
+    exists W. exact (conj eq_refl (safeU_to_goodF2U hS)).
+  - eapply (f_25_goodF2U (ih _ hs) h hN); lia.
+Qed.
+
+Lemma step_f_pos_0s {m X i Z W} (ih : InvLt m) :
+  BigF m X i Z -> NoNonlast0F X -> 0 < i -> Z = (0,true)::W -> ZeroOne Z.
+Proof.
+  intros hf hn hi he. destruct (bigF_return_view ih hf hn) as [|Z hr|s n a Y Z ha hs hN h|s n Y Z hs hN h hr|s n Y Z hs hN h hr]; try lia.
+  - destruct hr as [-> | [[U ->] | [U ->]]]; discriminate.
+  - destruct (Nat.eq_dec n 0) as [-> | hn0].
+    + exact (head0s11_to_head0s1 (bigF_3_zero_prefix h)).
+    + exact (f_pos_0s (ih _ hs) h (nnf_3F hN) ltac:(lia) he).
+  - destruct hr as [[-> hS] | [-> | [-> | ->]]].
+    + exact (head0s11_to_head0s1 (safe0s_to_head0s11 hS)).
+    + exact (f_pos_0s (ih _ hs) h hN ltac:(lia) he).
+    + exact (f_pos_0s (ih _ hs) h hN ltac:(lia) he).
+    + exact (f_pos_0s (ih _ hs) h hN ltac:(lia) he).
+  - destruct (Nat.eq_dec n 0) as [-> | hn0].
+    + exact (hr eq_refl).
+    + exact (f_pos_0s (ih _ hs) h hN ltac:(lia) he).
+Qed.
+
+Lemma step_f_4_head {m X Z} (ih : InvLt m) :
+  BigF m X 4 Z -> NoNonlast0F X -> FourHead Z.
+Proof.
+  remember 4 as i eqn:hi. intros hf hn.
+  destruct (bigF_return_view ih hf hn) as [|Z hr|s n a Y Z ha hs hN h|s n Y Z hs hN h hr|s n Y Z hs hN h hr]; try lia.
+  - exact hr.
+  - destruct ha as [-> | ->].
+    + assert (n=2) by lia. subst n.
+      contradiction (proj1 (f3_ne24 (ih _ hs) h hN) eq_refl).
+    + assert (n=1) by lia. subst n. contradiction (bigF_ne_one h).
+  - destruct hr as [[-> _] | [-> | [-> | ->]]]; lia.
+  - assert (n=1) by lia. subst n. contradiction (bigF_ne_one h).
+Qed.
+
+Lemma step_f_11 {m X Z} (ih : InvLt m) :
+  BigF m X 11 Z -> NoNonlast0F X -> Head0s11 Z \/ Strong2 Z.
+Proof.
+  remember 11 as i eqn:hi. intros hf hn.
+  destruct (bigF_return_view ih hf hn) as [|Z hr|s n a Y Z ha hs hN h|s n Y Z hs hN h hr|s n Y Z hs hN h hr]; try lia.
+  - destruct ha as [-> | ->].
+    + assert (n=9) by lia. subst n. exact (f3_9 (ih _ hs) h hN).
+    + assert (n=8) by lia. subst n. left. exact (f_258 (ih _ hs) h (nnf_3F hN) (or_intror (or_intror eq_refl))).
+  - destruct hr as [[-> _] | [-> | [-> | ->]]]; lia.
+  - assert (n=8) by lia. subst n. left. exact (f_258 (ih _ hs) h hN (or_intror (or_intror eq_refl))).
 Qed.
 
 (* ========================================================================== *)
@@ -5436,15 +4860,7 @@ Qed.
 Lemma good2_f_dispatch_high {m s s1 dlt dlt1 : nat} {Y R1 R_fin : list Seg}
     (ih : InvLt m) (hs : s <= m) (hs1 : s1 < s)
     (h1 : BigF s1 (bumpR (bumpR Y)) dlt1 R1) (hN_b2 : NoNonlast0F (bumpR (bumpR Y)))
-    (hcases :
-      (dlt1 mod 3 = 1 /\ 4 <= dlt1 /\ dlt = 0 /\ R_fin = (0, true) :: ones (dlt1 / 3) ++ R1) \/
-      (dlt1 = 2 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 2 /\ BigF s2 (bumpR (bumpR R1)) dlt3 R_fin) \/
-      (dlt1 mod 3 = 2 /\ 5 <= dlt1 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 2 /\
-        BigF s2 ((3, false) :: ones (dlt1 / 3 - 1) ++ R1) dlt3 R_fin) \/
-      (dlt1 = 0 /\ exists s2, s2 < s /\ exists dlt2, dlt = dlt2 + 1 /\ BigD1 s2 R1 dlt2 R_fin) \/
-      (dlt1 = 3 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 3 /\ BigF s2 (bumpR (bumpR R1)) dlt3 R_fin) \/
-      (dlt1 mod 3 = 0 /\ 6 <= dlt1 /\ exists s2, s2 < s /\ exists dlt3, dlt = dlt3 + 3 /\
-        BigF s2 ((3, false) :: ones (dlt1 / 3 - 2) ++ R1) dlt3 R_fin))
+    (hcases : FrontAfter s dlt1 R1 dlt R_fin)
     (hne2 : dlt1 <> 2)
     (h5 : dlt1 = 5 -> dlt mod 3 <> 2 /\ (dlt = 4 -> Good4Out R_fin) /\ (dlt = 6 -> Head0s11 R_fin) /\
       (dlt = 7 -> Strong2 R_fin \/ Head0s11 R_fin) /\
@@ -5634,6 +5050,150 @@ Proof.
     exact (good2_f_from_9_hs ih (f3_9 (ih s1 hs1) h1' (nnf_1F hNZ)) hF2 hs2 hN1).
 Qed.
 
+(* The two suffixes needed after a leading 4 have the same call interface. *)
+Definition TightHead (R : list Seg) :=
+  exists U, R = (0, true) :: (1, false) :: (1, false) :: U /\ GoodZero111Head U.
+
+Record FourSeed (d : nat) (R : list Seg) : Prop := {
+  seed_ne2 : d <> 2;
+  seed_0 : d = 0 -> TightHead R;
+  seed_3 : d = 3 -> Head0s11 R;
+  seed_5 : d = 5 -> Head0s111 R;
+  seed_6 : d = 6 -> Head0s11 R \/ Good1Safe R;
+  seed_9 : d = 9 -> Head0s11 R \/ Strong2 R
+}.
+
+Lemma four_seed_2s {m k d U R} (ih : InvLt m) (hk : k < m)
+    (h : BigF k ((2, true) :: U) d R) (hn : NoNonlast0F U) : FourSeed d R.
+Proof.
+  destruct (f2s (ih k hk) h hn) as [h2 [h5 [h0 [h3 [h6 [h9 _]]]]]].
+  constructor; try assumption; [| contradiction].
+  intro hd. destruct (h0 hd) as [V [-> hv]].
+  exists V; split; [reflexivity |].
+  exact (goodF2U_to_goodZero111Head (safeU_to_goodF2U hv)).
+Qed.
+
+Lemma four_seed_3 {m k d U R} (ih : InvLt m) (hk : k < m)
+    (h : BigF k ((3, false) :: U) d R) (hn : NoNonlast0F U) : FourSeed d R.
+Proof.
+  constructor; [exact (proj1 (f3_ne24 (ih k hk) h hn)) | ..]; intro hd.
+  - subst d. destruct (bigF_3_zero_goodF2U ih hk h hn) as [V [-> hv]].
+    exists V; split; [reflexivity | exact (goodF2U_to_goodZero111Head hv)].
+  - exact (f3_36 (ih k hk) h hn (or_introl hd)).
+  - subst d. exact (f3_5_0111 (ih k hk) h hn).
+  - left; exact (f3_36 (ih k hk) h hn (or_intror hd)).
+  - subst d. exact (f3_9 (ih k hk) h hn).
+Qed.
+
+Inductive FourReturn (R : list Seg) : nat -> Prop :=
+  | F4_zero : TightHead R -> FourReturn R 0
+  | F4_three : Head0s11 R -> FourReturn R 3
+  | F4_five : Head0s11 R -> FourReturn R 5
+  | F4_six : Head0s11 R \/ Good1Safe R -> FourReturn R 6
+  | F4_other d : d = 8 \/ d mod 3 = 1 \/ 9 <= d -> FourReturn R d.
+
+Lemma four_return {m k W d R} (ih : InvLt m) (hk : k < m)
+    (h : BigF k ((4, false) :: W) d R) (hn : NoNonlast0F W)
+    (seed : forall j e T, j < k -> BigF j (bumpR (bumpR W)) e T -> FourSeed e T) :
+  FourReturn R d.
+Proof.
+  inverts h as h1 hrem h2.
+  - destruct (bigD1_oneF_inv h1) as [j [hj [e [-> hf]]]].
+    destruct (seed j e _ ltac:(lia) hf) as [hne2 _ _ h5 _ _].
+    apply F4_zero.
+    destruct (Nat.eq_dec e 5) as [-> | hne5].
+    + destruct (h5 eq_refl) as [V ->]. cbn [Nat.div ones app].
+      eexists; split; [reflexivity | right; eexists; reflexivity].
+    + assert (hq : (e + 2) / 3 = S (S (S ((e + 2) / 3 - 3)))) by dlia.
+      rewrite hq. cbn [ones app].
+      eexists; split; [reflexivity | left; intros ? heq; discriminate heq].
+  - destruct (bigD1_oneF_inv h1) as [j [hj [e [-> hf]]]].
+    destruct (seed j e _ ltac:(lia) hf) as [_ h0 h3 _ h6 h9].
+    pose proof (bigF_nnf hf (noNonlast0F_bumpR (noNonlast0F_bumpR hn))) as hnt.
+    destruct (bigD1_oneF_inv h2) as [p [hp [f [-> hg]]]].
+    destruct (Nat.eq_dec e 0) as [-> | hne0].
+    + destruct (h0 eq_refl) as [V [-> hv]].
+      cbn [Nat.div ones app bumpR] in hg.
+      destruct (f2s_11 (ih p ltac:(lia)) hg
+        (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hnt)))) as [[-> h4] | [[-> _] | ->]];
+        try (apply F4_other; right; right; lia).
+      apply F4_six. right; exact (h4 hv).
+    + destruct (Nat.eq_dec e 3) as [-> | hne3].
+      * destruct (h3 eq_refl) as [V ->]. cbn [Nat.div ones app bumpR] in hg.
+        destruct (bigF_3_0s_inv hg) as [q [hq [g [-> hh]]]].
+        destruct (f3_11 (ih q ltac:(lia)) hh
+          (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hnt)))) as [-> | [-> | [-> _]]];
+          try (apply F4_other; right; right; lia).
+        apply F4_five. exact (bigF_3_zero_prefix hh).
+      * destruct (Nat.eq_dec e 6) as [-> | hne6].
+        -- cbn [Nat.div ones app bumpR] in hg. destruct (h6 eq_refl) as [[V ->] | hv].
+           ++ destruct (bigF_3_1_0s_inv hg) as [q [hq [g [-> hh]]]].
+              destruct (f2s_111 (ih q ltac:(lia)) hh
+                (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hnt)))) as [-> _].
+              apply F4_other; right; right; lia.
+           ++ destruct (proj1 (good2_f31 (ih p ltac:(lia)) (good1Safe_to_good2 hv) hg hnt)) as [-> | [-> _]];
+                apply F4_other; right; right; lia.
+        -- destruct (Nat.eq_dec e 9) as [-> | hne9].
+           ++ cbn [Nat.div ones app bumpR] in hg. destruct (h9 eq_refl) as [[V ->] | hv].
+              ** destruct (bigF_det hg (bigF_3_1_1_0s_exists ((1, false) :: (1, false) :: V))) as [-> _].
+                 apply F4_other; right; right; lia.
+              ** destruct (good2_f311 (ih p ltac:(lia)) (proj1 hv) hg hnt) as [-> _].
+                 apply F4_other; right; right; lia.
+           ++ assert (hq : (e + 2) / 3 = S (S (S (S ((e + 2) / 3 - 4))))) by dlia.
+              rewrite hq in hg. cbn [ones app bumpR] in hg.
+              destruct (f3_111 (ih p ltac:(lia)) hg (noNonlast0F_ones_append _ hnt)) as [[-> | ->] _];
+                apply F4_other; right; right; lia.
+  - destruct (bigD1_oneF_inv h1) as [j [hj [e [-> hf]]]].
+    pose proof (bigF_nnf hf (noNonlast0F_bumpR (noNonlast0F_bumpR hn))) as hnt.
+    pose proof (proj1 (proj1 (bigFD_bounds _) _ _ _ hf)) as hne1.
+    assert (hq : (e + 2) / 3 = S (S ((e + 2) / 3 - 2))) by dlia.
+    rewrite hq in h2.
+    destruct (bigD1_1_1_inv h2) as [p [hp [f [-> hg]]]].
+    pose proof (noNonlast0F_ones_append ((e + 2) / 3 - 2) hnt) as hn'.
+    pose proof (f3_ne24 (ih p ltac:(lia)) hg hn') as hne24.
+    destruct (Nat.eq_dec f 0) as [-> | hne0].
+    + apply F4_three. exact (bigF_3_zero_prefix hg).
+    + destruct (Nat.eq_dec f 3) as [-> | hne3].
+      * apply F4_six. left; exact (f3_36 (ih p ltac:(lia)) hg hn' (or_introl eq_refl)).
+      * destruct (Nat.eq_dec f 5) as [-> | hne5].
+        -- apply F4_other; left; lia.
+        -- destruct (Nat.eq_dec f 1) as [-> | hne1']; [contradiction (bigF_ne_one hg) |].
+           destruct (Nat.eq_dec (f mod 3) 1);
+             apply F4_other; right; [left | right]; dlia.
+Qed.
+
+Lemma good2_f_via_four {m W dlt R} (ih : InvLt m)
+    (h : BigF m ((2, false) :: (1, true) :: (1, false) :: W) dlt R)
+    (hn : NoNonlast0F W)
+    (seed : forall j e T, j < m -> BigF j (bumpR (bumpR W)) e T -> FourSeed e T) :
+  dlt mod 3 <> 2 /\ (dlt = 4 -> Good4Out R) /\ (dlt = 6 -> Head0s11 R) /\
+  (dlt = 7 -> Strong2 R \/ Head0s11 R) /\
+  (dlt = 10 -> Good2 R \/ Head0s11 R \/ (exists U, R = (1, true) :: U)).
+Proof.
+  destruct (bigF_2_inv h) as [s [hs [d [T [hF hcases]]]]].
+  assert (hn' : NoNonlast0F (bumpR (bumpR ((1, true) :: (1, false) :: W)))).
+  { cbn [bumpR]. apply nnf_Sd, nnf_1F, hn. }
+  pose proof (bigF_nnf hF hn') as hnT.
+  pose proof hF as hF'. cbn [bumpR] in hF'.
+  destruct (bigF_3s_inv hF') as [k [hk [e [he hg]]]].
+  cbn [bumpR] in hg.
+  pose proof (four_return (k := k) ih ltac:(lia) hg hn (fun j f V hj => seed j f V ltac:(lia))) as hret.
+  eapply (good2_f_dispatch_high ih (Nat.le_refl m) hs hF hn' hcases ltac:(lia)
+    (fun h5 => ltac:(destruct hret as [| | | | ? [? | [? | ?]]]; dlia))
+    (fun h0 => ltac:(lia))).
+  - intros h3 j f hj -> hh.
+    destruct hret as [[U [-> hG]] | | | | ? [? | [? | ?]]]; try dlia.
+    exact (good2_f_from_3_0s11 ih hG hh hj (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hnT)))).
+  - intros h6 j f hj -> hh.
+    destruct hret as [| [U ->] | | | ? [? | [? | ?]]]; try dlia.
+    exact (good2_f_from_6_0s11 ih hh hj (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hnT)))).
+  - intros h9 j f hj -> hh.
+    destruct hret as [| | | hshape | ? [? | [? | ?]]]; try dlia.
+    destruct hshape as [hH | hG].
+    + exact (good2_f_from_9_hs ih (or_introl hH) hh hj hnT).
+    + exact (good2_f_from_9_hs ih (or_intror (good1Safe_to_strong2 hG)) hh hj hnT).
+Qed.
+
 Lemma step_good2_f {m : nat} (ih : InvLt m)
     {G : list Seg} {dlt : nat} {R_fin : list Seg}
     (hG : Good2 G) (h : BigF m G dlt R_fin) (hN : NoNonlast0F G) :
@@ -5744,209 +5304,13 @@ Proof.
     destruct (bigF_det h hEx) as [-> _].
     split_and; dlia.
   - (* G2_c_2_1s_1_0s *)
-    destruct (bigF_2_inv h) as [s1 [hs1 [dlt1 [R1 [h1 hcases]]]]].
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN)))) as hNZ.
-    pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    pose proof h1 as h1'; cbn [bumpR] in h1'.
-    destruct (bigF_3s_inv h1') as [sa [hsa [dlta [hadd1 ha]]]].
-    cbn [bumpR] in ha.
-    assert (h4_info :
-      (dlta = 0 /\ Head0s111 R1) \/
-      (dlta = 3 /\ Head0s11 R1) \/
-      (dlta = 5 /\ Head0s11 R1) \/
-      (dlta = 6 /\ (Head0s11 R1 \/ Good1Safe R1)) \/
-      dlta = 8 \/ dlta mod 3 = 1 \/ 9 <= dlta).
-    { inverts ha as hd1 hremd1 hd2.
-      - match type of hd1 with BigD1 _ _ _ ?R => rename R into Rd1 end; destruct (bigD1_oneF_inv hd1) as [sb [hsb [dltb [-> hb]]]].
-        cbn [bumpR] in hb.
-        pose proof (f2s (ih sb ltac:(lia)) hb hNZ) as hf2s.
-        pose proof (proj1 hf2s) as hne2.
-        pose proof (proj1 (proj2 hf2s)) as hne5.
-        assert (hq3 : (dltb + 2) / 3 = S (S (S ((dltb + 2) / 3 - 3)))) by dlia.
-        rewrite hq3; cbn [ones app].
-        left; split; [reflexivity | exists (ones ((dltb + 2) / 3 - 3) ++ Rd1); reflexivity].
-      - match type of hd1 with BigD1 _ _ _ ?R => rename R into Rd1 end; destruct (bigD1_oneF_inv hd1) as [sb [hsb [dltb [-> hb]]]].
-        cbn [bumpR] in hb.
-        pose proof (bigF_nnf hb (nnf_2T hNZ)) as hNb.
-        pose proof (f2s (ih sb ltac:(lia)) hb hNZ) as hf2s.
-        destruct (bigD1_oneF_inv hd2) as [sc [hsc [dltc [-> hF]]]].
-        destruct (Nat.eq_dec dltb 0) as [-> | h0b];
-          [ destruct (proj1 (proj2 (proj2 hf2s)) eq_refl) as [U [-> hSU]];
-            cbn [Nat.div ones app bumpR] in hF;
-            destruct (f2s_11 (ih sc ltac:(lia)) hF (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hNb))))
-              as [[-> hG1] | [[-> _] | ->]];
-            [ right; right; right; left;
-              exact (conj eq_refl (or_intror (hG1 (goodF2U_to_goodZero111Head (safeU_to_goodF2U hSU)))))
-            | right; right; right; right; right; right; lia
-            | right; right; right; right; right; right; lia ]
-          | destruct (Nat.eq_dec dltb 3) as [-> | h3b];
-            [ destruct (proj1 (proj2 (proj2 (proj2 hf2s))) eq_refl) as [U ->];
-              cbn [Nat.div ones app bumpR] in hF;
-              destruct (bigF_3_0s_inv hF) as [s4 [hs4 [dlt4 [-> hF4]]]];
-              destruct (f3_11 (ih s4 ltac:(lia)) hF4 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hNb))))
-                as [-> | [-> | [-> _]]];
-              [ right; right; left; exact (conj eq_refl (bigF_3_zero_prefix hF4))
-              | right; right; right; right; right; right; lia
-              | right; right; right; right; right; right; lia ]
-            | destruct (Nat.eq_dec dltb 6) as [-> | h6b];
-              [ cbn [Nat.div ones app bumpR] in hF;
-                destruct (proj1 (proj2 (proj2 (proj2 (proj2 hf2s)))) eq_refl) as [[U ->] | hG1];
-                [ destruct (bigF_3_1_0s_inv hF) as [s4 [hs4 [dlt4 [-> hF4]]]];
-                  destruct (f2s_111 (ih s4 ltac:(lia)) hF4 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hNb)))) as [-> _];
-                  right; right; right; right; right; right; lia
-                | destruct (proj1 (good2_f31 (ih sc ltac:(lia)) (good1Safe_to_good2 hG1) hF hNb)) as [-> | [-> _]];
-                  right; right; right; right; right; right; lia ]
-              | destruct (Nat.eq_dec dltb 9) as [-> | h9b];
-                [ cbn [Nat.div ones app bumpR] in hF;
-                  destruct (proj1 (proj2 (proj2 (proj2 (proj2 (proj2 hf2s))))) eq_refl) as [[U ->] | hS];
-                  [ destruct (bigF_det hF (bigF_3_1_1_0s_exists ((1, false) :: (1, false) :: U))) as [-> _];
-                    right; right; right; right; right; right; lia
-                  | destruct (good2_f311 (ih sc ltac:(lia)) (proj1 hS) hF hNb) as [-> _];
-                    right; right; right; right; right; right; lia ]
-                | assert (hq4 : (dltb + 2) / 3 = S (S (S (S ((dltb + 2) / 3 - 4))))) by dlia;
-                  rewrite hq4 in hF; cbn [ones app bumpR] in hF;
-                  destruct (f3_111 (ih sc ltac:(lia)) hF (noNonlast0F_ones_append _ hNb)) as [[-> | ->] _];
-                    right; right; right; right; right; right; lia ] ] ] ].
-      - match type of hd1 with BigD1 _ _ _ ?R => rename R into Rd1 end; destruct (bigD1_oneF_inv hd1) as [sb [hsb [dltb [-> hb]]]].
-        cbn [bumpR] in hb.
-        pose proof (bigF_nnf hb (nnf_2T hNZ)) as hNb.
-        pose proof (proj1 (proj1 (bigFD_bounds _) _ _ _ hb)) as hne1b.
-        assert (hq2 : (dltb + 2) / 3 = S (S ((dltb + 2) / 3 - 2))) by dlia.
-        rewrite hq2 in hd2.
-        destruct (bigD1_1_1_inv hd2) as [sc [hsc [dltc [-> hF]]]].
-        pose proof (noNonlast0F_ones_append ((dltb + 2) / 3 - 2) hNb) as hN_in.
-        pose proof (f3_ne24 (ih sc ltac:(lia)) hF hN_in) as hne24.
-        destruct (Nat.eq_dec dltc 0) as [-> | h0c].
-        + right; left; split; [lia | exact (bigF_3_zero_prefix hF)].
-        + destruct (Nat.eq_dec dltc 3) as [-> | h3c].
-          * right; right; right; left; split; [lia | left; exact (f3_36 (ih sc ltac:(lia)) hF hN_in (or_introl eq_refl))].
-          * destruct (Nat.eq_dec dltc 5) as [-> | h5c].
-            -- right; right; right; right; left; lia.
-            -- destruct (Nat.eq_dec dltc 1) as [-> | h1c]; [contradiction (bigF_ne_one hF) |].
-               destruct (Nat.eq_dec (dltc mod 3) 1) as [hm1 | hm1].
-               ++ right; right; right; right; right; left; dlia.
-               ++ right; right; right; right; right; right; dlia. }
-    eapply (good2_f_dispatch_high ih (Nat.le_refl m) hs1 h1 hN_b2 hcases ltac:(lia)
-      (fun h5 => ltac:(destruct h4_info as [[? _] | [[? _] | [[? _] | [[? _] | [? | [? | ?]]]]]]; dlia))
-      (fun h0 => ltac:(lia))).
-    + intros h3 s2 dlt3 hs2 -> hF2.
-      assert (dlta = 0) by lia.
-      destruct h4_info as [[? [U ->]] | [[? _] | [[? _] | [[? _] | [? | [? | ?]]]]]]; try dlia.
-      assert (hGZ : GoodZero111Head ((1, false) :: U)) by (left; intros ? hEq; discriminate hEq).
-      exact (good2_f_from_3_0s11 ih hGZ hF2 hs2
-        (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1)))).
-    + intros h6 s2 dlt3 hs2 -> hF2.
-      assert (dlta = 3) by lia.
-      destruct h4_info as [[? _] | [[? [U ->]] | [[? _] | [[? _] | [? | [? | ?]]]]]]; try dlia.
-      exact (good2_f_from_6_0s11 ih hF2 hs2 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1)))).
-    + intros h9 s2 dlt3 hs2 -> hF2.
-      assert (dlta = 6) by lia.
-      destruct h4_info as [[? _] | [[? _] | [[? _] | [[? [hH | hG1]] | [? | [? | ?]]]]]]; try dlia.
-      * exact (good2_f_from_9_hs ih (or_introl hH) hF2 hs2 hN1).
-      * exact (good2_f_from_9_hs ih (or_intror (good1Safe_to_strong2 hG1)) hF2 hs2 hN1).
+    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN))) as hW.
+    apply (good2_f_via_four ih h hW).
+    intros j e T hj hT. exact (four_seed_2s ih hj hT (noNonlast0F_tail hW)).
   - (* G2_c_2_1s_1_1 *)
-    destruct (bigF_2_inv h) as [s1 [hs1 [dlt1 [R1 [h1 hcases]]]]].
-    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN)))) as hNZ.
-    pose proof (noNonlast0F_bumpR (noNonlast0F_bumpR (noNonlast0F_tail hN))) as hN_b2.
-    pose proof (bigF_nnf h1 hN_b2) as hN1.
-    pose proof h1 as h1'; cbn [bumpR] in h1'.
-    destruct (bigF_3s_inv h1') as [sa [hsa [dlta [hadd1 ha]]]].
-    cbn [bumpR] in ha.
-    assert (h4_info :
-      (dlta = 0 /\ exists U, R1 = (0, true) :: (1, false) :: (1, false) :: U /\ GoodZero111Head U) \/
-      (dlta = 3 /\ Head0s11 R1) \/
-      (dlta = 5 /\ Head0s11 R1) \/
-      (dlta = 6 /\ (Head0s11 R1 \/ Good1Safe R1)) \/
-      dlta = 8 \/ dlta mod 3 = 1 \/ 9 <= dlta).
-    { inverts ha as hd1 hremd1 hd2.
-      - match type of hd1 with BigD1 _ _ _ ?R => rename R into Rd1 end; destruct (bigD1_oneF_inv hd1) as [sb [hsb [dltb [-> hb]]]].
-        cbn [bumpR] in hb.
-        pose proof (f3_ne24 (ih sb ltac:(lia)) hb hNZ) as hne24.
-        destruct (Nat.eq_dec dltb 5) as [-> | h5b].
-        + destruct (f3_5_0111 (ih sb ltac:(lia)) hb hNZ) as [U ->].
-          cbn [Nat.div ones app].
-          left; split; [reflexivity | exists ((0, true) :: (1, false) :: (1, false) :: (1, false) :: U);
-            split; [reflexivity | right; exists ((1, false) :: (1, false) :: U); reflexivity]].
-        + assert (hq3 : (dltb + 2) / 3 = S (S (S ((dltb + 2) / 3 - 3)))) by dlia.
-          rewrite hq3; cbn [ones app].
-          left; split; [reflexivity | exists ((1, false) :: ones ((dltb + 2) / 3 - 3) ++ Rd1);
-            split; [reflexivity | left; intros ? hEq; discriminate hEq]].
-      - match type of hd1 with BigD1 _ _ _ ?R => rename R into Rd1 end; destruct (bigD1_oneF_inv hd1) as [sb [hsb [dltb [-> hb]]]].
-        cbn [bumpR] in hb.
-        pose proof (bigF_nnf hb (nnf_3F hNZ)) as hNb.
-        destruct (bigD1_oneF_inv hd2) as [sc [hsc [dltc [-> hF]]]].
-        destruct (Nat.eq_dec dltb 0) as [-> | h0b];
-        [ destruct (bigF_3_zero_goodF2U (s := sb) ih ltac:(lia) hb hNZ) as [U [-> hGFU]];
-          cbn [Nat.div ones app bumpR] in hF;
-          destruct (f2s_11 (ih sc ltac:(lia)) hF (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hNb))))
-            as [[-> hG1] | [[-> _] | ->]];
-          [ right; right; right; left;
-            exact (conj eq_refl (or_intror (hG1 (goodF2U_to_goodZero111Head hGFU))))
-          | right; right; right; right; right; right; lia
-          | right; right; right; right; right; right; lia ]
-        | destruct (Nat.eq_dec dltb 3) as [-> | h3b];
-          [ destruct (f3_36 (ih sb ltac:(lia)) hb hNZ (or_introl eq_refl)) as [U ->];
-            cbn [Nat.div ones app bumpR] in hF;
-            destruct (bigF_3_0s_inv hF) as [s4 [hs4 [dlt4 [-> hF4]]]];
-            destruct (f3_11 (ih s4 ltac:(lia)) hF4 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hNb))))
-              as [-> | [-> | [-> _]]];
-            [ right; right; left; exact (conj eq_refl (bigF_3_zero_prefix hF4))
-            | right; right; right; right; right; right; lia
-            | right; right; right; right; right; right; lia ]
-          | destruct (Nat.eq_dec dltb 6) as [-> | h6b];
-            [ destruct (f3_36 (ih sb ltac:(lia)) hb hNZ (or_intror eq_refl)) as [U ->];
-              cbn [Nat.div ones app bumpR] in hF;
-              destruct (bigF_3_1_0s_inv hF) as [s4 [hs4 [dlt4 [-> hF4]]]];
-              destruct (f2s_111 (ih s4 ltac:(lia)) hF4 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hNb)))) as [-> _];
-              right; right; right; right; right; right; lia
-            | destruct (Nat.eq_dec dltb 9) as [-> | h9b];
-              [ cbn [Nat.div ones app bumpR] in hF;
-                destruct (f3_9 (ih sb ltac:(lia)) hb hNZ) as [[U ->] | hS];
-                [ destruct (bigF_det hF (bigF_3_1_1_0s_exists ((1, false) :: (1, false) :: U))) as [-> _];
-                  right; right; right; right; right; right; lia
-                | destruct (good2_f311 (ih sc ltac:(lia)) (proj1 hS) hF hNb) as [-> _];
-                  right; right; right; right; right; right; lia ]
-              | assert (hq4 : (dltb + 2) / 3 = S (S (S (S ((dltb + 2) / 3 - 4))))) by dlia;
-                rewrite hq4 in hF; cbn [ones app bumpR] in hF;
-                destruct (f3_111 (ih sc ltac:(lia)) hF (noNonlast0F_ones_append _ hNb)) as [[-> | ->] _];
-                  right; right; right; right; right; right; lia ] ] ] ].
-      - match type of hd1 with BigD1 _ _ _ ?R => rename R into Rd1 end; destruct (bigD1_oneF_inv hd1) as [sb [hsb [dltb [-> hb]]]].
-        cbn [bumpR] in hb.
-        pose proof (bigF_nnf hb (nnf_3F hNZ)) as hNb.
-        pose proof (f3_ne24 (ih sb ltac:(lia)) hb hNZ) as hne24.
-        pose proof (proj1 (proj1 (bigFD_bounds _) _ _ _ hb)) as hne1b.
-        assert (hq2 : (dltb + 2) / 3 = S (S ((dltb + 2) / 3 - 2))) by dlia.
-        rewrite hq2 in hd2.
-        destruct (bigD1_1_1_inv hd2) as [sc [hsc [dltc [-> hF]]]].
-        pose proof (noNonlast0F_ones_append ((dltb + 2) / 3 - 2) hNb) as hN_in.
-        pose proof (f3_ne24 (ih sc ltac:(lia)) hF hN_in) as hne24c.
-        destruct (Nat.eq_dec dltc 0) as [-> | h0c].
-        + right; left; split; [lia | exact (bigF_3_zero_prefix hF)].
-        + destruct (Nat.eq_dec dltc 3) as [-> | h3c].
-          * right; right; right; left; split; [lia | left; exact (f3_36 (ih sc ltac:(lia)) hF hN_in (or_introl eq_refl))].
-          * destruct (Nat.eq_dec dltc 5) as [-> | h5c].
-            -- right; right; right; right; left; lia.
-            -- destruct (Nat.eq_dec dltc 1) as [-> | h1c]; [contradiction (bigF_ne_one hF) |].
-               destruct (Nat.eq_dec (dltc mod 3) 1) as [hm1 | hm1].
-               ++ right; right; right; right; right; left; dlia.
-               ++ right; right; right; right; right; right; dlia. }
-    eapply (good2_f_dispatch_high ih (Nat.le_refl m) hs1 h1 hN_b2 hcases ltac:(lia)
-      (fun h5 => ltac:(destruct h4_info as [[? _] | [[? _] | [[? _] | [[? _] | [? | [? | ?]]]]]]; dlia))
-      (fun h0 => ltac:(lia))).
-    + intros h3 s2 dlt3 hs2 -> hF2.
-      assert (dlta = 0) by lia.
-      destruct h4_info as [[? [U [-> hGZ]]] | [[? _] | [[? _] | [[? _] | [? | [? | ?]]]]]]; try dlia.
-      exact (good2_f_from_3_0s11 ih hGZ hF2 hs2 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1)))).
-    + intros h6 s2 dlt3 hs2 -> hF2.
-      assert (dlta = 3) by lia.
-      destruct h4_info as [[? _] | [[? [U ->]] | [[? _] | [[? _] | [? | [? | ?]]]]]]; try dlia.
-      exact (good2_f_from_6_0s11 ih hF2 hs2 (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN1)))).
-    + intros h9 s2 dlt3 hs2 -> hF2.
-      assert (dlta = 6) by lia.
-      destruct h4_info as [[? _] | [[? _] | [[? _] | [[? [hH | hG1]] | [? | [? | ?]]]]]]; try dlia.
-      * exact (good2_f_from_9_hs ih (or_introl hH) hF2 hs2 hN1).
-      * exact (good2_f_from_9_hs ih (or_intror (good1Safe_to_strong2 hG1)) hF2 hs2 hN1).
+    pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN))) as hW.
+    apply (good2_f_via_four ih h hW).
+    intros j e T hj hT. exact (four_seed_3 ih hj hT (noNonlast0F_tail hW)).
   - (* G2_c_2_1_0s *)
     destruct (bigF_2_inv h) as [s1 [hs1 [dlt1 [R1 [h1 hcases]]]]].
     pose proof (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN))) as hNZ.
@@ -6436,24 +5800,77 @@ Proof.
   - destruct hf1 as [h0 | [[h9 _] | [[h12 _] | [hm ?]]]]; dlia.
 Qed.
 
-Lemma good2_2_zero_ne4_f31 {sg s2 dlt3 : nat} {Y Rg R_fin : list Seg}
-    (hg : BigF sg ((2, false) :: Y) 0 Rg)
-    (hF2 : BigF s2 (bumpR (bumpR ((0, true) :: Rg))) dlt3 R_fin)
-    (hne4 : forall sa Ra, sa < sg -> BigF sa (bumpR (bumpR Y)) 4 Ra -> False) :
-  (dlt3 + 3 = 7 \/ (dlt3 + 3 = 10 /\ Good2 R_fin)) /\ (Strong2 ((2, false) :: Y) -> Strong2 R_fin).
+(* Only the second segment matters when a zero return follows a leading 2. *)
+Definition Good2Tail Y :=
+  match Y with
+  | (0,false)::X => X = []
+  | (0,true)::_ | (1,_)::_ | (2,false)::_ => True
+  | _ => False
+  end.
+
+Lemma good2_tail_shape Y : Good2 ((2,false)::Y) -> Good2Tail Y.
 Proof.
-  destruct (bigF_2_inv hg) as [sa [hsa [dlta [Ra [ha hca]]]]].
-  destruct hca as [[hrema [hgea [? ->]]] | [[? [? [? [? [hadd _]]]]] |
-    [[? [? [? [? [? [hadd _]]]]]] | [[? [? [? [? [hadd _]]]]] |
-    [[? [? [? [? [hadd _]]]]] | [? [? [? [? [? [hadd _]]]]]]]]]]]; try lia.
-  cbn [bumpR] in hF2.
-  destruct (bigF_det hF2 (bigF_2s_0s_full_exists (ones (dlta / 3) ++ Ra))) as [-> ->].
-  assert (h4ne : dlta <> 4) by (intro h4; subst dlta; exact (hne4 sa Ra hsa ha)).
-  assert (hq2 : dlta / 3 = S (S (dlta / 3 - 2))) by dlia.
-  rewrite hq2; cbn [ones app].
-  split; [left; reflexivity | intro; exact (strong2_of_2_1_1 (ones (dlta / 3 - 2) ++ Ra))].
+  intro h. inverts h as h1; try (exact I || reflexivity).
+  destruct h1 as [h | [[W h] | [h | [h | [[W h] | [[W h] | [[W h] | [[W [h _]] | [W h]]]]]]]]];
+    try discriminate. inversion h. exact I.
 Qed.
 
+Lemma bump_good1_zero G Y : Good1 G -> G = (1,true)::Y ->
+  Strong2 ((2,false)::bumpR Y).
+Proof.
+  intros h he. destruct h as [-> | [[W ->] | [-> | [-> | [[W ->] | [[W ->] | [[W ->] | [[W [-> hv]] | [W ->]]]]]]]]];
+    try discriminate; inversion he; subst; cbn [bumpR];
+    eauto using strong2_of_2_1s_0, strong2_of_2_1s_0s, strong2_of_2_1s_1, strong2_of_2_1s_1_0,
+      strong2_of_2_1s_1_0s, strong2_of_2_1s_1_1, strong2_of_2_2_1_0s_1_1, strong2_of_2_2_1_1_gf.
+Qed.
+
+Lemma bigF_two_zero_result {s Y R} : BigF s ((2,false)::Y) 0 R ->
+  exists t n Z, t < s /\ BigF t (bumpR (bumpR Y)) n Z /\
+    4 <= n /\ n mod 3 = 1 /\ R = (0,true)::ones (n/3) ++ Z.
+Proof.
+  intro hf. destruct (bigF_2_inv hf) as [t [ht [n [Z [h cases]]]]].
+  destruct cases as [[hm [hle [_ ->]]] | [[? [? [? [? [ha _]]]]] |
+    [[? [? [? [? [? [ha _]]]]]] | [[? [? [? [? [ha _]]]]] |
+    [[? [? [? [? [ha _]]]]] | [? [? [? [? [? [ha _]]]]]]]]]]]; try lia.
+  exists t, n, Z. auto.
+Qed.
+
+Lemma good2_inner_four {m t Y Z} (ih : InvLt m) :
+  t < m -> Strong2 ((2,false)::Y) -> NoNonlast0F Y -> BigF t (bumpR (bumpR Y)) 4 Z ->
+  Strong2 ((2,false)::(1,false)::Z).
+Proof.
+  intros ht hstrong hn hf. pose proof (good2_tail_shape _ (proj1 hstrong)) as hshape.
+  destruct Y as [|[[|[|[|d]]] c] Y]; try contradiction hshape; destruct c; try contradiction hshape.
+  - cbn [bumpR] in hf.
+    pose proof (bigF_2s_4_good2_of_strongHead ih (proj2 hstrong Y eq_refl) hf ht (noNonlast0F_tail hn)) as hG.
+    split; [exact hG | intros U h; discriminate h].
+  - change (Y = []) in hshape. subst Y.
+    destruct bigF_2_nil_exists as [t' hf'].
+    destruct (bigF_det hf hf') as [_ ->].
+    exact (strong2_of_2_1_1 []).
+  - cbn [bumpR] in hf.
+    destruct (bigF_3s_inv hf) as [u [hu [i [e h]]]].
+    assert (i=1) by lia. subst i. contradiction (bigF_ne_one h).
+  - exact (False_ind _ (proj2 (f3_ne24 (ih _ ht) hf (noNonlast0F_tail hn)) eq_refl)).
+  - exact (False_ind _ (bigF_4_ne4 ih hf ht (noNonlast0F_tail hn))).
+Qed.
+
+Lemma good2_zero_suffix {m s G R} (ih : InvLt m) :
+  Good2 G -> BigF s G 0 R -> s < m -> NoNonlast0F G ->
+  exists U, R = (0,true)::U /\ (Strong2 G -> Strong2 ((2,false)::U)).
+Proof.
+  intros hg hf hs hn.
+  destruct (good2_head_cases hg) as [[Y ->] | [Y ->]].
+  - inverts hf. exists (bumpR Y). split; [reflexivity | intros _].
+    destruct (good2_good1_or_ge2 hg) as [h | [X h]]; [| discriminate h].
+    exact (bump_good1_zero _ _ h eq_refl).
+  - destruct (bigF_two_zero_result hf) as [t [n [Z [ht [h [hle [hm ->]]]]]]].
+    exists (ones (n/3) ++ Z). split; [reflexivity | intros hstrong].
+    destruct (Nat.eq_dec n 4) as [-> | hne].
+    + exact (good2_inner_four (t := t) ih ltac:(lia) hstrong (noNonlast0F_tail hn) h).
+    + assert (hq : n/3 = S (S (n/3-2))) by dlia.
+      rewrite hq. exact (strong2_of_2_1_1 (ones (n/3-2) ++ Z)).
+Qed.
 Lemma step_good2_f31 {m : nat} (ih : InvLt m)
     {G : list Seg} {dlt : nat} {R_fin : list Seg}
     (hG : Good2 G) (h : BigF m ((3, false) :: (1, false) :: G) dlt R_fin) (hN : NoNonlast0F G) :
@@ -6475,106 +5892,10 @@ Proof.
         pose proof (bigF_nnf hg hN) as hNg;
         destruct (Nat.eq_dec dltg 0) as [-> | h0g];
         [ cbn [Nat.div ones app] in hF2;
-          destruct hG as [? h1g | | | | U | | Z | | | Z | Z | Z | Z | Z | Z | Z | Z hGF | G' hG'];
-          [ destruct h1g as [-> | [[Z ->] | [-> | [-> | [[Z ->] | [[Z ->] | [[Z ->] | [[Z [-> hGF]] | [Z ->]]]]]]]]];
-            [ inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists [(1, true); (0, false)])) as [-> ->];
-              split; [left; reflexivity | intro; exact strong2_of_2_1s_0]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists ((1, true) :: (0, true) :: Z))) as [-> ->];
-              split; [left; reflexivity | intro; exact (strong2_of_2_1s_0s Z)]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists [(1, true); (1, false)])) as [-> ->];
-              split; [left; reflexivity | intro; exact strong2_of_2_1s_1]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists [(1, true); (1, false); (0, false)])) as [-> ->];
-              split; [left; reflexivity | intro; exact strong2_of_2_1s_1_0]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists ((1, true) :: (1, false) :: (0, true) :: Z))) as [-> ->];
-              split; [left; reflexivity | intro; exact (strong2_of_2_1s_1_0s Z)]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists ((1, true) :: (1, false) :: (1, false) :: Z))) as [-> ->];
-              split; [left; reflexivity | intro; exact (strong2_of_2_1s_1_1 Z)]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists
-                ((2, false) :: (1, false) :: (0, true) :: (1, false) :: (1, false) :: Z))) as [-> ->];
-              split; [left; reflexivity | intro; exact (strong2_of_2_2_1_0s_1_1 Z)]
-            | inverts hg; cbn [bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists ((2, false) :: (1, false) :: (1, false) :: Z))) as [-> ->];
-              split; [left; reflexivity | intro; exact (strong2_of_2_2_1_1_gf hGF)]
-            | eapply (good2_2_zero_ne4_f31 hg hF2);
-              intros sa Ra hsa ha; cbn [bumpR] in ha;
-              exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha
-                (nnf_1F (noNonlast0F_tail (noNonlast0F_tail (noNonlast0F_tail hN))))) eq_refl) ]
-          | destruct bigF_2_0_exists as [? hEx];
-            destruct (bigF_det hg hEx) as [? ->]; cbn [bumpR] in hF2;
-            destruct (bigF_det hF2 (bigF_2s_0s_full_exists [(1, false); (1, false)])) as [-> ->];
-            split; [left; reflexivity | intro; exact (strong2_of_2_1_1 ([] : list Seg))]
-          | destruct bigF_2_1_nil_exists as [? hEx];
-            destruct (bigF_det hg hEx) as [? ->]; cbn [bumpR] in hF2;
-            destruct (bigF_det hF2 (bigF_2s_0s_full_exists [(1, false); (1, false); (1, false)])) as [-> ->];
-            split; [left; reflexivity | intro; exact (strong2_of_2_1_1 [(1, false)])]
-          | destruct bigF_2_1_2_exists as [? hEx];
-            destruct (bigF_det hg hEx) as [h4 _]; lia
-          | destruct (bigF_2_inv hg) as [sa [hsa [dlta [Ra [ha hca]]]]];
-            pose proof (noNonlast0F_tail (noNonlast0F_tail hN)) as hNU;
-            destruct hca as [[hrema [hgea [? ->]]] | [[? [? [? [? [hadd _]]]]] |
-              [[? [? [? [? [? [hadd _]]]]]] | [[? [? [? [? [hadd _]]]]] |
-              [[? [? [? [? [hadd _]]]]] | [? [? [? [? [? [hadd _]]]]]]]]]]]; try lia;
-            cbn [bumpR] in hF2;
-            destruct (bigF_det hF2 (bigF_2s_0s_full_exists (ones (dlta / 3) ++ Ra))) as [-> ->];
-            split; [left; reflexivity | intro hS];
-            destruct (Nat.eq_dec dlta 4) as [-> | h4a];
-            [ cbn [bumpR] in ha;
-              pose proof (bigF_2s_4_good2_of_strongHead ih (proj2 hS U eq_refl) ha ltac:(lia) hNU) as hG2;
-              cbn [Nat.div ones app];
-              split; [exact hG2 | intros ? hEq; discriminate hEq]
-            | assert (hq2 : dlta / 3 = S (S (dlta / 3 - 2))) by dlia;
-              rewrite hq2; cbn [ones app]; exact (strong2_of_2_1_1 (ones (dlta / 3 - 2) ++ Ra)) ]
-          | destruct bigF_2_1s_0_exists as [? hEx];
-            destruct (bigF_det hg hEx) as [? ->]; cbn [bumpR] in hF2;
-            destruct (bigF_det hF2 (bigF_2s_0s_full_exists [(1, false); (1, false); (1, false); (1, false)])) as [-> ->];
-            split; [left; reflexivity | intro; exact (strong2_of_2_1_1 [(1, false); (1, false)])]
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            destruct (bigF_3s_inv ha) as [sb [? [dltb [haddb hb]]]];
-            assert (dltb = 1) by lia; subst dltb; exact (bigF_ne_one hb)
-          | destruct bigF_2_1s_1_exists as [? [? hEx]];
-            destruct (bigF_det hg hEx) as [h13 _]; lia
-          | destruct bigF_2_1s_1_0_exists as [? hEx];
-            destruct (bigF_det hg hEx) as [? ->]; cbn [bumpR] in hF2;
-            destruct (bigF_det hF2 (bigF_2s_0s_full_exists
-              [(1, false); (1, false); (1, false); (1, false); (2, false)])) as [-> ->];
-            split; [left; reflexivity | intro; exact (strong2_of_2_1_1 [(1, false); (1, false); (2, false)])]
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            destruct (bigF_3s_inv ha) as [sb [? [dltb [haddb hb]]]];
-            assert (dltb = 1) by lia; subst dltb; exact (bigF_ne_one hb)
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            destruct (bigF_3s_inv ha) as [sb [? [dltb [haddb hb]]]];
-            assert (dltb = 1) by lia; subst dltb; exact (bigF_ne_one hb)
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl)
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl)
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl)
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (bigF_4_ne4 ih ha ltac:(lia) (noNonlast0F_tail (noNonlast0F_tail hN)))
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (bigF_4_ne4 ih ha ltac:(lia) (noNonlast0F_tail (noNonlast0F_tail hN)))
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (bigF_4_ne4 ih ha ltac:(lia) (noNonlast0F_tail (noNonlast0F_tail hN)))
-          | eapply (good2_2_zero_ne4_f31 hg hF2);
-            intros sa Ra hsa ha; cbn [bumpR] in ha;
-            exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl) ]
+          destruct (good2_zero_suffix (s := sg) ih hG hg ltac:(lia) hN) as [U [-> hstrong]];
+          cbn [bumpR] in hF2;
+          destruct (bigF_det hF2 (bigF_2s_0s_full_exists U)) as [-> ->];
+          split; [left; reflexivity | exact hstrong]
         | destruct (Nat.eq_dec dltg 3) as [-> | h3g];
           [ assert (hRg : exists U, Rg = (0, true) :: (1, false) :: (1, false) :: U /\ GoodF2U U) by
               (destruct (good2_head_cases hG) as [[Y ->] | [Y ->]];
@@ -6700,21 +6021,6 @@ Proof.
   - pose proof (bigD1_ge2_of_ne_nil h12 (append_nonempty_of_right _ _ (bigF_out_ne_nil h1f))); lia.
 Qed.
 
-Lemma good2_2_zero_ne4_gsh {sg : nat} {Y Rg : list Seg}
-    (hg : BigF sg ((2, false) :: Y) 0 Rg)
-    (hne4 : forall sa Ra, sa < sg -> BigF sa (bumpR (bumpR Y)) 4 Ra -> False) :
-  GoodStrongHead Rg.
-Proof.
-  destruct (bigF_2_inv hg) as [sa [hsa [dlta [Ra [ha hca]]]]].
-  destruct hca as [[hrema [hgea [? ->]]] | [[? [? [? [? [hadd _]]]]] |
-    [[? [? [? [? [? [hadd _]]]]]] | [[? [? [? [? [hadd _]]]]] |
-    [[? [? [? [? [hadd _]]]]] | [? [? [? [? [? [hadd _]]]]]]]]]]]; try lia.
-  assert (h4ne : dlta <> 4) by (intro h4; subst dlta; exact (hne4 sa Ra hsa ha)).
-  assert (hq2 : dlta / 3 = S (S (dlta / 3 - 2))) by dlia.
-  rewrite hq2; cbn [ones app].
-  right; right; left; eexists; split; [reflexivity | right; exact (G2_c_2_1_1 (ones (dlta / 3 - 2) ++ Ra))].
-Qed.
-
 Lemma step_good2_f3111 {m : nat} (ih : InvLt m)
     {G : list Seg} {dlt : nat} {R_fin : list Seg}
     (hG : Good2 G) (h : BigF m ((3, false) :: (1, false) :: (1, false) :: (1, false) :: G) dlt R_fin)
@@ -6747,84 +6053,12 @@ Proof.
         [ match type of hg with
           | BigF ?sg _ ?dltg ?Rg =>
             destruct (Nat.eq_dec dltg 0) as [-> | h0g];
-            [ cbn [Nat.div ones app bumpR] in hF2;
-              destruct (bigF_det hF2 (bigF_2s_0s_full_exists ((0, true) :: Rg))) as [-> ->];
-              split; [reflexivity | split; [exact (good2_of_2_0s Rg) | intro hS; apply strong2_of_2_0s]];
-              destruct hG as [? h1g | | | | U | | Z | | | Z | Z | Z | Z | Z | Z | Z | Z hGF | G' hG'];
-              [ destruct h1g as [-> | [[Z ->] | [-> | [-> | [[Z ->] | [[Z ->] | [[Z ->] | [[Z [-> hGF]] | [Z ->]]]]]]]]];
-                [ inverts hg; right; right; left; exists [(1, true); (0, false)]; exact (conj eq_refl (or_intror G2_c_2_1s_0))
-                | inverts hg; right; right; left; exists ((1, true) :: (0, true) :: Z); exact (conj eq_refl (or_intror (G2_c_2_1s_0s Z)))
-                | inverts hg; right; right; left; exists [(1, true); (1, false)]; exact (conj eq_refl (or_intror G2_c_2_1s_1))
-                | inverts hg; right; right; left; exists [(1, true); (1, false); (0, false)]; exact (conj eq_refl (or_intror G2_c_2_1s_1_0))
-                | inverts hg; right; right; left; exists ((1, true) :: (1, false) :: (0, true) :: Z);
-                  exact (conj eq_refl (or_intror (G2_c_2_1s_1_0s Z)))
-                | inverts hg; right; right; left; exists ((1, true) :: (1, false) :: (1, false) :: Z);
-                  exact (conj eq_refl (or_intror (G2_c_2_1s_1_1 Z)))
-                | inverts hg; right; right; left; exists ((2, false) :: (1, false) :: (0, true) :: (1, false) :: (1, false) :: Z);
-                  exact (conj eq_refl (or_intror (G2_c_2_2_1_0s_1_1 Z)))
-                | inverts hg; right; right; left; exists ((2, false) :: (1, false) :: (1, false) :: Z);
-                  exact (conj eq_refl (or_intror (G2_c_2_2_1_1_gf hGF)))
-                | eapply (good2_2_zero_ne4_gsh hg);
-                  intros sa Ra hsa ha; cbn [bumpR] in ha;
-                  exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl) ]
-              | destruct bigF_2_0_exists as [? hEx]; destruct (bigF_det hg hEx) as [? ->];
-                right; right; left; exists [(1, false); (1, false)];
-                exact (conj eq_refl (or_intror (G2_c_2_1_1 ([] : list Seg))))
-              | destruct bigF_2_1_nil_exists as [? hEx]; destruct (bigF_det hg hEx) as [? ->];
-                right; right; left; exists [(1, false); (1, false); (1, false)];
-                exact (conj eq_refl (or_intror (G2_c_2_1_1 [(1, false)])))
-              | destruct bigF_2_1_2_exists as [? hEx]; destruct (bigF_det hg hEx) as [h4 _]; lia
-              | destruct (bigF_2_inv hg) as [sa [hsa [dlta [Ra [ha hca]]]]];
-                pose proof (noNonlast0F_tail (noNonlast0F_tail hN)) as hNU;
-                destruct hca as [[hrema [hgea [? ->]]] | [[? [? [? [? [hadd _]]]]] |
-                  [[? [? [? [? [? [hadd _]]]]]] | [[? [? [? [? [hadd _]]]]] |
-                  [[? [? [? [? [hadd _]]]]] | [? [? [? [? [? [hadd _]]]]]]]]]]]; try lia;
-                destruct (Nat.eq_dec dlta 4) as [-> | h4a];
-                [ cbn [bumpR] in ha;
-                  pose proof (bigF_2s_4_good2_of_strongHead ih (proj2 hS U eq_refl) ha ltac:(lia) hNU) as hG2;
-                  cbn [Nat.div ones app];
-                  right; right; left; exists ((1, false) :: Ra); exact (conj eq_refl (or_intror hG2))
-                | assert (hq2 : dlta / 3 = S (S (dlta / 3 - 2))) by dlia;
-                  rewrite hq2; cbn [ones app];
-                  right; right; left; eexists; split; [reflexivity | right; exact (G2_c_2_1_1 (ones (dlta / 3 - 2) ++ Ra))] ]
-              | destruct bigF_2_1s_0_exists as [? hEx]; destruct (bigF_det hg hEx) as [? ->];
-                right; right; left; eexists; split; [reflexivity | right; exact (G2_c_2_1_1 [(1, false); (1, false)])]
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                destruct (bigF_3s_inv ha) as [sb [? [dltb [haddb hb]]]];
-                assert (dltb = 1) by lia; subst dltb; exact (bigF_ne_one hb)
-              | destruct bigF_2_1s_1_exists as [? [? hEx]]; destruct (bigF_det hg hEx) as [h13 _]; lia
-              | destruct bigF_2_1s_1_0_exists as [? hEx]; destruct (bigF_det hg hEx) as [? ->];
-                right; right; left; eexists; split; [reflexivity | right; exact (G2_c_2_1_1 [(1, false); (1, false); (2, false)])]
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                destruct (bigF_3s_inv ha) as [sb [? [dltb [haddb hb]]]];
-                assert (dltb = 1) by lia; subst dltb; exact (bigF_ne_one hb)
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                destruct (bigF_3s_inv ha) as [sb [? [dltb [haddb hb]]]];
-                assert (dltb = 1) by lia; subst dltb; exact (bigF_ne_one hb)
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl)
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl)
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl)
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (bigF_4_ne4 ih ha ltac:(lia) (noNonlast0F_tail (noNonlast0F_tail hN)))
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (bigF_4_ne4 ih ha ltac:(lia) (noNonlast0F_tail (noNonlast0F_tail hN)))
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (bigF_4_ne4 ih ha ltac:(lia) (noNonlast0F_tail (noNonlast0F_tail hN)))
-              | eapply (good2_2_zero_ne4_gsh hg);
-                intros sa Ra hsa ha; cbn [bumpR] in ha;
-                exact (proj2 (f3_ne24 (ih sa ltac:(lia)) ha (noNonlast0F_tail (noNonlast0F_tail hN))) eq_refl) ]
+            [ destruct (good2_zero_suffix (s := sg) ih hG hg ltac:(lia) hN) as [U [-> hstrong]];
+              cbn [Nat.div ones app bumpR] in hF2;
+              destruct (bigF_det hF2 (bigF_2s_0s_full_exists ((0,true)::(0,true)::U))) as [-> ->];
+              split; [reflexivity | split; [apply good2_of_2_0s |]];
+              intro hS; apply strong2_of_2_0s; right; right; left;
+              exists U; split; [reflexivity | right; exact (proj1 (hstrong hS))]
             | assert (hq1 : 1 <= (1 + dltg) / 3) by dlia;
               destruct (ones_pos_cons hq1 Rg) as [W hW];
               rewrite hW in hF2; cbn [bumpR] in hF2;
@@ -6960,6 +6194,104 @@ Proof.
   exact (wall_no_halt_of_bigF_inv StrongWall strongWall_step n rs hW).
 Qed.
 
+End CounterWall.
+Import CounterWall.
+
+Module TM115.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LF_1LC0LA_---1RD_1RF1RE_1LF1RD_1LB0RE").
+Arguments tm _ : simpl never.
+Local Definition interpret := evalCfg581 F B D.
+
+Lemma local_step c c' (h : step581 c = Some c') :
+  interpret c -[ tm ]->+ interpret c'.
+Proof. unfold interpret. prove_step581 c h. Qed.
+
+Lemma init_reaches_start_local :
+  c0 -[ tm ]->+ interpret (mkCfg581 BL0 [1; 0] [(0, false)]).
+Proof.
+  unfold c0, tape0, interpret, evalCfg581.
+  cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1].
+  run_steps.
+Qed.
+
+Definition wallR0_local : list Seg :=
+  [(0, true); (1, false); (1, false); (2, false);
+   (1, false); (1, false); (1, false); (1, false); (2, false);
+   (1, false); (1, false); (1, false); (1, false); (2, false);
+   (0, true); (1, true); (1, false); (1, false); (1, false); (2, false)].
+
+Lemma start_reaches_wall_local :
+  run581 803 (mkCfg581 BL0 [1; 0] [(0, false)]) =
+    Some (mkCfg581 BL0 [1; 3; 2] wallR0_local).
+Proof.
+  vm_compute. reflexivity.
+Qed.
+
+Lemma init_reaches_wall_local :
+  c0 -[ tm ]->+ interpret (mkCfg581 BL0 [1; 3; 2] wallR0_local).
+Proof.
+  eapply progress_evstep_trans.
+  - exact init_reaches_start_local.
+  - exact (run581_evstep tm interpret local_step 803 _ _ start_reaches_wall_local).
+Qed.
+
+Lemma wallR0_is_strongWall : StrongWall wallR0_local.
+Proof.
+  unfold wallR0_local, StrongWall.
+  eexists. split; [reflexivity |].
+  split; [cbn; exact I |].
+  left. eexists. split; [reflexivity |].
+  exact (strong2_of_2_1_1 _).
+Qed.
+
+Theorem nonhalt : ~halts tm c0.
+Proof.
+  exact (nonhalt_of_run581_no_halt tm interpret local_step _
+    init_reaches_wall_local (strongWall_no_halt _ wallR0_is_strongWall)).
+Qed.
+
+End TM115.
+
+Module TM118.
+
+Definition tm := Eval compute in (TM_from_str "1RB1RF_1LC0RF_1LE0LD_1RC0LB_---1RA_1LB1RA").
+Arguments tm _ : simpl never.
+Local Definition interpret := evalCfg581 B C A.
+
+Lemma local_step c c' (h : step581 c = Some c') :
+  interpret c -[ tm ]->+ interpret c'.
+Proof. unfold interpret. prove_step581 c h. Qed.
+
+Lemma init_reaches_start_local :
+  c0 -[ tm ]->+ interpret (mkCfg581 BL0 [0] [(1, false); (0, false)]).
+Proof.
+  unfold c0, tape0, interpret, evalCfg581.
+  cbn [cfg_mode cfg_L cfg_R encLeft581 encRight581 rep1].
+  run_steps.
+Qed.
+
+Definition wallR0_local : list Seg :=
+  [(0, true); (1, false); (1, false); (2, false);
+   (1, false); (2, false); (1, false); (1, false); (2, false);
+   (0, true); (0, true); (1, false); (1, true); (2, false);
+   (1, false); (1, false); (2, false)].
+
+Lemma start_reaches_wall_local :
+  run581 760 (mkCfg581 BL0 [0] [(1, false); (0, false)]) =
+    Some (mkCfg581 BL0 [1; 3; 2] wallR0_local).
+Proof.
+  vm_compute. reflexivity.
+Qed.
+
+Lemma init_reaches_wall_local :
+  c0 -[ tm ]->+ interpret (mkCfg581 BL0 [1; 3; 2] wallR0_local).
+Proof.
+  eapply progress_evstep_trans.
+  - exact init_reaches_start_local.
+  - exact (run581_evstep tm interpret local_step 760 _ _ start_reaches_wall_local).
+Qed.
+
 Lemma wallR0_is_strongWall : StrongWall wallR0_local.
 Proof.
   unfold wallR0_local, StrongWall.
@@ -6969,17 +6301,778 @@ Proof.
   exact (strong2_of_step_21 (good2_of_2_1_1 _)).
 Qed.
 
-Theorem nonhalt_internal : ~ halts tm c0.
+Theorem nonhalt : ~halts tm c0.
 Proof.
-  exact (nonhalt_of_run581_no_halt
-    (mkCfg581 BL0 [1; 3; 2] wallR0_local)
-    init_reaches_wall_local
-    (strongWall_no_halt wallR0_local wallR0_is_strongWall)).
+  exact (nonhalt_of_run581_no_halt tm interpret local_step _
+    init_reaches_wall_local (strongWall_no_halt _ wallR0_is_strongWall)).
 Qed.
 
-End Internal.
+End TM118.
 
-Theorem nonhalt : ~ halts tm c0.
+Module SixMode.
+
+Local Notation "'0inf'" := (@const Sym S0).
+Close Scope sym_scope.
+Open Scope list_scope.
+Open Scope bool_scope.
+Open Scope nat_scope.
+
+Inductive Mode484 : Type :=
+  | mC0
+  | mAL
+  | mE1
+  | mBR
+  | mDR
+  | mD0.
+
+Record State484 : Type := mkState484 {
+  s_mode : Mode484;
+  s_L : list (nat * bool);
+  s_R : list (nat * bool)
+}.
+
+Definition bump (xs : list (nat * bool)) : list (nat * bool) :=
+  match xs with
+  | [] => [(0, false)]
+  | (a, sep) :: rest => (S a, sep) :: rest
+  end.
+
+Definition stepAtomic (s : State484) : option State484 :=
+  match s_mode s with
+  | mC0 => Some (mkState484 mAL (s_L s) (bump (s_R s)))
+  | mAL =>
+    match s_L s with
+    | [] => Some (mkState484 mBR [(0, false)] (s_R s))
+    | (0, false) :: Ls => Some (mkState484 mE1 Ls (s_R s))
+    | (0, true) :: _ => None
+    | (1, false) :: Ls =>
+      match s_R s with
+      | [] => Some (mkState484 mC0 Ls [])
+      | r0 :: Rs => Some (mkState484 mAL Ls ((0, true) :: r0 :: Rs))
+      end
+    | (1, true) :: Ls => Some (mkState484 mBR (bump Ls) ((0, true) :: s_R s))
+    | (2, false) :: Ls => Some (mkState484 mBR (bump Ls) ((1, false) :: s_R s))
+    | (2, true) :: Ls => Some (mkState484 mBR ((0, false) :: Ls) ((1, false) :: s_R s))
+    | (S (S (S a)), sep) :: Ls => Some (mkState484 mC0 ((a, sep) :: Ls) ((0, false) :: s_R s))
+    end
+  | mE1 =>
+    match s_L s with
+    | [] => None
+    | l0 :: Ls => Some (mkState484 mBR (l0 :: Ls) (bump (bump (s_R s))))
+    end
+  | mBR =>
+    match s_R s with
+    | [] =>
+      match s_L s with
+      | [] => Some (mkState484 mC0 [] [(0, false)])
+      | (0, false) :: Ls => Some (mkState484 mD0 ((0, true) :: Ls) [])
+      | (0, true) :: Ls => Some (mkState484 mBR ((0, false) :: Ls) [(0, true); (0, false)])
+      | (S a, sep) :: Ls => Some (mkState484 mD0 ((0, false) :: (a, sep) :: Ls) [])
+      end
+    | (0, false) :: Rs => Some (mkState484 mD0 (bump (s_L s)) Rs)
+    | (0, true) :: Rs => Some (mkState484 mC0 (bump (bump (s_L s))) Rs)
+    | (S d, c) :: Rs => Some (mkState484 mDR (bump (s_L s)) ((d, c) :: Rs))
+    end
+  | mDR =>
+    match s_R s with
+    | [] => Some (mkState484 mC0 (bump (s_L s)) [])
+    | (0, false) :: Rs =>
+      match s_L s with
+      | [] => Some (mkState484 mBR [] (bump Rs))
+      | l0 :: Ls => Some (mkState484 mDR ((0, false) :: l0 :: Ls) Rs)
+      end
+    | (0, true) :: Rs =>
+      match s_L s with
+      | [] => Some (mkState484 mBR [] ((0, false) :: Rs))
+      | l0 :: Ls => Some (mkState484 mD0 ((0, false) :: l0 :: Ls) Rs)
+      end
+    | (S d, c) :: Rs => Some (mkState484 mBR (bump (s_L s)) ((d, c) :: Rs))
+    end
+  | mD0 =>
+    match s_R s with
+    | [] => Some (mkState484 mC0 (bump (s_L s)) [])
+    | (0, false) :: Rs => Some (mkState484 mC0 (bump (s_L s)) (bump Rs))
+    | (0, true) :: Rs => Some (mkState484 mC0 (bump (s_L s)) ((0, false) :: Rs))
+    | (1, false) :: Rs => Some (mkState484 mD0 ((0, false) :: bump (s_L s)) Rs)
+    | (1, true) :: Rs => Some (mkState484 mC0 ((1, false) :: bump (s_L s)) Rs)
+    | (S (S d), c) :: Rs => Some (mkState484 mDR ((0, false) :: bump (s_L s)) ((d, c) :: Rs))
+    end
+  end.
+
+Definition isDoor (s : State484) : bool :=
+  match s_mode s, s_L s with
+  | mAL, (0, true) :: _ => true
+  | mE1, [] => true
+  | _, _ => false
+  end.
+
+Definition stepTot (s : State484) : State484 :=
+  match stepAtomic s with
+  | None => s
+  | Some s' => s'
+  end.
+
+Fixpoint runTot (n : nat) (s : State484) : State484 :=
+  match n with
+  | 0 => s
+  | S n' => runTot n' (stepTot s)
+  end.
+
+Lemma stepAtomic_eq_none_iff (s : State484) :
+  stepAtomic s = None <-> isDoor s = true.
 Proof.
-  exact Internal.nonhalt_internal.
+  destruct s as [mode L R]; destruct mode; cbn [stepAtomic isDoor s_mode s_L s_R].
+  - split; discriminate.
+  - destruct L as [| [[| [| [| a]]] [|]] Ls];
+      try destruct R; split; (reflexivity || discriminate).
+  - destruct L; split; (reflexivity || discriminate).
+  - destruct R as [| [[| d] [|]] Rs];
+      try destruct L as [| [[| a] [|]] Ls];
+      split; discriminate.
+  - destruct R as [| [[| d] [|]] Rs];
+      try destruct L; split; discriminate.
+  - destruct R as [| [[| [| d]] [|]] Rs]; split; discriminate.
 Qed.
+
+Lemma stepAtomic_some_of_not_door {s : State484} (h : isDoor s = false) :
+  stepAtomic s = Some (stepTot s).
+Proof.
+  unfold stepTot.
+  destruct (stepAtomic s) as [s' |] eqn:hs.
+  - reflexivity.
+  - apply stepAtomic_eq_none_iff in hs.
+    rewrite hs in h. discriminate h.
+Qed.
+
+Lemma runTot_add (a b : nat) (s : State484) :
+  runTot (a + b) s = runTot b (runTot a s).
+Proof.
+  revert s.
+  induction a as [| a' ih]; intro s; [reflexivity |].
+  cbn [Nat.add runTot].
+  exact (ih (stepTot s)).
+Qed.
+
+Fixpoint pushOnes (n : nat) (t : side) : side :=
+  match n with
+  | 0 => t
+  | S n' => S1 >> pushOnes n' t
+  end.
+
+Definition pushSep (sep : bool) (t : side) : side :=
+  if sep then S0 >> S0 >> t else S0 >> t.
+
+Fixpoint encStack (xs : list (nat * bool)) : side :=
+  match xs with
+  | [] => 0inf
+  | (a, sep) :: rest => S1 >> pushOnes a (pushSep sep (encStack rest))
+  end.
+
+Lemma encStack_bump (xs : list (nat * bool)) :
+  encStack (bump xs) = S1 >> encStack xs.
+Proof.
+  destruct xs as [| [a sep] rest]; cbn [bump encStack pushOnes pushSep].
+  - rewrite zero_cons_default581. reflexivity.
+  - reflexivity.
+Qed.
+
+Tactic Notation "prove_stepAtomic" hyp(s) hyp(h) constr(enc) :=
+  (destruct s as [mode L R];
+  destruct mode;
+  [ idtac
+  | destruct L as [| [[| [| [| a3]]] sep] Ls];
+    [ idtac | destruct sep | destruct sep; [idtac | destruct R as [| [d c] Rs]] |
+      destruct sep | destruct sep ]
+  | destruct L as [| [a sep] Ls]
+  | destruct R as [| [[| d1] c] Rs];
+    [ destruct L as [| [[| a1] sep] Ls]; [idtac | destruct sep | destruct sep]
+    | destruct c | destruct c ]
+  | destruct R as [| [[| d1] c] Rs];
+    [ idtac | destruct c; destruct L as [| [a sep] Ls] | destruct c ]
+  | destruct R as [| [[| [| d2]] c] Rs];
+    [ idtac | destruct c | destruct c | destruct c ] ];
+  cbn [stepAtomic s_mode s_L s_R] in h; try discriminate h;
+  inversion h; subst; clear h;
+  unfold enc; cbn [s_mode s_L s_R encStack pushOnes pushSep];
+  repeat rewrite encStack_bump;
+  run_steps).
+
+Section OrbitSoundness.
+
+Context (tm : TM) (enc : State484 -> Q * tape)
+  (step_sound : forall s s', stepAtomic s = Some s' -> enc s -[ tm ]->+ enc s').
+
+Lemma safe_of_orbit_safe (k : nat) :
+  forall s, (forall n, isDoor (runTot n s) = false) -> Safe tm k (enc s).
+Proof.
+  induction k as [k ih] using strong_induction.
+  intros s hsafe.
+  pose proof (stepAtomic_some_of_not_door (hsafe 0)) as hs.
+  eapply (Safe_of_stepPlus tm); [exact (step_sound s (stepTot s) hs) |].
+  intros k' hk'.
+  apply ih; [exact hk' |].
+  intro n.
+  exact (hsafe (S n)).
+Qed.
+
+Lemma nonhalt_of_orbit_safe
+    (start : State484) (enc_start : c0 = enc start)
+    (hsafe : forall n, isDoor (runTot n start) = false) :
+  ~ halts tm c0.
+Proof.
+  intros [k Hhalt].
+  rewrite enc_start in Hhalt.
+  exact (safe_of_orbit_safe k start hsafe k (Nat.le_refl k) Hhalt).
+Qed.
+
+End OrbitSoundness.
+
+Fixpoint safePrefix (k : nat) (s : State484) : bool :=
+  match k with
+  | 0 => true
+  | S k' => negb (isDoor s) && safePrefix k' (stepTot s)
+  end.
+
+Lemma safePrefix_sound (k : nat) :
+  forall s, safePrefix k s = true -> forall j, j < k -> isDoor (runTot j s) = false.
+Proof.
+  induction k as [| k' ih]; intros s hs j hj; [lia |].
+  cbn [safePrefix] in hs.
+  apply andb_true_iff in hs. destruct hs as [hnd hrest].
+  apply negb_true_iff in hnd.
+  destruct j as [| j'].
+  - exact hnd.
+  - cbn [runTot].
+    apply ih; [exact hrest | lia].
+Qed.
+
+Fixpoint rep1Seg (n : nat) (R : list (nat * bool)) : list (nat * bool) :=
+  match n with
+  | 0 => R
+  | S n' => (1, false) :: rep1Seg n' R
+  end.
+
+Definition bump2 (R : list (nat * bool)) : list (nat * bool) :=
+  bump (bump R).
+
+Lemma rep1Seg_cons_one (q : nat) (R : list (nat * bool)) :
+  rep1Seg q ((1, false) :: R) = (1, false) :: rep1Seg q R.
+Proof.
+  induction q as [| q' ih]; [reflexivity |].
+  cbn [rep1Seg]. rewrite ih. reflexivity.
+Qed.
+
+Definition SafeSteps (k : nat) (s : State484) : Prop :=
+  forall j : nat, j < k -> isDoor (runTot j s) = false.
+
+Lemma safeSteps_zero (s : State484) : SafeSteps 0 s.
+Proof.
+  intros j hj. lia.
+Qed.
+
+Lemma safeSteps_step {k : nat} {s : State484}
+    (hd : isDoor s = false) (hnext : SafeSteps k (stepTot s)) :
+  SafeSteps (S k) s.
+Proof.
+  intros [| j'] hj.
+  - exact hd.
+  - cbn [runTot]. apply hnext. lia.
+Qed.
+
+Ltac solve_safe_steps :=
+  repeat (apply safeSteps_zero || (apply safeSteps_step; [reflexivity |])).
+
+Lemma safeSteps_trans {a b : nat} {s : State484}
+    (ha : SafeSteps a s) (hb : SafeSteps b (runTot a s)) :
+  SafeSteps (a + b) s.
+Proof.
+  intros j hj.
+  destruct (Nat.lt_ge_cases j a) as [hlt | hge].
+  - exact (ha j hlt).
+  - replace j with (a + (j - a)) by lia.
+    rewrite runTot_add.
+    apply hb. lia.
+Qed.
+
+Lemma mAL_drain_3q (q r : nat) (Ls R : list (nat * bool)) :
+  SafeSteps (2 * q) (mkState484 mAL ((3 * q + r, false) :: Ls) R) /\
+  runTot (2 * q) (mkState484 mAL ((3 * q + r, false) :: Ls) R) =
+    mkState484 mAL ((r, false) :: Ls) (rep1Seg q R).
+Proof.
+  revert R.
+  induction q as [| q' ih]; intro R.
+  - cbn [Nat.mul Nat.add rep1Seg].
+    exact (conj (safeSteps_zero _) eq_refl).
+  - replace (3 * S q' + r) with (S (S (S (3 * q' + r)))) by lia.
+    replace (2 * S q') with (2 + 2 * q') by lia.
+    destruct (ih ((1, false) :: R)) as [hs hr].
+    assert (hpre2 : SafeSteps 2 (mkState484 mAL ((S (S (S (3 * q' + r))), false) :: Ls) R))
+      by solve_safe_steps.
+    assert (hrun2 : runTot 2 (mkState484 mAL ((S (S (S (3 * q' + r))), false) :: Ls) R) =
+        mkState484 mAL ((3 * q' + r, false) :: Ls) ((1, false) :: R))
+      by reflexivity.
+    split.
+    + apply safeSteps_trans; [exact hpre2 |].
+      rewrite hrun2. exact hs.
+    + rewrite runTot_add, hrun2, hr, rep1Seg_cons_one. reflexivity.
+Qed.
+
+Lemma bump_eq_bumpR (R : list Seg) : bump R = bumpR R.
+Proof.
+  destruct R as [| [d b] xs]; reflexivity.
+Qed.
+
+Lemma bump2_eq_bumpR2 (R : list Seg) : bump2 R = bumpR (bumpR R).
+Proof.
+  unfold bump2. rewrite !bump_eq_bumpR. reflexivity.
+Qed.
+
+Lemma rep1Seg_eq_ones_append (q : nat) (R : list Seg) :
+  rep1Seg q R = ones q ++ R.
+Proof.
+  induction q as [| k ih]; [reflexivity |].
+  cbn [rep1Seg ones app]. rewrite ih. reflexivity.
+Qed.
+
+(* It is enough to account for calls on a trace that reaches a door.
+   Calls that never return need not have a BigF/BigD1 derivation. *)
+Definition Bad (k : nat) (s : State484) := isDoor (runTot k s) = true.
+Definition Transfer k st (P : State484 -> Prop) :=
+  Bad k st -> exists j, j < k /\ exists out, P out /\ Bad j out.
+
+Lemma transfer_map k st P Q : Transfer k st P ->
+  (forall out, P out -> Q out) -> Transfer k st Q.
+Proof.
+  intros h hPQ hb. destruct (h hb) as [j [hj [out [hp hbad]]]].
+  exists j. split; [exact hj |]. exists out. auto.
+Qed.
+
+
+Lemma transfer_bind k st P Q : Transfer k st P ->
+  (forall j out, j < k -> P out -> Transfer j out Q) -> Transfer k st Q.
+Proof.
+  intros h hPQ hb. destruct (h hb) as [j [hj [out [hp hbad]]]].
+  destruct (hPQ j out hj hp hbad) as [i [hi hs]].
+  exists i. split; [lia | exact hs].
+Qed.
+
+Lemma bad_skip k n st out : SafeSteps n st -> runTot n st = out ->
+  Bad k st -> Bad (k - n) out.
+Proof.
+  intros hs hr hb.
+  assert (hn : n <= k).
+  { destruct (Nat.lt_ge_cases k n) as [h | h]; [| exact h].
+    specialize (hs k h). unfold Bad in hb. congruence. }
+  unfold Bad in *. now rewrite <- hr, <- runTot_add, Nat.add_comm, Nat.sub_add.
+Qed.
+
+Lemma transfer_skip k n st out P : SafeSteps n st -> runTot n st = out ->
+  Transfer (k - n) out P -> Transfer k st P.
+Proof.
+  intros hs hr ht hb. destruct (ht (bad_skip k n st out hs hr hb)) as [j [hj h]].
+  exists j. split; [lia | exact h].
+Qed.
+
+Lemma transfer_stop k n st out P : 0 < n ->
+  SafeSteps n st -> runTot n st = out -> P out -> Transfer k st P.
+Proof.
+  intros hn hs hr hp hb. pose proof (bad_skip k n st out hs hr hb) as he.
+  assert (hnk : n <= k).
+  { destruct (Nat.lt_ge_cases k n) as [h | h]; [| exact h].
+    specialize (hs k h). unfold Bad in hb. congruence. }
+  exists (k-n). split; [lia |]. exists out. auto.
+Qed.
+
+Definition Fret (a : nat) (Ls R : list Seg) (out : State484) : Prop :=
+  exists s i Z, BigF s R i Z /\ out = mkState484 mAL ((a + i, false) :: Ls) Z.
+
+Definition Dret (a : nat) (Ls R : list Seg) (out : State484) : Prop :=
+  exists s i Z, BigD1 s R (S i) Z /\ out = mkState484 mAL ((a + i, false) :: Ls) Z.
+
+Definition Dispatch (v : nat) (R : list Seg) (i : nat) (Z : list Seg) : Prop :=
+  match v mod 3 with
+  | 0 => exists s d, BigD1 s (ones (v / 3) ++ R) d Z /\ i = d + 1
+  | 1 => i = 0 /\ Z = (0, true) :: ones (v / 3) ++ R
+  | _ => exists s, BigD1 s (ones (S (v / 3)) ++ R) i Z
+  end.
+
+Definition Pret (v b : nat) (Ls R : list Seg) (out : State484) : Prop :=
+  exists i Z, Dispatch v R i Z /\ out = mkState484 mAL ((b + i, false) :: Ls) Z.
+
+Definition Call0 k a Ls R :=
+  Transfer k (mkState484 mD0 ((a, false) :: Ls) R) (Fret (S a) Ls R).
+Definition CallB k a Ls d c R :=
+  Transfer k (mkState484 mBR ((a, false) :: Ls) ((d, c) :: R)) (Dret a Ls ((d, c) :: R)).
+Definition CallR k b Ls R :=
+  Transfer k (mkState484 mDR ((0, false) :: (b, false) :: Ls) R) (Fret b Ls (bump2 R)).
+Definition CallP k v b Ls Z :=
+  Z <> [] -> Transfer k (mkState484 mAL ((v, false) :: (b, false) :: Ls) Z) (Pret v b Ls Z).
+
+Ltac take_steps count :=
+  eapply transfer_skip with (n := count);
+  [ solve_safe_steps | reflexivity | ].
+Ltac return_steps count :=
+  eapply transfer_stop with (n := count);
+  [ lia | solve_safe_steps | reflexivity | ].
+Ltac ret_eq :=
+  cbn [runTot stepTot stepAtomic s_mode s_L s_R bump];
+  solve [repeat (first [solve [lia] | f_equal])].
+
+(* Dispatch is the only place a quotient occurs.  Constructors of BigF then
+   just consume its three possible exit descriptions. *)
+Ltac use_dispatch h :=
+  unfold Dispatch in h;
+  let E := fresh "E" in
+  match type of h with context [ ?v mod 3 ] =>
+    destruct (v mod 3) as [| [| r]] eqn:E
+  end;
+  [ destruct h as [? [? [h ->]]]
+  | destruct h as [-> ->]
+  | destruct h as [? h] ].
+
+Lemma dispatch_one {s R i Z j Y} :
+  BigF s R i Z -> Dispatch (1 + i) Z j Y -> exists t, BigF t ((1, false) :: R) j Y.
+Proof.
+  intros hf hp. use_dispatch hp; eexists.
+  - exact (BF_oneF_rem0 hf E hp).
+  - exact (BF_oneF_rem1 hf E).
+  - replace (S (S r)) with 2 in E by (pose proof (Nat.mod_upper_bound (1+i) 3 ltac:(lia)); lia).
+    exact (BF_oneF_rem2 hf E hp).
+Qed.
+
+Lemma dispatch_twoF {s R i Z j Y} :
+  BigF s (bump2 R) i Z -> Dispatch i Z j Y -> exists t, BigF t ((2, false) :: R) j Y.
+Proof.
+  rewrite bump2_eq_bumpR2. intros hf hp. use_dispatch hp; eexists.
+  - exact (BF_twoF_rem0 hf E hp).
+  - exact (BF_twoF_rem1 hf E).
+  - replace (S (S r)) with 2 in E by (pose proof (Nat.mod_upper_bound i 3 ltac:(lia)); lia).
+    exact (BF_twoF_rem2 hf E hp).
+Qed.
+
+Lemma dispatch_twoT {s R i Z j Y} :
+  BigF s ((1, false) :: R) i Z -> Dispatch i Z j Y -> exists t, BigF t ((2, true) :: R) j Y.
+Proof.
+  intros hf hp. use_dispatch hp; eexists.
+  - exact (BF_twoT_rem0 hf E hp).
+  - exact (BF_twoT_rem1 hf E).
+  - replace (S (S r)) with 2 in E by (pose proof (Nat.mod_upper_bound i 3 ltac:(lia)); lia).
+    exact (BF_twoT_rem2 hf E hp).
+Qed.
+
+Lemma dispatch_ge3 {s d c R i Z j Y} :
+  BigD1 s ((d, c) :: R) i Z -> Dispatch i Z j Y ->
+  exists t, BigF t ((S (S (S d)), c) :: R) j Y.
+Proof.
+  intros hf hp. use_dispatch hp; eexists.
+  - exact (BF_ge3_rem0 hf E hp).
+  - exact (BF_ge3_rem1 hf E).
+  - replace (S (S r)) with 2 in E by (pose proof (Nat.mod_upper_bound i 3 ltac:(lia)); lia).
+    exact (BF_ge3_rem2 hf E hp).
+Qed.
+
+Lemma bigD1_out_nonempty s R d Z : BigD1 s R d Z -> Z <> [].
+Proof.
+  intro h. induction h; try discriminate; eauto using bigF_out_ne_nil, bumpR_nonempty.
+Qed.
+
+(* Repeatedly use the remaining bad trace as the measure for subcalls. *)
+Lemma calls_return k :
+  (forall a Ls R, Call0 k a Ls R) /\
+  (forall a Ls d c R, CallB k a Ls d c R) /\
+  (forall b Ls R, CallR k b Ls R) /\
+  (forall v b Ls Z, CallP k v b Ls Z).
+Proof.
+  induction k as [k IH] using strong_induction.
+  destruct k as [| prev].
+  { clear IH. split; [| split; [| split]].
+    - intros a Ls R hb. discriminate hb.
+    - intros a Ls d c R hb. discriminate hb.
+    - intros b Ls R hb. discriminate hb.
+    - intros [|v] b Ls Z _ hb; discriminate hb. }
+  remember (S prev) as k eqn:hk in *.
+  assert (I0 : forall j, j < k -> forall a Ls R, Call0 j a Ls R)
+    by (intros j hj; exact (proj1 (IH j hj))).
+  assert (IB : forall j, j < k -> forall a Ls d c R, CallB j a Ls d c R)
+    by (intros j hj; exact (proj1 (proj2 (IH j hj)))).
+  assert (IR : forall j, j < k -> forall b Ls R, CallR j b Ls R)
+    by (intros j hj; exact (proj1 (proj2 (proj2 (IH j hj))))).
+  assert (IP : forall j, j < k -> forall v b Ls Z, CallP j v b Ls Z)
+    by (intros j hj; exact (proj2 (proj2 (proj2 (IH j hj))))).
+  clear IH.
+  split; [| split; [| split]].
+  - intros a Ls [| [[| [| d]] c] R]; unfold Call0.
+    + return_steps 2. exists 0, 0, [(0,false)]. split; [exact BF_nil | ret_eq].
+    + destruct c.
+      * return_steps 2. exists 0, 0, ((1,false)::R). split; [apply BF_zeroT | ret_eq].
+      * return_steps 2. exists 0, 0, (bump2 R).
+        split; [rewrite bump2_eq_bumpR2; apply BF_zeroF | ret_eq].
+    + destruct c.
+      * destruct R as [|[d c] R]; return_steps 3.
+        all: eexists 0, 0, _; split; [apply BF_oneT | ret_eq].
+      * take_steps 1.
+        eapply transfer_bind; [apply I0; lia |].
+        intros j out hj [s [i [Z [hf ->]]]].
+        eapply transfer_map; [apply IP; [lia | exact (bigF_out_ne_nil hf)] |].
+        intros out [d [Y [hp ->]]]. destruct (dispatch_one hf hp) as [t h].
+        exists t, d, Y. auto.
+    + take_steps 1. apply IR. lia.
+  - intros a Ls [| [| d]] c R; unfold CallB.
+    + destruct c.
+      * return_steps 2. exists 0, 2, (bump R).
+        split; [rewrite bump_eq_bumpR; apply BD_zeroT | ret_eq].
+      * take_steps 1. eapply transfer_map; [apply I0; lia |].
+        intros out [s [i [Z [hf ->]]]].
+        exists (s+1), (S (S i)), Z. split.
+        -- replace (S (S (S i))) with (i+3) by lia. exact (BD_zeroF hf).
+        -- ret_eq.
+    + destruct c.
+      * take_steps 2.
+        eapply transfer_bind; [apply I0; lia |].
+        intros j out hj [s [i [Z [hf ->]]]].
+        eapply transfer_map; [apply IP; [lia | exact (bigF_out_ne_nil hf)] |].
+        intros out [j' [Y [hp ->]]]. destruct (dispatch_one hf hp) as [t h].
+        exists (t+1), (S j'), Y. split.
+        -- replace (S (S j')) with (j'+2) by lia. exact (BD_oneT h).
+        -- ret_eq.
+      * take_steps 2. eapply transfer_map; [apply IR; lia |].
+        intros out [s [i [Z [hf ->]]]].
+        exists (s+1), (S i), Z. split.
+        -- rewrite bump2_eq_bumpR2 in hf. replace (S (S i)) with (i+2) by lia.
+           exact (BD_oneF hf).
+        -- ret_eq.
+    + take_steps 2. eapply transfer_map; [apply IB; lia |].
+      intros out [s [i [Z [hd ->]]]].
+      exists (s+1), (S (S i)), Z. split.
+      * replace (S (S (S i))) with (S i+2) by lia. exact (BD_ge2 hd).
+      * ret_eq.
+  - intros b Ls [| [[| d] c] R]; unfold CallR.
+    + return_steps 3. exists 1, 0, [(0,true); (0,false)]. split.
+      * exact (BF_oneF_rem1 BF_nil eq_refl).
+      * ret_eq.
+    + destruct c.
+      * take_steps 1.
+        eapply transfer_bind; [apply I0; lia |].
+        intros j out hj [s [i [Z [hf ->]]]].
+        eapply transfer_bind; [apply IP; [lia | exact (bigF_out_ne_nil hf)] |].
+        intros j' out hj' [i' [Z' [hp ->]]].
+        destruct (dispatch_one hf hp) as [t h].
+        eapply transfer_map; [apply IP; [lia | exact (bigF_out_ne_nil h)] |].
+        intros out [d [Y [hp' ->]]].
+        destruct (dispatch_twoT h hp') as [t' h'].
+        exists t', d, Y. auto.
+      * take_steps 1.
+        eapply transfer_bind; [apply IR; lia |].
+        intros j out hj [s [i [Z [hf ->]]]].
+        eapply transfer_map; [apply IP; [lia | exact (bigF_out_ne_nil hf)] |].
+        intros out [d [Y [hp ->]]]. destruct (dispatch_twoF hf hp) as [t h].
+        exists t, d, Y. auto.
+    + take_steps 1.
+      eapply transfer_bind; [apply IB; lia |].
+      intros j out hj [s [i [Z [hd ->]]]].
+      eapply transfer_map.
+      * apply IP; [lia | exact (bigD1_out_nonempty _ _ _ _ hd)].
+      * intros out [j' [Y [hp ->]]]. destruct (dispatch_ge3 hd hp) as [t h].
+        exists t, j', Y. auto.
+  - intros v b Ls R hR. unfold CallP.
+    pose proof (Nat.div_mod v 3 ltac:(lia)) as he.
+    pose proof (Nat.mod_upper_bound v 3 ltac:(lia)) as hh.
+    remember (v / 3) as q eqn:hq; remember (v mod 3) as r eqn:hr.
+    (* Drain the left register in one stride; all cases share it. *)
+    destruct (mAL_drain_3q q r ((b,false)::Ls) R) as [hs ht].
+    rewrite <- he in hs, ht.
+    eapply transfer_skip; [exact hs | exact ht |].
+    rewrite rep1Seg_eq_ones_append.
+    assert (hT : ones q ++ R <> []) by (apply append_nonempty_of_right; exact hR).
+    destruct r as [| [| r]].
+    + remember (ones q ++ R) as T eqn:hT'. destruct T as [|[d c] T]; [contradiction |].
+      take_steps 4.
+      eapply transfer_map; [apply IB; lia |].
+      intros out [s [i [Z [hd ->]]]]. exists (S i + 1), Z.
+      split.
+      * unfold Dispatch. rewrite <- hr, <- hq, <- hT'. eauto.
+      * ret_eq.
+    + remember (ones q ++ R) as T eqn:hT'. destruct T as [|x T]; [contradiction |].
+      return_steps 1. exists 0, ((0,true)::x::T).
+      unfold Dispatch. now rewrite <- hr, <- hq, <- hT', Nat.add_0_r.
+    + assert (r=0) by lia. subst r.
+      take_steps 1. eapply transfer_map; [apply IB; lia |].
+      intros out [s [i [Z [hd ->]]]]. exists (S i), Z.
+      split.
+      * unfold Dispatch. rewrite <- hr, <- hq. exists s. exact hd.
+      * ret_eq.
+Qed.
+
+Definition atWall xs := mkState484 mAL [(2,false)] ((1,false)::xs).
+
+Lemma wall_return k xs :
+  Transfer k (atWall xs) (Fret 1 [] ((3,false)::xs)).
+Proof.
+  unfold atWall. take_steps 3.
+  exact (proj1 (proj2 (proj2 (calls_return _))) 1 [] ((1,false)::xs)).
+Qed.
+
+Lemma strongWall_front R :
+  StrongWall R -> exists xs, R = (0,true)::(1,false)::xs.
+Proof.
+  intros [tail [-> [_ [[G [h _]] | [G [h _]]]]]];
+    destruct tail as [|[d c] xs]; cbn [bumpR] in h; try discriminate;
+    inversion h; subst; eauto.
+Qed.
+
+Lemma wall_no_door k xs :
+  StrongWall ((0,true)::(1,false)::xs) -> ~ Bad k (atWall xs).
+Proof.
+  revert xs. induction k as [k IH] using strong_induction. intros xs hW hb.
+  destruct (wall_return k xs hb) as [j [hj [out [[s [i [Z [hf ->]]]] hbad]]]].
+  destruct (strongWall_step _ hW) as [tail [he hw]]. inversion he; subst tail; clear he.
+  destruct (hw _ _ _ hf) as [hmod hWall].
+  pose proof (Nat.div_mod i 3 ltac:(lia)) as he.
+  assert (hv : 1 + i = 3 * (i / 3) + 2) by lia.
+  rewrite hv in hbad.
+  destruct (mAL_drain_3q (i / 3) 2 [] Z) as [hpre hrun].
+  pose proof (bad_skip _ _ _ _ hpre hrun hbad) as hshort.
+  rewrite rep1Seg_eq_ones_append in hshort.
+  destruct (strongWall_front _ hWall) as [xs' hh].
+  assert (hr : ones (i/3) ++ Z = (1,false)::xs') by congruence.
+  rewrite hr in hWall, hshort.
+  apply (IH (j - 2 * (i/3)) ltac:(lia) xs' hWall hshort).
+Qed.
+
+Lemma wall_entry_safe_return start fuel xs :
+  runTot fuel start = atWall xs -> safePrefix fuel start = true ->
+  StrongWall ((0,true)::(1,false)::xs) ->
+  forall k, isDoor (runTot k start) = false.
+Proof.
+  intros hr hs hW k.
+  destruct (isDoor (runTot k start)) eqn:hb; [| reflexivity].
+  exfalso. exact (wall_no_door _ _ hW
+    (bad_skip k fuel start (atWall xs) (safePrefix_sound fuel start hs) hr hb)).
+Qed.
+
+End SixMode.
+Import SixMode.
+Local Notation "'0inf'" := (@const Sym S0).
+
+Module TM116.
+
+Definition tm := Eval compute in (TM_from_str "1RB1LD_1RC0LA_1LA0RE_1LB1LA_1RF0RB_---0LB").
+Arguments tm _ : simpl never.
+
+Definition start : State484 := mkState484 mBR [] [].
+
+Definition interpret (s : State484) : Q * tape :=
+  let l := encStack (s_R s) in
+  let r := encStack (s_L s) in
+  match s_mode s with
+  | mC0 => (B, (l, S0, r))
+  | mAL => l {{C}}> r
+  | mE1 => (E, (S0 >> l, S0, r))
+  | mBR => l <{{A}} r
+  | mDR => l <{{D}} r
+  | mD0 => (D, (l, S0, r))
+  end.
+
+Lemma enc_start : c0 = interpret start.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma local_step s s' (h : stepAtomic s = Some s') :
+  interpret s -[ tm ]->+ interpret s'.
+Proof. prove_stepAtomic s h interpret. Qed.
+
+Definition suffix : list Seg :=
+  [(1, false); (1, false); (2, false); (0, true); (2, false); (1, false); (1, false); (2, false)].
+
+Theorem nonhalt : ~halts tm c0.
+Proof.
+  apply (nonhalt_of_orbit_safe tm interpret local_step start enc_start).
+  apply (wall_entry_safe_return start 315 suffix); [vm_compute; reflexivity | vm_compute; reflexivity |].
+  unfold StrongWall. eexists. split; [reflexivity |]. split; [exact I |].
+  right. eexists. split; [reflexivity | apply good2_of_2_0s].
+Qed.
+
+End TM116.
+
+Module TM117.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LC_1LC0RE_1RA1LD_1LA1LC_1RF0RA_---0LA").
+Arguments tm _ : simpl never.
+
+Definition start : State484 := mkState484 mC0 [] [].
+
+Definition interpret (s : State484) : Q * tape :=
+  let l := encStack (s_R s) in
+  let r := encStack (s_L s) in
+  match s_mode s with
+  | mC0 => (A, (l, S0, r))
+  | mAL => l {{B}}> r
+  | mE1 => (E, (S0 >> l, S0, r))
+  | mBR => l <{{C}} r
+  | mDR => l <{{D}} r
+  | mD0 => (D, (l, S0, r))
+  end.
+
+Lemma enc_start : c0 = interpret start.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma local_step s s' (h : stepAtomic s = Some s') :
+  interpret s -[ tm ]->+ interpret s'.
+Proof. prove_stepAtomic s h interpret. Qed.
+
+Definition suffix : list Seg :=
+  [(1, false); (2, false); (1, false); (1, false); (1, false); (1, false); (2, false); (1, false); (1, false); (1, false); (1, false); (2, false); (0, true); (1, true); (1, false); (1, false); (1, false); (2, false)].
+
+Theorem nonhalt : ~halts tm c0.
+Proof.
+  apply (nonhalt_of_orbit_safe tm interpret local_step start enc_start).
+  apply (wall_entry_safe_return start 794 suffix); [vm_compute; reflexivity | vm_compute; reflexivity |].
+  unfold StrongWall. eexists. split; [reflexivity |]. split; [exact I |].
+  left. eexists. split; [reflexivity | apply strong2_of_2_1_1].
+Qed.
+
+End TM117.
+
+Module TM119.
+
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1LC1RD_1LA0RB_1RC1RB_1LF0LC_---0RC").
+Arguments tm _ : simpl never.
+
+Definition start : State484 := mkState484 mAL [] [].
+
+Definition interpret (s : State484) : Q * tape :=
+  let l := encStack (s_L s) in
+  let r := encStack (s_R s) in
+  match s_mode s with
+  | mC0 => (C, (l, S0, r))
+  | mAL => l <{{A}} r
+  | mE1 => (E, (l, S0, S0 >> r))
+  | mBR => l {{B}}> r
+  | mDR => l {{D}}> r
+  | mD0 => (D, (l, S0, r))
+  end.
+
+Lemma enc_start : c0 = interpret start.
+Proof.
+  reflexivity.
+Qed.
+
+Lemma local_step s s' (h : stepAtomic s = Some s') :
+  interpret s -[ tm ]->+ interpret s'.
+Proof. prove_stepAtomic s h interpret. Qed.
+
+Definition suffix : list Seg :=
+  [(1, false); (2, false); (1, false); (1, false); (2, false)].
+
+Theorem nonhalt : ~halts tm c0.
+Proof.
+  apply (nonhalt_of_orbit_safe tm interpret local_step start enc_start).
+  apply (wall_entry_safe_return start 173 suffix); [vm_compute; reflexivity | vm_compute; reflexivity |].
+  unfold StrongWall. eexists. split; [reflexivity |]. split; [exact I |].
+  left. eexists. split; [reflexivity | apply strong2_of_2_1_1].
+Qed.
+
+End TM119.
