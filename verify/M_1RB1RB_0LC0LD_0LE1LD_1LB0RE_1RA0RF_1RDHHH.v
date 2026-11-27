@@ -16,7 +16,6 @@ Definition tm : TM := Eval compute in
 Arguments tm _ : simpl never.
 
 Definition fuel64  : nat := Eval vm_compute in N.to_nat 64.
-Definition fuel124 : nat := Eval vm_compute in N.to_nat 124.
 Definition fuel256 : nat := Eval vm_compute in N.to_nat 256.
 Definition fuel512 : nat := Eval vm_compute in N.to_nat 512.
 
@@ -1871,41 +1870,6 @@ Proof.
       exact (IH vM (k + 1) tail).
 Qed.
 
-Definition accelSteps (k_len n : nat) (in_segs : list SymSeg) : option (list SymSeg) :=
-  match iterSymStep (S n) (firstn k_len in_segs) with
-  | Some out => Some (out ++ skipn k_len in_segs)
-  | None => None
-  end.
-
-Lemma accelSteps_sound (k_len n : nat) (in_segs out_segs : list SymSeg) (vM : N) (tail : list nat) :
-  accelSteps k_len n in_segs = Some out_segs ->
-  cfgSweep (evalSym in_segs vM 0 0 ++ tail) -[ tm ]->*
-    cfgSweep (evalSym out_segs vM 0 0 ++ tail).
-Proof.
-  unfold accelSteps.
-  destruct (iterSymStep (S n) (firstn k_len in_segs)) as [out|] eqn:Hs; [|discriminate].
-  intro H; inversion H; subst out_segs; clear H.
-  replace (evalSym in_segs vM 0 0 ++ tail)
-    with (evalSym (firstn k_len in_segs) vM 0 0 ++ (evalSym (skipn k_len in_segs) vM 0 0 ++ tail))
-    by (rewrite app_assoc, <- evalSym_app, firstn_skipn; reflexivity).
-  rewrite evalSym_app, <- app_assoc.
-  apply progress_evstep.
-  exact (iterSymStep_sound n (firstn k_len in_segs) out vM 0 0
-    (evalSym (skipn k_len in_segs) vM 0 0 ++ tail) Hs).
-Qed.
-
-Definition accelFactor (k_len : nat) (in_segs : list SymSeg) : option (list SymSeg) :=
-  Some (canonFunctional (firstn k_len in_segs) ++ skipn k_len in_segs).
-
-Lemma accelFactor_sound (k_len : nat) (in_segs out_segs : list SymSeg) (vM : N) (tail : list nat) :
-  accelFactor k_len in_segs = Some out_segs ->
-  evalSym out_segs vM 0 0 ++ tail = evalSym in_segs vM 0 0 ++ tail.
-Proof.
-  unfold accelFactor. intro H; inversion H; subst out_segs; clear H.
-  rewrite evalSym_app, canonFunctional_sound, <- evalSym_app, firstn_skipn.
-  reflexivity.
-Qed.
-
 Definition accelLoop (collapse : bool) (k_len : nat) (in_segs : list SymSeg)
   (stride : nat) (alpha beta : N) (lss : list LoopSeg) : option (list SymSeg) :=
   let act := firstn k_len in_segs in
@@ -1965,178 +1929,11 @@ Proof.
   induction s as [|sg rest IH]; [reflexivity | cbn [substMSegs evalSym]; rewrite substM_sound, IH; reflexivity].
 Qed.
 
-Inductive TraceOp : Type :=
-| TO_steps (k_len : nat) (n : nat)
-| TO_factor (k_len : nat)
-| TO_loop (collapse : bool) (k_len : nat) (stride : nat) (alpha beta : N) (lss : list LoopSeg).
-
-Fixpoint runTrace (ops : list TraceOp) (s : list SymSeg) : option (list SymSeg) :=
-  match ops with
-  | [] => Some s
-  | TO_steps k_len n :: rest =>
-    match accelSteps k_len n s with
-    | Some s1 => runTrace rest s1
-    | None => None
-    end
-  | TO_factor k_len :: rest =>
-    match accelFactor k_len s with
-    | Some s1 => runTrace rest s1
-    | None => None
-    end
-  | TO_loop collapse k_len stride alpha beta lss :: rest =>
-    match accelLoop collapse k_len s stride alpha beta lss with
-    | Some s1 => runTrace rest s1
-    | None => None
-    end
-  end.
-
-Lemma runTrace_sound (ops : list TraceOp) :
-  forall s s' vM tail,
-  runTrace ops s = Some s' ->
-  cfgSweep (evalSym s vM 0 0 ++ tail) -[ tm ]->*
-    cfgSweep (evalSym s' vM 0 0 ++ tail).
-Proof.
-  induction ops as [|op rest IH]; intros s s' vM tail H; cbn [runTrace] in H.
-  - inversion H; subst s'. apply evstep_refl.
-  - destruct op as [k_len n | k_len | collapse k_len stride alpha beta lss].
-    + destruct (accelSteps k_len n s) as [s1|] eqn:Hs; [|discriminate].
-      eapply evstep_trans.
-      * exact (accelSteps_sound k_len n s s1 vM tail Hs).
-      * exact (IH s1 s' vM tail H).
-    + destruct (accelFactor k_len s) as [s1|] eqn:Hf; [|discriminate].
-      rewrite <- (accelFactor_sound k_len s s1 vM tail Hf).
-      exact (IH s1 s' vM tail H).
-    + destruct (accelLoop collapse k_len s stride alpha beta lss) as [s1|] eqn:Hl; [|discriminate].
-      eapply evstep_trans.
-      * exact (accelLoop_sound collapse k_len s s1 stride alpha beta lss vM tail Hl).
-      * exact (IH s1 s' vM tail H).
-Qed.
-
-(* ========================================================================== *)
-(* Layer 3: Soundness of Prefix & Wave Checkers                               *)
-(* ========================================================================== *)
-
-Definition checkPrefixGen (cSteps : nat) (wTpl : list SymSeg) (p0 : list SymSeg) (ops : list TraceOp) : bool :=
-  match iterConcrete (S cSteps) [0%nat] with
-  | None => false
-  | Some c25 =>
-    nat_list_eqb c25 (evalSym p0 0 0 0 ++ []) &&
-    match runTrace ops p0 with
-    | None => false
-    | Some out_p =>
-      list_symseg_eqb (canonCollapse (firstn 27%nat out_p))
-        (canonCollapse (substMSegs 0 0 wTpl ++ [mkSeg [2%nat] 0 0 0 7]))
-    end
-  end.
-
-Lemma checkPrefixGen_sound (cSteps : nat) (wTpl p0 : list SymSeg) (ops : list TraceOp) :
-  checkPrefixGen cSteps wTpl p0 ops = true ->
-  exists tail0 : list nat,
-    c0 -[ tm ]->+ cfgSweep (evalSym wTpl 0 0 0 ++ tail0).
-Proof.
-  unfold checkPrefixGen.
-  destruct (iterConcrete (S cSteps) [0%nat]) as [c25|] eqn:Hc; [|intro Hbad; discriminate Hbad].
-  rewrite Bool.andb_true_iff.
-  intros [Heq Htr].
-  apply nat_list_eqb_eq in Heq.
-  destruct (runTrace ops p0) as [out_p|] eqn:Hr; [|discriminate Htr].
-  apply list_symseg_eqb_eq in Htr.
-  pose proof (progress_trans tm _ _ _ init_reaches_sweep0
-    (iterConcrete_sound cSteps [0%nat] c25 Hc)) as Hinit.
-  rewrite Heq in Hinit.
-  pose proof (progress_evstep_trans tm _ _ _ Hinit
-    (runTrace_sound ops p0 out_p 0 [] Hr)) as Hreach.
-  rewrite app_nil_r in Hreach.
-  assert (Hhead : evalSym (firstn 27%nat out_p) 0 0 0 =
-    evalSym wTpl 0 0 0 ++ evalSym [mkSeg [2%nat] 0 0 0 7] 0 0 0).
-  { rewrite <- (canonCollapse_sound (firstn 27%nat out_p) 0 0 0), Htr,
-      canonCollapse_sound, evalSym_app, substMSegs_sound.
-    reflexivity. }
-  assert (Hsplit : evalSym out_p 0 0 0 =
-    evalSym wTpl 0 0 0 ++
-      (evalSym [mkSeg [2%nat] 0 0 0 7] 0 0 0 ++ evalSym (skipn 27%nat out_p) 0 0 0)).
-  { rewrite <- (firstn_skipn 27%nat out_p) at 1.
-    rewrite evalSym_app, Hhead, <- app_assoc. reflexivity. }
-  rewrite Hsplit in Hreach.
-  eexists; exact Hreach.
-Qed.
-
-Definition checkWaveGen (wTpl remSeg : list SymSeg) (ops : list TraceOp) : bool :=
-  match symStepFunctional wTpl with
-  | None => false
-  | Some s1 =>
-    match runTrace ops s1 with
-    | None => false
-    | Some out_w =>
-      list_symseg_eqb (canonCollapse (firstn 30%nat out_w))
-        (canonCollapse (substMSegs 2 16 wTpl ++ remSeg))
-    end
-  end.
-
-Lemma checkWaveGen_sound (wTpl remSeg : list SymSeg) (ops : list TraceOp) :
-  checkWaveGen wTpl remSeg ops = true ->
-  forall (vM : N) (tail : list nat),
-  exists tail' : list nat,
-    cfgSweep (evalSym wTpl vM 0 0 ++ tail) -[ tm ]->+
-      cfgSweep (evalSym wTpl (2 * vM + 16) 0 0 ++ tail').
-Proof.
-  unfold checkWaveGen.
-  destruct (symStepFunctional wTpl) as [s1|] eqn:Hs1; [|discriminate].
-  destruct (runTrace ops s1) as [out_w|] eqn:Hr; [|discriminate].
-  intro Hcl; apply list_symseg_eqb_eq in Hcl.
-  intros vM tail.
-  pose proof (stepConcrete_sound _ _ (symStepFunctional_sound wTpl s1 vM 0 0 tail Hs1)) as H0.
-  pose proof (progress_evstep_trans tm _ _ _ H0
-    (runTrace_sound ops s1 out_w vM tail Hr)) as Hreach.
-  assert (Hhead : evalSym (firstn 30%nat out_w) vM 0 0 =
-    evalSym wTpl (2 * vM + 16) 0 0 ++ evalSym remSeg vM 0 0).
-  { rewrite <- (canonCollapse_sound (firstn 30%nat out_w) vM 0 0), Hcl,
-      canonCollapse_sound, evalSym_app, substMSegs_sound.
-    reflexivity. }
-  assert (Hsplit : evalSym out_w vM 0 0 ++ tail =
-    evalSym wTpl (2 * vM + 16) 0 0 ++
-      (evalSym remSeg vM 0 0 ++ evalSym (skipn 30%nat out_w) vM 0 0 ++ tail)).
-  { rewrite <- (firstn_skipn 30%nat out_w) at 1.
-    rewrite evalSym_app, Hhead, <- !app_assoc. reflexivity. }
-  rewrite Hsplit in Hreach.
-  eexists; exact Hreach.
-Qed.
-
-
-(* ========================================================================== *)
-(* Layer 4: Certificate Data, VM Verification, and Non-Halting Theorem        *)
-(* ========================================================================== *)
-
 Definition seg0 (w : list nat) (b0 : N) : SymSeg := mkSeg w 0 0 0 b0.
 Definition segM (w : list nat) (cM0 b0 : N) : SymSeg := mkSeg w cM0 0 0 b0.
 Definition segMPQ (w : list nat) (cM0 cP0 cQ0 b0 : N) : SymSeg := mkSeg w cM0 cP0 cQ0 b0.
-
-Arguments seg0 w%_list b0%_N.
-Arguments segM w%_list cM0%_N b0%_N.
-Arguments segMPQ w%_list cM0%_N cP0%_N cQ0%_N b0%_N.
-Arguments LS_const w%_list cM0%_N b0%_N.
-Arguments LS_grow w%_list cM0%_N b0%_N r%_N.
-Arguments LS_drain w%_list remM%_N remB%_N r%_N.
-Arguments TO_steps k_len%_nat n%_nat.
-Arguments TO_factor k_len%_nat.
-Arguments TO_loop collapse%_bool k_len%_nat stride%_nat alpha%_N beta%_N lss%_list.
-
 Section TraceData.
 Local Open Scope nat_scope.
-
-Definition pChk_0 : list SymSeg := [
-  seg0 [1] 1;
-  seg0 [0; 0; 2] 14;
-  seg0 [0; 0; 1; 2; 0; 0; 0; 2; 0; 2; 0; 0; 0; 2; 0; 2] 1;
-  seg0 [0] 7;
-  seg0 [2; 2; 0; 0; 0; 0; 1] 1;
-  seg0 [0; 0; 0; 2; 2] 9;
-  seg0 [0] 6;
-  seg0 [2; 0; 2] 1;
-  seg0 [0] 6;
-  seg0 [2; 0; 1; 2; 2; 0; 0; 0; 0; 1; 2; 2; 0; 0; 0; 2; 2; 2; 0; 0; 1; 2; 0; 2; 0; 1; 2] 1;
-  seg0 [0] 6
-].
 
 Definition waveTemplate : list SymSeg := [
   seg0 [1; 0; 0; 1; 0; 0; 0; 1; 2; 2] 1;
@@ -2173,1330 +1970,125 @@ Definition closeRemSeg : list SymSeg := [
   seg0 [2; 2; 2; 2; 2; 2; 2; 0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1] 1
 ].
 
-Definition pOpsChunk_0 : list TraceOp := [
-  TO_steps 6 1; TO_steps 3 0; TO_steps 3 0; TO_factor 3; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 6 1; TO_steps 5 1; TO_steps 3 0; TO_factor 3;
-  TO_steps 7 1; TO_steps 8 1; TO_steps 3 1; TO_steps 1 0; TO_steps 7 0;
-  TO_factor 3; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 1 0;
-  TO_steps 3 0; TO_factor 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 4 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 3;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1;
-  TO_steps 1 0; TO_steps 5 0; TO_factor 3; TO_steps 3 1; TO_steps 5 1;
-  TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 1 0;
-  TO_steps 3 0; TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 0 7 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 2 1; TO_steps 3 1; TO_steps 2 0; TO_steps 2 0;
-  TO_factor 1; TO_steps 8 1; TO_steps 8 0;
-  TO_loop true 8 0 0 8 [
+End TraceData.
+
+Fixpoint stripPrefix (p s : list nat) : option (list nat) :=
+  match p, s with
+  | [], _ => Some s
+  | a :: p', b0 :: s' => if Nat.eqb a b0 then stripPrefix p' s' else None
+  | _, [] => None
+  end.
+
+Lemma stripPrefix_sound p s t : stripPrefix p s = Some t -> s = p ++ t.
+Proof.
+  revert s; induction p as [|a p IH]; intros s H.
+  - cbn in H. now inversion H.
+  - destruct s as [|b0 s]; cbn in H; [discriminate|].
+    destruct (Nat.eqb a b0) eqn:E; [|discriminate].
+    apply Nat.eqb_eq in E; subst b0; cbn; f_equal; now apply IH.
+Qed.
+
+Fixpoint findConcretePrefix (fuel : nat) (p s : list nat) : bool :=
+  match stripPrefix p s with
+  | Some _ => true
+  | None =>
+    match fuel with
+    | O => false
+    | S fuel' =>
+      match stepConcrete s with
+      | Some s' => findConcretePrefix fuel' p s'
+      | None => false
+      end
+    end
+  end.
+
+Lemma findConcretePrefix_sound fuel p s :
+  findConcretePrefix fuel p s = true ->
+  exists t, cfgSweep s -[ tm ]->* cfgSweep (p ++ t).
+Proof.
+  revert s; induction fuel as [|fuel IH]; intros s H; cbn [findConcretePrefix] in H.
+  - destruct (stripPrefix p s) as [t|] eqn:E; [|discriminate].
+    apply stripPrefix_sound in E. exists t; subst; apply evstep_refl.
+  - destruct (stripPrefix p s) as [t|] eqn:E.
+    + apply stripPrefix_sound in E. exists t; subst; apply evstep_refl.
+    + destruct (stepConcrete s) as [s'|] eqn:Hs; [|discriminate].
+      destruct (IH _ H) as [t Ht]; exists t.
+      eapply evstep_trans.
+      * apply progress_evstep. exact (stepConcrete_sound _ _ Hs).
+      * exact Ht.
+Qed.
+
+Definition autoPrefixFuel : nat := Eval vm_compute in N.to_nat 16384.
+Lemma auto_prefix_ok :
+  findConcretePrefix autoPrefixFuel (evalSym waveTemplate 0 0 0) [0%nat] = true.
+Proof. vm_compute; reflexivity. Qed.
+
+Lemma auto_prefix_reach :
+  exists t, c0 -[ tm ]->+ cfgSweep (evalSym waveTemplate 0 0 0 ++ t).
+Proof.
+  destruct (findConcretePrefix_sound _ _ _ auto_prefix_ok) as [t Ht].
+  exists t. eapply progress_evstep_trans; [exact init_reaches_sweep0 | exact Ht].
+Qed.
+
+(* Factor only the window rewritten by the two verified sweeps. *)
+Definition autoSymStep (s : list SymSeg) : option (list SymSeg) :=
+  match fwdSymLoop fuel512 0%nat s [mkSeg [0%nat] 0 0 0 1] with
+  | Some (rem, revops, suffix) =>
+    match bwdSymPass 0%nat revops rem with
+    | Some (O, out) | Some (S O, out) | Some (S (S O), out) =>
+      let '(hd, tl) := splitHead suffix in
+      Some (canonFunctional (mkSeg [1%nat] 0 0 0 1 :: (out ++ hd)) ++ tl)
+    | _ => None
+    end
+  | None => None
+  end.
+
+Lemma autoSymStep_sound s s' vM tail :
+  autoSymStep s = Some s' ->
+  cfgSweep (evalSym s vM 0 0 ++ tail) -[ tm ]->+ cfgSweep (evalSym s' vM 0 0 ++ tail).
+Proof.
+  unfold autoSymStep.
+  destruct (fwdSymLoop _ _ _ _) as [[[rem revops] suffix]|] eqn:E; [|discriminate].
+  destruct (bwdSymPass _ _ _) as [[r out]|] eqn:F; [|discriminate].
+  destruct (splitHead suffix) as [hd tl] eqn:G.
+  pose proof (symStepFunctional_sound s (canonRaw (mkSeg [1%nat] 0 0 0 1 :: out ++ hd) ++ tl)
+    vM 0 0 tail) as H.
+  assert (HH : r = 0%nat \/ r = 1%nat \/ r = 2%nat ->
+    symStepFunctional s = Some (canonRaw (mkSeg [1%nat] 0 0 0 1 :: out ++ hd) ++ tl)).
+  { intros [-> | [-> | ->]]; unfold symStepFunctional; now rewrite E, F, G. }
+  clear E F G.
+  assert (Er : forall v,
+    evalSym (canonRaw (mkSeg [1%nat] 0 0 0 1 :: out ++ hd) ++ tl) v 0 0 =
+    evalSym (canonFunctional (mkSeg [1%nat] 0 0 0 1 :: out ++ hd) ++ tl) v 0 0).
+  { intro v; now rewrite !evalSym_app, canonRaw_sound, canonFunctional_sound. }
+  destruct r as [|[|[|r]]]; intro Hs; try discriminate; inversion Hs; subst s';
+    apply stepConcrete_sound; specialize (H (HH ltac:(auto)));
+    rewrite (Er vM) in H; exact H.
+Qed.
+
+
+Inductive WaveHint := Hint (collapse : bool) (stride : nat) (alpha beta : N) (lss : list LoopSeg).
+Local Open Scope nat_scope.
+Arguments Hint collapse%_bool stride%_nat alpha%_N beta%_N lss%_list.
+Arguments LS_const w%_list cM0%_N b0%_N.
+Arguments LS_grow w%_list cM0%_N b0%_N r%_N.
+Arguments LS_drain w%_list remM%_N remB%_N r%_N.
+Definition hints : list WaveHint := [
+  Hint true 0 72 1127 [
       LS_const [1] 0 1;
       LS_grow [0; 0; 2] 0 8 1;
       LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
       LS_const [0; 0; 0; 1] 0 1;
       LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
     ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1;
-  TO_steps 3 0; TO_factor 3; TO_steps 6 1; TO_steps 3 0; TO_factor 3;
-  TO_steps 5 1; TO_steps 5 1; TO_steps 6 1; TO_steps 5 1; TO_steps 5 0;
-  TO_factor 5; TO_steps 9 1; TO_steps 10 1; TO_steps 7 0; TO_factor 3;
-  TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 5 1;
-  TO_steps 3 1; TO_steps 3 1; TO_steps 1 0; TO_steps 3 0; TO_factor 1;
-  TO_steps 1 0; TO_steps 7 0; TO_factor 4; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 4; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 1 0; TO_steps 5 0; TO_factor 3; TO_steps 3 1;
-  TO_steps 8 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 7 1;
-  TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 1 0; TO_steps 3 0;
-  TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 0 13 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 2 1; TO_steps 3 1; TO_steps 2 0; TO_steps 2 0;
-  TO_factor 1; TO_steps 8 1; TO_steps 8 0;
-  TO_loop true 8 0 0 13 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 8 1;
-      LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1] 0 1;
-      LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 6 0;
-  TO_steps 6 0; TO_factor 4; TO_steps 4 1; TO_steps 4 1; TO_steps 4 0;
-  TO_steps 4 0; TO_factor 4; TO_steps 5 0;
-  TO_loop false 5 0 0 12 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 38 1;
-      LS_drain [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [2; 0; 1] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 4 1; TO_steps 4 1; TO_steps 5 1; TO_steps 5 0;
-  TO_factor 5; TO_steps 10 0; TO_factor 5; TO_steps 5 0; TO_factor 5;
-  TO_steps 10 1; TO_steps 10 0; TO_factor 6; TO_steps 6 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 4 1; TO_steps 3 1; TO_steps 9 0; TO_factor 3;
-  TO_steps 12 1; TO_steps 8 1; TO_steps 5 0; TO_factor 5; TO_steps 9 1;
-  TO_steps 9 0; TO_factor 8; TO_steps 8 1; TO_steps 5 0; TO_steps 12 0;
-  TO_factor 5; TO_steps 11 1; TO_steps 12 1; TO_steps 11 1; TO_steps 11 1;
-  TO_steps 9 1; TO_steps 5 1; TO_steps 5 1; TO_steps 5 0; TO_steps 5 0;
-  TO_factor 5; TO_steps 7 1; TO_steps 15 1; TO_steps 13 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 10 0; TO_factor 8; TO_steps 8 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 13 0; TO_factor 5; TO_steps 7 1; TO_steps 3 1;
-  TO_steps 14 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 1 0; TO_steps 3 0; TO_factor 3; TO_steps 1 0;
-  TO_steps 3 0; TO_factor 1; TO_steps 6 1; TO_steps 4 1; TO_steps 4 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1;
-  TO_steps 4 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 4;
-  TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 4; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 4; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 9 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 18 0; TO_factor 11; TO_steps 4 1; TO_steps 5 1; TO_steps 3 1;
-  TO_steps 1 0; TO_steps 7 0; TO_factor 5; TO_steps 3 1; TO_steps 7 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 16 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 3 1; TO_steps 1 0; TO_steps 3 0; TO_factor 3;
-  TO_steps 4 1;
-  TO_loop false 4 1 0 47 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 2 1; TO_steps 3 1; TO_steps 2 0; TO_steps 2 0;
-  TO_factor 1; TO_steps 8 1; TO_steps 8 0;
-  TO_loop true 8 0 0 47 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 8 1;
-      LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1] 0 1;
-      LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 6 0;
-  TO_factor 6; TO_steps 8 1; TO_steps 18 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 4 1; TO_steps 4 1;
-  TO_loop true 4 0 0 46 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 76 1;
-      LS_drain [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [2; 0; 1] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 11 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 3 1; TO_steps 3 1; TO_steps 5 1; TO_steps 3 1;
-  TO_steps 3 0; TO_steps 11 0; TO_factor 3; TO_steps 9 1; TO_steps 20 1;
-  TO_steps 5 0; TO_factor 5; TO_steps 12 0; TO_factor 10; TO_steps 5 0;
-  TO_steps 10 0; TO_factor 5
-].
-
-Definition pOpsChunk_1 : list TraceOp := [
-  TO_steps 9 1; TO_steps 5 0; TO_steps 14 0; TO_factor 5; TO_steps 11 1;
-  TO_steps 13 1; TO_steps 11 1; TO_steps 11 1; TO_steps 9 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 25 0; TO_factor 17; TO_steps 8 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 12 0; TO_factor 5; TO_steps 8 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 13 0; TO_factor 5; TO_steps 7 1; TO_steps 5 1;
-  TO_steps 10 1; TO_steps 5 1; TO_steps 5 1; TO_steps 5 0; TO_steps 5 0;
-  TO_factor 5; TO_steps 7 1; TO_steps 5 1; TO_steps 5 0; TO_steps 12 0;
-  TO_factor 10; TO_steps 5 0; TO_steps 11 0; TO_factor 10; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 5; TO_steps 5 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 5; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 5; TO_steps 7 1; TO_steps 5 0; TO_steps 10 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 13 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 10 1; TO_steps 5 0; TO_steps 18 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 20 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 5 1; TO_steps 12 1; TO_steps 3 1;
-  TO_steps 8 1; TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 7 1;
-  TO_steps 1 0; TO_steps 3 0; TO_factor 1; TO_steps 1 0; TO_steps 10 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 18 0;
-  TO_factor 10; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 14 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 15 1; TO_steps 4 1; TO_steps 5 1; TO_steps 3 1;
-  TO_steps 1 0; TO_steps 7 0; TO_factor 5; TO_steps 3 1; TO_steps 7 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 1 0; TO_steps 21 0;
-  TO_factor 10; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 1 0;
-  TO_steps 3 0; TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 0 119 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 2 1; TO_steps 3 1; TO_steps 2 0; TO_steps 2 0;
-  TO_factor 1; TO_steps 8 1; TO_steps 8 0;
-  TO_loop true 8 0 0 119 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 8 1;
-      LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1] 0 1;
-      LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 6 0;
-  TO_factor 6; TO_steps 9 1; TO_steps 17 0; TO_factor 13; TO_steps 21 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 0;
-  TO_loop true 4 0 0 118 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 148 1;
-      LS_drain [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [2; 0; 1] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 3 0; TO_steps 15 0;
-  TO_factor 13; TO_steps 9 1; TO_steps 16 1; TO_steps 5 0; TO_factor 5;
-  TO_steps 12 0; TO_factor 10; TO_steps 5 0; TO_steps 10 0; TO_factor 5;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 14 0; TO_factor 5; TO_steps 11 1;
-  TO_steps 13 1; TO_steps 11 1; TO_steps 11 1; TO_steps 9 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 5 1; TO_steps 5 0; TO_steps 13 0;
-  TO_factor 5; TO_steps 9 1; TO_steps 5 1; TO_steps 5 0; TO_steps 13 0;
-  TO_factor 11; TO_steps 7 1; TO_steps 5 1; TO_steps 11 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 13 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 7 0; TO_factor 5; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0
-].
-
-Definition pOpsChunk_2 : list TraceOp := [
-  TO_steps 10 0; TO_factor 5; TO_steps 5 0; TO_steps 7 0; TO_factor 5;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 10 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 13 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 10 1;
-  TO_steps 5 0; TO_steps 21 0; TO_factor 9; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 18 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 15 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 11 1; TO_steps 7 1; TO_steps 16 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0;
-  TO_steps 20 0; TO_factor 11; TO_steps 7 1; TO_steps 11 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 12 1; TO_steps 7 1; TO_steps 8 1; TO_steps 11 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 11 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0;
-  TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 13 1; TO_steps 18 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 25 0; TO_factor 18; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 5 1; TO_steps 3 0;
-  TO_steps 17 0; TO_factor 12; TO_steps 3 1; TO_steps 19 1; TO_steps 3 1;
-  TO_steps 5 1; TO_steps 3 1; TO_steps 7 1; TO_steps 1 0; TO_steps 3 0;
-  TO_factor 1; TO_steps 12 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 14 0; TO_factor 12; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 14 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 22 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 13 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 15 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 17 0; TO_factor 11;
-  TO_steps 4 1; TO_steps 16 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 17 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 16 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 7 1
-].
-
-Definition pOpsChunk_3 : list TraceOp := [
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 13 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 14 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 5 1;
-  TO_steps 3 1; TO_steps 1 0; TO_steps 7 0; TO_factor 5; TO_steps 3 1;
-  TO_steps 7 1; TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 14 1;
-  TO_steps 3 1; TO_steps 3 1; TO_steps 3 1; TO_steps 1 0; TO_steps 3 0;
-  TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 0 263 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 2 1; TO_steps 3 1; TO_steps 2 0; TO_steps 2 0;
-  TO_factor 1; TO_steps 8 1; TO_steps 8 0;
-  TO_loop true 8 0 0 263 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 8 1;
-      LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1] 0 1;
-      LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 6 0;
-  TO_factor 6; TO_steps 9 1; TO_steps 31 0; TO_factor 17; TO_steps 22 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 0;
-  TO_loop true 4 0 0 262 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 292 1;
-      LS_drain [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [2; 0; 1] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 27 0;
-  TO_factor 18; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 3 1; TO_steps 3 1; TO_steps 5 1; TO_steps 3 1;
-  TO_steps 3 0; TO_steps 27 0; TO_factor 19; TO_steps 9 1; TO_steps 16 1;
-  TO_steps 5 0; TO_factor 5; TO_steps 12 0; TO_factor 10; TO_steps 5 0;
-  TO_steps 10 0; TO_factor 5; TO_steps 9 1; TO_steps 5 0; TO_steps 14 0;
-  TO_factor 5; TO_steps 11 1; TO_steps 13 1; TO_steps 11 1; TO_steps 11 1;
-  TO_steps 9 1; TO_steps 5 1; TO_steps 5 1; TO_steps 5 0; TO_steps 5 0;
-  TO_factor 5; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 13 0; TO_factor 5; TO_steps 9 1; TO_steps 5 1;
-  TO_steps 5 0; TO_steps 13 0; TO_factor 11; TO_steps 7 1; TO_steps 5 1;
-  TO_steps 11 1; TO_steps 5 1; TO_steps 5 1; TO_steps 5 0; TO_steps 5 0;
-  TO_factor 5; TO_steps 7 1; TO_steps 5 1; TO_steps 5 0; TO_steps 14 0;
-  TO_factor 9; TO_steps 13 1; TO_steps 5 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 5; TO_steps 5 1; TO_steps 5 1; TO_steps 5 0; TO_steps 10 0;
-  TO_factor 5; TO_steps 5 0; TO_steps 7 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 10 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 13 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 10 1; TO_steps 5 0;
-  TO_steps 21 0; TO_factor 9; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 18 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 15 1; TO_steps 10 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 16 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 20 0;
-  TO_factor 11; TO_steps 7 1; TO_steps 11 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 12 1; TO_steps 7 1; TO_steps 8 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 13 1; TO_steps 18 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 24 0;
-  TO_factor 18; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 19 0;
-  TO_factor 14; TO_steps 21 1; TO_steps 7 1; TO_steps 9 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 5 0
-].
-
-Definition pOpsChunk_4 : list TraceOp := [
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 15 0; TO_factor 13; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 15 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 14 1; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1;
-  TO_steps 7 1; TO_steps 23 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 14 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 18 0; TO_factor 12; TO_steps 17 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 18 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 17 1; TO_steps 7 1;
-  TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1;
-  TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 10 1; TO_steps 5 1; TO_steps 3 0; TO_steps 32 0;
-  TO_factor 27; TO_steps 3 1; TO_steps 21 1; TO_steps 3 1; TO_steps 5 1;
-  TO_steps 3 1; TO_steps 7 1; TO_steps 1 0; TO_steps 3 0; TO_factor 1;
-  TO_steps 1 0; TO_steps 26 0; TO_factor 17; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 26 0; TO_factor 18; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 13 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 15 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1
-].
-
-Definition pOpsChunk_5 : list TraceOp := [
-  TO_steps 1 0; TO_steps 36 0; TO_factor 21; TO_steps 4 1; TO_steps 25 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 25 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 25 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 13 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0;
-  TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 14 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0;
-  TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 15 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 28 0; TO_factor 19; TO_steps 4 1;
-  TO_steps 26 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 26 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 27 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 13 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 11 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 13 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 14 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 15 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 29 0; TO_factor 19;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 31 0; TO_factor 29; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 31 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1
-].
-
-Definition pOpsChunk_6 : list TraceOp := [
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 27 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 13 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 5 1; TO_steps 3 1; TO_steps 1 0; TO_steps 7 0;
-  TO_factor 5; TO_steps 3 1; TO_steps 7 1; TO_steps 3 1; TO_steps 5 1;
-  TO_steps 3 1; TO_steps 14 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1;
-  TO_steps 1 0; TO_steps 3 0; TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 0 551 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 2 1; TO_steps 3 1; TO_steps 2 0; TO_steps 2 0;
-  TO_factor 1; TO_steps 8 1; TO_steps 8 0;
-  TO_loop true 8 0 0 551 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 8 1;
-      LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1] 0 1;
-      LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 6 0;
-  TO_factor 6; TO_steps 9 1; TO_steps 29 0; TO_factor 19; TO_steps 30 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 0;
-  TO_loop true 4 0 0 550 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 580 1;
-      LS_drain [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [2; 0; 1] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 31 1;
-  TO_steps 7 1; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 3 0; TO_steps 28 0;
-  TO_factor 3; TO_steps 9 1; TO_steps 16 1; TO_steps 5 0; TO_factor 5;
-  TO_steps 12 0; TO_factor 10; TO_steps 5 0; TO_steps 10 0; TO_factor 5;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 14 0; TO_factor 5; TO_steps 11 1;
-  TO_steps 13 1; TO_steps 11 1; TO_steps 11 1; TO_steps 9 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 5 1; TO_steps 5 0; TO_steps 13 0;
-  TO_factor 5; TO_steps 9 1; TO_steps 5 1; TO_steps 5 0; TO_steps 13 0;
-  TO_factor 11; TO_steps 7 1; TO_steps 5 1; TO_steps 11 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 13 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 7 0; TO_factor 5; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 10 0; TO_factor 5; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 5; TO_steps 7 1; TO_steps 5 0; TO_steps 10 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 10 1; TO_steps 5 0; TO_steps 21 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 18 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 15 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 11 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 5 0; TO_steps 20 0; TO_factor 11; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 15 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 12 1; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 11 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 9 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 9 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1
-].
-
-Definition pOpsChunk_7 : list TraceOp := [
-  TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 18 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 24 0; TO_factor 18; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 19 0; TO_factor 14; TO_steps 21 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 13 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 15 0; TO_factor 13; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 15 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 14 1; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1;
-  TO_steps 7 1; TO_steps 23 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 14 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 18 0; TO_factor 12; TO_steps 17 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 18 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 17 1; TO_steps 7 1;
-  TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1;
-  TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 34 0;
-  TO_factor 29; TO_steps 23 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 27 0; TO_factor 18; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 27 0; TO_factor 19; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 13 1; TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 37 0; TO_factor 22; TO_steps 26 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 26 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 26 1; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0
-].
-
-Definition pOpsChunk_8 : list TraceOp := [
-  TO_steps 14 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1;
-  TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 29 0; TO_factor 20; TO_steps 27 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 27 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 28 1;
-  TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1;
-  TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 30 0; TO_factor 20; TO_steps 5 0; TO_steps 32 0; TO_factor 30;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 32 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 28 1; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 14 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1;
-  TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 5 1;
-  TO_steps 3 0; TO_steps 28 0; TO_factor 18; TO_steps 3 1; TO_steps 29 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 7 1; TO_steps 1 0;
-  TO_steps 3 0; TO_factor 1; TO_steps 30 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 27 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 13 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 14 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1
-].
-
-Definition pOpsChunk_9 : list TraceOp := [
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 15 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 29 0;
-  TO_factor 19; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 27 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 13 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 13 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 10 0; TO_factor 8; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 15 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 29 0; TO_factor 19; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 30 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 27 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 13 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1; TO_steps 7 1
-].
-
-Definition pOpsChunk_10 : list TraceOp := [
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 15 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 29 0; TO_factor 19; TO_steps 4 1; TO_steps 30 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 30 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 27 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 13 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0;
-  TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 14 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0;
-  TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 15 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 29 0; TO_factor 19; TO_steps 4 1;
-  TO_steps 30 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 30 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 27 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 13 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 11 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 13 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 14 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1
-].
-
-Definition pOpsChunk_11 : list TraceOp := [
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 15 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 29 0; TO_factor 19;
-  TO_steps 4 1; TO_steps 30 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 27 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 13 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 14 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 10 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 15 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 29 0;
-  TO_factor 19; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 27 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 13 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 13 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 10 0; TO_factor 8; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 15 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1
-].
-
-Definition pOpsChunk_12 : list TraceOp := [
-  TO_steps 4 1; TO_steps 1 0; TO_steps 6 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 29 0; TO_factor 19; TO_steps 4 1; TO_steps 30 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 30 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 27 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 8 0; TO_factor 6; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 11 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0;
-  TO_factor 8; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 9 1;
-  TO_steps 4 1; TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 13 0; TO_factor 8;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1; TO_steps 4 1;
-  TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 14 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0; TO_factor 13;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 6 0;
-  TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1; TO_steps 12 1;
-  TO_steps 4 1; TO_steps 5 1; TO_steps 3 1; TO_steps 1 0; TO_steps 7 0;
-  TO_factor 5; TO_steps 3 1; TO_steps 7 1; TO_steps 3 1; TO_steps 5 1;
-  TO_steps 3 1; TO_steps 14 1; TO_steps 3 1; TO_steps 3 1; TO_steps 3 1;
-  TO_steps 1 0; TO_steps 3 0; TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 0 1127 [
-      LS_const [1; 2] 0 1;
-      LS_drain [0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1; 2; 2] 0 1;
-      LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 1 0
-].
-
-Definition pOpsChunk_all : list TraceOp :=
-  pOpsChunk_0 ++ pOpsChunk_1 ++ pOpsChunk_2 ++ pOpsChunk_3 ++ pOpsChunk_4 ++ pOpsChunk_5 ++ pOpsChunk_6 ++ pOpsChunk_7 ++ pOpsChunk_8 ++ pOpsChunk_9 ++ pOpsChunk_10 ++ pOpsChunk_11 ++ pOpsChunk_12.
-
-
-Definition wOpsChunk_0 : list TraceOp := [
-  TO_steps 3 1; TO_steps 2 0; TO_steps 2 0; TO_factor 1; TO_steps 8 1;
-  TO_steps 8 0;
-  TO_loop true 8 0 72 1127 [
-      LS_const [1] 0 1;
-      LS_grow [0; 0; 2] 0 8 1;
-      LS_grow [0; 0; 0; 0; 2; 0] 0 6 1;
-      LS_const [0; 0; 0; 1] 0 1;
-      LS_drain [0; 1; 0; 0; 0; 2; 2] 0 6 1
-    ];
-  TO_steps 5 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 6 0;
-  TO_factor 6; TO_steps 9 1; TO_steps 29 0; TO_factor 11; TO_steps 30 1;
-  TO_steps 8 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 0;
-  TO_loop true 4 0 72 1126 [
+  Hint true 0 72 1126 [
       LS_const [1] 0 1;
       LS_grow [0; 0; 2] 72 1156 1;
       LS_drain [0; 0; 0; 0; 2; 0] 0 6 1;
       LS_const [0; 0; 0; 0; 1; 2; 2] 0 1;
       LS_grow [2; 0; 1] 0 6 1
     ];
-  TO_steps 5 1; TO_steps 4 1; TO_steps 4 1; TO_steps 4 1; TO_steps 30 1;
-  TO_steps 7 1; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 3 0; TO_steps 28 0;
-  TO_factor 3; TO_steps 9 1; TO_steps 16 1; TO_steps 5 0; TO_factor 5;
-  TO_steps 12 0; TO_factor 10; TO_steps 5 0; TO_steps 10 0; TO_factor 5;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 14 0; TO_factor 5; TO_steps 11 1;
-  TO_steps 13 1; TO_steps 11 1; TO_steps 11 1; TO_steps 9 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 5 1; TO_steps 5 0; TO_steps 13 0;
-  TO_factor 5; TO_steps 9 1; TO_steps 5 1; TO_steps 5 0; TO_steps 13 0;
-  TO_factor 11; TO_steps 7 1; TO_steps 5 1; TO_steps 11 1; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 5 0; TO_factor 5; TO_steps 7 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 13 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 7 0; TO_factor 5; TO_steps 5 1;
-  TO_steps 5 1; TO_steps 5 0; TO_steps 10 0; TO_factor 5; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 5; TO_steps 7 1; TO_steps 5 0; TO_steps 10 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 10 1; TO_steps 5 0; TO_steps 21 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 18 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 15 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 11 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 5 0; TO_steps 20 0; TO_factor 11; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 15 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 12 1; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 11 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 9 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 9 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 18 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 24 0; TO_factor 18; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 19 0; TO_factor 14; TO_steps 21 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 13 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 15 0; TO_factor 13; TO_steps 7 1; TO_steps 14 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 15 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 14 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 14 1; TO_steps 7 1; TO_steps 23 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 14 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1;
-  TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 18 0; TO_factor 12; TO_steps 17 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 18 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 17 1;
-  TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 13 1
-].
-
-Definition wOpsChunk_1 : list TraceOp := [
-  TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 13 1; TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 34 0; TO_factor 29; TO_steps 23 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 27 0; TO_factor 18;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 27 0; TO_factor 19;
-  TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1;
-  TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 37 0; TO_factor 22; TO_steps 26 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 26 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 26 1; TO_steps 7 1;
-  TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1;
-  TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 29 0;
-  TO_factor 20; TO_steps 27 1; TO_steps 7 1; TO_steps 9 1; TO_steps 27 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 28 1; TO_steps 7 1; TO_steps 14 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14;
-  TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1; TO_steps 15 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0;
-  TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 16 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 30 0; TO_factor 20
-].
-
-Definition wOpsChunk_2 : list TraceOp := [
-  TO_steps 5 0; TO_steps 32 0; TO_factor 30; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 32 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 28 1; TO_steps 7 1;
-  TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1;
-  TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 30 0;
-  TO_factor 20; TO_steps 31 1; TO_steps 7 1; TO_steps 9 1; TO_steps 31 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 28 1; TO_steps 7 1; TO_steps 14 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14;
-  TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1; TO_steps 15 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0;
-  TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 16 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 30 0; TO_factor 20;
-  TO_steps 31 1; TO_steps 7 1; TO_steps 9 1; TO_steps 31 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 28 1; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 13 1; TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 30 0; TO_factor 20; TO_steps 31 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 31 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 28 1; TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 10 1; TO_steps 8 1; TO_steps 7 1; TO_steps 13 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 14 0; TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1
-].
-
-Definition wOpsChunk_3 : list TraceOp := [
-  TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1;
-  TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 30 0; TO_factor 20; TO_steps 31 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 31 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 28 1;
-  TO_steps 7 1; TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1;
-  TO_steps 8 1; TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1;
-  TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 30 0; TO_factor 20; TO_steps 31 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 31 1; TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 7; TO_steps 7 1; TO_steps 9 1; TO_steps 28 1; TO_steps 7 1;
-  TO_steps 14 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1;
-  TO_steps 11 1; TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0;
-  TO_steps 9 0; TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0; TO_steps 16 0;
-  TO_factor 14; TO_steps 7 1; TO_steps 8 1; TO_steps 14 1; TO_steps 7 1;
-  TO_steps 15 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1; TO_steps 5 0;
-  TO_steps 16 0; TO_factor 14; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 11 0; TO_factor 9; TO_steps 8 1; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 7 1; TO_steps 7 1; TO_steps 8 1; TO_steps 7 1; TO_steps 5 0;
-  TO_steps 7 0; TO_factor 7; TO_steps 13 1; TO_steps 13 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 16 1; TO_steps 9 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0;
-  TO_factor 7; TO_steps 10 1; TO_steps 7 1; TO_steps 5 0; TO_steps 30 0;
-  TO_factor 20; TO_steps 31 1; TO_steps 7 1; TO_steps 9 1; TO_steps 31 1;
-  TO_loop true 51 143 1 2 [
+  Hint true 143 1 2 [
       LS_const [1] 0 1;
       LS_drain [0; 0; 2] 0 135 144;
       LS_const [0; 0; 1] 0 1;
@@ -3527,26 +2119,7 @@ Definition wOpsChunk_3 : list TraceOp := [
       LS_const [2] 0 15;
       LS_grow [0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 2; 2; 2; 2; 2; 2] 0 6 1
     ];
-  TO_steps 7 1; TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 30 1; TO_steps 7 1; TO_steps 14 1;
-  TO_steps 5 0; TO_steps 9 0; TO_factor 7; TO_steps 7 1; TO_steps 11 1;
-  TO_steps 12 1; TO_steps 7 1; TO_steps 11 1; TO_steps 5 0; TO_steps 9 0;
-  TO_factor 9; TO_steps 7 1; TO_steps 10 1; TO_steps 8 1; TO_steps 7 1;
-  TO_steps 13 1; TO_steps 10 1; TO_steps 7 1; TO_steps 7 1; TO_steps 9 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 14 0; TO_factor 9; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 16 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 14 1; TO_steps 7 1; TO_steps 15 1; TO_steps 7 1; TO_steps 7 1;
-  TO_steps 9 1; TO_steps 5 0; TO_steps 16 0; TO_factor 14; TO_steps 7 1;
-  TO_steps 7 1; TO_steps 9 1; TO_steps 7 1; TO_steps 11 1; TO_steps 10 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 11 0; TO_factor 9; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 11 1; TO_steps 7 1; TO_steps 7 1; TO_steps 8 1;
-  TO_steps 7 1; TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 13 1;
-  TO_steps 13 1; TO_steps 7 1; TO_steps 5 0; TO_steps 9 0; TO_factor 7;
-  TO_steps 9 1; TO_steps 7 1; TO_steps 16 1; TO_steps 9 1; TO_steps 7 1;
-  TO_steps 5 0; TO_steps 7 0; TO_factor 7; TO_steps 10 1; TO_steps 5 1;
-  TO_steps 3 0; TO_steps 28 0; TO_factor 18; TO_steps 3 1; TO_steps 29 1;
-  TO_steps 3 1; TO_steps 5 1; TO_steps 3 1; TO_steps 7 1;
-  TO_loop true 30 287 1 15 [
+  Hint true 287 1 15 [
       LS_const [1; 2] 0 1;
       LS_grow [0; 0; 0; 2; 0] 0 6 144;
       LS_drain [0; 0; 0; 2; 0; 2] 0 62 72;
@@ -3582,66 +2155,168 @@ Definition wOpsChunk_3 : list TraceOp := [
       LS_grow [2; 2; 2; 2; 2; 2; 2; 0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 2; 0; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1; 2; 0; 1] 1 8 1;
       LS_const [2] 0 7
     ];
-  TO_steps 4 1; TO_steps 33 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 29 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 13 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 6; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 10 1; TO_steps 4 1; TO_steps 11 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1
-].
-
-Definition wOpsChunk_4 : list TraceOp := [
-  TO_steps 4 1; TO_steps 1 0; TO_steps 8 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 6 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 9 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 1 0; TO_steps 13 0; TO_factor 8; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 8 1; TO_steps 4 1;
-  TO_steps 15 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 7 1;
-  TO_steps 4 1; TO_steps 13 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 14 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 1 0; TO_steps 15 0;
-  TO_factor 13; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 8 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 10 1; TO_steps 4 1; TO_steps 9 1; TO_steps 4 1; TO_steps 6 1;
-  TO_steps 4 1; TO_steps 1 0; TO_steps 10 0; TO_factor 8; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 10 1;
-  TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1;
-  TO_steps 7 1; TO_steps 4 1; TO_steps 6 1; TO_steps 4 1; TO_steps 1 0;
-  TO_steps 6 0; TO_factor 6; TO_steps 4 1; TO_steps 12 1; TO_steps 4 1;
-  TO_steps 12 1; TO_steps 4 1; TO_steps 5 1; TO_steps 3 1; TO_steps 1 0;
-  TO_steps 7 0; TO_factor 5; TO_steps 3 1; TO_steps 7 1; TO_steps 3 1;
-  TO_steps 5 1; TO_steps 3 1; TO_steps 14 1; TO_steps 3 1; TO_steps 3 1;
-  TO_steps 3 1; TO_steps 1 0; TO_steps 3 0; TO_factor 3; TO_steps 4 1;
-  TO_loop false 4 1 144 2279 [
+  Hint false 1 144 2279 [
       LS_const [1; 2] 0 1;
       LS_drain [0; 0; 0; 2; 0] 0 6 1;
       LS_const [0; 0; 0; 1; 2; 2] 0 1;
       LS_grow [0; 0; 0; 2; 2; 0; 1] 0 6 1
-    ];
-  TO_steps 4 1; TO_steps 4 1; TO_steps 2 1; TO_steps 2 1; TO_steps 2 1;
-  TO_steps 2 1; TO_steps 1 0
+    ]
 ].
 
-Definition wOpsChunk_all : list TraceOp :=
-  wOpsChunk_0 ++ wOpsChunk_1 ++ wOpsChunk_2 ++ wOpsChunk_3 ++ wOpsChunk_4.
+Open Scope N_scope.
 
+Definition width (s : SymSeg) : N * N :=
+  let n := N.of_nat (List.length (word s)) in (n * cM s, n * b s).
 
-End TraceData.
+Fixpoint sumWidth (s : list SymSeg) : N * N :=
+  match s with
+  | [] => (0, 0)
+  | x :: xs =>
+    let '(m, b0) := width x in
+    let '(m', b') := sumWidth xs in
+    (m + m', b0 + b')
+  end.
 
-Lemma prefix_ok : checkPrefixGen fuel124 waveTemplate pChk_0 pOpsChunk_all = true.
+Fixpoint seekCut (m b0 : N) (s : list SymSeg) (i : nat) : option nat :=
+  if (m =? 0) && (b0 =? 0) then Some i else
+  match s with
+  | [] => None
+  | x :: xs =>
+    let '(m1, b1) := width x in
+    if (m1 <=? m) && (b1 <=? b0) then seekCut (m - m1) (b0 - b1) xs (S i)
+    else None
+  end.
+
+Definition matchHint (h : WaveHint) (s : list SymSeg) : option (list SymSeg) :=
+  match h with
+  | Hint collapse stride alpha beta lss =>
+    let '(m, b0) := sumWidth (loopStart alpha beta lss) in
+    match seekCut m b0 s O with
+    | Some n => accelLoop collapse n s stride alpha beta lss
+    | None => None
+    end
+  end.
+
+Definition waveTarget := substMSegs 2 16 waveTemplate ++ closeRemSeg.
+Definition targetCanon := canonCollapse waveTarget.
+Definition targetWidth := sumWidth waveTarget.
+
+Definition matchesWave (s : list SymSeg) : bool :=
+  let '(m, b0) := targetWidth in
+  match seekCut m b0 s O with
+  | Some n => list_symseg_eqb (canonCollapse (firstn n s)) targetCanon
+  | None => false
+  end.
+
+(* Hints are offered in order.  If the next loop does not match, execute
+   one sweep of the current state and try again. *)
+Fixpoint runAutoWave (fuel : nat) (hs : list WaveHint) (s : list SymSeg) : bool :=
+  match fuel with
+  | O => false
+  | S more =>
+    if matchesWave s then true else
+    let step := fun _ =>
+      match autoSymStep s with
+      | Some s' => runAutoWave more hs s'
+      | None => false
+      end in
+    match hs with
+    | [] => step tt
+    | h :: hs' =>
+      match matchHint h s with
+      | Some s' => runAutoWave more hs' s'
+      | None => step tt
+      end
+    end
+  end.
+
+Definition waveFuel : nat := Eval vm_compute in N.to_nat 4096.
+
+Lemma matchHint_sound h s s' vM tail :
+  matchHint h s = Some s' ->
+  cfgSweep (evalSym s vM 0 0 ++ tail) -[ tm ]->*
+  cfgSweep (evalSym s' vM 0 0 ++ tail).
+Proof.
+  destruct h as [collapse stride alpha beta lss]; cbn [matchHint].
+  destruct (sumWidth (loopStart alpha beta lss)) as [m b0].
+  destruct (seekCut m b0 s O) as [n|]; [|discriminate].
+  now apply accelLoop_sound.
+Qed.
+
+Lemma matchesWave_sound s vM tail :
+  matchesWave s = true ->
+  exists tail',
+    evalSym s vM 0 0 ++ tail = evalSym waveTemplate (2 * vM + 16) 0 0 ++ tail'.
+Proof.
+  unfold matchesWave.
+  destruct targetWidth as [m b0].
+  destruct (seekCut m b0 s O) as [n|]; [|discriminate].
+  intro E; apply list_symseg_eqb_eq in E.
+  assert (He : evalSym (firstn n s) vM 0 0 = evalSym waveTarget vM 0 0).
+  { rewrite <- (canonCollapse_sound (firstn n s) vM 0 0).
+    rewrite E. apply canonCollapse_sound. }
+  assert (Hs : evalSym s vM 0 0 =
+      evalSym (firstn n s) vM 0 0 ++ evalSym (skipn n s) vM 0 0).
+  { rewrite <- evalSym_app, firstn_skipn. reflexivity. }
+  rewrite Hs, He.
+  unfold waveTarget; rewrite evalSym_app, substMSegs_sound, <- !app_assoc.
+  eexists; reflexivity.
+Qed.
+
+Lemma runAutoWave_sound fuel hs s vM tail :
+  runAutoWave fuel hs s = true ->
+  exists tail',
+    cfgSweep (evalSym s vM 0 0 ++ tail) -[ tm ]->*
+    cfgSweep (evalSym waveTemplate (2 * vM + 16) 0 0 ++ tail').
+Proof.
+  revert hs s; induction fuel as [|fuel IH]; intros hs s H;
+    cbn [runAutoWave fst] in H; [discriminate|].
+  destruct (matchesWave s) eqn:E.
+  - destruct (matchesWave_sound s vM tail E) as [tail' Ht].
+    exists tail'. rewrite Ht. apply evstep_refl.
+  - destruct hs as [|h hs].
+    + destruct (autoSymStep s) as [s'|] eqn:S; [|discriminate].
+      destruct (IH [] s' H) as [tail' Ht].
+      exists tail'. eapply evstep_trans.
+      * apply progress_evstep. exact (autoSymStep_sound _ _ vM tail S).
+      * exact Ht.
+    + destruct (matchHint h s) as [s'|] eqn:L.
+      * destruct (IH hs s' H) as [tail' Ht].
+        exists tail'. eapply evstep_trans.
+        -- exact (matchHint_sound _ _ _ vM tail L).
+        -- exact Ht.
+      * destruct (autoSymStep s) as [s'|] eqn:S; [|discriminate].
+        destruct (IH (h :: hs) s' H) as [tail' Ht].
+        exists tail'. eapply evstep_trans.
+        -- apply progress_evstep. exact (autoSymStep_sound _ _ vM tail S).
+        -- exact Ht.
+Qed.
+
+Definition checkAutoWave : bool :=
+  match autoSymStep waveTemplate with
+  | Some s1 => runAutoWave waveFuel hints s1
+  | None => false
+  end.
+
+Lemma checkAutoWave_sound :
+  checkAutoWave = true ->
+  forall vM tail, exists tail',
+    cfgSweep (evalSym waveTemplate vM 0 0 ++ tail) -[ tm ]->+
+    cfgSweep (evalSym waveTemplate (2 * vM + 16) 0 0 ++ tail').
+Proof.
+  unfold checkAutoWave.
+  destruct (autoSymStep waveTemplate) as [s1|] eqn:E; [|discriminate].
+  intros H vM tail.
+  destruct (runAutoWave_sound _ _ _ vM tail H) as [tail' Ht].
+  exists tail'. eapply progress_evstep_trans.
+  - exact (autoSymStep_sound _ _ vM tail E).
+  - exact Ht.
+Qed.
+
+Lemma wave_ok : checkAutoWave = true.
 Proof. vm_compute; reflexivity. Qed.
 
-Lemma wave_ok : checkWaveGen waveTemplate closeRemSeg wOpsChunk_all = true.
-Proof. vm_compute; reflexivity. Qed.
-
-#[local] Opaque pChk_0 waveTemplate closeRemSeg
-  pOpsChunk_0 pOpsChunk_1 pOpsChunk_2 pOpsChunk_3 pOpsChunk_4
-  pOpsChunk_5 pOpsChunk_6 pOpsChunk_7 pOpsChunk_8 pOpsChunk_9
-  pOpsChunk_10 pOpsChunk_11 pOpsChunk_12 pOpsChunk_all
-  wOpsChunk_0 wOpsChunk_1 wOpsChunk_2 wOpsChunk_3 wOpsChunk_4 wOpsChunk_all.
+#[local] Opaque waveTemplate closeRemSeg hints.
 
 Definition WaveInv (c : Q * tape) : Prop :=
   exists (vM : N) (tail : list nat),
@@ -3650,8 +2325,7 @@ Definition WaveInv (c : Q * tape) : Prop :=
 Lemma wave_inv_step : forall c, WaveInv c -> exists c', WaveInv c' /\ c -[ tm ]->+ c'.
 Proof.
   intros c [vM [tail ->]].
-  destruct (checkWaveGen_sound waveTemplate closeRemSeg wOpsChunk_all wave_ok vM tail)
-    as [tail' Hstep].
+  destruct (checkAutoWave_sound wave_ok vM tail) as [tail' Hstep].
   exists (cfgSweep (evalSym waveTemplate (2 * vM + 16) 0 0 ++ tail')).
   split.
   - exists (2 * vM + 16), tail'. reflexivity.
@@ -3660,11 +2334,12 @@ Qed.
 
 Lemma nonhalt : ~ halts tm c0.
 Proof.
-  destruct (checkPrefixGen_sound fuel124 waveTemplate pChk_0 pOpsChunk_all prefix_ok)
-    as [tail0 Hinit].
+  destruct auto_prefix_reach as [tail0 Hinit].
   eapply multistep_nonhalt.
   - exact (progress_evstep tm _ _ Hinit).
   - eapply progress_nonhalt with (P := WaveInv).
     + exact wave_inv_step.
     + exists 0, tail0. reflexivity.
 Qed.
+
+Print Assumptions nonhalt.
