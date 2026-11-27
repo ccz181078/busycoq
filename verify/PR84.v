@@ -1,23 +1,22 @@
-(* 1RB0LE_1RC1RB_1LD0RE_1LA1LC_1RB0LF_0LC--- halts (BB(6) holdout 608:#339 / 797:#449). *)
+(** Two machines with the same accelerated tape rules (PR 84). *)
 
 From BusyCoq Require Import Individual62.
 From Coq Require Import Lia ZifyNat ZifyN NArith PArith PeanoNat Bool String List Lists.Streams.
 Import ListNotations.
 Set Default Goal Selector "!".
 
-Definition tm : TM := TM_from_str "1RB0LE_1RC1RB_1LD0RE_1LA1LC_1RB0LF_0LC---".
+Module Common.
 
-Module M339.
+Definition machine (variant : bool) : TM :=
+  if variant then TM_from_str "1RB0LE_1RC1RB_1LD0RE_1LA1LC_1RB0LF_0LC---"
+  else TM_from_str "1RB0LE_1RC1RB_1LD0RA_1LA1LC_0LC1LF_0RA---".
 
 Local Open Scope list_scope.
 Local Open Scope N_scope.
 Ltac Zify.zify_convert_to_euclidean_division_equations_flag ::= constr:(true).
 
-Notation "c --> c'" := (c -[ tm ]-> c') (at level 40).
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-
-Lemma evstep_halts (c c' : Q * tape) :
-  c -->* c' -> halts tm c' -> halts tm c.
+Lemma evstep_halts {variant : bool} (c c' : Q * tape) :
+  c -[ machine variant ]->* c' -> halts (machine variant) c' -> halts (machine variant) c.
 Proof.
   intros Hreach Hh.
   destruct (with_counter Hreach) as [n Hn].
@@ -225,7 +224,7 @@ Ltac finish_cb :=
 
 Ltac check_done_cb :=
   lazymatch goal with
-  | |- (?q, _) -->* (?q, _) => finish_cb
+  | |- (?q, _) -[ _ ]->* (?q, _) => finish_cb
   end.
 
 Ltac fsteps :=
@@ -245,109 +244,103 @@ Proof.
   - replace (N.succ n) with (1 + n) by lia. exact (HS n IHn).
 Qed.
 
-Lemma scanR_plain (l r : side) (n : N) :
-  (B;; l {{S0}} (npow [S1; S1] n *> r)) -->*
+Lemma scanR_plain {variant : bool} (l r : side) (n : N) :
+  (B;; l {{S0}} (npow [S1; S1] n *> r)) -[ machine variant ]->*
   (B;; (npow [S1; S0] n *> l) {{S0}} r).
 Proof.
   revert l. induction n as [| n ih] using N_ind_1_add; intro l.
   - finish_cb.
-  - nsteps 6.
-    eapply evstep_trans; [apply (ih (S1 >> S0 >> l)) |].
-    finish_cb.
+  - destruct variant; (nsteps 6;
+    eapply evstep_trans; [apply (ih (S1 >> S0 >> l)) | finish_cb]).
 Qed.
 
-Lemma scanR (l r : side) (n : N) :
-  (B;; l {{S0}} (S1 >> (npow [S1; S1] n *> r))) -->*
+Lemma scanR {variant : bool} (l r : side) (n : N) :
+  (B;; l {{S0}} (S1 >> (npow [S1; S1] n *> r))) -[ machine variant ]->*
   (B;; (npow [S1; S0] n *> l) {{S0}} (S1 >> r)).
 Proof.
   rewrite <- rot_11.
   exact (scanR_plain l (S1 >> r) n).
 Qed.
 
-Lemma scanR1 (l r : side) (n : N) :
-  (B;; l {{S0}} (S1 >> S1 >> (npow [S1; S1] n *> r))) -->*
+Lemma scanR1 {variant : bool} (l r : side) (n : N) :
+  (B;; l {{S0}} (S1 >> S1 >> (npow [S1; S1] n *> r))) -[ machine variant ]->*
   (B;; (npow [S1; S0] n *> l) {{S0}} (S1 >> S1 >> r)).
 Proof.
   rewrite <- (rot_11 n r).
   exact (scanR l (S1 >> r) n).
 Qed.
 
-Lemma scanB (l r : side) (n : N) :
-  ((npow [S0; S1] n *> l) <{{C}} r) -->*
+Lemma scanB {variant : bool} (l r : side) (n : N) :
+  ((npow [S0; S1] n *> l) <{{C}} r) -[ machine variant ]->*
   (l <{{C}} (npow [S1; S1] n *> r)).
 Proof.
   revert r. induction n as [| n ih] using N_ind_1_add; intro r.
   - finish_cb.
-  - nsteps 2.
-    eapply evstep_trans; [apply (ih ([S1; S1] *> r)) |].
-    finish_cb.
+  - destruct variant; (nsteps 2;
+    eapply evstep_trans; [apply (ih ([S1; S1] *> r)) | finish_cb]).
 Qed.
 
-Lemma scanC (l r : side) (n : N) :
-  ((npow [S1; S0] n *> l) <{{D}} r) -->*
+Lemma scanC {variant : bool} (l r : side) (n : N) :
+  ((npow [S1; S0] n *> l) <{{D}} r) -[ machine variant ]->*
   (l <{{D}} (npow [S1; S1] n *> r)).
 Proof.
   revert r. induction n as [| n ih] using N_ind_1_add; intro r.
   - finish_cb.
-  - nsteps 2.
-    eapply evstep_trans; [apply (ih ([S1; S1] *> r)) |].
-    finish_cb.
+  - destruct variant; (nsteps 2;
+    eapply evstep_trans; [apply (ih ([S1; S1] *> r)) | finish_cb]).
 Qed.
 
-Lemma scanPair (l r : side) (n : N) :
-  (B;; l {{S0}} (S1 >> (npow [S0; S1; S0; S1] n *> r))) -->*
+Lemma scanPair {variant : bool} (l r : side) (n : N) :
+  (B;; l {{S0}} (S1 >> (npow [S0; S1; S0; S1] n *> r))) -[ machine variant ]->*
   (B;; (npow [S1; S1; S0; S1] n *> l) {{S0}} (S1 >> r)).
 Proof.
   revert l. induction n as [| n ih] using N_ind_1_add; intro l.
   - finish_cb.
-  - nsteps 4.
-    eapply evstep_trans; [apply (ih (S1 >> S1 >> S0 >> S1 >> l)) |].
-    finish_cb.
+  - destruct variant; (nsteps 4;
+    eapply evstep_trans; [apply (ih (S1 >> S1 >> S0 >> S1 >> l)) | finish_cb]).
 Qed.
 
-Lemma ones (l r : side) (n : N) :
-  (l {{B}}> (npow [S1] n *> r)) -->*
+Lemma ones {variant : bool} (l r : side) (n : N) :
+  (l {{B}}> (npow [S1] n *> r)) -[ machine variant ]->*
   ((npow [S1] n *> l) {{B}}> r).
 Proof.
   revert l. induction n as [| n ih] using N_ind_1_add; intro l.
   - finish_cb.
-  - nsteps 1.
-    eapply evstep_trans; [apply (ih ([S1] *> l)) |].
-    finish_cb.
+  - destruct variant; (nsteps 1;
+    eapply evstep_trans; [apply (ih ([S1] *> l)) | finish_cb]).
 Qed.
 
-Lemma ones2 (l r : side) (n : N) :
-  (l {{B}}> (npow [S1; S1] n *> r)) -->*
+Lemma ones2 {variant : bool} (l r : side) (n : N) :
+  (l {{B}}> (npow [S1; S1] n *> r)) -[ machine variant ]->*
   ((npow [S1; S1] n *> l) {{B}}> r).
 Proof.
   rewrite pow_11_eq_pow_1.
   exact (ones l r (n * 2)).
 Qed.
 
-Lemma rule_init :
-  c0 -->* CfgL ([S1] *> 0inf) ([S1] *> 0inf).
+Lemma rule_init {variant : bool} :
+  c0 -[ machine variant ]->* CfgL ([S1] *> 0inf) ([S1] *> 0inf).
 Proof.
   unfold c0, tape0, q0, s0.
-  fsteps.
+  destruct variant; fsteps.
 Qed.
 
-Lemma rule_halt (l r : side) :
-  halts tm (CfgL ([S0; S0; S1; S1; S1] *> l) r).
+Lemma rule_halt {variant : bool} (l r : side) :
+  halts (machine variant) (CfgL ([S0; S0; S1; S1; S1] *> l) r).
 Proof.
   unfold CfgL.
-  do 4 (eapply halts_step; [| prove_step]; simpl_tape).
-  apply halted_halts.
-  reflexivity.
+  destruct variant; do 4 (eapply halts_step; [| prove_step]; simpl_tape);
+    apply halted_halts; reflexivity.
 Qed.
 
-Lemma rule_right (l r : side) (n : N) :
-  CfgR l (D_word n *> r) -->* CfgR (S_word n *> l) r.
+Lemma rule_right {variant : bool} (l r : side) (n : N) :
+  CfgR l (D_word n *> r) -[ machine variant ]->* CfgR (S_word n *> l) r.
 Proof.
-  nsteps 3. follow_cb (scanR _ _ n). finish_cb.
+  destruct variant; nsteps 3; follow_cb (scanR _ _ n); finish_cb.
 Qed.
 
-Lemma rule_right_pow (l r : side) (n k : N) :
-  CfgR l (npow (D_word n) k *> r) -->* CfgR (npow (S_word n) k *> l) r.
+Lemma rule_right_pow {variant : bool} (l r : side) (n k : N) :
+  CfgR l (npow (D_word n) k *> r) -[ machine variant ]->* CfgR (npow (S_word n) k *> l) r.
 Proof.
   revert l. induction k as [| k ih] using N_ind_1_add; intro l.
   - finish_cb.
@@ -359,14 +352,14 @@ Proof.
     apply evstep_refl.
 Qed.
 
-Lemma rule_left (l r : side) (n : N) :
-  CfgL (S_word n *> l) r -->* CfgL l (D_word n *> r).
+Lemma rule_left {variant : bool} (l r : side) (n : N) :
+  CfgL (S_word n *> l) r -[ machine variant ]->* CfgL l (D_word n *> r).
 Proof.
-  nsteps 5. follow_cb (scanB _ _ n). finish_cb.
+  destruct variant; nsteps 5; follow_cb (scanB _ _ n); finish_cb.
 Qed.
 
-Lemma rule_left_pow (l r : side) (n k : N) :
-  CfgL (npow (S_word n) k *> l) r -->* CfgL l (npow (D_word n) k *> r).
+Lemma rule_left_pow {variant : bool} (l r : side) (n k : N) :
+  CfgL (npow (S_word n) k *> l) r -[ machine variant ]->* CfgL l (npow (D_word n) k *> r).
 Proof.
   revert r. induction k as [| k ih] using N_ind_1_add; intro r.
   - finish_cb.
@@ -378,80 +371,80 @@ Proof.
     apply evstep_refl.
 Qed.
 
-Lemma rule_even (l r : side) (n : N) :
-  CfgR l (npow [S1; S1] (1 + n) *> ([S0; S0] *> r)) -->*
+Lemma rule_even {variant : bool} (l r : side) (n : N) :
+  CfgR l (npow [S1; S1] (1 + n) *> ([S0; S0] *> r)) -[ machine variant ]->*
   CfgL l (D_word (1 + n) *> ([S1; S0] *> r)).
 Proof.
-  nsteps 3. follow_cb (scanR1 _ _ n). nsteps 16. follow_cb (scanB _ _ n). finish_cb.
+  destruct variant; nsteps 3; follow_cb (scanR1 _ _ n); nsteps 16; follow_cb (scanB _ _ n); finish_cb.
 Qed.
 
-Lemma rule_restart (l r : side) (b : N) :
-  CfgL (npow [S1; S0] (1 + b) *> ([S1; S1; S1] *> l)) r -->*
+Lemma rule_restart {variant : bool} (l r : side) (b : N) :
+  CfgL (npow [S1; S0] (1 + b) *> ([S1; S1; S1] *> l)) r -[ machine variant ]->*
   CfgR (npow [S1; S0] (1 + b) *> l) r.
 Proof.
   assert (H : npow [S1; S0] (1 + b) *> ([S1; S1; S1] *> l) =
               S_word b *> ([S1; S1] *> l)) by (norm_cb; reflexivity).
   rewrite H.
   eapply evstep_trans; [apply (rule_left ([S1; S1] *> l) r b) |].
-  nsteps 5. follow_cb (scanR _ _ b). finish_cb.
+  destruct variant; nsteps 5; follow_cb (scanR _ _ b); finish_cb.
 Qed.
 
-Lemma rule_overflow2 (r : side) (b : N) :
-  CfgL (npow [S1; S0] (1 + b) *> ([S1; S1] *> 0inf)) r -->*
+Lemma rule_overflow2 {variant : bool} (r : side) (b : N) :
+  CfgL (npow [S1; S0] (1 + b) *> ([S1; S1] *> 0inf)) r -[ machine variant ]->*
   CfgR (npow [S1; S0] 2 *> (npow [S1; S1] (1 + b) *> 0inf)) ([S1] *> r).
 Proof.
-  nsteps 5. follow_cb (scanB _ _ b). nsteps 16. follow_cb (scanR1 _ _ b).
-  nsteps 16. follow_cb (scanB _ _ b). nsteps 9. follow_cb (ones2 _ _ b). fsteps.
+  destruct variant; nsteps 5; follow_cb (scanB _ _ b); nsteps 16; follow_cb (scanR1 _ _ b);
+  nsteps 16; follow_cb (scanB _ _ b); nsteps 9; follow_cb (ones2 _ _ b); fsteps.
 Qed.
 
-Lemma rule_overflow1 (r : side) (b n : N) :
-  CfgL (npow [S1; S0] (1 + b) *> ([S1] *> 0inf)) (D_word n *> r) -->*
+Lemma rule_overflow1 {variant : bool} (r : side) (b n : N) :
+  CfgL (npow [S1; S0] (1 + b) *> ([S1] *> 0inf)) (D_word n *> r) -[ machine variant ]->*
   CfgR (npow [S1; S0] (n + 2) *> (npow [S1; S1] b *> 0inf)) ([S1; S0] *> r).
 Proof.
-  nsteps 5. follow_cb (scanB _ _ b). nsteps 7. follow_cb (ones2 _ _ b).
-  nsteps 8. follow_cb (scanR1 _ _ n). nsteps 16. follow_cb (scanB _ _ n).
-  nsteps 11. follow_cb (scanR _ _ n). finish_cb.
+  destruct variant; nsteps 5; follow_cb (scanB _ _ b); nsteps 7; follow_cb (ones2 _ _ b);
+  nsteps 8; follow_cb (scanR1 _ _ n); nsteps 16; follow_cb (scanB _ _ n);
+  nsteps 11; follow_cb (scanR _ _ n); finish_cb.
 Qed.
 
-Lemma rule_leftJ (l r : side) (n : N) :
-  CfgJ (S_word n *> l) r -->* CfgL l (D_word (1 + n) *> r).
+Lemma rule_leftJ {variant : bool} (l r : side) (n : N) :
+  CfgJ (S_word n *> l) r -[ machine variant ]->* CfgL l (D_word (1 + n) *> r).
 Proof.
-  nsteps 3. follow_cb (scanB _ _ n). finish_cb.
+  destruct variant; nsteps 3; follow_cb (scanB _ _ n); finish_cb.
 Qed.
 
-Lemma rule_turnB (l r : side) (n : N) :
-  CfgL ([S1; S1] *> l) (D_word n *> r) -->*
+Lemma rule_turnB {variant : bool} (l r : side) (n : N) :
+  CfgL ([S1; S1] *> l) (D_word n *> r) -[ machine variant ]->*
   CfgR (npow [S1; S0] (1 + n) *> l) r.
 Proof.
-  nsteps 5. follow_cb (scanR _ _ n). finish_cb.
+  destruct variant; nsteps 5; follow_cb (scanR _ _ n); finish_cb.
 Qed.
 
-Lemma rule_turnJ (l r : side) (b : N) :
-  CfgJ (npow [S1; S0] b *> ([S1; S1; S1] *> l)) r -->*
+Lemma rule_turnJ {variant : bool} (l r : side) (b : N) :
+  CfgJ (npow [S1; S0] b *> ([S1; S1; S1] *> l)) r -[ machine variant ]->*
   CfgR (npow [S1; S0] (1 + b) *> l) r.
 Proof.
-  nsteps 1. follow_cb (scanB _ _ b). nsteps 5. follow_cb (scanR _ _ b). finish_cb.
+  destruct variant; nsteps 1; follow_cb (scanB _ _ b); nsteps 5; follow_cb (scanR _ _ b); finish_cb.
 Qed.
 
-Lemma rule_finishP (l r : side) (b : N) :
-  CfgL (npow [S1; S0] (1 + b) *> ([S0; S1] *> (S_word 0 *> l))) r -->*
+Lemma rule_finishP {variant : bool} (l r : side) (b : N) :
+  CfgL (npow [S1; S0] (1 + b) *> ([S0; S1] *> (S_word 0 *> l))) r -[ machine variant ]->*
   CfgJ l (D_word (1 + b) *> r).
 Proof.
-  nsteps 4. follow_cb (scanC _ _ b). fsteps.
+  destruct variant; nsteps 4; follow_cb (scanC _ _ b); fsteps.
 Qed.
 
-Lemma rule_defect0 (l r : side) (m : N) :
-  CfgR l ([S1; S0] *> (D_word 0 *> ([S1] *> (npow [S1; S1] m *> ([S0] *> r))))) -->*
+Lemma rule_defect0 {variant : bool} (l r : side) (m : N) :
+  CfgR l ([S1; S0] *> (D_word 0 *> ([S1] *> (npow [S1; S1] m *> ([S0] *> r))))) -[ machine variant ]->*
   CfgJ l ([S1; S1; S1; S1] *> (D_word m *> ([S1] *> r))).
 Proof.
-  nsteps 15. follow_cb (scanR1 _ _ m). nsteps 15. follow_cb (scanC _ _ m). fsteps.
+  destruct variant; nsteps 15; follow_cb (scanR1 _ _ m); nsteps 15; follow_cb (scanC _ _ m); fsteps.
 Qed.
 
-Lemma rule_defect0_D (l r : side) (m : N) :
-  CfgR l ([S1; S0] *> (D_word 0 *> (D_word m *> r))) -->*
+Lemma rule_defect0_D {variant : bool} (l r : side) (m : N) :
+  CfgR l ([S1; S0] *> (D_word 0 *> (D_word m *> r))) -[ machine variant ]->*
   CfgJ l (D_word (m + 2) *> ([S1; S0] *> r)).
 Proof.
-  pose proof (rule_defect0 l (S0 >> r) m) as h.
+  pose proof (rule_defect0 (variant := variant) l (S0 >> r) m) as h.
   assert (hl : [S1] *> (npow [S1; S1] m *> ([S0] *> (S0 >> r))) = D_word m *> r)
     by (norm_cb; reflexivity).
   assert (hr : [S1; S1; S1; S1] *> (D_word m *> ([S1] *> (S0 >> r))) =
@@ -461,18 +454,18 @@ Proof.
   exact h.
 Qed.
 
-Lemma rule_defect1 (l r : side) (m : N) :
-  CfgR l ([S1; S0] *> (D_word 1 *> ([S1] *> (npow [S1; S1] m *> ([S0] *> r))))) -->*
+Lemma rule_defect1 {variant : bool} (l r : side) (m : N) :
+  CfgR l ([S1; S0] *> (D_word 1 *> ([S1] *> (npow [S1; S1] m *> ([S0] *> r))))) -[ machine variant ]->*
   CfgL l (D_word 0 *> (D_word 0 *> (D_word (1 + m) *> ([S1] *> r)))).
 Proof.
-  nsteps 17. follow_cb (scanR1 _ _ m). nsteps 16. follow_cb (scanB _ _ m). fsteps.
+  destruct variant; nsteps 17; follow_cb (scanR1 _ _ m); nsteps 16; follow_cb (scanB _ _ m); fsteps.
 Qed.
 
-Lemma rule_defect1_D (l r : side) (m : N) :
-  CfgR l ([S1; S0] *> (D_word 1 *> (D_word m *> r))) -->*
+Lemma rule_defect1_D {variant : bool} (l r : side) (m : N) :
+  CfgR l ([S1; S0] *> (D_word 1 *> (D_word m *> r))) -[ machine variant ]->*
   CfgL l (D_word 0 *> (D_word 0 *> (D_word (1 + m) *> ([S1; S0] *> r)))).
 Proof.
-  pose proof (rule_defect1 l (S0 >> r) m) as h.
+  pose proof (rule_defect1 (variant := variant) l (S0 >> r) m) as h.
   assert (hl : [S1] *> (npow [S1; S1] m *> ([S0] *> (S0 >> r))) = D_word m *> r)
     by (norm_cb; reflexivity).
   assert (hr : [S1] *> (S0 >> r) = [S1; S0] *> r)
@@ -481,8 +474,8 @@ Proof.
   exact h.
 Qed.
 
-Lemma rule_defect2 (l r : side) (n m : N) :
-  CfgR l ([S1; S0] *> (D_word (2 + n) *> ([S1] *> (npow [S1; S1] m *> ([S0] *> r))))) -->*
+Lemma rule_defect2 {variant : bool} (l r : side) (n m : N) :
+  CfgR l ([S1; S0] *> (D_word (2 + n) *> ([S1] *> (npow [S1; S1] m *> ([S0] *> r))))) -[ machine variant ]->*
   CfgR (B_word (2 + m) (2 * n) *> l) ([S1] *> r).
 Proof.
   assert (hB : B_word (2 + m) (2 * n) *> l =
@@ -490,15 +483,15 @@ Proof.
   { unfold B_word. replace (2 * n) with (n * 2) by lia.
     rewrite <- pow_11_eq_pow_1, !Str_app_assoc. reflexivity. }
   rewrite hB.
-  nsteps 11. follow_cb (ones2 _ _ n). nsteps 8. follow_cb (scanR1 _ _ m).
-  nsteps 16. follow_cb (scanB _ _ m). nsteps 11. follow_cb (scanR _ _ m). finish_cb.
+  destruct variant; nsteps 11; follow_cb (ones2 _ _ n); nsteps 8; follow_cb (scanR1 _ _ m);
+  nsteps 16; follow_cb (scanB _ _ m); nsteps 11; follow_cb (scanR _ _ m); finish_cb.
 Qed.
 
-Lemma rule_defect2_D (l r : side) (n m : N) :
-  CfgR l ([S1; S0] *> (D_word (2 + n) *> (D_word m *> r))) -->*
+Lemma rule_defect2_D {variant : bool} (l r : side) (n m : N) :
+  CfgR l ([S1; S0] *> (D_word (2 + n) *> (D_word m *> r))) -[ machine variant ]->*
   CfgR (B_word (2 + m) (2 * n) *> l) ([S1; S0] *> r).
 Proof.
-  pose proof (rule_defect2 l (S0 >> r) n m) as h.
+  pose proof (rule_defect2 (variant := variant) l (S0 >> r) n m) as h.
   assert (hl : [S1] *> (npow [S1; S1] m *> ([S0] *> (S0 >> r))) = D_word m *> r)
     by (norm_cb; reflexivity).
   assert (hr : [S1] *> (S0 >> r) = [S1; S0] *> r)
@@ -507,8 +500,8 @@ Proof.
   exact h.
 Qed.
 
-Lemma rule_defect2_D_pair_pow (l r : side) (n k : N) :
-  CfgR l ([S1; S0] *> (npow (D_word (2 + n)) (2 * k) *> r)) -->*
+Lemma rule_defect2_D_pair_pow {variant : bool} (l r : side) (n k : N) :
+  CfgR l ([S1; S0] *> (npow (D_word (2 + n)) (2 * k) *> r)) -[ machine variant ]->*
   CfgR (npow (B_word (4 + n) (2 * n)) k *> l) ([S1; S0] *> r).
 Proof.
   revert l. induction k as [| k ih] using N_ind_1_add; intro l.
@@ -523,28 +516,28 @@ Proof.
     apply evstep_refl.
 Qed.
 
-Lemma rule_defect_blank0 (l r : side) :
-  CfgR l ([S1; S0] *> (D_word 0 *> ([S0; S0] *> r))) -->*
+Lemma rule_defect_blank0 {variant : bool} (l r : side) :
+  CfgR l ([S1; S0] *> (D_word 0 *> ([S0; S0] *> r))) -[ machine variant ]->*
   CfgR ([S1; S0] *> ([S0; S1] *> (S_word 0 *> l))) r.
 Proof.
-  fsteps.
+  destruct variant; fsteps.
 Qed.
 
-Lemma rule_paired (l r : side) (k n : N) :
-  CfgR l (npow [S1; S0] (k * 2) *> (D_word n *> r)) -->*
+Lemma rule_paired {variant : bool} (l r : side) (k n : N) :
+  CfgR l (npow [S1; S0] (k * 2) *> (D_word n *> r)) -[ machine variant ]->*
   CfgR (npow [S1; S0] n *> (npow [S1; S1; S0; S1] k *> (S_word 0 *> l))) r.
 Proof.
-  nsteps 3. follow_cb (scanPair _ _ k). follow_cb (scanR _ _ n). finish_cb.
+  destruct variant; nsteps 3; follow_cb (scanPair _ _ k); follow_cb (scanR _ _ n); finish_cb.
 Qed.
 
-Lemma rule_emptyR (l : side) :
-  CfgR l 0inf -->* CfgL l (D_word 0 *> (D_word 0 *> 0inf)).
+Lemma rule_emptyR {variant : bool} (l : side) :
+  CfgR l 0inf -[ machine variant ]->* CfgL l (D_word 0 *> (D_word 0 *> 0inf)).
 Proof.
-  fsteps.
+  destruct variant; fsteps.
 Qed.
 
-Lemma rule_ML_01 (l r : side) (k : N) :
-  CfgL (npow [S0; S1] k *> l) r -->*
+Lemma rule_ML_01 {variant : bool} (l r : side) (k : N) :
+  CfgL (npow [S0; S1] k *> l) r -[ machine variant ]->*
   CfgL l (npow [S1; S1] k *> r).
 Proof.
   unfold CfgL. simpl.
@@ -552,57 +545,63 @@ Proof.
   exact (scanB l (S1 >> r) k).
 Qed.
 
-Lemma rule_ML_10 (l r : side) :
-  CfgL ([S1; S0] *> l) r -->* CfgJ l r.
+Lemma rule_ML_10 {variant : bool} (l r : side) :
+  CfgL ([S1; S0] *> l) r -[ machine variant ]->* CfgJ l r.
 Proof.
-  fsteps.
+  destruct variant; fsteps.
 Qed.
 
-Lemma rule_MJ_default (r : side) :
-  CfgJ 0inf r -->* CfgL ([S1; S1; S1] *> 0inf) ([S1] *> r).
+Lemma rule_MJ_default {variant : bool} (r : side) :
+  CfgJ 0inf r -[ machine variant ]->* CfgL ([S1; S1; S1] *> 0inf) ([S1] *> r).
 Proof.
-  fsteps.
+  destruct variant; fsteps.
 Qed.
 
-Lemma rule_ML_default (r : side) (k : N) :
-  CfgL 0inf (npow [S1] k *> ([S0; S0] *> r)) -->*
+Lemma rule_ML_default {variant : bool} (r : side) (k : N) :
+  CfgL 0inf (npow [S1] k *> ([S0; S0] *> r)) -[ machine variant ]->*
   CfgL (npow [S1] (k + 4) *> 0inf) ([S1] *> r).
 Proof.
   assert (hk4 : npow [S1] (k + 4) *> 0inf = npow [S1] k *> ([S1; S1; S1; S1] *> 0inf)).
   { replace (k + 4) with (k + (2 + 2)) by lia.
     rewrite npow_add, npow_two_add, npow_2, !Str_app_assoc. reflexivity. }
   rewrite hk4.
-  nsteps 6. follow_cb (ones _ _ k). fsteps.
+  destruct variant; nsteps 6; follow_cb (ones _ _ k); fsteps.
 Qed.
 
-Lemma rule_ML_TurnB_even (l r : side) (k : N) :
-  CfgL ([S1; S1] *> l) (npow [S1; S1] k *> ([S0] *> r)) -->*
+Lemma rule_ML_TurnB_even {variant : bool} (l r : side) (k : N) :
+  CfgL ([S1; S1] *> l) (npow [S1; S1] k *> ([S0] *> r)) -[ machine variant ]->*
   CfgL (npow [S1; S0] (k + 1) *> l) ([S1] *> r).
 Proof.
   rewrite <- npow_succ_right, Str_app_assoc.
-  nsteps 5. follow_cb (scanR_plain _ _ k). fsteps.
+  destruct variant; nsteps 5; follow_cb (scanR_plain _ _ k); fsteps.
 Qed.
 
-Lemma rule_MR_PairedEven (l r : side) (m : N) :
-  CfgR l ([S1; S0; S1; S0] *> (npow [S1; S1] m *> ([S0; S0] *> r))) -->*
+Lemma rule_MR_PairedEven {variant : bool} (l r : side) (m : N) :
+  CfgR l ([S1; S0; S1; S0] *> (npow [S1; S1] m *> ([S0; S0] *> r))) -[ machine variant ]->*
   CfgL (npow [S1; S0] m *> ([S1; S1; S0; S1] *> (S_word 0 *> l))) ([S1; S0] *> r).
 Proof.
-  nsteps 7. follow_cb (scanR_plain _ _ m). fsteps.
+  destruct variant; nsteps 7; follow_cb (scanR_plain _ _ m); fsteps.
 Qed.
 
-Lemma rule_MR_110 (l r : side) :
-  CfgR l ([S1; S1; S0] *> r) -->*
+Lemma rule_MR_110 {variant : bool} (l r : side) :
+  CfgR l ([S1; S1; S0] *> r) -[ machine variant ]->*
   CfgL (S_word 1 *> l) ([S1] *> r).
 Proof.
-  fsteps.
+  destruct variant; fsteps.
 Qed.
 
-Lemma rule_MR_PairedOdd (l r : side) (n : N) :
-  CfgR l (npow [S1; S0] 3 *> (D_word n *> r)) -->*
+Lemma rule_MR_PairedOdd {variant : bool} (l r : side) (n : N) :
+  CfgR l (npow [S1; S0] 3 *> (D_word n *> r)) -[ machine variant ]->*
   CfgL (npow [S1; S1] n *> (npow [S1; S1; S0; S1] 2 *> (S_word 0 *> l))) ([S1] *> r).
 Proof.
-  nsteps 11. follow_cb (ones2 _ _ n). fsteps.
+  destruct variant; nsteps 11; follow_cb (ones2 _ _ n); fsteps.
 Qed.
+
+Section BothMachines.
+Variable variant : bool.
+Local Notation tm := (machine variant).
+Notation "c --> c'" := (c -[ tm ]-> c') (at level 40).
+Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 
 (* ========================================================================== *)
 (* Section 2: OneCall, NCalls, and B_word Macro Lemmas                        *)
@@ -1724,6 +1723,245 @@ Fixpoint sweepSK (L Rh Rt : Runs) : Runs * Runs * Runs :=
   | r :: rest => (r :: rest, Rh, Rt)
   end.
 
+Definition mrCallPlain (f64 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg :=
+  let '(b1, L1) := take10RunsK f64 L in
+  if N.eqb b1 0 then None
+  else
+    let '(c111, L2) := take111RunsK L1 in
+    let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 (c111 + 1) true in
+    if N.eqb hd 0 then None
+    else
+      let rem := c111 - (hd - 1) in
+      Some (mkCfg ML (pushRunK Sw10 b1 (pushRunK Sw111 rem L2)) nRh nRt nD0).
+
+Definition mrOther (f64 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg :=
+  let '(c10, Rh1a) := take10RunsK f64 Rh in
+  let res10 : option FastCfg :=
+    if N.eqb c10 0 then None
+    else
+      let '(Rh1, Rt1) := normRK Rh1a Rt in
+      if N.eqb (N.b2n (N.odd c10)) 1 then
+        let odd3 : option FastCfg :=
+          if N.eqb c10 3 then
+            match tryTakeDRK Rh1 Rt1 d0 with
+            | Some (dn, Rh2, Rt2, d2) =>
+              let L' := pushRunK Sw11 dn (pushRunK Sw1101 2 (pushRunK (SS 0) 1 L)) in
+              Some (mkCfg ML L' (pushRunK Sb1 1 Rh2) Rt2 d2)
+            | None => None
+            end
+          else None in
+        match odd3 with
+        | Some cfg => Some cfg
+        | None =>
+          let Rh1' := pushRunK Sw10 (c10 - 1) Rh1 in
+          match tryTakeDRK Rh1' Rt1 d0 with
+          | None => None
+          | Some (a, Rh2, Rt2, d2) =>
+            match tryTakeDRK Rh2 Rt2 d2 with
+            | Some (m, Rh3, Rt3, d3) =>
+              if N.eqb a 0 then
+                let Rh4 := pushRunK Sw10 1 Rh3 in
+                let '(Rh5, Rt5) := pushRDK (m + 2) 1 Rh4 Rt3 in
+                Some (mkCfg MJ L Rh5 Rt5 d3)
+              else if N.eqb a 1 then None
+              else
+                Some (mkCfg MR (pushBK (m + 2) (2 * (a - 2)) 1 L) (pushRunK Sw10 1 Rh3) Rt3 d3)
+            | None =>
+              match takeBits2RK false false Rh2 Rt2 d2 with
+              | Some (Rh3, Rt3, d3) =>
+                if N.eqb a 0 then
+                  let L' := pushRunK Sw10 1 (pushRunK Sw01 1 (pushRunK (SS 0) 1 L)) in
+                  Some (mkCfg MR L' Rh3 Rt3 d3)
+                else None
+              | None =>
+                if N.leb 1 a then
+                  let '(ones, Rh3, Rt3, d3) := takeOnesRK Rh2 Rt2 d2 in
+                  if N.eqb (N.b2n (N.odd ones)) 1 then
+                    match takeBitRK false Rh3 Rt3 d3 with
+                    | Some (Rh4, Rt4, d4) =>
+                      let mv := N.div2 ones in
+                      if N.eqb a 1 then
+                        let Rh5 := pushRunK Sb1 1 Rh4 in
+                        let '(Rh6, Rt6) := pushRDK (mv + 1) 1 Rh5 Rt4 in
+                        let '(Rh7, Rt7) := pushRDK 0 2 Rh6 Rt6 in
+                        Some (mkCfg ML L Rh7 Rt7 d4)
+                      else
+                        Some (mkCfg MR (pushBK (mv + 2) (2 * (a - 2)) 1 L) (pushRunK Sb1 1 Rh4) Rt4 d4)
+                    | None => None
+                    end
+                  else None
+                else None
+              end
+            end
+          end
+        end
+      else
+        match tryTakeDRK Rh1 Rt1 d0 with
+        | Some (dn, Rh2, Rt2, d2) =>
+          let kp := N.div2 c10 in
+          let L' := pushRunK Sw10 dn (pushRunK Sw1101 kp (pushRunK (SS 0) 1 L)) in
+          Some (mkCfg MR L' Rh2 Rt2 d2)
+        | None =>
+          if N.eqb c10 2 then
+            let '(ones, Rh2, Rt2, d2) := takeOnesRK Rh1 Rt1 d0 in
+            if N.eqb (N.b2n (N.odd ones)) 0 then
+              match takeBits2RK false false Rh2 Rt2 d2 with
+              | Some (Rh3, Rt3, d3) =>
+                let m := N.div2 ones in
+                let L' := pushRunK Sw10 m (pushRunK Sw1101 1 (pushRunK (SS 0) 1 L)) in
+                Some (mkCfg ML L' (pushRunK Sw10 1 Rh3) Rt3 d3)
+              | None => None
+              end
+            else None
+          else None
+        end in
+  match res10 with
+  | Some cfg => Some cfg
+  | None =>
+    match tryTakeDRK Rh Rt d0 with
+    | Some (dn, Rh', Rt', d') => Some (mkCfg MR (pushSK dn 1 L) Rh' Rt' d')
+    | None =>
+      let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
+      let evenRes : option FastCfg :=
+        if (if N.leb 2 ones then N.eqb (N.b2n (N.odd ones)) 0 else false) then
+          match takeBits2RK false false Rh1 Rt1 d1 with
+          | Some (Rh2, Rt2, d2) =>
+            let Rh3 := pushRunK Sw10 1 Rh2 in
+            let '(Rh4, Rt4) := pushRDK (N.div2 ones) 1 Rh3 Rt2 in
+            Some (mkCfg ML L Rh4 Rt4 d2)
+          | None => None
+          end
+        else None in
+      match evenRes with
+      | Some cfg => Some cfg
+      | None =>
+        match takeBits3RK true true false Rh Rt d0 with
+        | Some (Rh', Rt', d') => Some (mkCfg ML (pushRunK (SS 1) 1 L) (pushRunK Sb1 1 Rh') Rt' d')
+        | None => None
+        end
+      end
+    end
+  end.
+
+Definition mlOther (f64 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg :=
+  let '(b1, L1) := take10RunsK f64 L in
+  let res10 : option FastCfg :=
+    if N.eqb b1 0 then None
+    else
+      let '(c111, L2) := take111RunsK L1 in
+      if N.eqb c111 0 then
+        match takeBits5RunsK false true true false true L2 with
+        | Some L3 =>
+          let '(Rh1, Rt1) := pushRDK b1 1 Rh Rt in
+          Some (mkCfg MJ L3 Rh1 Rt1 d0)
+        | None =>
+          let over2 : option FastCfg :=
+            match takeBits2RunsK true true L2 with
+            | Some L3 =>
+              if isAllZeroRunsK L3 then
+                Some (mkCfg MR (pushRunK Sw10 2 (pushRunK Sw11 b1 [])) (pushRunK Sb1 1 Rh) Rt d0)
+              else None
+            | None => None
+            end in
+          match over2 with
+          | Some cfg => Some cfg
+          | None =>
+            match takeBitRunsK true L2 with
+            | Some L3 =>
+              if isAllZeroRunsK L3 then
+                match tryTakeDRK Rh Rt d0 with
+                | Some (dn, Rh', Rt', d') =>
+                  Some (mkCfg MR (pushRunK Sw10 (dn + 2) (pushRunK Sw11 (b1 - 1) [])) (pushRunK Sw10 1 Rh') Rt' d')
+                | None => None
+                end
+              else None
+            | None => None
+            end
+          end
+        end
+      else
+        match Rh with
+        | [] => Some (mkCfg ML (pushRunK Sw10 b1 L2) [] Rt (d0 + 2 * c111))
+        | _ :: _ =>
+          let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 c111 true in
+          if N.eqb hd 0 then
+            Some (mkCfg MR (pushRunK Sw10 b1 (pushRunK Sw111 (c111 - 1) L2)) Rh Rt d0)
+          else
+            Some (mkCfg ML (pushRunK Sw10 b1 (pushRunK Sw111 (c111 - hd) L2)) nRh nRt nD0)
+        end in
+  match res10 with
+  | Some cfg => Some cfg
+  | None =>
+    match tryTakeSK f64 L with
+    | Some (sn, L') =>
+      let '(Rh1, Rt1) := pushRDK sn 1 Rh Rt in
+      Some (mkCfg ML L' Rh1 Rt1 d0)
+    | None =>
+      let turnB : option FastCfg :=
+        match takeBits2RunsK true true L with
+        | Some L' =>
+          match tryTakeDRK Rh Rt d0 with
+          | Some (dn, Rh', Rt', d') => Some (mkCfg MR (pushRunK Sw10 (dn + 1) L') Rh' Rt' d')
+          | None =>
+            let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
+            if N.eqb (N.b2n (N.odd ones)) 0 then
+              match takeBitRK false Rh1 Rt1 d1 with
+              | Some (Rh2, Rt2, d2) =>
+                Some (mkCfg ML (pushRunK Sw10 (N.div2 ones + 1) L') (pushRunK Sb1 1 Rh2) Rt2 d2)
+              | None => None
+              end
+            else None
+          end
+        | None => None
+        end in
+      match turnB with
+      | Some cfg => Some cfg
+      | None =>
+        let '(k01, L') := take01RunsK f64 L in
+        if N.eqb k01 0 then
+          match takeBits2RunsK true false L with
+          | Some L' => Some (mkCfg MJ L' Rh Rt d0)
+          | None =>
+            if isAllZeroRunsK L then
+              let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
+              match takeBits2RK false false Rh1 Rt1 d1 with
+              | Some (Rh2, Rt2, d2) =>
+                Some (mkCfg ML (pushRunK Sb1 (ones + 4) []) (pushRunK Sb1 1 Rh2) Rt2 d2)
+              | None => None
+              end
+            else None
+          end
+        else
+          match Rh with
+          | mkRun (SD dn) kd :: Rh' =>
+            let '(Rh1, Rt1) := pushRDK (dn + k01) 1 (decRunK (SD dn) kd Rh') Rt in
+            Some (mkCfg ML L' Rh1 Rt1 d0)
+          | [] =>
+            match Rt with
+            | mkRun (SD dn) kd :: Rt' =>
+              Some (mkCfg ML L' [] (pushDK (dn + k01) 1 (decRunK (SD dn) kd Rt')) d0)
+            | [] =>
+              if N.eqb d0 0 then Some (mkCfg ML L' (pushRunK Sw11 k01 []) [] 0)
+              else Some (mkCfg ML L' [] [mkRun (SD k01) 1] (d0 - 1))
+            | _ => Some (mkCfg ML L' (pushRunK Sw11 k01 []) Rt d0)
+            end
+          | _ => Some (mkCfg ML L' (pushRunK Sw11 k01 Rh) Rt d0)
+          end
+        end
+      end
+    end.
+
+Definition mjOther (f64 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg :=
+  match tryTakeSK f64 L with
+  | Some (sn, L') =>
+    let '(Rh1, Rt1) := pushRDK (sn + 1) 1 Rh Rt in
+    Some (mkCfg ML L' Rh1 Rt1 d0)
+  | None =>
+    if isAllZeroRunsK L then
+      Some (mkCfg ML (pushRunK Sw111 1 []) (pushRunK Sb1 1 Rh) Rt d0)
+    else None
+  end.
+
 Definition stepMRK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg :=
   match Rh with
   | [] =>
@@ -1754,15 +1992,7 @@ Definition stepMRK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg 
                 Some (mkCfg ML L2 nRh nRt nD0)
             else None
           | _ =>
-            let '(b1, L1) := take10RunsK f64 L in
-            if N.eqb b1 0 then None
-            else
-              let '(c111, L2) := take111RunsK L1 in
-              let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 (c111 + 1) true in
-              if N.eqb hd 0 then None
-              else
-                let rem := c111 - (hd - 1) in
-                Some (mkCfg ML (pushRunK Sw10 b1 (pushRunK Sw111 rem L2)) nRh nRt nD0)
+            mrCallPlain f64 L Rh Rt d0
           end in
         match callRes with
         | Some cfg => Some cfg
@@ -1771,115 +2001,38 @@ Definition stepMRK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg 
           Some (mkCfg MR L' Rh' Rt d0)
         end
       | _ =>
-        let '(c10, Rh1a) := take10RunsK f64 Rh in
-        let res10 : option FastCfg :=
-          if N.eqb c10 0 then None
-          else
-            let '(Rh1, Rt1) := normRK Rh1a Rt in
-            if N.eqb (N.b2n (N.odd c10)) 1 then
-              let odd3 : option FastCfg :=
-                if N.eqb c10 3 then
-                  match tryTakeDRK Rh1 Rt1 d0 with
-                  | Some (dn, Rh2, Rt2, d2) =>
-                    let L' := pushRunK Sw11 dn (pushRunK Sw1101 2 (pushRunK (SS 0) 1 L)) in
-                    Some (mkCfg ML L' (pushRunK Sb1 1 Rh2) Rt2 d2)
-                  | None => None
-                  end
-                else None in
-              match odd3 with
-              | Some cfg => Some cfg
-              | None =>
-                let Rh1' := pushRunK Sw10 (c10 - 1) Rh1 in
-                match tryTakeDRK Rh1' Rt1 d0 with
-                | None => None
-                | Some (a, Rh2, Rt2, d2) =>
-                  match tryTakeDRK Rh2 Rt2 d2 with
-                  | Some (m, Rh3, Rt3, d3) =>
-                    if N.eqb a 0 then
-                      let Rh4 := pushRunK Sw10 1 Rh3 in
-                      let '(Rh5, Rt5) := pushRDK (m + 2) 1 Rh4 Rt3 in
-                      Some (mkCfg MJ L Rh5 Rt5 d3)
-                    else if N.eqb a 1 then None
-                    else
-                      Some (mkCfg MR (pushBK (m + 2) (2 * (a - 2)) 1 L) (pushRunK Sw10 1 Rh3) Rt3 d3)
-                  | None =>
-                    match takeBits2RK false false Rh2 Rt2 d2 with
-                    | Some (Rh3, Rt3, d3) =>
-                      if N.eqb a 0 then
-                        let L' := pushRunK Sw10 1 (pushRunK Sw01 1 (pushRunK (SS 0) 1 L)) in
-                        Some (mkCfg MR L' Rh3 Rt3 d3)
-                      else None
-                    | None =>
-                      if N.leb 1 a then
-                        let '(ones, Rh3, Rt3, d3) := takeOnesRK Rh2 Rt2 d2 in
-                        if N.eqb (N.b2n (N.odd ones)) 1 then
-                          match takeBitRK false Rh3 Rt3 d3 with
-                          | Some (Rh4, Rt4, d4) =>
-                            let mv := N.div2 ones in
-                            if N.eqb a 1 then
-                              let Rh5 := pushRunK Sb1 1 Rh4 in
-                              let '(Rh6, Rt6) := pushRDK (mv + 1) 1 Rh5 Rt4 in
-                              let '(Rh7, Rt7) := pushRDK 0 2 Rh6 Rt6 in
-                              Some (mkCfg ML L Rh7 Rt7 d4)
-                            else
-                              Some (mkCfg MR (pushBK (mv + 2) (2 * (a - 2)) 1 L) (pushRunK Sb1 1 Rh4) Rt4 d4)
-                          | None => None
-                          end
-                        else None
-                      else None
-                    end
-                  end
-                end
-              end
-            else
-              match tryTakeDRK Rh1 Rt1 d0 with
-              | Some (dn, Rh2, Rt2, d2) =>
-                let kp := N.div2 c10 in
-                let L' := pushRunK Sw10 dn (pushRunK Sw1101 kp (pushRunK (SS 0) 1 L)) in
-                Some (mkCfg MR L' Rh2 Rt2 d2)
-              | None =>
-                if N.eqb c10 2 then
-                  let '(ones, Rh2, Rt2, d2) := takeOnesRK Rh1 Rt1 d0 in
-                  if N.eqb (N.b2n (N.odd ones)) 0 then
-                    match takeBits2RK false false Rh2 Rt2 d2 with
-                    | Some (Rh3, Rt3, d3) =>
-                      let m := N.div2 ones in
-                      let L' := pushRunK Sw10 m (pushRunK Sw1101 1 (pushRunK (SS 0) 1 L)) in
-                      Some (mkCfg ML L' (pushRunK Sw10 1 Rh3) Rt3 d3)
-                    | None => None
-                    end
-                  else None
-                else None
-              end in
-        match res10 with
-        | Some cfg => Some cfg
-        | None =>
-          match tryTakeDRK Rh Rt d0 with
-          | Some (dn, Rh', Rt', d') => Some (mkCfg MR (pushSK dn 1 L) Rh' Rt' d')
-          | None =>
-            let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
-            let evenRes : option FastCfg :=
-              if (if N.leb 2 ones then N.eqb (N.b2n (N.odd ones)) 0 else false) then
-                match takeBits2RK false false Rh1 Rt1 d1 with
-                | Some (Rh2, Rt2, d2) =>
-                  let Rh3 := pushRunK Sw10 1 Rh2 in
-                  let '(Rh4, Rt4) := pushRDK (N.div2 ones) 1 Rh3 Rt2 in
-                  Some (mkCfg ML L Rh4 Rt4 d2)
-                | None => None
-                end
-              else None in
-            match evenRes with
-            | Some cfg => Some cfg
-            | None =>
-              match takeBits3RK true true false Rh Rt d0 with
-              | Some (Rh', Rt', d') => Some (mkCfg ML (pushRunK (SS 1) 1 L) (pushRunK Sb1 1 Rh') Rt' d')
-              | None => None
-              end
-            end
-          end
-        end
+        mrOther f64 L Rh Rt d0
       end
     end
+  end.
+
+(* The modes share the scan, call count and left run consumption. Only
+   the encoding pushed back to the right differs. *)
+Definition bCollisionK (fromML : bool) (ba bc bk : N) (L' Rh Rt : Runs) (d0 : N)
+  : option FastCfg :=
+  match Rh with
+  | [] => None
+  | _ :: _ =>
+    if (if N.eqb (bc mod 3) 2 then N.leb 1 ba else false) then
+      let stepH := bc / 3 + 1 in
+      let zAv := peekCollZAvailK Rh Rt d0 in
+      let av := (N.div2 zAv) / stepH in
+      let mc := if N.leb bk av then bk else av in
+      if N.eqb mc 0 then None
+      else
+        let need := mc * stepH in
+        let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 need false in
+        if N.eqb hd need then
+          let L1 := if N.eqb bk mc then L' else mkRun (SB ba bc) (bk - mc) :: L' in
+          if fromML then
+            let '(nRh1, nRt1) := pushRDK ba 1 nRh nRt in
+            let '(nRh2, nRt2) := pushRDK (ba + 1) (mc - 1) nRh1 nRt1 in
+            Some (mkCfg MJ L1 nRh2 nRt2 nD0)
+          else
+            let '(nRh1, nRt1) := pushRDK (ba + 1) mc nRh nRt in
+            Some (mkCfg MJ L1 nRh1 nRt1 nD0)
+        else None
+    else None
   end.
 
 Definition stepMLK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg :=
@@ -1896,28 +2049,7 @@ Definition stepMLK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg 
       let '(L', Rh', Rt') := sweepSK L Rh Rt in
       Some (mkCfg ML L' Rh' Rt' d0)
     | mkRun (SB ba bc) bk :: L' =>
-      let tryColl : option FastCfg :=
-        match Rh with
-        | [] => None
-        | _ :: _ =>
-          if (if N.eqb (bc mod 3) 2 then N.leb 1 ba else false) then
-            let stepH := bc / 3 + 1 in
-            let zAv := peekCollZAvailK Rh Rt d0 in
-            let av := (N.div2 zAv) / stepH in
-            let mc := if N.leb bk av then bk else av in
-            if N.eqb mc 0 then None
-            else
-              let need := mc * stepH in
-              let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 need false in
-              if N.eqb hd need then
-                let L1 := if N.eqb bk mc then L' else mkRun (SB ba bc) (bk - mc) :: L' in
-                let '(nRh1, nRt1) := pushRDK ba 1 nRh nRt in
-                let '(nRh2, nRt2) := pushRDK (ba + 1) (mc - 1) nRh1 nRt1 in
-                Some (mkCfg MJ L1 nRh2 nRt2 nD0)
-              else None
-          else None
-        end in
-      match tryColl with
+      match bCollisionK true ba bc bk L' Rh Rt d0 with
       | Some cfg => Some cfg
       | None =>
         let L1 := decRunK (SB ba bc) bk L' in
@@ -1925,112 +2057,7 @@ Definition stepMLK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg 
         Some (mkCfg ML L2 Rh Rt d0)
       end
     | _ =>
-      let '(b1, L1) := take10RunsK f64 L in
-      let res10 : option FastCfg :=
-        if N.eqb b1 0 then None
-        else
-          let '(c111, L2) := take111RunsK L1 in
-          if N.eqb c111 0 then
-            match takeBits5RunsK false true true false true L2 with
-            | Some L3 =>
-              let '(Rh1, Rt1) := pushRDK b1 1 Rh Rt in
-              Some (mkCfg MJ L3 Rh1 Rt1 d0)
-            | None =>
-              let over2 : option FastCfg :=
-                match takeBits2RunsK true true L2 with
-                | Some L3 =>
-                  if isAllZeroRunsK L3 then
-                    Some (mkCfg MR (pushRunK Sw10 2 (pushRunK Sw11 b1 [])) (pushRunK Sb1 1 Rh) Rt d0)
-                  else None
-                | None => None
-                end in
-              match over2 with
-              | Some cfg => Some cfg
-              | None =>
-                match takeBitRunsK true L2 with
-                | Some L3 =>
-                  if isAllZeroRunsK L3 then
-                    match tryTakeDRK Rh Rt d0 with
-                    | Some (dn, Rh', Rt', d') =>
-                      Some (mkCfg MR (pushRunK Sw10 (dn + 2) (pushRunK Sw11 (b1 - 1) [])) (pushRunK Sw10 1 Rh') Rt' d')
-                    | None => None
-                    end
-                  else None
-                | None => None
-                end
-              end
-            end
-          else
-            match Rh with
-            | [] => Some (mkCfg ML (pushRunK Sw10 b1 L2) [] Rt (d0 + 2 * c111))
-            | _ :: _ =>
-              let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 c111 true in
-              if N.eqb hd 0 then
-                Some (mkCfg MR (pushRunK Sw10 b1 (pushRunK Sw111 (c111 - 1) L2)) Rh Rt d0)
-              else
-                Some (mkCfg ML (pushRunK Sw10 b1 (pushRunK Sw111 (c111 - hd) L2)) nRh nRt nD0)
-            end in
-      match res10 with
-      | Some cfg => Some cfg
-      | None =>
-        match tryTakeSK f64 L with
-        | Some (sn, L') =>
-          let '(Rh1, Rt1) := pushRDK sn 1 Rh Rt in
-          Some (mkCfg ML L' Rh1 Rt1 d0)
-        | None =>
-          let turnB : option FastCfg :=
-            match takeBits2RunsK true true L with
-            | Some L' =>
-              match tryTakeDRK Rh Rt d0 with
-              | Some (dn, Rh', Rt', d') => Some (mkCfg MR (pushRunK Sw10 (dn + 1) L') Rh' Rt' d')
-              | None =>
-                let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
-                if N.eqb (N.b2n (N.odd ones)) 0 then
-                  match takeBitRK false Rh1 Rt1 d1 with
-                  | Some (Rh2, Rt2, d2) =>
-                    Some (mkCfg ML (pushRunK Sw10 (N.div2 ones + 1) L') (pushRunK Sb1 1 Rh2) Rt2 d2)
-                  | None => None
-                  end
-                else None
-              end
-            | None => None
-            end in
-          match turnB with
-          | Some cfg => Some cfg
-          | None =>
-            let '(k01, L') := take01RunsK f64 L in
-            if N.eqb k01 0 then
-              match takeBits2RunsK true false L with
-              | Some L' => Some (mkCfg MJ L' Rh Rt d0)
-              | None =>
-                if isAllZeroRunsK L then
-                  let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
-                  match takeBits2RK false false Rh1 Rt1 d1 with
-                  | Some (Rh2, Rt2, d2) =>
-                    Some (mkCfg ML (pushRunK Sb1 (ones + 4) []) (pushRunK Sb1 1 Rh2) Rt2 d2)
-                  | None => None
-                  end
-                else None
-              end
-            else
-              match Rh with
-              | mkRun (SD dn) kd :: Rh' =>
-                let '(Rh1, Rt1) := pushRDK (dn + k01) 1 (decRunK (SD dn) kd Rh') Rt in
-                Some (mkCfg ML L' Rh1 Rt1 d0)
-              | [] =>
-                match Rt with
-                | mkRun (SD dn) kd :: Rt' =>
-                  Some (mkCfg ML L' [] (pushDK (dn + k01) 1 (decRunK (SD dn) kd Rt')) d0)
-                | [] =>
-                  if N.eqb d0 0 then Some (mkCfg ML L' (pushRunK Sw11 k01 []) [] 0)
-                  else Some (mkCfg ML L' [] [mkRun (SD k01) 1] (d0 - 1))
-                | _ => Some (mkCfg ML L' (pushRunK Sw11 k01 []) Rt d0)
-                end
-              | _ => Some (mkCfg ML L' (pushRunK Sw11 k01 Rh) Rt d0)
-              end
-            end
-          end
-        end
+      mlOther f64 L Rh Rt d0
     end
   end.
 
@@ -2045,27 +2072,7 @@ Definition stepMJK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg 
   | None =>
     match L with
     | mkRun (SB ba bc) bk :: L' =>
-      let tryColl : option FastCfg :=
-        match Rh with
-        | [] => None
-        | _ :: _ =>
-          if (if N.eqb (bc mod 3) 2 then N.leb 1 ba else false) then
-            let stepH := bc / 3 + 1 in
-            let zAv := peekCollZAvailK Rh Rt d0 in
-            let av := (N.div2 zAv) / stepH in
-            let mc := if N.leb bk av then bk else av in
-            if N.eqb mc 0 then None
-            else
-              let need := mc * stepH in
-              let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 need false in
-              if N.eqb hd need then
-                let L1 := if N.eqb bk mc then L' else mkRun (SB ba bc) (bk - mc) :: L' in
-                let '(nRh1, nRt1) := pushRDK (ba + 1) mc nRh nRt in
-                Some (mkCfg MJ L1 nRh1 nRt1 nD0)
-              else None
-          else None
-        end in
-      match tryColl with
+      match bCollisionK false ba bc bk L' Rh Rt d0 with
       | Some cfg => Some cfg
       | None =>
         if (if N.leb 1 ba then N.leb 3 bc else false) then
@@ -2081,15 +2088,7 @@ Definition stepMJK (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) : option FastCfg 
           Some (mkCfg MJ L2 Rh Rt d0)
       end
     | _ =>
-      match tryTakeSK f64 L with
-      | Some (sn, L') =>
-        let '(Rh1, Rt1) := pushRDK (sn + 1) 1 Rh Rt in
-        Some (mkCfg ML L' Rh1 Rt1 d0)
-      | None =>
-        if isAllZeroRunsK L then
-          Some (mkCfg ML (pushRunK Sw111 1 []) (pushRunK Sb1 1 Rh) Rt d0)
-        else None
-      end
+      mjOther f64 L Rh Rt d0
     end
   end.
 
@@ -3584,7 +3583,7 @@ Proof.
     assert (hka_eq : ka = 2 * kp + rem).
     { unfold kp, rem; rewrite N.div2_div, N_b2n_odd_mod2; lia. }
     rewrite hsplit, hka_eq, <- npow_append_npow, <- eN.
-    pose proof (rule_defect2_D_pair_pow (evalRuns L 0inf) (evalR RhN RtN d1) (a - 2) kp) as hstep.
+    pose proof (rule_defect2_D_pair_pow (variant := variant) (evalRuns L 0inf) (evalR RhN RtN d1) (a - 2) kp) as hstep.
     replace (2 + (a - 2)) with a in hstep by lia.
     replace (4 + (a - 2)) with (a + 2) in hstep by lia.
     eapply evstep_trans; [exact hstep |].
@@ -3648,7 +3647,7 @@ Proof.
           (AllPos_pushBK (m + 2) (2 * (a - 2)) 1 hL) p2 q2 d2h h) as [hv hreach].
         split; [exact hv |].
         rewrite hR_am.
-        pose proof (rule_defect2_D (evalRuns L 0inf) (evalR Rh2 Rt2 d2) (a - 2) m) as hstep.
+        pose proof (rule_defect2_D (variant := variant) (evalRuns L 0inf) (evalR Rh2 Rt2 d2) (a - 2) m) as hstep.
         replace (2 + (a - 2)) with a in hstep by lia.
         replace (2 + m) with (m + 2) in hstep by lia.
         eapply evstep_trans; [exact hstep |].
@@ -3705,6 +3704,553 @@ Proof.
   - destruct k as [| [p|p|]]; try discriminate; exfalso; apply N.eqb_neq in hk1; lia.
 Qed.
 
+Lemma mrOther_sound (f64 : nat) (L Rh Rt : Runs) (d0 : N) (cfg' : FastCfg)
+  (hL : AllPos L) (hRh : AllPos Rh) (hRt : AllPos Rt) (hD : AllD Rt)
+  (h : mrOther f64 L Rh Rt d0 = Some cfg') :
+  ValidCfg cfg' /\ CfgR (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg'.
+Proof.
+  unfold mrOther in h; cbv zeta in h.
+  pose proof (take10RunsK_spec f64 Rh (evalRuns Rt (npow (D_word 0) d0 *> 0inf)) hRh) as ht10.
+  destruct (take10RunsK f64 Rh) as [c10 Rh1a].
+  destruct ht10 as [hpRh1a heRh1a].
+  split_opt h csub hres10.
+  - destruct (N.eqb c10 0) eqn:hc10; [discriminate |].
+    apply N.eqb_neq in hc10.
+    pose proof (normRK_spec Rh1a Rt d0 hpRh1a hRt hD) as hn.
+    destruct (normRK Rh1a Rt) as [Rh1 Rt1].
+    destruct hn as [p1 [q1 [d1h e1]]].
+    assert (hR_c10 : evalR Rh Rt d0 = npow [S1; S0] c10 *> evalR Rh1 Rt1 d0).
+    { rewrite e1; unfold evalR; rewrite heRh1a; reflexivity. }
+    destruct (N.eqb (N.b2n (N.odd c10)) 1) eqn:hodd.
+    + split_opt hres10 csub2 hodd3.
+      * destruct (N.eqb c10 3) eqn:hc3; [| discriminate].
+        apply N.eqb_eq in hc3; subst c10.
+        destruct (tryTakeDRK Rh1 Rt1 d0) as [[[[dn Rh2] Rt2] d2] |] eqn:htd; [| discriminate].
+        destruct (tryTakeDRK_spec Rh1 Rt1 Rh2 Rt2 d0 dn d2 p1 q1 d1h htd) as [p2 [q2 [d2h e2]]].
+        inversion hodd3; subst.
+        split;
+          [exact (conj (AllPos_pushRunK Sw11 dn (AllPos_pushRunK Sw1101 2 (AllPos_pushRunK (SS 0) 1 hL)))
+            (conj (AllPos_pushRunK Sb1 1 p2) (conj q2 d2h))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite hR_c10, e2, !evalRuns_pushRunK, evalR_pushRunK, !npow_1; unfold evalSym.
+        exact (rule_MR_PairedOdd (evalRuns L 0inf) (evalR Rh2 Rt2 d2) dn).
+      * set (Rh1' := pushRunK Sw10 (c10 - 1) Rh1) in *.
+        destruct (tryTakeDRK Rh1' Rt1 d0) as [[[[a Rh2] Rt2] d2] |] eqn:htd; [| discriminate].
+        destruct (tryTakeDRK_spec Rh1' Rt1 Rh2 Rt2 d0 a d2
+          (AllPos_pushRunK Sw10 (c10 - 1) p1) q1 d1h htd) as [p2 [q2 [d2h e2]]].
+        assert (hR_a : evalR Rh Rt d0 = [S1; S0] *> (D_word a *> evalR Rh2 Rt2 d2)).
+        { rewrite hR_c10.
+          replace c10 with (1 + (c10 - 1)) at 1 by lia.
+          rewrite <- npow_append_npow, npow_1.
+          unfold Rh1' in e2; rewrite evalR_pushRunK in e2; unfold evalSym in e2.
+          rewrite e2. reflexivity. }
+        destruct (tryTakeDRK Rh2 Rt2 d2) as [[[[m Rh3] Rt3] d3] |] eqn:htd2.
+        -- destruct (tryTakeDRK_spec Rh2 Rt2 Rh3 Rt3 d2 m d3 p2 q2 d2h htd2) as [p3 [q3 [d3h e3]]].
+           destruct (N.eqb a 0) eqn:ha0.
+           ++ apply N.eqb_eq in ha0; subst a.
+              pose proof (pushRDK_spec (m + 2) 1 (pushRunK Sw10 1 Rh3) Rt3 d3
+                (AllPos_pushRunK Sw10 1 p3) q3 d3h) as hp5.
+              destruct (pushRDK (m + 2) 1 (pushRunK Sw10 1 Rh3) Rt3) as [Rh5 Rt5].
+              inversion hres10; subst.
+              destruct hp5 as [p5 [q5 [d5h e5]]].
+              split; [exact (conj hL (conj p5 (conj q5 d5h))) |].
+              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+              rewrite hR_a, e3, e5, evalR_pushRunK, !npow_1; unfold evalSym.
+              exact (rule_defect0_D (evalRuns L 0inf) (evalR Rh3 Rt3 d3) m).
+           ++ apply N.eqb_neq in ha0.
+              destruct (N.eqb a 1) eqn:ha1; [discriminate |].
+              apply N.eqb_neq in ha1.
+              inversion hres10; subst.
+              split; [exact (conj (AllPos_pushBK (m + 2) (2 * (a - 2)) 1 hL)
+                (conj (AllPos_pushRunK Sw10 1 p3) (conj q3 d3h))) |].
+              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+              rewrite hR_a, e3, evalRuns_pushBK, evalR_pushRunK, !npow_1; unfold evalSym.
+              pose proof (rule_defect2_D (variant := variant) (evalRuns L 0inf) (evalR Rh3 Rt3 d3) (a - 2) m) as hstep.
+              replace (2 + (a - 2)) with a in hstep by lia.
+              replace (2 + m) with (m + 2) in hstep by lia.
+              exact hstep.
+        -- destruct (takeBits2RK false false Rh2 Rt2 d2) as [[[Rh3 Rt3] d3] |] eqn:hb2.
+           ++ destruct (takeBits2RK_spec false false Rh2 Rt2 Rh3 Rt3 d2 d3 p2 q2 d2h hb2)
+                as [p3 [q3 [d3h e3]]].
+              destruct (N.eqb a 0) eqn:ha0; [| discriminate].
+              apply N.eqb_eq in ha0; subst a.
+              inversion hres10; subst.
+              split; [exact (conj (AllPos_pushRunK Sw10 1 (AllPos_pushRunK Sw01 1 (AllPos_pushRunK (SS 0) 1 hL)))
+                (conj p3 (conj q3 d3h))) |].
+              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+              rewrite hR_a, e3, !evalRuns_pushRunK, !npow_1; unfold evalSym, bitSym.
+              exact (rule_defect_blank0 (evalRuns L 0inf) (evalR Rh3 Rt3 d3)).
+           ++ destruct (N.leb 1 a) eqn:ha1; [| discriminate].
+              apply N.leb_le in ha1.
+              pose proof (takeOnesRK_spec Rh2 Rt2 d2 p2 q2 d2h) as hto.
+              destruct (takeOnesRK Rh2 Rt2 d2) as [[[ones Rh3] Rt3] d3].
+              destruct hto as [p3 [q3 [d3h e3]]].
+              rewrite N_b2n_odd_mod2 in hres10.
+              destruct (N.eqb (ones mod 2) 1) eqn:ho1; [| discriminate].
+              apply N.eqb_eq in ho1.
+              destruct (takeBitRK false Rh3 Rt3 d3) as [[[Rh4 Rt4] d4] |] eqn:hb0; [| discriminate].
+              destruct (takeBitRK_spec false Rh3 Rt3 Rh4 Rt4 d3 d4 p3 q3 d3h hb0)
+                as [p4 [q4 [d4h e4]]].
+              set (mv := N.div2 ones) in *.
+              assert (hones_eq : npow [S1] ones *> ([S0] *> evalR Rh4 Rt4 d4) =
+                [S1] *> (npow [S1; S1] mv *> ([S0] *> evalR Rh4 Rt4 d4))).
+              { unfold mv; rewrite N.div2_div, pow_11_eq_pow_1.
+                replace ones with (1 + (ones / 2) * 2) at 1 by lia.
+                rewrite <- npow_append_npow, npow_1. reflexivity. }
+              destruct (N.eqb a 1) eqn:ha_eq1.
+              ** apply N.eqb_eq in ha_eq1; subst a.
+                 pose proof (pushRDK_spec (mv + 1) 1 (pushRunK Sb1 1 Rh4) Rt4 d4
+                   (AllPos_pushRunK Sb1 1 p4) q4 d4h) as hp6.
+                 destruct (pushRDK (mv + 1) 1 (pushRunK Sb1 1 Rh4) Rt4) as [Rh6 Rt6].
+                 destruct hp6 as [p6 [q6 [d6h e6]]].
+                 pose proof (pushRDK_spec 0 2 Rh6 Rt6 d4 p6 q6 d6h) as hp7.
+                 destruct (pushRDK 0 2 Rh6 Rt6) as [Rh7 Rt7].
+                 inversion hres10; subst.
+                 destruct hp7 as [p7 [q7 [d7h e7]]].
+                 split; [exact (conj hL (conj p7 (conj q7 d7h))) |].
+                 unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+                 rewrite hR_a, e3, e4; unfold bitSym; change (S0 >> evalR Rh4 Rt4 d4) with ([S0] *> evalR Rh4 Rt4 d4).
+                 rewrite hones_eq, e7, e6, evalR_pushRunK, npow_2, !npow_1, Str_app_assoc; unfold evalSym.
+                 replace (mv + 1) with (1 + mv) by lia.
+                 exact (rule_defect1 (evalRuns L 0inf) (evalR Rh4 Rt4 d4) mv).
+              ** apply N.eqb_neq in ha_eq1.
+                 inversion hres10; subst.
+                 split; [exact (conj (AllPos_pushBK (mv + 2) (2 * (a - 2)) 1 hL)
+                   (conj (AllPos_pushRunK Sb1 1 p4) (conj q4 d4h))) |].
+                 unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+                 rewrite hR_a, e3, e4; unfold bitSym; change (S0 >> evalR Rh4 Rt4 d4) with ([S0] *> evalR Rh4 Rt4 d4).
+                 rewrite hones_eq, evalRuns_pushBK, evalR_pushRunK, !npow_1; unfold evalSym.
+                 pose proof (rule_defect2 (variant := variant) (evalRuns L 0inf) (evalR Rh4 Rt4 d4) (a - 2) mv) as hstep.
+                 replace (2 + (a - 2)) with a in hstep by lia.
+                 replace (2 + mv) with (mv + 2) in hstep by lia.
+                 exact hstep.
+    + rewrite N_b2n_odd_mod2 in hodd.
+      assert (hc10_even : c10 mod 2 = 0) by (destruct (N.eqb (c10 mod 2) 1) eqn:heq; [discriminate | apply N.eqb_neq in heq; lia]).
+      destruct (tryTakeDRK Rh1 Rt1 d0) as [[[[dn Rh2] Rt2] d2] |] eqn:htd.
+      * destruct (tryTakeDRK_spec Rh1 Rt1 Rh2 Rt2 d0 dn d2 p1 q1 d1h htd) as [p2 [q2 [d2h e2]]].
+        inversion hres10; subst.
+        split; [exact (conj (AllPos_pushRunK Sw10 dn (AllPos_pushRunK Sw1101 (N.div2 c10) (AllPos_pushRunK (SS 0) 1 hL)))
+          (conj p2 (conj q2 d2h))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite hR_c10, e2, !evalRuns_pushRunK, npow_1, N.div2_div; unfold evalSym.
+        replace c10 with ((c10 / 2) * 2) at 1 by lia.
+        exact (rule_paired (evalRuns L 0inf) (evalR Rh2 Rt2 d2) (c10 / 2) dn).
+      * destruct (N.eqb c10 2) eqn:hc2; [| discriminate].
+        apply N.eqb_eq in hc2; subst c10.
+        pose proof (takeOnesRK_spec Rh1 Rt1 d0 p1 q1 d1h) as hto.
+        destruct (takeOnesRK Rh1 Rt1 d0) as [[[ones Rh2] Rt2] d2].
+        destruct hto as [p2 [q2 [d2h e2]]].
+        rewrite N_b2n_odd_mod2 in hres10.
+        destruct (N.eqb (ones mod 2) 0) eqn:ho0; [| discriminate].
+        apply N.eqb_eq in ho0.
+        destruct (takeBits2RK false false Rh2 Rt2 d2) as [[[Rh3 Rt3] d3] |] eqn:hb2; [| discriminate].
+        destruct (takeBits2RK_spec false false Rh2 Rt2 Rh3 Rt3 d2 d3 p2 q2 d2h hb2)
+          as [p3 [q3 [d3h e3]]].
+        inversion hres10; subst.
+        split; [exact (conj (AllPos_pushRunK Sw10 (N.div2 ones) (AllPos_pushRunK Sw1101 1 (AllPos_pushRunK (SS 0) 1 hL)))
+          (conj (AllPos_pushRunK Sw10 1 p3) (conj q3 d3h))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite hR_c10, e2, e3, !evalRuns_pushRunK, evalR_pushRunK, npow_2, !npow_1, N.div2_div;
+          unfold evalSym, bitSym.
+        replace ones with ((ones / 2) * 2) at 1 by lia.
+        rewrite <- pow_11_eq_pow_1.
+        exact (rule_MR_PairedEven (evalRuns L 0inf) (evalR Rh3 Rt3 d3) (ones / 2)).
+  - destruct (tryTakeDRK Rh Rt d0) as [[[[dn Rh'] Rt'] d'] |] eqn:htd.
+    + destruct (tryTakeDRK_spec Rh Rt Rh' Rt' d0 dn d' hRh hRt hD htd) as [p1 [q1 [d1h e1]]].
+      inversion h; subst.
+      split; [exact (conj (AllPos_pushSK dn 1 hL) (conj p1 (conj q1 d1h))) |].
+      unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+      rewrite e1, evalRuns_pushSK, npow_1.
+      exact (rule_right (evalRuns L 0inf) (evalR Rh' Rt' d') dn).
+    + pose proof (takeOnesRK_spec Rh Rt d0 hRh hRt hD) as hto.
+      destruct (takeOnesRK Rh Rt d0) as [[[ones Rh1] Rt1] d1].
+      destruct hto as [p1 [q1 [d1h e1]]].
+      split_opt h csub2 heven.
+      * destruct (N.leb 2 ones) eqn:ho2; [| discriminate].
+        apply N.leb_le in ho2.
+        rewrite N_b2n_odd_mod2 in heven.
+        destruct (N.eqb (ones mod 2) 0) eqn:ho0; [| discriminate].
+        apply N.eqb_eq in ho0.
+        destruct (takeBits2RK false false Rh1 Rt1 d1) as [[[Rh2 Rt2] d2] |] eqn:hb2; [| discriminate].
+        destruct (takeBits2RK_spec false false Rh1 Rt1 Rh2 Rt2 d1 d2 p1 q1 d1h hb2)
+          as [p2 [q2 [d2h e2]]].
+        pose proof (pushRDK_spec (N.div2 ones) 1 (pushRunK Sw10 1 Rh2) Rt2 d2
+          (AllPos_pushRunK Sw10 1 p2) q2 d2h) as hp4.
+        destruct (pushRDK (N.div2 ones) 1 (pushRunK Sw10 1 Rh2) Rt2) as [Rh4 Rt4].
+        inversion heven; subst.
+        destruct hp4 as [p4 [q4 [d4h e4]]].
+        split; [exact (conj hL (conj p4 (conj q4 d4h))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite e1, e2, e4, evalR_pushRunK, !npow_1, N.div2_div; unfold evalSym, bitSym.
+        set (n0 := ones / 2 - 1).
+        replace ones with ((1 + n0) * 2) by (unfold n0; lia).
+        replace ((1 + n0) * 2 / 2) with (1 + n0) by lia.
+        rewrite <- pow_11_eq_pow_1.
+        exact (rule_even (evalRuns L 0inf) (evalR Rh2 Rt2 d2) n0).
+      * destruct (takeBits3RK true true false Rh Rt d0) as [[[Rh' Rt'] d'] |] eqn:hb3; [| discriminate].
+        destruct (takeBits3RK_spec true true false Rh Rt Rh' Rt' d0 d' hRh hRt hD hb3)
+          as [p' [q' [d'h e']]].
+        inversion h; subst.
+        split; [exact (conj (AllPos_pushRunK (SS 1) 1 hL) (conj (AllPos_pushRunK Sb1 1 p') (conj q' d'h))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite e', evalRuns_pushRunK, evalR_pushRunK, !npow_1; unfold evalSym, bitSym.
+        exact (rule_MR_110 (evalRuns L 0inf) (evalR Rh' Rt' d')).
+Qed.
+
+Lemma mrCallPlain_sound (f64 : nat) (L Rh Rt : Runs) (d0 : N) (cfg' : FastCfg)
+  (hL : AllPos L) (hRh : AllPos Rh) (hRt : AllPos Rt) (hD : AllD Rt)
+  (h : mrCallPlain f64 L Rh Rt d0 = Some cfg') :
+  ValidCfg cfg' /\ CfgR (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg'.
+Proof.
+  unfold mrCallPlain in h.
+  pose proof (take10RunsK_spec f64 L 0inf hL) as ht10.
+  destruct (take10RunsK f64 L) as [b1 L1].
+  destruct ht10 as [hpL1 heL1].
+  destruct (N.eqb b1 0) eqn:hb1; [discriminate |].
+  apply N.eqb_neq in hb1.
+  pose proof (take111RunsK_spec L1 0inf hpL1) as ht111.
+  destruct (take111RunsK L1) as [c111 L2].
+  destruct ht111 as [hpL2 heL2].
+  pose proof (doCallsNoneK_sound Rh Rt d0 (c111 + 1) true ltac:(lia) hRh hRt hD) as hdc.
+  destruct (doCallsNoneK Rh Rt d0 (c111 + 1) true) as [[[hd nRh] nRt] nD0].
+  destruct hdc as [pnRh [pnRt [dnRt [hhd hnc]]]].
+  destruct (N.eqb hd 0) eqn:hhd0; [discriminate |].
+  apply N.eqb_neq in hhd0.
+  inversion h; subst.
+  split; [exact (conj (AllPos_pushRunK Sw10 b1 (AllPos_pushRunK Sw111 (c111 - (hd - 1)) hpL2))
+    (conj pnRh (conj pnRt dnRt))) |].
+  unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+  rewrite heL1, heL2, !evalRuns_pushRunK; unfold evalSym.
+  replace c111 with ((hd - 1) + (c111 - (hd - 1))) at 1 by lia.
+  rewrite <- npow_append_npow.
+  replace hd with ((hd - 1) + 1) in hnc by lia.
+  pose proof (NCalls_from_MR (hd - 1) (b1 - 1)
+    (npow [S1; S1; S1] (c111 - (hd - 1)) *> evalRuns L2 0inf)
+    (evalR Rh Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
+  replace (1 + (b1 - 1)) with b1 in hstep by lia.
+  exact hstep.
+Qed.
+
+Lemma mlOther_sound (f64 : nat) (L Rh Rt : Runs) (d0 : N) (cfg' : FastCfg)
+  (hL : AllPos L) (hRh : AllPos Rh) (hRt : AllPos Rt) (hD : AllD Rt)
+  (h : mlOther f64 L Rh Rt d0 = Some cfg') :
+  ValidCfg cfg' /\ CfgL (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg'.
+Proof.
+  unfold mlOther in h; cbv zeta in h.
+  pose proof (take10RunsK_spec f64 L 0inf hL) as ht10.
+  destruct (take10RunsK f64 L) as [b1 L1].
+  destruct ht10 as [hpL1 heL1].
+  split_opt h csub hres10.
+  - destruct (N.eqb b1 0) eqn:hb1; [discriminate |].
+    apply N.eqb_neq in hb1.
+    pose proof (take111RunsK_spec L1 0inf hpL1) as ht111.
+    destruct (take111RunsK L1) as [c111 L2].
+    destruct ht111 as [hpL2 heL2].
+    destruct (N.eqb c111 0) eqn:hc111.
+    + apply N.eqb_eq in hc111; subst c111.
+      rewrite npow_0 in heL2; cbn [Str_app] in heL2.
+      destruct (takeBits5RunsK false true true false true L2) as [L3 |] eqn:hb5.
+      * destruct (takeBits5RunsK_spec false true true false true L2 L3 hpL2 hb5) as [hpL3 heL3].
+        pose proof (pushRDK_spec b1 1 Rh Rt d0 hRh hRt hD) as hp1.
+        destruct (pushRDK b1 1 Rh Rt) as [Rh1 Rt1].
+        inversion hres10; subst.
+        destruct hp1 as [p1 [q1 [d1h e1]]].
+        split; [exact (conj hpL3 (conj p1 (conj q1 d1h))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite heL1, heL2, heL3, e1, npow_1; unfold bitSym.
+        change ([S0; S1; S1; S0; S1] *> evalRuns L3 0inf)
+          with ([S0; S1] *> (S_word 0 *> evalRuns L3 0inf)).
+        pose proof (rule_finishP (variant := variant) (evalRuns L3 0inf) (evalR Rh Rt d0) (b1 - 1)) as hstep.
+        replace (1 + (b1 - 1)) with b1 in hstep by lia.
+        exact hstep.
+      * split_opt hres10 csub2 hover2.
+        -- destruct (takeBits2RunsK true true L2) as [L3 |] eqn:hb2; [| discriminate].
+           destruct (takeBits2RunsK_spec true true L2 L3 hpL2 hb2) as [_ heL3].
+           destruct (isAllZeroRunsK L3) eqn:hz; [| discriminate].
+           inversion hover2; subst.
+           split; [exact (conj (AllPos_pushRunK Sw10 2 (AllPos_pushRunK Sw11 b1 (I : AllPos [])))
+             (conj (AllPos_pushRunK Sb1 1 hRh) (conj hRt hD))) |].
+           unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+           rewrite heL1, heL2, heL3, (isAllZeroRunsK_spec hz), !evalRuns_pushRunK, evalR_pushRunK, npow_1;
+             cbn [evalRuns]; unfold evalSym, bitSym.
+           pose proof (rule_overflow2 (variant := variant) (evalR Rh Rt d0) (b1 - 1)) as hstep.
+           replace (1 + (b1 - 1)) with b1 in hstep by lia.
+           exact hstep.
+        -- destruct (takeBitRunsK true L2) as [L3 |] eqn:hb1t; [| discriminate].
+           destruct (takeBitRunsK_spec true L2 L3 hpL2 hb1t) as [_ heL3].
+           destruct (isAllZeroRunsK L3) eqn:hz; [| discriminate].
+           destruct (tryTakeDRK Rh Rt d0) as [[[[dn Rh'] Rt'] d'] |] eqn:htd; [| discriminate].
+           destruct (tryTakeDRK_spec Rh Rt Rh' Rt' d0 dn d' hRh hRt hD htd) as [p' [q' [d'h e']]].
+           inversion hres10; subst.
+           split; [exact (conj (AllPos_pushRunK Sw10 (dn + 2) (AllPos_pushRunK Sw11 (b1 - 1) (I : AllPos [])))
+             (conj (AllPos_pushRunK Sw10 1 p') (conj q' d'h))) |].
+           unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+           rewrite heL1, heL2, heL3, (isAllZeroRunsK_spec hz), e', !evalRuns_pushRunK, evalR_pushRunK, npow_1;
+             cbn [evalRuns]; unfold evalSym, bitSym.
+           pose proof (rule_overflow1 (variant := variant) (evalR Rh' Rt' d') (b1 - 1) dn) as hstep.
+           replace (1 + (b1 - 1)) with b1 in hstep by lia.
+           exact hstep.
+    + apply N.eqb_neq in hc111.
+      destruct Rh as [| r0 rrest].
+      * inversion hres10; subst.
+        split; [exact (conj (AllPos_pushRunK Sw10 b1 hpL2) (conj I (conj hRt hD))) |].
+        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+        rewrite heL1, heL2, evalRuns_pushRunK; unfold evalSym.
+        pose proof (NCalls_pureD_tail Rt hD c111 d0) as hc.
+        pose proof (NCalls_from_ML c111 (b1 - 1) (evalRuns L2 0inf)
+          (evalR [] Rt d0) (evalR [] Rt (d0 + 2 * c111)) hc) as hstep.
+        replace (1 + (b1 - 1)) with b1 in hstep by lia.
+        exact hstep.
+      * pose proof (doCallsNoneK_sound (r0 :: rrest) Rt d0 c111 true ltac:(lia) hRh hRt hD) as hdc.
+        destruct (doCallsNoneK (r0 :: rrest) Rt d0 c111 true) as [[[hd nRh] nRt] nD0].
+        destruct hdc as [pnRh [pnRt [dnRt [hhd hnc]]]].
+        destruct (N.eqb hd 0) eqn:hhd0.
+        -- inversion hres10; subst.
+           split; [exact (conj (AllPos_pushRunK Sw10 b1 (AllPos_pushRunK Sw111 (c111 - 1) hpL2))
+             (conj hRh (conj hRt hD))) |].
+           unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+           rewrite heL1, heL2, !evalRuns_pushRunK; unfold evalSym.
+           replace c111 with (1 + (c111 - 1)) at 1 by lia.
+           rewrite <- npow_append_npow, npow_1.
+           pose proof (rule_restart (variant := variant) (npow [S1; S1; S1] (c111 - 1) *> evalRuns L2 0inf)
+             (evalR (r0 :: rrest) Rt d0) (b1 - 1)) as hstep.
+           replace (1 + (b1 - 1)) with b1 in hstep by lia.
+           exact hstep.
+        -- inversion hres10; subst.
+           split; [exact (conj (AllPos_pushRunK Sw10 b1 (AllPos_pushRunK Sw111 (c111 - hd) hpL2))
+             (conj pnRh (conj pnRt dnRt))) |].
+           unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+           rewrite heL1, heL2, !evalRuns_pushRunK; unfold evalSym.
+           replace c111 with (hd + (c111 - hd)) at 1 by lia.
+           rewrite <- npow_append_npow.
+           pose proof (NCalls_from_ML hd (b1 - 1) (npow [S1; S1; S1] (c111 - hd) *> evalRuns L2 0inf)
+             (evalR (r0 :: rrest) Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
+           replace (1 + (b1 - 1)) with b1 in hstep by lia.
+           exact hstep.
+  - destruct (tryTakeSK f64 L) as [[sn L'] |] eqn:hts.
+    + destruct (tryTakeSK_spec f64 L L' sn hL hts) as [hpL' heL'].
+      pose proof (pushRDK_spec sn 1 Rh Rt d0 hRh hRt hD) as hp1.
+      destruct (pushRDK sn 1 Rh Rt) as [Rh1 Rt1].
+      inversion h; subst.
+      destruct hp1 as [p1 [q1 [d1h e1]]].
+      split; [exact (conj hpL' (conj p1 (conj q1 d1h))) |].
+      unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+      rewrite heL', e1, npow_1.
+      exact (rule_left (evalRuns L' 0inf) (evalR Rh Rt d0) sn).
+    + split_opt h csub2 hturnB.
+      * destruct (takeBits2RunsK true true L) as [L' |] eqn:hb2; [| discriminate].
+        destruct (takeBits2RunsK_spec true true L L' hL hb2) as [hpL' heL'].
+        destruct (tryTakeDRK Rh Rt d0) as [[[[dn Rh'] Rt'] d'] |] eqn:htd.
+        -- destruct (tryTakeDRK_spec Rh Rt Rh' Rt' d0 dn d' hRh hRt hD htd) as [p' [q' [d'h e']]].
+           inversion hturnB; subst.
+           split; [exact (conj (AllPos_pushRunK Sw10 (dn + 1) hpL') (conj p' (conj q' d'h))) |].
+           unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+           rewrite heL', e', evalRuns_pushRunK; unfold evalSym, bitSym.
+           replace (dn + 1) with (1 + dn) by lia.
+           exact (rule_turnB (evalRuns L' 0inf) (evalR Rh' Rt' d') dn).
+        -- pose proof (takeOnesRK_spec Rh Rt d0 hRh hRt hD) as hto.
+           destruct (takeOnesRK Rh Rt d0) as [[[ones Rh1] Rt1] d1].
+           destruct hto as [p1 [q1 [d1h e1]]].
+           rewrite N_b2n_odd_mod2 in hturnB.
+           destruct (N.eqb (ones mod 2) 0) eqn:ho0; [| discriminate].
+           apply N.eqb_eq in ho0.
+           destruct (takeBitRK false Rh1 Rt1 d1) as [[[Rh2 Rt2] d2] |] eqn:hb0; [| discriminate].
+           destruct (takeBitRK_spec false Rh1 Rt1 Rh2 Rt2 d1 d2 p1 q1 d1h hb0)
+             as [p2 [q2 [d2h e2]]].
+           inversion hturnB; subst.
+           split; [exact (conj (AllPos_pushRunK Sw10 (N.div2 ones + 1) hpL')
+             (conj (AllPos_pushRunK Sb1 1 p2) (conj q2 d2h))) |].
+           unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+           rewrite heL', e1, e2, evalRuns_pushRunK, evalR_pushRunK, npow_1, N.div2_div;
+             unfold evalSym, bitSym.
+           replace ones with ((ones / 2) * 2) at 1 by lia.
+           rewrite <- pow_11_eq_pow_1.
+           exact (rule_ML_TurnB_even (evalRuns L' 0inf) (evalR Rh2 Rt2 d2) (ones / 2)).
+      * pose proof (take01RunsK_spec f64 L hL) as ht01.
+        destruct (take01RunsK f64 L) as [k01 L'].
+        destruct ht01 as [hpL' heL'].
+        destruct (N.eqb k01 0) eqn:hk01.
+        -- destruct (takeBits2RunsK true false L) as [L2' |] eqn:hb2.
+           ++ destruct (takeBits2RunsK_spec true false L L2' hL hb2) as [hpL2' heL2'].
+              inversion h; subst.
+              split; [exact (conj hpL2' (conj hRh (conj hRt hD))) |].
+              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+              rewrite heL2'; unfold bitSym.
+              exact (rule_ML_10 (evalRuns L2' 0inf) (evalR Rh Rt d0)).
+           ++ destruct (isAllZeroRunsK L) eqn:hz; [| discriminate].
+              pose proof (takeOnesRK_spec Rh Rt d0 hRh hRt hD) as hto.
+              destruct (takeOnesRK Rh Rt d0) as [[[ones Rh1] Rt1] d1].
+              destruct hto as [p1 [q1 [d1h e1]]].
+              destruct (takeBits2RK false false Rh1 Rt1 d1) as [[[Rh2 Rt2] d2] |] eqn:hb00; [| discriminate].
+              destruct (takeBits2RK_spec false false Rh1 Rt1 Rh2 Rt2 d1 d2 p1 q1 d1h hb00)
+                as [p2 [q2 [d2h e2]]].
+              inversion h; subst.
+              split; [exact (conj (AllPos_pushRunK Sb1 (ones + 4) (I : AllPos []))
+                (conj (AllPos_pushRunK Sb1 1 p2) (conj q2 d2h))) |].
+              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+              rewrite (isAllZeroRunsK_spec hz), e1, e2, evalRuns_pushRunK, evalR_pushRunK, npow_1;
+                cbn [evalRuns]; unfold evalSym, bitSym.
+              exact (rule_ML_default (evalR Rh2 Rt2 d2) ones).
+        -- apply N.eqb_neq in hk01.
+           assert (h01_step : CfgL (evalRuns L 0inf) (evalR Rh Rt d0) -->*
+             CfgL (evalRuns L' 0inf) (npow [S1; S1] k01 *> evalR Rh Rt d0)).
+           { rewrite heL'. exact (rule_ML_01 (evalRuns L' 0inf) (evalR Rh Rt d0) k01). }
+           destruct Rh as [| [rw rk] rrest].
+           ++ destruct Rt as [| [tw tk] trest].
+              ** destruct (N.eqb d0 0) eqn:hd0.
+                 --- apply N.eqb_eq in hd0; subst d0.
+                     inversion h; subst.
+                     split; [exact (conj hpL' (conj (AllPos_pushRunK Sw11 k01 (I : AllPos [])) (conj I I))) |].
+                     unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+                     rewrite evalR_pushRunK; unfold evalSym; exact h01_step.
+                 --- apply N.eqb_neq in hd0.
+                     inversion h; subst.
+                     split; [exact (conj hpL' (conj I (conj (conj (N.le_refl 1) I) I))) |].
+                     unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+                     assert (hrhs : npow [S1; S1] k01 *> evalR [] [] d0 =
+                       evalR [] [mkRun (SD k01) 1] (d0 - 1)).
+                     { unfold evalR; cbn [evalRuns evalSym].
+                       rewrite npow_1.
+                       replace d0 with (1 + (d0 - 1)) at 1 by lia.
+                       rewrite <- npow_append_npow, npow_1, w11_absorb_D_word, N.add_0_l.
+                       reflexivity. }
+                     rewrite hrhs in h01_step. exact h01_step.
+              ** destruct tw; try contradiction.
+                 inversion h; subst.
+                 split; [exact (conj hpL' (conj I (conj (AllPos_pushDK (n + k01) 1 (AllPos_decRunK (SD n) tk (proj2 hRt)))
+                   (AllD_pushDK (n + k01) 1 (AllD_decRunK n tk hD))))) |].
+                 unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+                 assert (hrhs : npow [S1; S1] k01 *> evalR [] (mkRun (SD n) tk :: trest) d0 =
+                   evalR [] (pushDK (n + k01) 1 (decRunK (SD n) tk trest)) d0).
+                 { rewrite evalR_nil_pushDK, npow_1.
+                   pose proof (evalRuns_decRunK (SD n) tk trest (npow (D_word 0) d0 *> 0inf) (proj1 hRt)) as hdec.
+                   unfold evalR; cbn [evalRuns].
+                   rewrite <- hdec; unfold evalSym.
+                   exact (w11_absorb_D_word k01 n _). }
+                 rewrite hrhs in h01_step. exact h01_step.
+           ++ destruct rw;
+                try (inversion h; subst;
+                     split; [exact (conj hpL' (conj (AllPos_pushRunK Sw11 k01 hRh) (conj hRt hD))) |];
+                     unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0];
+                     rewrite evalR_pushRunK; unfold evalSym; exact h01_step).
+              pose proof (pushRDK_spec (n + k01) 1 (decRunK (SD n) rk rrest) Rt d0
+                (AllPos_decRunK (SD n) rk (proj2 hRh)) hRt hD) as hp1.
+              destruct (pushRDK (n + k01) 1 (decRunK (SD n) rk rrest) Rt) as [Rh1 Rt1].
+              inversion h; subst.
+              destruct hp1 as [p1 [q1 [d1h e1]]].
+              split; [exact (conj hpL' (conj p1 (conj q1 d1h))) |].
+              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+              assert (hrhs : npow [S1; S1] k01 *> evalR (mkRun (SD n) rk :: rrest) Rt d0 =
+                evalR Rh1 Rt1 d0).
+              { rewrite e1, npow_1.
+                pose proof (evalRuns_decRunK (SD n) rk rrest (evalRuns Rt (npow (D_word 0) d0 *> 0inf)) (proj1 hRh)) as hdec.
+                unfold evalR; cbn [evalRuns].
+                rewrite <- hdec; unfold evalSym.
+                exact (w11_absorb_D_word k01 n _). }
+              rewrite hrhs in h01_step. exact h01_step.
+Qed.
+
+Lemma mjOther_sound (f64 : nat) (L Rh Rt : Runs) (d0 : N) (cfg' : FastCfg)
+  (hL : AllPos L) (hRh : AllPos Rh) (hRt : AllPos Rt) (hD : AllD Rt)
+  (h : mjOther f64 L Rh Rt d0 = Some cfg') :
+  ValidCfg cfg' /\ CfgJ (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg'.
+Proof.
+  unfold mjOther in h.
+  destruct (tryTakeSK f64 L) as [[sn L'] |] eqn:hts.
+  - destruct (tryTakeSK_spec f64 L L' sn hL hts) as [hpL' heL'].
+    pose proof (pushRDK_spec (sn + 1) 1 Rh Rt d0 hRh hRt hD) as hp1.
+    destruct (pushRDK (sn + 1) 1 Rh Rt) as [Rh1 Rt1].
+    inversion h; subst.
+    destruct hp1 as [p1 [q1 [d1h e1]]].
+    split; [exact (conj hpL' (conj p1 (conj q1 d1h))) |].
+    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+    rewrite heL', e1, npow_1.
+    replace (sn + 1) with (1 + sn) by lia.
+    exact (rule_leftJ (evalRuns L' 0inf) (evalR Rh Rt d0) sn).
+  - destruct (isAllZeroRunsK L) eqn:hz; [| discriminate].
+    inversion h; subst.
+    split; [exact (conj (AllPos_pushRunK Sw111 1 (I : AllPos []))
+      (conj (AllPos_pushRunK Sb1 1 hRh) (conj hRt hD))) |].
+    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+    rewrite (isAllZeroRunsK_spec hz), evalRuns_pushRunK, evalR_pushRunK, !npow_1;
+      cbn [evalRuns]; unfold evalSym.
+    exact (rule_MJ_default (evalR Rh Rt d0)).
+Qed.
+
+Lemma bCollisionK_sound (fromML : bool) (ba bc lk : N) (L' Rh Rt : Runs) (d0 : N) (cfg' : FastCfg)
+  (hL : AllPos (mkRun (SB ba bc) lk :: L')) (hRh : AllPos Rh) (hRt : AllPos Rt) (hD : AllD Rt)
+  (hcoll : bCollisionK fromML ba bc lk L' Rh Rt d0 = Some cfg') :
+  ValidCfg cfg' /\
+  (if fromML then CfgL else CfgJ) (evalRuns (mkRun (SB ba bc) lk :: L') 0inf)
+    (evalR Rh Rt d0) -->* evalCfg cfg'.
+Proof.
+  unfold bCollisionK in hcoll.
+  destruct Rh as [| r0 rrest]; [discriminate |].
+  destruct (if N.eqb (bc mod 3) 2 then N.leb 1 ba else false) eqn:hcond; [| discriminate].
+  destruct (N.eqb (bc mod 3) 2) eqn:hbc2; [| discriminate].
+  apply N.eqb_eq in hbc2; apply N.leb_le in hcond.
+  set (stepH := bc / 3 + 1) in *.
+  set (av := N.div2 (peekCollZAvailK (r0 :: rrest) Rt d0) / stepH) in *.
+  set (mc := if N.leb lk av then lk else av) in *.
+  destruct (N.eqb mc 0) eqn:hmc0; [discriminate |].
+  apply N.eqb_neq in hmc0.
+  assert (hmc_le : 1 <= mc /\ mc <= lk).
+  { unfold mc; destruct (N.leb lk av) eqn:hlk;
+      [apply N.leb_le in hlk | apply N.leb_gt in hlk]; lia. }
+  destruct hmc_le as [hmc1 hmc_lk].
+  set (need := mc * stepH) in *.
+  assert (hneed1 : 1 <= need) by (unfold need, stepH; nia).
+  pose proof (doCallsNoneK_sound (r0 :: rrest) Rt d0 need false hneed1 hRh hRt hD) as hdc.
+  destruct (doCallsNoneK (r0 :: rrest) Rt d0 need false) as [[[hd nRh] nRt] nD0].
+  destruct hdc as [pnRh [pnRt [dnRt [_ hnc]]]].
+  destruct (N.eqb hd need) eqn:hhd; [| discriminate].
+  apply N.eqb_eq in hhd; subst hd.
+  set (L1 := if N.eqb lk mc then L' else mkRun (SB ba bc) (lk - mc) :: L') in *.
+  assert (hL1 : AllPos L1 /\
+    evalRuns (mkRun (SB ba bc) lk :: L') 0inf = npow (B_word ba bc) mc *> evalRuns L1 0inf).
+  { unfold L1. destruct (N.eqb lk mc) eqn:hlkmc.
+    - apply N.eqb_eq in hlkmc; rewrite hlkmc. exact (conj (proj2 hL) eq_refl).
+    - apply N.eqb_neq in hlkmc.
+      split; [simpl; split; [lia | exact (proj2 hL)] |].
+      cbn [evalRuns]; unfold evalSym.
+      replace lk with (mc + (lk - mc)) at 1 by lia.
+      rewrite <- npow_append_npow. reflexivity. }
+  destruct hL1 as [hpL1 heL1].
+  destruct fromML; cbv iota in hcoll |- *.
+  - pose proof (pushRDK_spec ba 1 nRh nRt nD0 pnRh pnRt dnRt) as hp1.
+    destruct (pushRDK ba 1 nRh nRt) as [nRh1 nRt1].
+    destruct hp1 as [p1 [q1 [d1h e1]]].
+    pose proof (pushRDK_spec (ba + 1) (mc - 1) nRh1 nRt1 nD0 p1 q1 d1h) as hp2.
+    destruct (pushRDK (ba + 1) (mc - 1) nRh1 nRt1) as [nRh2 nRt2].
+    inversion hcoll; subst.
+    destruct hp2 as [p2 [q2 [d2h e2]]].
+    split; [exact (conj hpL1 (conj p2 (conj q2 d2h))) |].
+    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+    rewrite heL1, e2, e1, npow_1.
+    unfold need, stepH in hnc.
+    replace mc with (1 + (mc - 1)) in hnc by lia.
+    pose proof (B_word_ML_r2_pow (ba - 1) (bc / 3) (mc - 1) (evalRuns L1 0inf)
+      (evalR (r0 :: rrest) Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
+    replace (1 + (ba - 1)) with ba in hstep by lia.
+    replace (2 + (ba - 1)) with (ba + 1) in hstep by lia.
+    replace (3 * (bc / 3) + 2) with bc in hstep by lia.
+    replace (1 + (mc - 1)) with mc in hstep by lia.
+    exact hstep.
+  - pose proof (pushRDK_spec (ba + 1) mc nRh nRt nD0 pnRh pnRt dnRt) as hp1.
+    destruct (pushRDK (ba + 1) mc nRh nRt) as [nRh1 nRt1].
+    inversion hcoll; subst.
+    destruct hp1 as [p1 [q1 [d1h e1]]].
+    split; [exact (conj hpL1 (conj p1 (conj q1 d1h))) |].
+    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
+    rewrite heL1, e1.
+    pose proof (B_word_MJ_r2_pow (ba - 1) (bc / 3) mc (evalRuns L1 0inf)
+      (evalR (r0 :: rrest) Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
+    replace (1 + (ba - 1)) with ba in hstep by lia.
+    replace (2 + (ba - 1)) with (ba + 1) in hstep by lia.
+    replace (3 * (bc / 3) + 2) with bc in hstep by lia.
+    exact hstep.
+Qed.
+
 Lemma stepMRK_sound (f64 f4096 : nat) (L Rh Rt : Runs) (d0 : N) (cfg' : FastCfg)
   (hL : AllPos L) (hRh : AllPos Rh) (hRt : AllPos Rt) (hD : AllD Rt)
   (h : stepMRK f64 f4096 L Rh Rt d0 = Some cfg') :
@@ -3737,344 +4283,11 @@ Proof.
   - split_opt h csub hloop.
     + exact (runMrW10LoopK_sound f4096 L (mkRun rw rk :: rrest) Rt d0 cfg' hL hRh hRt hD hloop).
     + set (Rh := mkRun rw rk :: rrest) in *.
-      assert (hnonD :
-        (let '(c10, Rh1a) := take10RunsK f64 Rh in
-         let res10 :=
-           if N.eqb c10 0 then None
-           else
-             let '(Rh1, Rt1) := normRK Rh1a Rt in
-             if N.eqb (N.b2n (N.odd c10)) 1 then
-               let odd3 :=
-                 if N.eqb c10 3 then
-                   match tryTakeDRK Rh1 Rt1 d0 with
-                   | Some (dn, Rh2, Rt2, d2) =>
-                     let L' := pushRunK Sw11 dn (pushRunK Sw1101 2 (pushRunK (SS 0) 1 L)) in
-                     Some (mkCfg ML L' (pushRunK Sb1 1 Rh2) Rt2 d2)
-                   | None => None
-                   end
-                 else None in
-               match odd3 with
-               | Some cfg => Some cfg
-               | None =>
-                 let Rh1' := pushRunK Sw10 (c10 - 1) Rh1 in
-                 match tryTakeDRK Rh1' Rt1 d0 with
-                 | None => None
-                 | Some (a, Rh2, Rt2, d2) =>
-                   match tryTakeDRK Rh2 Rt2 d2 with
-                   | Some (m, Rh3, Rt3, d3) =>
-                     if N.eqb a 0 then
-                       let Rh4 := pushRunK Sw10 1 Rh3 in
-                       let '(Rh5, Rt5) := pushRDK (m + 2) 1 Rh4 Rt3 in
-                       Some (mkCfg MJ L Rh5 Rt5 d3)
-                     else if N.eqb a 1 then None
-                     else
-                       Some (mkCfg MR (pushBK (m + 2) (2 * (a - 2)) 1 L) (pushRunK Sw10 1 Rh3) Rt3 d3)
-                   | None =>
-                     match takeBits2RK false false Rh2 Rt2 d2 with
-                     | Some (Rh3, Rt3, d3) =>
-                       if N.eqb a 0 then
-                         let L' := pushRunK Sw10 1 (pushRunK Sw01 1 (pushRunK (SS 0) 1 L)) in
-                         Some (mkCfg MR L' Rh3 Rt3 d3)
-                       else None
-                     | None =>
-                       if N.leb 1 a then
-                         let '(ones, Rh3, Rt3, d3) := takeOnesRK Rh2 Rt2 d2 in
-                         if N.eqb (N.b2n (N.odd ones)) 1 then
-                           match takeBitRK false Rh3 Rt3 d3 with
-                           | Some (Rh4, Rt4, d4) =>
-                             let mv := N.div2 ones in
-                             if N.eqb a 1 then
-                               let Rh5 := pushRunK Sb1 1 Rh4 in
-                               let '(Rh6, Rt6) := pushRDK (mv + 1) 1 Rh5 Rt4 in
-                               let '(Rh7, Rt7) := pushRDK 0 2 Rh6 Rt6 in
-                               Some (mkCfg ML L Rh7 Rt7 d4)
-                             else
-                               Some (mkCfg MR (pushBK (mv + 2) (2 * (a - 2)) 1 L) (pushRunK Sb1 1 Rh4) Rt4 d4)
-                           | None => None
-                           end
-                         else None
-                       else None
-                     end
-                   end
-                 end
-               end
-             else
-               match tryTakeDRK Rh1 Rt1 d0 with
-               | Some (dn, Rh2, Rt2, d2) =>
-                 let kp := N.div2 c10 in
-                 let L' := pushRunK Sw10 dn (pushRunK Sw1101 kp (pushRunK (SS 0) 1 L)) in
-                 Some (mkCfg MR L' Rh2 Rt2 d2)
-               | None =>
-                 if N.eqb c10 2 then
-                   let '(ones, Rh2, Rt2, d2) := takeOnesRK Rh1 Rt1 d0 in
-                   if N.eqb (N.b2n (N.odd ones)) 0 then
-                     match takeBits2RK false false Rh2 Rt2 d2 with
-                     | Some (Rh3, Rt3, d3) =>
-                       let m := N.div2 ones in
-                       let L' := pushRunK Sw10 m (pushRunK Sw1101 1 (pushRunK (SS 0) 1 L)) in
-                       Some (mkCfg ML L' (pushRunK Sw10 1 Rh3) Rt3 d3)
-                     | None => None
-                     end
-                   else None
-                 else None
-               end in
-         match res10 with
-         | Some cfg => Some cfg
-         | None =>
-           match tryTakeDRK Rh Rt d0 with
-           | Some (dn, Rh', Rt', d') => Some (mkCfg MR (pushSK dn 1 L) Rh' Rt' d')
-           | None =>
-             let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
-             let evenRes :=
-               if (if N.leb 2 ones then N.eqb (N.b2n (N.odd ones)) 0 else false) then
-                 match takeBits2RK false false Rh1 Rt1 d1 with
-                 | Some (Rh2, Rt2, d2) =>
-                   let Rh3 := pushRunK Sw10 1 Rh2 in
-                   let '(Rh4, Rt4) := pushRDK (N.div2 ones) 1 Rh3 Rt2 in
-                   Some (mkCfg ML L Rh4 Rt4 d2)
-                 | None => None
-                 end
-               else None in
-             match evenRes with
-             | Some cfg => Some cfg
-             | None =>
-               match takeBits3RK true true false Rh Rt d0 with
-               | Some (Rh', Rt', d') => Some (mkCfg ML (pushRunK (SS 1) 1 L) (pushRunK Sb1 1 Rh') Rt' d')
-               | None => None
-               end
-             end
-           end
-         end) = Some cfg' ->
-        ValidCfg cfg' /\ CfgR (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg').
-      { intro hnd; cbv zeta in hnd.
-        pose proof (take10RunsK_spec f64 Rh (evalRuns Rt (npow (D_word 0) d0 *> 0inf)) hRh) as ht10.
-        destruct (take10RunsK f64 Rh) as [c10 Rh1a].
-        destruct ht10 as [hpRh1a heRh1a].
-        split_opt hnd csub hres10.
-        - destruct (N.eqb c10 0) eqn:hc10; [discriminate |].
-          apply N.eqb_neq in hc10.
-          pose proof (normRK_spec Rh1a Rt d0 hpRh1a hRt hD) as hn.
-          destruct (normRK Rh1a Rt) as [Rh1 Rt1].
-          destruct hn as [p1 [q1 [d1h e1]]].
-          assert (hR_c10 : evalR Rh Rt d0 = npow [S1; S0] c10 *> evalR Rh1 Rt1 d0).
-          { rewrite e1; unfold evalR; rewrite heRh1a; reflexivity. }
-          destruct (N.eqb (N.b2n (N.odd c10)) 1) eqn:hodd.
-          + split_opt hres10 csub2 hodd3.
-            * destruct (N.eqb c10 3) eqn:hc3; [| discriminate].
-              apply N.eqb_eq in hc3; subst c10.
-              destruct (tryTakeDRK Rh1 Rt1 d0) as [[[[dn Rh2] Rt2] d2] |] eqn:htd; [| discriminate].
-              destruct (tryTakeDRK_spec Rh1 Rt1 Rh2 Rt2 d0 dn d2 p1 q1 d1h htd) as [p2 [q2 [d2h e2]]].
-              inversion hodd3; subst.
-              split;
-                [exact (conj (AllPos_pushRunK Sw11 dn (AllPos_pushRunK Sw1101 2 (AllPos_pushRunK (SS 0) 1 hL)))
-                  (conj (AllPos_pushRunK Sb1 1 p2) (conj q2 d2h))) |].
-              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-              rewrite hR_c10, e2, !evalRuns_pushRunK, evalR_pushRunK, !npow_1; unfold evalSym.
-              exact (rule_MR_PairedOdd (evalRuns L 0inf) (evalR Rh2 Rt2 d2) dn).
-            * set (Rh1' := pushRunK Sw10 (c10 - 1) Rh1) in *.
-              destruct (tryTakeDRK Rh1' Rt1 d0) as [[[[a Rh2] Rt2] d2] |] eqn:htd; [| discriminate].
-              destruct (tryTakeDRK_spec Rh1' Rt1 Rh2 Rt2 d0 a d2
-                (AllPos_pushRunK Sw10 (c10 - 1) p1) q1 d1h htd) as [p2 [q2 [d2h e2]]].
-              assert (hR_a : evalR Rh Rt d0 = [S1; S0] *> (D_word a *> evalR Rh2 Rt2 d2)).
-              { rewrite hR_c10.
-                replace c10 with (1 + (c10 - 1)) at 1 by lia.
-                rewrite <- npow_append_npow, npow_1.
-                unfold Rh1' in e2; rewrite evalR_pushRunK in e2; unfold evalSym in e2.
-                rewrite e2. reflexivity. }
-              destruct (tryTakeDRK Rh2 Rt2 d2) as [[[[m Rh3] Rt3] d3] |] eqn:htd2.
-              -- destruct (tryTakeDRK_spec Rh2 Rt2 Rh3 Rt3 d2 m d3 p2 q2 d2h htd2) as [p3 [q3 [d3h e3]]].
-                 destruct (N.eqb a 0) eqn:ha0.
-                 ++ apply N.eqb_eq in ha0; subst a.
-                    pose proof (pushRDK_spec (m + 2) 1 (pushRunK Sw10 1 Rh3) Rt3 d3
-                      (AllPos_pushRunK Sw10 1 p3) q3 d3h) as hp5.
-                    destruct (pushRDK (m + 2) 1 (pushRunK Sw10 1 Rh3) Rt3) as [Rh5 Rt5].
-                    inversion hres10; subst.
-                    destruct hp5 as [p5 [q5 [d5h e5]]].
-                    split; [exact (conj hL (conj p5 (conj q5 d5h))) |].
-                    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                    rewrite hR_a, e3, e5, evalR_pushRunK, !npow_1; unfold evalSym.
-                    exact (rule_defect0_D (evalRuns L 0inf) (evalR Rh3 Rt3 d3) m).
-                 ++ apply N.eqb_neq in ha0.
-                    destruct (N.eqb a 1) eqn:ha1; [discriminate |].
-                    apply N.eqb_neq in ha1.
-                    inversion hres10; subst.
-                    split; [exact (conj (AllPos_pushBK (m + 2) (2 * (a - 2)) 1 hL)
-                      (conj (AllPos_pushRunK Sw10 1 p3) (conj q3 d3h))) |].
-                    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                    rewrite hR_a, e3, evalRuns_pushBK, evalR_pushRunK, !npow_1; unfold evalSym.
-                    pose proof (rule_defect2_D (evalRuns L 0inf) (evalR Rh3 Rt3 d3) (a - 2) m) as hstep.
-                    replace (2 + (a - 2)) with a in hstep by lia.
-                    replace (2 + m) with (m + 2) in hstep by lia.
-                    exact hstep.
-              -- destruct (takeBits2RK false false Rh2 Rt2 d2) as [[[Rh3 Rt3] d3] |] eqn:hb2.
-                 ++ destruct (takeBits2RK_spec false false Rh2 Rt2 Rh3 Rt3 d2 d3 p2 q2 d2h hb2)
-                      as [p3 [q3 [d3h e3]]].
-                    destruct (N.eqb a 0) eqn:ha0; [| discriminate].
-                    apply N.eqb_eq in ha0; subst a.
-                    inversion hres10; subst.
-                    split; [exact (conj (AllPos_pushRunK Sw10 1 (AllPos_pushRunK Sw01 1 (AllPos_pushRunK (SS 0) 1 hL)))
-                      (conj p3 (conj q3 d3h))) |].
-                    unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                    rewrite hR_a, e3, !evalRuns_pushRunK, !npow_1; unfold evalSym, bitSym.
-                    exact (rule_defect_blank0 (evalRuns L 0inf) (evalR Rh3 Rt3 d3)).
-                 ++ destruct (N.leb 1 a) eqn:ha1; [| discriminate].
-                    apply N.leb_le in ha1.
-                    pose proof (takeOnesRK_spec Rh2 Rt2 d2 p2 q2 d2h) as hto.
-                    destruct (takeOnesRK Rh2 Rt2 d2) as [[[ones Rh3] Rt3] d3].
-                    destruct hto as [p3 [q3 [d3h e3]]].
-                    rewrite N_b2n_odd_mod2 in hres10.
-                    destruct (N.eqb (ones mod 2) 1) eqn:ho1; [| discriminate].
-                    apply N.eqb_eq in ho1.
-                    destruct (takeBitRK false Rh3 Rt3 d3) as [[[Rh4 Rt4] d4] |] eqn:hb0; [| discriminate].
-                    destruct (takeBitRK_spec false Rh3 Rt3 Rh4 Rt4 d3 d4 p3 q3 d3h hb0)
-                      as [p4 [q4 [d4h e4]]].
-                    set (mv := N.div2 ones) in *.
-                    assert (hones_eq : npow [S1] ones *> ([S0] *> evalR Rh4 Rt4 d4) =
-                      [S1] *> (npow [S1; S1] mv *> ([S0] *> evalR Rh4 Rt4 d4))).
-                    { unfold mv; rewrite N.div2_div, pow_11_eq_pow_1.
-                      replace ones with (1 + (ones / 2) * 2) at 1 by lia.
-                      rewrite <- npow_append_npow, npow_1. reflexivity. }
-                    destruct (N.eqb a 1) eqn:ha_eq1.
-                    ** apply N.eqb_eq in ha_eq1; subst a.
-                       pose proof (pushRDK_spec (mv + 1) 1 (pushRunK Sb1 1 Rh4) Rt4 d4
-                         (AllPos_pushRunK Sb1 1 p4) q4 d4h) as hp6.
-                       destruct (pushRDK (mv + 1) 1 (pushRunK Sb1 1 Rh4) Rt4) as [Rh6 Rt6].
-                       destruct hp6 as [p6 [q6 [d6h e6]]].
-                       pose proof (pushRDK_spec 0 2 Rh6 Rt6 d4 p6 q6 d6h) as hp7.
-                       destruct (pushRDK 0 2 Rh6 Rt6) as [Rh7 Rt7].
-                       inversion hres10; subst.
-                       destruct hp7 as [p7 [q7 [d7h e7]]].
-                       split; [exact (conj hL (conj p7 (conj q7 d7h))) |].
-                       unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                       rewrite hR_a, e3, e4; unfold bitSym; change (S0 >> evalR Rh4 Rt4 d4) with ([S0] *> evalR Rh4 Rt4 d4).
-                       rewrite hones_eq, e7, e6, evalR_pushRunK, npow_2, !npow_1, Str_app_assoc; unfold evalSym.
-                       replace (mv + 1) with (1 + mv) by lia.
-                       exact (rule_defect1 (evalRuns L 0inf) (evalR Rh4 Rt4 d4) mv).
-                    ** apply N.eqb_neq in ha_eq1.
-                       inversion hres10; subst.
-                       split; [exact (conj (AllPos_pushBK (mv + 2) (2 * (a - 2)) 1 hL)
-                         (conj (AllPos_pushRunK Sb1 1 p4) (conj q4 d4h))) |].
-                       unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                       rewrite hR_a, e3, e4; unfold bitSym; change (S0 >> evalR Rh4 Rt4 d4) with ([S0] *> evalR Rh4 Rt4 d4).
-                       rewrite hones_eq, evalRuns_pushBK, evalR_pushRunK, !npow_1; unfold evalSym.
-                       pose proof (rule_defect2 (evalRuns L 0inf) (evalR Rh4 Rt4 d4) (a - 2) mv) as hstep.
-                       replace (2 + (a - 2)) with a in hstep by lia.
-                       replace (2 + mv) with (mv + 2) in hstep by lia.
-                       exact hstep.
-          + rewrite N_b2n_odd_mod2 in hodd.
-            assert (hc10_even : c10 mod 2 = 0) by (destruct (N.eqb (c10 mod 2) 1) eqn:heq; [discriminate | apply N.eqb_neq in heq; lia]).
-            destruct (tryTakeDRK Rh1 Rt1 d0) as [[[[dn Rh2] Rt2] d2] |] eqn:htd.
-            * destruct (tryTakeDRK_spec Rh1 Rt1 Rh2 Rt2 d0 dn d2 p1 q1 d1h htd) as [p2 [q2 [d2h e2]]].
-              inversion hres10; subst.
-              split; [exact (conj (AllPos_pushRunK Sw10 dn (AllPos_pushRunK Sw1101 (N.div2 c10) (AllPos_pushRunK (SS 0) 1 hL)))
-                (conj p2 (conj q2 d2h))) |].
-              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-              rewrite hR_c10, e2, !evalRuns_pushRunK, npow_1, N.div2_div; unfold evalSym.
-              replace c10 with ((c10 / 2) * 2) at 1 by lia.
-              exact (rule_paired (evalRuns L 0inf) (evalR Rh2 Rt2 d2) (c10 / 2) dn).
-            * destruct (N.eqb c10 2) eqn:hc2; [| discriminate].
-              apply N.eqb_eq in hc2; subst c10.
-              pose proof (takeOnesRK_spec Rh1 Rt1 d0 p1 q1 d1h) as hto.
-              destruct (takeOnesRK Rh1 Rt1 d0) as [[[ones Rh2] Rt2] d2].
-              destruct hto as [p2 [q2 [d2h e2]]].
-              rewrite N_b2n_odd_mod2 in hres10.
-              destruct (N.eqb (ones mod 2) 0) eqn:ho0; [| discriminate].
-              apply N.eqb_eq in ho0.
-              destruct (takeBits2RK false false Rh2 Rt2 d2) as [[[Rh3 Rt3] d3] |] eqn:hb2; [| discriminate].
-              destruct (takeBits2RK_spec false false Rh2 Rt2 Rh3 Rt3 d2 d3 p2 q2 d2h hb2)
-                as [p3 [q3 [d3h e3]]].
-              inversion hres10; subst.
-              split; [exact (conj (AllPos_pushRunK Sw10 (N.div2 ones) (AllPos_pushRunK Sw1101 1 (AllPos_pushRunK (SS 0) 1 hL)))
-                (conj (AllPos_pushRunK Sw10 1 p3) (conj q3 d3h))) |].
-              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-              rewrite hR_c10, e2, e3, !evalRuns_pushRunK, evalR_pushRunK, npow_2, !npow_1, N.div2_div;
-                unfold evalSym, bitSym.
-              replace ones with ((ones / 2) * 2) at 1 by lia.
-              rewrite <- pow_11_eq_pow_1.
-              exact (rule_MR_PairedEven (evalRuns L 0inf) (evalR Rh3 Rt3 d3) (ones / 2)).
-        - destruct (tryTakeDRK Rh Rt d0) as [[[[dn Rh'] Rt'] d'] |] eqn:htd.
-          + destruct (tryTakeDRK_spec Rh Rt Rh' Rt' d0 dn d' hRh hRt hD htd) as [p1 [q1 [d1h e1]]].
-            inversion hnd; subst.
-            split; [exact (conj (AllPos_pushSK dn 1 hL) (conj p1 (conj q1 d1h))) |].
-            unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-            rewrite e1, evalRuns_pushSK, npow_1.
-            exact (rule_right (evalRuns L 0inf) (evalR Rh' Rt' d') dn).
-          + pose proof (takeOnesRK_spec Rh Rt d0 hRh hRt hD) as hto.
-            destruct (takeOnesRK Rh Rt d0) as [[[ones Rh1] Rt1] d1].
-            destruct hto as [p1 [q1 [d1h e1]]].
-            split_opt hnd csub2 heven.
-            * destruct (N.leb 2 ones) eqn:ho2; [| discriminate].
-              apply N.leb_le in ho2.
-              rewrite N_b2n_odd_mod2 in heven.
-              destruct (N.eqb (ones mod 2) 0) eqn:ho0; [| discriminate].
-              apply N.eqb_eq in ho0.
-              destruct (takeBits2RK false false Rh1 Rt1 d1) as [[[Rh2 Rt2] d2] |] eqn:hb2; [| discriminate].
-              destruct (takeBits2RK_spec false false Rh1 Rt1 Rh2 Rt2 d1 d2 p1 q1 d1h hb2)
-                as [p2 [q2 [d2h e2]]].
-              pose proof (pushRDK_spec (N.div2 ones) 1 (pushRunK Sw10 1 Rh2) Rt2 d2
-                (AllPos_pushRunK Sw10 1 p2) q2 d2h) as hp4.
-              destruct (pushRDK (N.div2 ones) 1 (pushRunK Sw10 1 Rh2) Rt2) as [Rh4 Rt4].
-              inversion heven; subst.
-              destruct hp4 as [p4 [q4 [d4h e4]]].
-              split; [exact (conj hL (conj p4 (conj q4 d4h))) |].
-              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-              rewrite e1, e2, e4, evalR_pushRunK, !npow_1, N.div2_div; unfold evalSym, bitSym.
-              set (n0 := ones / 2 - 1).
-              replace ones with ((1 + n0) * 2) by (unfold n0; lia).
-              replace ((1 + n0) * 2 / 2) with (1 + n0) by lia.
-              rewrite <- pow_11_eq_pow_1.
-              exact (rule_even (evalRuns L 0inf) (evalR Rh2 Rt2 d2) n0).
-            * destruct (takeBits3RK true true false Rh Rt d0) as [[[Rh' Rt'] d'] |] eqn:hb3; [| discriminate].
-              destruct (takeBits3RK_spec true true false Rh Rt Rh' Rt' d0 d' hRh hRt hD hb3)
-                as [p' [q' [d'h e']]].
-              inversion hnd; subst.
-              split; [exact (conj (AllPos_pushRunK (SS 1) 1 hL) (conj (AllPos_pushRunK Sb1 1 p') (conj q' d'h))) |].
-              unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-              rewrite e', evalRuns_pushRunK, evalR_pushRunK, !npow_1; unfold evalSym, bitSym.
-              exact (rule_MR_110 (evalRuns L 0inf) (evalR Rh' Rt' d')). }
-      destruct rw; try exact (hnonD h).
+      destruct rw; try exact (mrOther_sound f64 L Rh Rt d0 cfg' hL hRh hRt hD h).
       (* rw = SD n *)
       split_opt h csub hcall.
-      * assert (hcall_gen :
-          (let '(b1, L1) := take10RunsK f64 L in
-           if N.eqb b1 0 then None
-           else
-             let '(c111, L2) := take111RunsK L1 in
-             let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 (c111 + 1) true in
-             if N.eqb hd 0 then None
-             else
-               let rem := c111 - (hd - 1) in
-               Some (mkCfg ML (pushRunK Sw10 b1 (pushRunK Sw111 rem L2)) nRh nRt nD0)) = Some cfg' ->
-          ValidCfg cfg' /\ CfgR (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg').
-        { intro hcg.
-          pose proof (take10RunsK_spec f64 L 0inf hL) as ht10.
-          destruct (take10RunsK f64 L) as [b1 L1].
-          destruct ht10 as [hpL1 heL1].
-          destruct (N.eqb b1 0) eqn:hb1; [discriminate |].
-          apply N.eqb_neq in hb1.
-          pose proof (take111RunsK_spec L1 0inf hpL1) as ht111.
-          destruct (take111RunsK L1) as [c111 L2].
-          destruct ht111 as [hpL2 heL2].
-          pose proof (doCallsNoneK_sound Rh Rt d0 (c111 + 1) true ltac:(lia) hRh hRt hD) as hdc.
-          destruct (doCallsNoneK Rh Rt d0 (c111 + 1) true) as [[[hd nRh] nRt] nD0].
-          destruct hdc as [pnRh [pnRt [dnRt [hhd hnc]]]].
-          destruct (N.eqb hd 0) eqn:hhd0; [discriminate |].
-          apply N.eqb_neq in hhd0.
-          inversion hcg; subst.
-          split; [exact (conj (AllPos_pushRunK Sw10 b1 (AllPos_pushRunK Sw111 (c111 - (hd - 1)) hpL2))
-            (conj pnRh (conj pnRt dnRt))) |].
-          unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-          rewrite heL1, heL2, !evalRuns_pushRunK; unfold evalSym.
-          replace c111 with ((hd - 1) + (c111 - (hd - 1))) at 1 by lia.
-          rewrite <- npow_append_npow.
-          replace hd with ((hd - 1) + 1) in hnc by lia.
-          pose proof (NCalls_from_MR (hd - 1) (b1 - 1)
-            (npow [S1; S1; S1] (c111 - (hd - 1)) *> evalRuns L2 0inf)
-            (evalR Rh Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
-          replace (1 + (b1 - 1)) with b1 in hstep by lia.
-          exact hstep. }
-        destruct L as [| [lw lk] L']; [exact (hcall_gen hcall) |].
-        destruct lw as [| | ba bc | | | | | | | |]; try exact (hcall_gen hcall).
+      * destruct L as [| [lw lk] L']; [exact (mrCallPlain_sound f64 _ Rh Rt d0 cfg' hL hRh hRt hD hcall) |].
+        destruct lw as [| | ba bc | | | | | | | |]; try exact (mrCallPlain_sound f64 _ Rh Rt d0 cfg' hL hRh hRt hD hcall).
         destruct (N.leb 1 ba) eqn:hba; [| discriminate].
         apply N.leb_le in hba.
         set (c111av := bc / 3 + (if N.eqb (bc mod 3) 2 then 1 else 0)) in *.
@@ -4131,328 +4344,8 @@ Proof.
   split_opt h csub hdtail.
   - destruct Rh; [| discriminate].
     exact (runDtailLoopK_sound f4096 ML L Rt d0 cfg' hL hRt hD hdtail).
-  - assert (hrestL :
-      (let '(b1, L1) := take10RunsK f64 L in
-       let res10 :=
-         if N.eqb b1 0 then None
-         else
-           let '(c111, L2) := take111RunsK L1 in
-           if N.eqb c111 0 then
-             match takeBits5RunsK false true true false true L2 with
-             | Some L3 =>
-               let '(Rh1, Rt1) := pushRDK b1 1 Rh Rt in
-               Some (mkCfg MJ L3 Rh1 Rt1 d0)
-             | None =>
-               let over2 :=
-                 match takeBits2RunsK true true L2 with
-                 | Some L3 =>
-                   if isAllZeroRunsK L3 then
-                     Some (mkCfg MR (pushRunK Sw10 2 (pushRunK Sw11 b1 [])) (pushRunK Sb1 1 Rh) Rt d0)
-                   else None
-                 | None => None
-                 end in
-               match over2 with
-               | Some cfg => Some cfg
-               | None =>
-                 match takeBitRunsK true L2 with
-                 | Some L3 =>
-                   if isAllZeroRunsK L3 then
-                     match tryTakeDRK Rh Rt d0 with
-                     | Some (dn, Rh', Rt', d') =>
-                       Some (mkCfg MR (pushRunK Sw10 (dn + 2) (pushRunK Sw11 (b1 - 1) [])) (pushRunK Sw10 1 Rh') Rt' d')
-                     | None => None
-                     end
-                   else None
-                 | None => None
-                 end
-               end
-             end
-           else
-             match Rh with
-             | [] => Some (mkCfg ML (pushRunK Sw10 b1 L2) [] Rt (d0 + 2 * c111))
-             | _ :: _ =>
-               let '(hd, nRh, nRt, nD0) := doCallsNoneK Rh Rt d0 c111 true in
-               if N.eqb hd 0 then
-                 Some (mkCfg MR (pushRunK Sw10 b1 (pushRunK Sw111 (c111 - 1) L2)) Rh Rt d0)
-               else
-                 Some (mkCfg ML (pushRunK Sw10 b1 (pushRunK Sw111 (c111 - hd) L2)) nRh nRt nD0)
-             end in
-       match res10 with
-       | Some cfg => Some cfg
-       | None =>
-         match tryTakeSK f64 L with
-         | Some (sn, L') =>
-           let '(Rh1, Rt1) := pushRDK sn 1 Rh Rt in
-           Some (mkCfg ML L' Rh1 Rt1 d0)
-         | None =>
-           let turnB :=
-             match takeBits2RunsK true true L with
-             | Some L' =>
-               match tryTakeDRK Rh Rt d0 with
-               | Some (dn, Rh', Rt', d') => Some (mkCfg MR (pushRunK Sw10 (dn + 1) L') Rh' Rt' d')
-               | None =>
-                 let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
-                 if N.eqb (N.b2n (N.odd ones)) 0 then
-                   match takeBitRK false Rh1 Rt1 d1 with
-                   | Some (Rh2, Rt2, d2) =>
-                     Some (mkCfg ML (pushRunK Sw10 (N.div2 ones + 1) L') (pushRunK Sb1 1 Rh2) Rt2 d2)
-                   | None => None
-                   end
-                 else None
-               end
-             | None => None
-             end in
-           match turnB with
-           | Some cfg => Some cfg
-           | None =>
-             let '(k01, L') := take01RunsK f64 L in
-             if N.eqb k01 0 then
-               match takeBits2RunsK true false L with
-               | Some L' => Some (mkCfg MJ L' Rh Rt d0)
-               | None =>
-                 if isAllZeroRunsK L then
-                   let '(ones, Rh1, Rt1, d1) := takeOnesRK Rh Rt d0 in
-                   match takeBits2RK false false Rh1 Rt1 d1 with
-                   | Some (Rh2, Rt2, d2) =>
-                     Some (mkCfg ML (pushRunK Sb1 (ones + 4) []) (pushRunK Sb1 1 Rh2) Rt2 d2)
-                   | None => None
-                   end
-                 else None
-               end
-             else
-               match Rh with
-               | mkRun (SD dn) kd :: Rh' =>
-                 let '(Rh1, Rt1) := pushRDK (dn + k01) 1 (decRunK (SD dn) kd Rh') Rt in
-                 Some (mkCfg ML L' Rh1 Rt1 d0)
-               | [] =>
-                 match Rt with
-                 | mkRun (SD dn) kd :: Rt' =>
-                   Some (mkCfg ML L' [] (pushDK (dn + k01) 1 (decRunK (SD dn) kd Rt')) d0)
-                 | [] =>
-                   if N.eqb d0 0 then Some (mkCfg ML L' (pushRunK Sw11 k01 []) [] 0)
-                   else Some (mkCfg ML L' [] [mkRun (SD k01) 1] (d0 - 1))
-                 | _ => Some (mkCfg ML L' (pushRunK Sw11 k01 []) Rt d0)
-                 end
-               | _ => Some (mkCfg ML L' (pushRunK Sw11 k01 Rh) Rt d0)
-               end
-           end
-         end
-       end) = Some cfg' ->
-      ValidCfg cfg' /\ CfgL (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg').
-    { intro hrl; cbv zeta in hrl.
-      pose proof (take10RunsK_spec f64 L 0inf hL) as ht10.
-      destruct (take10RunsK f64 L) as [b1 L1].
-      destruct ht10 as [hpL1 heL1].
-      split_opt hrl csub hres10.
-      - destruct (N.eqb b1 0) eqn:hb1; [discriminate |].
-        apply N.eqb_neq in hb1.
-        pose proof (take111RunsK_spec L1 0inf hpL1) as ht111.
-        destruct (take111RunsK L1) as [c111 L2].
-        destruct ht111 as [hpL2 heL2].
-        destruct (N.eqb c111 0) eqn:hc111.
-        + apply N.eqb_eq in hc111; subst c111.
-          rewrite npow_0 in heL2; cbn [Str_app] in heL2.
-          destruct (takeBits5RunsK false true true false true L2) as [L3 |] eqn:hb5.
-          * destruct (takeBits5RunsK_spec false true true false true L2 L3 hpL2 hb5) as [hpL3 heL3].
-            pose proof (pushRDK_spec b1 1 Rh Rt d0 hRh hRt hD) as hp1.
-            destruct (pushRDK b1 1 Rh Rt) as [Rh1 Rt1].
-            inversion hres10; subst.
-            destruct hp1 as [p1 [q1 [d1h e1]]].
-            split; [exact (conj hpL3 (conj p1 (conj q1 d1h))) |].
-            unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-            rewrite heL1, heL2, heL3, e1, npow_1; unfold bitSym.
-            change ([S0; S1; S1; S0; S1] *> evalRuns L3 0inf)
-              with ([S0; S1] *> (S_word 0 *> evalRuns L3 0inf)).
-            pose proof (rule_finishP (evalRuns L3 0inf) (evalR Rh Rt d0) (b1 - 1)) as hstep.
-            replace (1 + (b1 - 1)) with b1 in hstep by lia.
-            exact hstep.
-          * split_opt hres10 csub2 hover2.
-            -- destruct (takeBits2RunsK true true L2) as [L3 |] eqn:hb2; [| discriminate].
-               destruct (takeBits2RunsK_spec true true L2 L3 hpL2 hb2) as [_ heL3].
-               destruct (isAllZeroRunsK L3) eqn:hz; [| discriminate].
-               inversion hover2; subst.
-               split; [exact (conj (AllPos_pushRunK Sw10 2 (AllPos_pushRunK Sw11 b1 (I : AllPos [])))
-                 (conj (AllPos_pushRunK Sb1 1 hRh) (conj hRt hD))) |].
-               unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-               rewrite heL1, heL2, heL3, (isAllZeroRunsK_spec hz), !evalRuns_pushRunK, evalR_pushRunK, npow_1;
-                 cbn [evalRuns]; unfold evalSym, bitSym.
-               pose proof (rule_overflow2 (evalR Rh Rt d0) (b1 - 1)) as hstep.
-               replace (1 + (b1 - 1)) with b1 in hstep by lia.
-               exact hstep.
-            -- destruct (takeBitRunsK true L2) as [L3 |] eqn:hb1t; [| discriminate].
-               destruct (takeBitRunsK_spec true L2 L3 hpL2 hb1t) as [_ heL3].
-               destruct (isAllZeroRunsK L3) eqn:hz; [| discriminate].
-               destruct (tryTakeDRK Rh Rt d0) as [[[[dn Rh'] Rt'] d'] |] eqn:htd; [| discriminate].
-               destruct (tryTakeDRK_spec Rh Rt Rh' Rt' d0 dn d' hRh hRt hD htd) as [p' [q' [d'h e']]].
-               inversion hres10; subst.
-               split; [exact (conj (AllPos_pushRunK Sw10 (dn + 2) (AllPos_pushRunK Sw11 (b1 - 1) (I : AllPos [])))
-                 (conj (AllPos_pushRunK Sw10 1 p') (conj q' d'h))) |].
-               unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-               rewrite heL1, heL2, heL3, (isAllZeroRunsK_spec hz), e', !evalRuns_pushRunK, evalR_pushRunK, npow_1;
-                 cbn [evalRuns]; unfold evalSym, bitSym.
-               pose proof (rule_overflow1 (evalR Rh' Rt' d') (b1 - 1) dn) as hstep.
-               replace (1 + (b1 - 1)) with b1 in hstep by lia.
-               exact hstep.
-        + apply N.eqb_neq in hc111.
-          destruct Rh as [| r0 rrest].
-          * inversion hres10; subst.
-            split; [exact (conj (AllPos_pushRunK Sw10 b1 hpL2) (conj I (conj hRt hD))) |].
-            unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-            rewrite heL1, heL2, evalRuns_pushRunK; unfold evalSym.
-            pose proof (NCalls_pureD_tail Rt hD c111 d0) as hc.
-            pose proof (NCalls_from_ML c111 (b1 - 1) (evalRuns L2 0inf)
-              (evalR [] Rt d0) (evalR [] Rt (d0 + 2 * c111)) hc) as hstep.
-            replace (1 + (b1 - 1)) with b1 in hstep by lia.
-            exact hstep.
-          * pose proof (doCallsNoneK_sound (r0 :: rrest) Rt d0 c111 true ltac:(lia) hRh hRt hD) as hdc.
-            destruct (doCallsNoneK (r0 :: rrest) Rt d0 c111 true) as [[[hd nRh] nRt] nD0].
-            destruct hdc as [pnRh [pnRt [dnRt [hhd hnc]]]].
-            destruct (N.eqb hd 0) eqn:hhd0.
-            -- inversion hres10; subst.
-               split; [exact (conj (AllPos_pushRunK Sw10 b1 (AllPos_pushRunK Sw111 (c111 - 1) hpL2))
-                 (conj hRh (conj hRt hD))) |].
-               unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-               rewrite heL1, heL2, !evalRuns_pushRunK; unfold evalSym.
-               replace c111 with (1 + (c111 - 1)) at 1 by lia.
-               rewrite <- npow_append_npow, npow_1.
-               pose proof (rule_restart (npow [S1; S1; S1] (c111 - 1) *> evalRuns L2 0inf)
-                 (evalR (r0 :: rrest) Rt d0) (b1 - 1)) as hstep.
-               replace (1 + (b1 - 1)) with b1 in hstep by lia.
-               exact hstep.
-            -- inversion hres10; subst.
-               split; [exact (conj (AllPos_pushRunK Sw10 b1 (AllPos_pushRunK Sw111 (c111 - hd) hpL2))
-                 (conj pnRh (conj pnRt dnRt))) |].
-               unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-               rewrite heL1, heL2, !evalRuns_pushRunK; unfold evalSym.
-               replace c111 with (hd + (c111 - hd)) at 1 by lia.
-               rewrite <- npow_append_npow.
-               pose proof (NCalls_from_ML hd (b1 - 1) (npow [S1; S1; S1] (c111 - hd) *> evalRuns L2 0inf)
-                 (evalR (r0 :: rrest) Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
-               replace (1 + (b1 - 1)) with b1 in hstep by lia.
-               exact hstep.
-      - destruct (tryTakeSK f64 L) as [[sn L'] |] eqn:hts.
-        + destruct (tryTakeSK_spec f64 L L' sn hL hts) as [hpL' heL'].
-          pose proof (pushRDK_spec sn 1 Rh Rt d0 hRh hRt hD) as hp1.
-          destruct (pushRDK sn 1 Rh Rt) as [Rh1 Rt1].
-          inversion hrl; subst.
-          destruct hp1 as [p1 [q1 [d1h e1]]].
-          split; [exact (conj hpL' (conj p1 (conj q1 d1h))) |].
-          unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-          rewrite heL', e1, npow_1.
-          exact (rule_left (evalRuns L' 0inf) (evalR Rh Rt d0) sn).
-        + split_opt hrl csub2 hturnB.
-          * destruct (takeBits2RunsK true true L) as [L' |] eqn:hb2; [| discriminate].
-            destruct (takeBits2RunsK_spec true true L L' hL hb2) as [hpL' heL'].
-            destruct (tryTakeDRK Rh Rt d0) as [[[[dn Rh'] Rt'] d'] |] eqn:htd.
-            -- destruct (tryTakeDRK_spec Rh Rt Rh' Rt' d0 dn d' hRh hRt hD htd) as [p' [q' [d'h e']]].
-               inversion hturnB; subst.
-               split; [exact (conj (AllPos_pushRunK Sw10 (dn + 1) hpL') (conj p' (conj q' d'h))) |].
-               unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-               rewrite heL', e', evalRuns_pushRunK; unfold evalSym, bitSym.
-               replace (dn + 1) with (1 + dn) by lia.
-               exact (rule_turnB (evalRuns L' 0inf) (evalR Rh' Rt' d') dn).
-            -- pose proof (takeOnesRK_spec Rh Rt d0 hRh hRt hD) as hto.
-               destruct (takeOnesRK Rh Rt d0) as [[[ones Rh1] Rt1] d1].
-               destruct hto as [p1 [q1 [d1h e1]]].
-               rewrite N_b2n_odd_mod2 in hturnB.
-               destruct (N.eqb (ones mod 2) 0) eqn:ho0; [| discriminate].
-               apply N.eqb_eq in ho0.
-               destruct (takeBitRK false Rh1 Rt1 d1) as [[[Rh2 Rt2] d2] |] eqn:hb0; [| discriminate].
-               destruct (takeBitRK_spec false Rh1 Rt1 Rh2 Rt2 d1 d2 p1 q1 d1h hb0)
-                 as [p2 [q2 [d2h e2]]].
-               inversion hturnB; subst.
-               split; [exact (conj (AllPos_pushRunK Sw10 (N.div2 ones + 1) hpL')
-                 (conj (AllPos_pushRunK Sb1 1 p2) (conj q2 d2h))) |].
-               unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-               rewrite heL', e1, e2, evalRuns_pushRunK, evalR_pushRunK, npow_1, N.div2_div;
-                 unfold evalSym, bitSym.
-               replace ones with ((ones / 2) * 2) at 1 by lia.
-               rewrite <- pow_11_eq_pow_1.
-               exact (rule_ML_TurnB_even (evalRuns L' 0inf) (evalR Rh2 Rt2 d2) (ones / 2)).
-          * pose proof (take01RunsK_spec f64 L hL) as ht01.
-            destruct (take01RunsK f64 L) as [k01 L'].
-            destruct ht01 as [hpL' heL'].
-            destruct (N.eqb k01 0) eqn:hk01.
-            -- destruct (takeBits2RunsK true false L) as [L2' |] eqn:hb2.
-               ++ destruct (takeBits2RunsK_spec true false L L2' hL hb2) as [hpL2' heL2'].
-                  inversion hrl; subst.
-                  split; [exact (conj hpL2' (conj hRh (conj hRt hD))) |].
-                  unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                  rewrite heL2'; unfold bitSym.
-                  exact (rule_ML_10 (evalRuns L2' 0inf) (evalR Rh Rt d0)).
-               ++ destruct (isAllZeroRunsK L) eqn:hz; [| discriminate].
-                  pose proof (takeOnesRK_spec Rh Rt d0 hRh hRt hD) as hto.
-                  destruct (takeOnesRK Rh Rt d0) as [[[ones Rh1] Rt1] d1].
-                  destruct hto as [p1 [q1 [d1h e1]]].
-                  destruct (takeBits2RK false false Rh1 Rt1 d1) as [[[Rh2 Rt2] d2] |] eqn:hb00; [| discriminate].
-                  destruct (takeBits2RK_spec false false Rh1 Rt1 Rh2 Rt2 d1 d2 p1 q1 d1h hb00)
-                    as [p2 [q2 [d2h e2]]].
-                  inversion hrl; subst.
-                  split; [exact (conj (AllPos_pushRunK Sb1 (ones + 4) (I : AllPos []))
-                    (conj (AllPos_pushRunK Sb1 1 p2) (conj q2 d2h))) |].
-                  unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                  rewrite (isAllZeroRunsK_spec hz), e1, e2, evalRuns_pushRunK, evalR_pushRunK, npow_1;
-                    cbn [evalRuns]; unfold evalSym, bitSym.
-                  exact (rule_ML_default (evalR Rh2 Rt2 d2) ones).
-            -- apply N.eqb_neq in hk01.
-               assert (h01_step : CfgL (evalRuns L 0inf) (evalR Rh Rt d0) -->*
-                 CfgL (evalRuns L' 0inf) (npow [S1; S1] k01 *> evalR Rh Rt d0)).
-               { rewrite heL'. exact (rule_ML_01 (evalRuns L' 0inf) (evalR Rh Rt d0) k01). }
-               destruct Rh as [| [rw rk] rrest].
-               ++ destruct Rt as [| [tw tk] trest].
-                  ** destruct (N.eqb d0 0) eqn:hd0.
-                     --- apply N.eqb_eq in hd0; subst d0.
-                         inversion hrl; subst.
-                         split; [exact (conj hpL' (conj (AllPos_pushRunK Sw11 k01 (I : AllPos [])) (conj I I))) |].
-                         unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                         rewrite evalR_pushRunK; unfold evalSym; exact h01_step.
-                     --- apply N.eqb_neq in hd0.
-                         inversion hrl; subst.
-                         split; [exact (conj hpL' (conj I (conj (conj (N.le_refl 1) I) I))) |].
-                         unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                         assert (hrhs : npow [S1; S1] k01 *> evalR [] [] d0 =
-                           evalR [] [mkRun (SD k01) 1] (d0 - 1)).
-                         { unfold evalR; cbn [evalRuns evalSym].
-                           rewrite npow_1.
-                           replace d0 with (1 + (d0 - 1)) at 1 by lia.
-                           rewrite <- npow_append_npow, npow_1, w11_absorb_D_word, N.add_0_l.
-                           reflexivity. }
-                         rewrite hrhs in h01_step. exact h01_step.
-                  ** destruct tw; try contradiction.
-                     inversion hrl; subst.
-                     split; [exact (conj hpL' (conj I (conj (AllPos_pushDK (n + k01) 1 (AllPos_decRunK (SD n) tk (proj2 hRt)))
-                       (AllD_pushDK (n + k01) 1 (AllD_decRunK n tk hD))))) |].
-                     unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                     assert (hrhs : npow [S1; S1] k01 *> evalR [] (mkRun (SD n) tk :: trest) d0 =
-                       evalR [] (pushDK (n + k01) 1 (decRunK (SD n) tk trest)) d0).
-                     { rewrite evalR_nil_pushDK, npow_1.
-                       pose proof (evalRuns_decRunK (SD n) tk trest (npow (D_word 0) d0 *> 0inf) (proj1 hRt)) as hdec.
-                       unfold evalR; cbn [evalRuns].
-                       rewrite <- hdec; unfold evalSym.
-                       exact (w11_absorb_D_word k01 n _). }
-                     rewrite hrhs in h01_step. exact h01_step.
-               ++ destruct rw;
-                    try (inversion hrl; subst;
-                         split; [exact (conj hpL' (conj (AllPos_pushRunK Sw11 k01 hRh) (conj hRt hD))) |];
-                         unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0];
-                         rewrite evalR_pushRunK; unfold evalSym; exact h01_step).
-                  pose proof (pushRDK_spec (n + k01) 1 (decRunK (SD n) rk rrest) Rt d0
-                    (AllPos_decRunK (SD n) rk (proj2 hRh)) hRt hD) as hp1.
-                  destruct (pushRDK (n + k01) 1 (decRunK (SD n) rk rrest) Rt) as [Rh1 Rt1].
-                  inversion hrl; subst.
-                  destruct hp1 as [p1 [q1 [d1h e1]]].
-                  split; [exact (conj hpL' (conj p1 (conj q1 d1h))) |].
-                  unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-                  assert (hrhs : npow [S1; S1] k01 *> evalR (mkRun (SD n) rk :: rrest) Rt d0 =
-                    evalR Rh1 Rt1 d0).
-                  { rewrite e1, npow_1.
-                    pose proof (evalRuns_decRunK (SD n) rk rrest (evalRuns Rt (npow (D_word 0) d0 *> 0inf)) (proj1 hRh)) as hdec.
-                    unfold evalR; cbn [evalRuns].
-                    rewrite <- hdec; unfold evalSym.
-                    exact (w11_absorb_D_word k01 n _). }
-                  rewrite hrhs in h01_step. exact h01_step. }
-    destruct L as [| [lw lk] L']; [exact (hrestL h) |].
-    destruct lw as [| sn | ba bc | | | | | | | |]; try exact (hrestL h).
+  - destruct L as [| [lw lk] L']; [exact (mlOther_sound f64 _ Rh Rt d0 cfg' hL hRh hRt hD h) |].
+    destruct lw as [| sn | ba bc | | | | | | | |]; try exact (mlOther_sound f64 _ Rh Rt d0 cfg' hL hRh hRt hD h).
     + (* lw = SS sn *)
       pose proof (sweepSK_spec (mkRun (SS sn) lk :: L') Rh Rt d0 hL hRh hRt hD) as hsw.
       destruct (sweepSK (mkRun (SS sn) lk :: L') Rh Rt) as [[L1' Rh1'] Rt1'].
@@ -4461,56 +4354,7 @@ Proof.
       exact (conj (conj pL (conj pRh (conj pRt dRt))) hstep).
     + (* lw = SB ba bc *)
       split_opt h csub hcoll.
-      * destruct Rh as [| r0 rrest]; [discriminate |].
-        destruct (if N.eqb (bc mod 3) 2 then N.leb 1 ba else false) eqn:hcond; [| discriminate].
-        destruct (N.eqb (bc mod 3) 2) eqn:hbc2; [| discriminate].
-        apply N.eqb_eq in hbc2; apply N.leb_le in hcond.
-        set (stepH := bc / 3 + 1) in *.
-        set (av := N.div2 (peekCollZAvailK (r0 :: rrest) Rt d0) / stepH) in *.
-        set (mc := if N.leb lk av then lk else av) in *.
-        destruct (N.eqb mc 0) eqn:hmc0; [discriminate |].
-        apply N.eqb_neq in hmc0.
-        assert (hmc_le : 1 <= mc /\ mc <= lk).
-        { unfold mc; destruct (N.leb lk av) eqn:hlk;
-            [apply N.leb_le in hlk | apply N.leb_gt in hlk]; lia. }
-        destruct hmc_le as [hmc1 hmc_lk].
-        set (need := mc * stepH) in *.
-        assert (hneed1 : 1 <= need) by (unfold need, stepH; nia).
-        pose proof (doCallsNoneK_sound (r0 :: rrest) Rt d0 need false hneed1 hRh hRt hD) as hdc.
-        destruct (doCallsNoneK (r0 :: rrest) Rt d0 need false) as [[[hd nRh] nRt] nD0].
-        destruct hdc as [pnRh [pnRt [dnRt [_ hnc]]]].
-        destruct (N.eqb hd need) eqn:hhd; [| discriminate].
-        apply N.eqb_eq in hhd; subst hd.
-        set (L1 := if N.eqb lk mc then L' else mkRun (SB ba bc) (lk - mc) :: L') in *.
-        assert (hL1 : AllPos L1 /\
-          evalRuns (mkRun (SB ba bc) lk :: L') 0inf = npow (B_word ba bc) mc *> evalRuns L1 0inf).
-        { unfold L1. destruct (N.eqb lk mc) eqn:hlkmc.
-          - apply N.eqb_eq in hlkmc; rewrite hlkmc. exact (conj (proj2 hL) eq_refl).
-          - apply N.eqb_neq in hlkmc.
-            split; [simpl; split; [lia | exact (proj2 hL)] |].
-            cbn [evalRuns]; unfold evalSym.
-            replace lk with (mc + (lk - mc)) at 1 by lia.
-            rewrite <- npow_append_npow. reflexivity. }
-        destruct hL1 as [hpL1 heL1].
-        pose proof (pushRDK_spec ba 1 nRh nRt nD0 pnRh pnRt dnRt) as hp1.
-        destruct (pushRDK ba 1 nRh nRt) as [nRh1 nRt1].
-        destruct hp1 as [p1 [q1 [d1h e1]]].
-        pose proof (pushRDK_spec (ba + 1) (mc - 1) nRh1 nRt1 nD0 p1 q1 d1h) as hp2.
-        destruct (pushRDK (ba + 1) (mc - 1) nRh1 nRt1) as [nRh2 nRt2].
-        inversion hcoll; subst.
-        destruct hp2 as [p2 [q2 [d2h e2]]].
-        split; [exact (conj hpL1 (conj p2 (conj q2 d2h))) |].
-        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-        rewrite heL1, e2, e1, npow_1.
-        unfold need, stepH in hnc.
-        replace mc with (1 + (mc - 1)) in hnc by lia.
-        pose proof (B_word_ML_r2_pow (ba - 1) (bc / 3) (mc - 1) (evalRuns L1 0inf)
-          (evalR (r0 :: rrest) Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
-        replace (1 + (ba - 1)) with ba in hstep by lia.
-        replace (2 + (ba - 1)) with (ba + 1) in hstep by lia.
-        replace (3 * (bc / 3) + 2) with bc in hstep by lia.
-        replace (1 + (mc - 1)) with mc in hstep by lia.
-        exact hstep.
+      * exact (bCollisionK_sound true ba bc lk L' Rh Rt d0 cfg' hL hRh hRt hD hcoll).
       * inversion h; subst.
         set (L1 := decRunK (SB ba bc) lk L').
         pose proof (AllPos_decRunK (SB ba bc) lk (proj2 hL)) as hpL1.
@@ -4532,85 +4376,11 @@ Proof.
   split_opt h csub hdtail.
   - destruct Rh; [| discriminate].
     exact (runDtailLoopK_sound f4096 MJ L Rt d0 cfg' hL hRt hD hdtail).
-  - assert (hrestL :
-      (match tryTakeSK f64 L with
-       | Some (sn, L') =>
-         let '(Rh1, Rt1) := pushRDK (sn + 1) 1 Rh Rt in
-         Some (mkCfg ML L' Rh1 Rt1 d0)
-       | None =>
-         if isAllZeroRunsK L then
-           Some (mkCfg ML (pushRunK Sw111 1 []) (pushRunK Sb1 1 Rh) Rt d0)
-         else None
-       end) = Some cfg' ->
-      ValidCfg cfg' /\ CfgJ (evalRuns L 0inf) (evalR Rh Rt d0) -->* evalCfg cfg').
-    { intro hrl.
-      destruct (tryTakeSK f64 L) as [[sn L'] |] eqn:hts.
-      - destruct (tryTakeSK_spec f64 L L' sn hL hts) as [hpL' heL'].
-        pose proof (pushRDK_spec (sn + 1) 1 Rh Rt d0 hRh hRt hD) as hp1.
-        destruct (pushRDK (sn + 1) 1 Rh Rt) as [Rh1 Rt1].
-        inversion hrl; subst.
-        destruct hp1 as [p1 [q1 [d1h e1]]].
-        split; [exact (conj hpL' (conj p1 (conj q1 d1h))) |].
-        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-        rewrite heL', e1, npow_1.
-        replace (sn + 1) with (1 + sn) by lia.
-        exact (rule_leftJ (evalRuns L' 0inf) (evalR Rh Rt d0) sn).
-      - destruct (isAllZeroRunsK L) eqn:hz; [| discriminate].
-        inversion hrl; subst.
-        split; [exact (conj (AllPos_pushRunK Sw111 1 (I : AllPos []))
-          (conj (AllPos_pushRunK Sb1 1 hRh) (conj hRt hD))) |].
-        unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-        rewrite (isAllZeroRunsK_spec hz), evalRuns_pushRunK, evalR_pushRunK, !npow_1;
-          cbn [evalRuns]; unfold evalSym.
-        exact (rule_MJ_default (evalR Rh Rt d0)). }
-    destruct L as [| [lw lk] L']; [exact (hrestL h) |].
-    destruct lw as [| | ba bc | | | | | | | |]; try exact (hrestL h).
+  - destruct L as [| [lw lk] L']; [exact (mjOther_sound f64 _ Rh Rt d0 cfg' hL hRh hRt hD h) |].
+    destruct lw as [| | ba bc | | | | | | | |]; try exact (mjOther_sound f64 _ Rh Rt d0 cfg' hL hRh hRt hD h).
     (* lw = SB ba bc *)
     split_opt h csub hcoll.
-    + destruct Rh as [| r0 rrest]; [discriminate |].
-      destruct (if N.eqb (bc mod 3) 2 then N.leb 1 ba else false) eqn:hcond; [| discriminate].
-      destruct (N.eqb (bc mod 3) 2) eqn:hbc2; [| discriminate].
-      apply N.eqb_eq in hbc2; apply N.leb_le in hcond.
-      set (stepH := bc / 3 + 1) in *.
-      set (av := N.div2 (peekCollZAvailK (r0 :: rrest) Rt d0) / stepH) in *.
-      set (mc := if N.leb lk av then lk else av) in *.
-      destruct (N.eqb mc 0) eqn:hmc0; [discriminate |].
-      apply N.eqb_neq in hmc0.
-      assert (hmc_le : 1 <= mc /\ mc <= lk).
-      { unfold mc; destruct (N.leb lk av) eqn:hlk;
-          [apply N.leb_le in hlk | apply N.leb_gt in hlk]; lia. }
-      destruct hmc_le as [hmc1 hmc_lk].
-      set (need := mc * stepH) in *.
-      assert (hneed1 : 1 <= need) by (unfold need, stepH; nia).
-      pose proof (doCallsNoneK_sound (r0 :: rrest) Rt d0 need false hneed1 hRh hRt hD) as hdc.
-      destruct (doCallsNoneK (r0 :: rrest) Rt d0 need false) as [[[hd nRh] nRt] nD0].
-      destruct hdc as [pnRh [pnRt [dnRt [_ hnc]]]].
-      destruct (N.eqb hd need) eqn:hhd; [| discriminate].
-      apply N.eqb_eq in hhd; subst hd.
-      set (L1 := if N.eqb lk mc then L' else mkRun (SB ba bc) (lk - mc) :: L') in *.
-      assert (hL1 : AllPos L1 /\
-        evalRuns (mkRun (SB ba bc) lk :: L') 0inf = npow (B_word ba bc) mc *> evalRuns L1 0inf).
-      { unfold L1. destruct (N.eqb lk mc) eqn:hlkmc.
-        - apply N.eqb_eq in hlkmc; rewrite hlkmc. exact (conj (proj2 hL) eq_refl).
-        - apply N.eqb_neq in hlkmc.
-          split; [simpl; split; [lia | exact (proj2 hL)] |].
-          cbn [evalRuns]; unfold evalSym.
-          replace lk with (mc + (lk - mc)) at 1 by lia.
-          rewrite <- npow_append_npow. reflexivity. }
-      destruct hL1 as [hpL1 heL1].
-      pose proof (pushRDK_spec (ba + 1) mc nRh nRt nD0 pnRh pnRt dnRt) as hp1.
-      destruct (pushRDK (ba + 1) mc nRh nRt) as [nRh1 nRt1].
-      inversion hcoll; subst.
-      destruct hp1 as [p1 [q1 [d1h e1]]].
-      split; [exact (conj hpL1 (conj p1 (conj q1 d1h))) |].
-      unfold evalCfg; cbn [cfg_mode cfg_L cfg_Rh cfg_Rt cfg_d0].
-      rewrite heL1, e1.
-      pose proof (B_word_MJ_r2_pow (ba - 1) (bc / 3) mc (evalRuns L1 0inf)
-        (evalR (r0 :: rrest) Rt d0) (evalR nRh nRt nD0) hnc) as hstep.
-      replace (1 + (ba - 1)) with ba in hstep by lia.
-      replace (2 + (ba - 1)) with (ba + 1) in hstep by lia.
-      replace (3 * (bc / 3) + 2) with bc in hstep by lia.
-      exact hstep.
+    + exact (bCollisionK_sound false ba bc lk L' Rh Rt d0 cfg' hL hRh hRt hD hcoll).
     + set (L1 := decRunK (SB ba bc) lk L') in *.
       pose proof (evalRuns_decRunK (SB ba bc) lk L' 0inf (proj1 hL)) as hdec.
       pose proof (AllPos_decRunK (SB ba bc) lk (proj2 hL)) as hpL1.
@@ -4741,10 +4511,26 @@ Qed.
 Lemma traj_halted : runHalted 1240545%positive cp_0 = true.
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
-End M339.
-
-Theorem halt : halts tm c0.
+Lemma variant_halts : halts tm c0.
 Proof.
-  exact (M339.evstep_halts c0 (M339.evalCfg M339.cp_0) M339.init_to_cp0
-    (M339.runHalted_sound 1240545%positive M339.cp_0 M339.cp_0_valid M339.traj_halted)).
+  exact (evstep_halts c0 (evalCfg cp_0) init_to_cp0
+    (runHalted_sound 1240545%positive cp_0 cp_0_valid traj_halted)).
 Qed.
+
+End BothMachines.
+End Common.
+
+Module TM1.
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1RC1RB_1LD0RA_1LA1LC_0LC1LF_0RA---").
+Theorem halt : halts tm c0.
+Proof. exact (Common.variant_halts false). Qed.
+End TM1.
+
+Module TM2.
+Definition tm := Eval compute in (TM_from_str "1RB0LE_1RC1RB_1LD0RE_1LA1LC_1RB0LF_0LC---").
+Theorem halt : halts tm c0.
+Proof. exact (Common.variant_halts true). Qed.
+End TM2.
+
+Print Assumptions TM1.halt.
+Print Assumptions TM2.halt.
