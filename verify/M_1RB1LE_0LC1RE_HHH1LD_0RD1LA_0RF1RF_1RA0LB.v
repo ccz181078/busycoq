@@ -31,6 +31,7 @@
 
 From BusyCoq Require Import Individual62.
 From Coq Require Import Lia String ZArith.
+From Coq Require NArith.Nnat.
 Open Scope string_scope.
 Definition tm := Eval compute in (TM_from_str "1RB1LE_0LC1RE_---1LD_0RD1LA_0RF1RF_1RA0LB").
 
@@ -83,7 +84,11 @@ Definition fV : list Sym := [1;1;1;1;1;1;1;1;1;1;1;0].
 (** * Tactics: symbolic execution that uses the calls in the context *)
 
 Ltac notdone R := lazymatch goal with |- (_, (_, hd R, tl R)) -[ _ ]->* _ => fail | _ => idtac end.
-Ltac use_call := match goal with H : Call _ _ _ _ |- _ => eapply evstep_trans; [apply H|] end.
+Ltac use_call :=
+  match goal with
+  | H : Call ?q _ _ _ |- (?q, _) -[ _ ]->* _ =>
+      eapply evstep_trans; [apply H|]
+  end.
 Ltac run_to R :=
   repeat (notdone R; first [ use_call | step1 | use_shift_rule | progress simpl_rotate ]);
   try simpl_rotate; apply evstep_refl.
@@ -185,7 +190,7 @@ Proof. intros H; destruct_die H; solve_die. Qed.
 
 
 Ltac run_fin :=
-  repeat (first [ solve [finish] | use_call | step1 | use_shift_rule | progress simpl_rotate ]).
+  repeat (first [ solve [apply evstep_refl] | use_call | step1 | use_shift_rule | progress simpl_rotate | solve [finish] ]).
 Ltac front_halt := unfold fH, fV; simpl_tape;
   eapply halts_evstep; [ match goal with H : HaltCall _ _ |- _ => apply H end | run_halt ].
 
@@ -538,7 +543,7 @@ Qed.
 
 (** * Calls and hits on cells *)
 
-Definition callFuel : nat := Nat.pow 10 7.
+Definition callFuel : nat := Nat.pow 10 6.
 Global Opaque callFuel.
 
 Definition call1 (q q' : Q) (l : list Sym) : option (list Sym) :=
@@ -676,48 +681,51 @@ Definition frontC (o : option Kind) : list Sym := match o with Some k => fOf k |
 Definition cfg (s : St) : Q * tape := (frontC (fr s) *> Stack (lvs s) (cells s *> zs)) {{A}}> zs.
 Definition Reach (s : St) : Prop := c0 -->* cfg s.
 
-(** [m] hits on the cells, alternately of the two kinds. *)
-Fixpoint tailRun (k : Kind) (m : nat) (c : list Sym) : option (list Sym) :=
-  match m with
-  | O => Some c
-  | S m => match tailHit k c with Some c' => tailRun (other k) m c' | None => None end
+(** Scan the regular prefix once, keeping both its length and its endpoint. *)
+Fixpoint regular (cap : nat) (k : Kind) (c : list Sym) : nat * list Sym :=
+  match cap with
+  | O => (O, c)
+  | S cap =>
+    match tailHit k c with
+    | None => (O, c)
+    | Some c' => let (n, c'') := regular cap (other k) c' in (S n, c'')
+    end
   end.
-Lemma tailRun_ok m : forall k c c', tailRun k m c = Some c' -> Run k m (c *> zs) (c' *> zs).
+Lemma regular_ok cap : forall k c m c', regular cap k c = (m, c') ->
+  Run k m (c *> zs) (c' *> zs).
 Proof.
-  induction m as [|m IH]; intros k c c' H; cbn in H |- *.
-  - injection H as <-. reflexivity.
-  - destruct (tailHit k c) as [c1|] eqn:E; [|discriminate].
-    exists (c1 *> zs). split; [apply tailHit_ok, E | apply IH, H].
+  induction cap as [|cap IH]; intros k c m c' H; cbn [regular] in H.
+  - injection H as <- <-. reflexivity.
+  - destruct (tailHit k c) as [c1|] eqn:E; [|injection H as <- <-; reflexivity].
+    destruct (regular cap (other k) c1) as [n c2] eqn:F.
+    injection H as <- <-. exists (c1 *> zs). split; [apply tailHit_ok, E | apply IH, F].
 Qed.
 
-Definition maxBatch : N := 1000%N.
-
-(** [y] hits from the front; the hits that reach the cells are simulated on them. *)
-Definition opAdv (s : St) (y : N) : option St :=
+(** [y] hits from the front, checked against the previously simulated tail prefix. *)
+Definition opAdv (s : St) (y : N) (n : nat) (c' : list Sym) : option St :=
   match fr s with
   | None => None
   | Some t =>
     if chainOK t (lvs s) then
       let (ls', m) := advS (lvs s) y in
-      if (m <=? maxBatch)%N then
-        match tailRun (tailKind t (lvs s)) (N.to_nat m) (cells s) with
-        | Some c' => Some (mkS (Some (flipF t y)) ls' c')
-        | None => None
-        end
+      if (m =? N.of_nat n)%N then Some (mkS (Some (flipF t y)) ls' c')
       else None
     else None
   end.
 
-Lemma opAdv_ok s y s' : Reach s -> opAdv s y = Some s' -> Reach s'.
+Lemma opAdv_ok s y n c' s' : Reach s ->
+  (forall t, fr s = Some t -> Run (tailKind t (lvs s)) n (cells s *> zs) (c' *> zs)) ->
+  opAdv s y n c' = Some s' -> Reach s'.
 Proof.
-  unfold opAdv, Reach, cfg. intros Hr H. destruct (fr s) as [t|]; [|discriminate].
+  unfold opAdv, Reach, cfg. intros Hr Ht H. destruct (fr s) as [t|]; [|discriminate].
   destruct (chainOK t (lvs s)) eqn:Hc; [|discriminate].
   destruct (advS (lvs s) y) as [ls' m] eqn:Ea.
-  destruct (m <=? maxBatch)%N; [|discriminate].
-  destruct (tailRun (tailKind t (lvs s)) (N.to_nat m) (cells s)) as [c'|] eqn:Et; [|discriminate].
+  destruct (m =? N.of_nat n)%N eqn:Et; [|discriminate].
+  apply N.eqb_eq in Et. subst m.
   injection H as <-. unfold cfg. cbn [fr lvs cells frontC].
   pose proof (stack_run (lvs s) t y (cells s *> zs) (c' *> zs) Hc) as SR. rewrite Ea in SR. cbn [fst snd] in SR.
-  eapply evstep_trans; [exact Hr|]. apply front_runN. apply SR, tailRun_ok, Et.
+  rewrite Coq.NArith.Nnat.Nat2N.id in SR.
+  eapply evstep_trans; [exact Hr|]. apply front_runN. apply SR, Ht. reflexivity.
 Qed.
 
 (** [strip w l = Some r] when [l = w ++ r]. *)
@@ -756,18 +764,19 @@ Qed.
 
 (** Write the deepest level out as cells. *)
 Definition opUnpeel (s : St) : option St :=
-  match List.rev (lvs s) with
+  match List.rev' (lvs s) with
   | [] => None
-  | (p, j) :: r => Some (mkS (fr s) (List.rev r) (List.app (wList p j) (cells s)))
+  | (p, j) :: r => Some (mkS (fr s) (List.rev' r) (List.app (wList p j) (cells s)))
   end.
 Lemma opUnpeel_ok s s' : Reach s -> opUnpeel s = Some s' -> Reach s'.
 Proof.
-  unfold opUnpeel, Reach, cfg. intros Hr H.
+  unfold opUnpeel, Reach, cfg, List.rev'. rewrite <- List.rev_alt. intros Hr H.
   destruct (List.rev (lvs s)) as [|[p j] r] eqn:E; [discriminate|]. injection H as <-.
   cbn [fr lvs cells].
   assert (E' : lvs s = List.app (List.rev r) [(p, j)]).
   { rewrite <- (List.rev_involutive (lvs s)), E. reflexivity. }
-  rewrite E', Stack_snoc, W_list in Hr. exact Hr.
+  rewrite E', Stack_snoc, W_list in Hr.
+  rewrite <- List.rev_alt. exact Hr.
 Qed.
 
 (** The front starts the cells (no levels yet). *)
@@ -785,7 +794,7 @@ Proof.
 Qed.
 
 (** A plain visit on the cells (no levels). *)
-Definition visitFuel : nat := Nat.pow 10 7.
+Definition visitFuel : nat := callFuel.
 Global Opaque visitFuel.
 Definition opRaw (s : St) : option St :=
   match lvs s with
@@ -887,17 +896,35 @@ Definition need (p : nat) (x : N) : N :=
   end.
 (** The hits from the front after which the cells have had [m] more hits. *)
 Definition hitsFor (ls : list (nat * N)) (m : N) : N :=
-  List.fold_left (fun e pj => need (fst pj) e) (List.rev ls) m.
-(** How many hits in a row the cells take as the levels expect (at most [cap]). *)
-Fixpoint regular (cap : nat) (k : Kind) (c : list Sym) : nat :=
-  match cap with
-  | O => O
-  | S cap => match tailHit k c with Some c' => S (regular cap (other k) c') | None => O end
-  end.
+  List.fold_right (fun pj e => need (fst pj) e) m ls.
 Definition batchCap : nat := 100.
 Definition readyCount (ls : list (nat * N)) : N :=
-  List.fold_left (fun e pj => let y := need (fst pj) e in
-                   (y + N.of_nat (distPass 16 (posN (fst pj) (N.to_nat (N.land y 15)))))%N) (List.rev ls) 0%N.
+  List.fold_right (fun pj e => let y := need (fst pj) e in
+                   (y + N.of_nat (distPass 16 (posN (fst pj) (N.to_nat (N.land y 15)))))%N) 0%N ls.
+
+Definition batch (align : bool) (s : St) : option (bool * St) :=
+  match fr s with
+  | None => None
+  | Some t =>
+    let (m, c') := regular batchCap (tailKind t (lvs s)) (cells s) in
+    match m with
+    | O => if align then option_map (fun s' => (false, s')) (opAdv s (readyCount (lvs s)) O c')
+           else Some (false, s)
+    | S _ => option_map (fun s' => (true, s')) (opAdv s (hitsFor (lvs s) (N.of_nat m)) m c')
+    end
+  end.
+
+Lemma batch_ok align s b s' : Reach s -> batch align s = Some (b, s') -> Reach s'.
+Proof.
+  unfold batch. intros Hr H. destruct (fr s) as [t|] eqn:Et; [|discriminate].
+  destruct (regular _ _ _) as [m c'] eqn:E.
+  assert (K : forall t', fr s = Some t' ->
+    Run (tailKind t' (lvs s)) m (cells s *> zs) (c' *> zs)).
+  { intros t' F. rewrite Et in F. injection F as <-. eapply regular_ok; exact E. }
+  destruct m; [destruct align; [|injection H as <- <-; exact Hr]|];
+  destruct (opAdv _ _ _ _) eqn:F; try discriminate;
+  injection H as <- <-; eapply opAdv_ok; eauto.
+Qed.
 
 (** The run.  With [true]: read the levels off the cells, find how many hits the cells take as the levels
     expect, and make that many in one jump; if none, move every level to where it passes the next hit on
@@ -913,23 +940,23 @@ Fixpoint loop (f : nat) (b : bool) (s : St) : bool :=
         match opSplit s KH with Some s' => loop f true s' | None =>
         match opSplit s KV with Some s' => loop f true s' | None =>
         match opRaw s with Some s' => loop f true s' | None => false end end end
-      | Some t =>
+      | Some _ =>
         let s1 := peelAll 100 s in
-        match regular batchCap (tailKind t (lvs s1)) (cells s1) with
-        | O => match opAdv s1 (readyCount (lvs s1)) with Some s2 => loop f false s2 | None => false end
-        | m => match opAdv s1 (hitsFor (lvs s1) (N.of_nat m)) with Some s2 => loop f true s2 | None => false end
+        match batch true s1 with
+        | Some (b', s2) => loop f b' s2
+        | None => false
         end
       end
     else
       if opFinal s then true else
       match fr s with
       | None => false
-      | Some t =>
+      | Some _ =>
         match opUnpeel s with
         | Some s4 =>
-          match regular batchCap (tailKind t (lvs s4)) (cells s4) with
-          | O => loop f false s4
-          | m => match opAdv s4 (hitsFor (lvs s4) (N.of_nat m)) with Some s5 => loop f true s5 | None => false end
+          match batch false s4 with
+          | Some (b', s5) => loop f b' s5
+          | None => false
           end
         | None => match opRaw s with Some s5 => loop f true s5 | None => false end
         end
@@ -941,11 +968,8 @@ Proof.
   induction f as [|f IH]; intros b s Hr H; cbn [loop] in H; [discriminate|].
   destruct b.
   - destruct (fr s) as [t|] eqn:Ef.
-    + destruct (regular _ _ _) as [|m].
-      * destruct (opAdv (peelAll 100 s) _) as [s2|] eqn:E; [|discriminate].
-        eapply IH; [|exact H]. eapply opAdv_ok; [apply peelAll_ok, Hr|exact E].
-      * destruct (opAdv (peelAll 100 s) _) as [s2|] eqn:E; [|discriminate].
-        eapply IH; [|exact H]. eapply opAdv_ok; [apply peelAll_ok, Hr|exact E].
+    + destruct (batch true (peelAll 100 s)) as [[b' s2]|] eqn:E; [|discriminate].
+      eapply IH; [|exact H]. eapply batch_ok; [apply peelAll_ok, Hr|exact E].
     + destruct (opSplit s KH) as [s'|] eqn:E1; [eapply IH; [eapply opSplit_ok; eauto|exact H]|].
       destruct (opSplit s KV) as [s'|] eqn:E2; [eapply IH; [eapply opSplit_ok; eauto|exact H]|].
       destruct (opRaw s) as [s'|] eqn:E3; [eapply IH; [eapply opRaw_ok; eauto|exact H]|discriminate].
@@ -953,9 +977,8 @@ Proof.
     destruct (fr s) as [t|]; [|discriminate].
     destruct (opUnpeel s) as [s4|] eqn:E4.
     + assert (R4 : Reach s4) by (eapply opUnpeel_ok; eauto).
-      destruct (regular _ _ _) as [|m]; [eapply IH; eauto|].
-      destruct (opAdv s4 _) as [s5|] eqn:E5; [|discriminate].
-      eapply IH; [eapply opAdv_ok; eauto|exact H].
+      destruct (batch false s4) as [[b' s5]|] eqn:E5; [|discriminate].
+      eapply IH; [|exact H]. eapply batch_ok; [exact R4|exact E5].
     + destruct (opRaw s) as [s5|] eqn:E5; [eapply IH; [eapply opRaw_ok; eauto|exact H]|discriminate].
 Qed.
 Definition s0 : St := mkS None [] [].
