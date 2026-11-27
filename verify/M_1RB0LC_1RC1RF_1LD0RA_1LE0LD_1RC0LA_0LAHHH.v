@@ -1,6 +1,8 @@
+(* Refactored from BusyCoq PR #79. *)
 (* 1RB0LC_1RC1RF_1LD0RA_1LE0LD_1RC0LA_0LA--- never halts. *)
 
 From BusyCoq Require Import Individual62.
+From BusyCoq Require Import PR78_79Base.
 From Coq Require Import Bool List Lists.Streams Lia ZifyNat ZifyN ZifyBool NArith ZArith PeanoNat String.
 Import ListNotations.
 
@@ -912,41 +914,12 @@ Definition tryEraOsc (hd : Sym) (l : list LChunk) (r : list RChunk) : option Sta
   end.
 
 Definition stepBase (hd : Sym) (l : list LChunk) (r : list RChunk) : option State :=
-  match hd with
-  | S1 =>
-    let '(l1, r_in) := splitRChunk l r in
-    let '(b1, r1) := popR r_in in
-    match b1 with
-    | S1 => Some (mkState S0 l1 (pushR0 r1))
-    | S0 =>
-      let '(b2, r2) := popR r1 in
-      match b2 with
-      | S0 =>
-        let '(b3, r3) := popR r2 in
-        Some (mkState b3 (pushL110 0%N l1) r3)
-      | S1 =>
-        let '(b3, r3) := popR r2 in
-        match b3 with
-        | S0 => Some (mkState S1 (pushL0 l1) (pushR0 (pushR0 r3)))
-        | S1 => None
-        end
-      end
-    end
-  | S0 =>
-    let '(l1, r1) := splitLChunk l r in
-    let '(l_after, r_rem) := stripOnesL l1 (pushR1 r1) in
-    let '(e, e_rem) := popL l_after in
-    match e with
-    | S0 => Some (mkState S1 (pushL1 e_rem) r_rem)
-    | S1 =>
-      let '(ab, a_rem) := popL e_rem in
-      match ab with
-      | S1 =>
-        let '(cb, c_rem) := popL a_rem in
-        Some (mkState cb c_rem (pushR001 0%N r_rem))
-      | S0 => Some (mkState S1 (pushL1 (pushL1 a_rem)) r_rem)
-      end
-    end
+  match baseDispatch (fun l r => Some (splitLChunk l r))
+    (fun l r => Some (stripOnesL l r)) splitRChunk
+    (fun l => Some (popL l)) (fun r => Some (popR r))
+    pushL0 pushL1 (pushL110 0%N) pushR0 pushR1 (pushR001 0%N) hd l r with
+  | Some (hd', l', r') => Some (mkState hd' l' r')
+  | None => None
   end.
 
 Definition stepFast (s : State) : option State :=
@@ -1290,61 +1263,37 @@ Lemma stepBase_some (hd : Sym) (l : list LChunk) (r : list RChunk) (s' : State) 
   stepBase hd l r = Some s' -> encode (mkState hd l r) -->+ encode s'.
 Proof.
   unfold stepBase.
-  destruct hd as [|].
-  - pose proof (splitLChunk_ok l r) as hsw.
-    destruct (splitLChunk l r) as [l1 r1]; cbn [fst snd] in hsw.
-    assert (hb0 : (exL l1 {{C}}> (S0 >> exR r1)) -->* (exL l1 <{{D}} exR (pushR1 r1))).
-    { cbn [pushR1 exR]. apply evstep_one. apply @step_left. reflexivity. }
-    pose proof (stripOnesD_ok l1 (pushR1 r1)) as hones.
-    destruct (stripOnesL l1 (pushR1 r1)) as [l_after r_rem]; cbn [fst snd] in hones.
-    pose proof (etrans (etrans hsw hb0) hones) as hpre.
-    pose proof (popL_ok l_after) as hpe.
-    destruct (popL l_after) as [e e_rem]; cbn [fst snd] in hpe.
-    destruct e as [|].
-    + intros [= <-].
-      unfold encode; cbn [st_hd st_l st_r].
-      rewrite hpe in hpre. rewrite exL_pushL1.
-      exact (sp_trans hpre (reach_L1_lb (exL e_rem) (exR r_rem))).
-    + pose proof (popL_ok e_rem) as hpa.
-      destruct (popL e_rem) as [ab a_rem]; cbn [fst snd] in hpa.
-      destruct ab as [|].
-      * intros [= <-].
-        unfold encode; cbn [st_hd st_l st_r].
-        rewrite hpe, hpa in hpre. rewrite !exL_pushL1.
-        exact (sp_trans hpre (reach_L3_lb (exL a_rem) (exR r_rem))).
-      * pose proof (popL_ok a_rem) as hpc.
-        destruct (popL a_rem) as [cb c_rem]; cbn [fst snd] in hpc.
-        intros [= <-].
-        unfold encode; cbn [st_hd st_l st_r].
-        rewrite hpe, hpa, hpc in hpre. rewrite exR_pushR001.
-        cbn [N.to_nat Nat.add rep001].
-        exact (sp_trans hpre (reach_L2_lb cb (exL c_rem) (exR r_rem))).
-  - pose proof (splitRChunk_ok r l) as hsw.
-    destruct (splitRChunk l r) as [l1 r_in]; cbn [fst snd] in hsw.
-    pose proof (popR_ok r_in) as hp1.
-    destruct (popR r_in) as [b1 r1]; cbn [fst snd] in hp1.
-    destruct b1 as [|].
-    + pose proof (popR_ok r1) as hp2.
-      destruct (popR r1) as [b2 r2]; cbn [fst snd] in hp2.
-      destruct b2 as [|].
-      * pose proof (popR_ok r2) as hp3.
-        destruct (popR r2) as [b3 r3]; cbn [fst snd] in hp3.
-        intros [= <-].
-        unfold encode; cbn [st_hd st_l st_r].
-        rewrite hp1, hp2, hp3 in hsw. rewrite exL_pushL110.
-        cbn [N.to_nat Nat.add rep110].
-        exact (sp_trans hsw (reach_R2_lb b3 (exL l1) (exR r3))).
-      * pose proof (popR_ok r2) as hp3.
-        destruct (popR r2) as [b3 r3]; cbn [fst snd] in hp3.
-        destruct b3 as [|]; [| discriminate].
-        intros [= <-].
-        unfold encode; cbn [st_hd st_l st_r].
-        rewrite hp1, hp2, hp3 in hsw. rewrite exL_pushL0, !exR_pushR0.
-        exact (sp_trans hsw (reach_R3_lb (exL l1) (exR r3))).
-    + intros [= <-].
-      unfold encode; cbn [st_hd st_l st_r].
-      rewrite hp1 in hsw. rewrite exR_pushR0.
-      exact (sp_trans hsw (reach_R1_lb (exL l1) (exR r1))).
+  destruct (baseDispatch _ _ _ _ _ _ _ _ _ _ _ hd l r) as [[[hd' l'] r']|] eqn:E;
+    [|discriminate].
+  intros [= <-].
+  eapply (baseDispatch_sound tm C D exL exR (fun _ => True) (fun _ => True)) in E; try exact I.
+  - exact (proj2 (proj2 E)).
+  - intros a b a' b' _ _ H. cbn beta in H.
+    pose proof (splitLChunk_ok a b) as Hr.
+    destruct (splitLChunk a b); injection H as <- <-. exact (conj I (conj I Hr)).
+  - intros b a _ _. exact (conj I (conj I (splitRChunk_ok b a))).
+  - intros a b a' b' _ _ H. cbn beta in H.
+    pose proof (stripOnesD_ok a b) as Hr.
+    destruct (stripOnesL a b); injection H as <- <-. exact (conj I (conj I Hr)).
+  - intros a a' c _ H. cbn beta in H.
+    pose proof (popL_ok a) as Hr.
+    destruct (popL a); injection H as <- <-. exact (conj I Hr).
+  - intros a a' c _ H. cbn beta in H.
+    pose proof (popR_ok a) as Hr.
+    destruct (popR a); injection H as <- <-. exact (conj I Hr).
+  - intros a _. exact (conj I (exL_pushL0 a)).
+  - intros a _. exact (conj I (exL_pushL1 a)).
+  - intros a _. exact (conj I (exL_pushL110 0%N a)).
+  - intros a _. exact (conj I (exR_pushR0 a)).
+  - intros a _. exact (conj I eq_refl).
+  - intros a _. exact (conj I (exR_pushR001 0%N a)).
+  - intros a b. apply evstep_one. apply @step_left. reflexivity.
+  - exact reach_R1_lb.
+  - exact reach_R2_lb.
+  - exact reach_R3_lb.
+  - exact reach_L1_lb.
+  - exact reach_L2_lb.
+  - exact reach_L3_lb.
 Qed.
 
 Lemma stepFast_sound (s s' : State) :
@@ -1704,68 +1653,12 @@ Definition symTryEraOsc (P : SymPred) (hd : Sym) (l : list SLChunk) (r : list SR
   | S0 => None
   end.
 
-Definition symStepBase (P : SymPred) (hd : Sym) (l : list SLChunk) (r : list SRChunk) (hs : list N) :
-  option SymState :=
-  match hd with
-  | S1 =>
-    let '(l1, r_in) := symSplitR l r in
-    match symPopR P r_in with
-    | None => None
-    | Some (b1, r1) =>
-      match b1 with
-      | S1 => Some (mkSymState S0 l1 (symPushR0 r1) hs)
-      | S0 =>
-        match symPopR P r1 with
-        | None => None
-        | Some (b2, r2) =>
-          match b2 with
-          | S0 =>
-            match symPopR P r2 with
-            | None => None
-            | Some (b3, r3) => Some (mkSymState b3 (symPushL110 (lfConst 1%Z) l1) r3 hs)
-            end
-          | S1 =>
-            match symPopR P r2 with
-            | None => None
-            | Some (b3, r3) =>
-              match b3 with
-              | S0 => Some (mkSymState S1 (symPushL0 l1) (symPushR0 (symPushR0 r3)) hs)
-              | S1 => None
-              end
-            end
-          end
-        end
-      end
-    end
-  | S0 =>
-    match symSplitL P l r with
-    | None => None
-    | Some (l1, r1) =>
-      match symStripOnesL P l1 (symPushR1 r1) with
-      | None => None
-      | Some (l_after, r_rem) =>
-        match symPopL P l_after with
-        | None => None
-        | Some (e, e_rem) =>
-          match e with
-          | S0 => Some (mkSymState S1 (symPushL1 e_rem) r_rem hs)
-          | S1 =>
-            match symPopL P e_rem with
-            | None => None
-            | Some (ab, a_rem) =>
-              match ab with
-              | S1 =>
-                match symPopL P a_rem with
-                | None => None
-                | Some (cb, c_rem) => Some (mkSymState cb c_rem (symPushR001 (lfConst 1%Z) r_rem) hs)
-                end
-              | S0 => Some (mkSymState S1 (symPushL1 (symPushL1 a_rem)) r_rem hs)
-              end
-            end
-          end
-        end
-      end
-    end
+Definition symStepBase (P : SymPred) (hd : Sym) (l : list SLChunk) (r : list SRChunk) (hs : list N) : option SymState :=
+  match baseDispatch (symSplitL P) (symStripOnesL P) symSplitR (symPopL P) (symPopR P)
+    symPushL0 symPushL1 (symPushL110 (lfConst 1%Z))
+    symPushR0 symPushR1 (symPushR001 (lfConst 1%Z)) hd l r with
+  | Some (hd', l', r') => Some (mkSymState hd' l' r' hs)
+  | None => None
   end.
 
 Definition symStep (P : SymPred) (s : SymState) : option SymState :=
@@ -2251,84 +2144,36 @@ Lemma symStepBase_sound {P : SymPred} {vN vQ vm : nat} (hP : ValidPred P vN vQ v
   symStepBase P hd l r hs = Some s' ->
   validSym vN vQ vm s' /\ evalSym vN vQ vm (mkSymState hd l r hs) -->+ evalSym vN vQ vm s'.
 Proof.
-  intros [hvl hvr] H.
-  unfold symStepBase in H.
-  destruct hd as [|].
-  - destruct (symSplitL P l r) as [[l1 r1] |] eqn:EL; [| discriminate].
-    destruct (symSplitL_ok hP l r l1 r1 hvl hvr EL) as [hvL1 [hvR1 hsw]].
-    assert (hb0 : (exSL vN vQ vm l1 {{C}}> (S0 >> exSR vN vQ vm r1)) -->*
-                  (exSL vN vQ vm l1 <{{D}} exSR vN vQ vm (symPushR1 r1))).
-    { cbn [symPushR1 exSR]. apply evstep_one. apply @step_left. reflexivity. }
-    destruct (symStripOnesL P l1 (symPushR1 r1)) as [[l_after r_rem] |] eqn:EO; [| discriminate].
-    destruct (symStripOnesL_ok hP l1 (symPushR1 r1) l_after r_rem hvL1 hvR1 EO)
-      as [hvLa [hvRr hones]].
-    pose proof (etrans (etrans hsw hb0) hones) as hpre.
-    destruct (symPopL P l_after) as [[e e_rem] |] eqn:EPE; [| discriminate].
-    destruct (symPopL_ok hP l_after e_rem e hvLa EPE) as [hve hpe].
-    destruct e as [|].
-    + apply some_inj in H; subst s'.
-      destruct (exSL_pushL1 e_rem hve) as [hvl1 hexl1].
-      split; [exact (conj hvl1 hvRr) |].
-      unfold evalSym; cbn [sst_hd sst_l sst_r].
-      rewrite hpe in hpre. rewrite hexl1.
-      exact (sp_trans hpre (reach_L1_lb (exSL vN vQ vm e_rem) (exSR vN vQ vm r_rem))).
-    + destruct (symPopL P e_rem) as [[ab a_rem] |] eqn:EPA; [| discriminate].
-      destruct (symPopL_ok hP e_rem a_rem ab hve EPA) as [hva hpa].
-      destruct ab as [|].
-      * apply some_inj in H; subst s'.
-        destruct (exSL_pushL1 a_rem hva) as [hvl1 hexl1].
-        destruct (exSL_pushL1 (symPushL1 a_rem) hvl1) as [hvl2 hexl2].
-        split; [exact (conj hvl2 hvRr) |].
-        unfold evalSym; cbn [sst_hd sst_l sst_r].
-        rewrite hpe, hpa in hpre. rewrite hexl2, hexl1.
-        exact (sp_trans hpre (reach_L3_lb (exSL vN vQ vm a_rem) (exSR vN vQ vm r_rem))).
-      * destruct (symPopL P a_rem) as [[cb c_rem] |] eqn:EPC; [| discriminate].
-        apply some_inj in H; subst s'.
-        destruct (symPopL_ok hP a_rem c_rem cb hva EPC) as [hvc hpc].
-        assert (hc1 : (1 <= evalLF vN vQ vm (lfConst 1%Z))%Z) by (rewrite evalLF_const; lia).
-        destruct (exSR_pushR001 (lfConst 1%Z) r_rem hc1 hvRr) as [hvr1 hexr1].
-        split; [exact (conj hvc hvr1) |].
-        unfold evalSym; cbn [sst_hd sst_l sst_r].
-        rewrite hpe, hpa, hpc in hpre.
-        rewrite hexr1. change 1%Z with (Z.of_nat 1). rewrite evalLFNat_const.
-        cbn [rep001].
-        exact (sp_trans hpre (reach_L2_lb cb (exSL vN vQ vm c_rem) (exSR vN vQ vm r_rem))).
-  - destruct (symSplitR_ok r l hvl hvr) as [hvL1 [hvR1 hsw]].
-    destruct (symSplitR l r) as [l1 r_in]; cbn [fst snd] in hvL1, hvR1, hsw.
-    destruct (symPopR P r_in) as [[b1 r1] |] eqn:EP1; [| discriminate].
-    destruct (symPopR_ok hP r_in r1 b1 hvR1 EP1) as [hvr1 hp1].
-    destruct b1 as [|].
-    + destruct (symPopR P r1) as [[b2 r2] |] eqn:EP2; [| discriminate].
-      destruct (symPopR_ok hP r1 r2 b2 hvr1 EP2) as [hvr2 hp2].
-      destruct b2 as [|].
-      * destruct (symPopR P r2) as [[b3 r3] |] eqn:EP3; [| discriminate].
-        apply some_inj in H; subst s'.
-        destruct (symPopR_ok hP r2 r3 b3 hvr2 EP3) as [hvr3 hp3].
-        assert (hc1 : (1 <= evalLF vN vQ vm (lfConst 1%Z))%Z) by (rewrite evalLF_const; lia).
-        destruct (exSL_pushL110 (lfConst 1%Z) l1 hc1 hvL1) as [hvl2 hexl2].
-        split; [exact (conj hvl2 hvr3) |].
-        unfold evalSym; cbn [sst_hd sst_l sst_r].
-        rewrite hp1, hp2, hp3 in hsw.
-        rewrite hexl2. change 1%Z with (Z.of_nat 1). rewrite evalLFNat_const.
-        cbn [rep110].
-        exact (sp_trans hsw (reach_R2_lb b3 (exSL vN vQ vm l1) (exSR vN vQ vm r3))).
-      * destruct (symPopR P r2) as [[b3 r3] |] eqn:EP3; [| discriminate].
-        destruct (symPopR_ok hP r2 r3 b3 hvr2 EP3) as [hvr3 hp3].
-        destruct b3 as [|]; [| discriminate].
-        apply some_inj in H; subst s'.
-        destruct (exSL_pushL0 l1 hvL1) as [hvl2 hexl2].
-        destruct (exSR_pushR0 r3 hvr3) as [hvr4 hexr4].
-        destruct (exSR_pushR0 (symPushR0 r3) hvr4) as [hvr5 hexr5].
-        split; [exact (conj hvl2 hvr5) |].
-        unfold evalSym; cbn [sst_hd sst_l sst_r].
-        rewrite hp1, hp2, hp3 in hsw. rewrite hexl2, hexr5, hexr4.
-        exact (sp_trans hsw (reach_R3_lb (exSL vN vQ vm l1) (exSR vN vQ vm r3))).
-    + apply some_inj in H; subst s'.
-      destruct (exSR_pushR0 r1 hvr1) as [hvr0 hexr0].
-      split; [exact (conj hvL1 hvr0) |].
-      unfold evalSym; cbn [sst_hd sst_l sst_r].
-      rewrite hp1 in hsw. rewrite hexr0.
-      exact (sp_trans hsw (reach_R1_lb (exSL vN vQ vm l1) (exSR vN vQ vm r1))).
+  intros [hl hr].
+  unfold symStepBase.
+  destruct (baseDispatch _ _ _ _ _ _ _ _ _ _ _ hd l r) as [[[hd' l'] r']|] eqn:E;
+    [|discriminate].
+  intros [= <-].
+  assert (hc : (1 <= evalLF vN vQ vm (lfConst 1%Z))%Z) by (rewrite evalLF_const; lia).
+  assert (hcN : evalLFNat vN vQ vm (lfConst 1%Z) = 1).
+  { change 1%Z with (Z.of_nat 1). apply evalLFNat_const. }
+  eapply (baseDispatch_sound tm C D (exSL vN vQ vm) (exSR vN vQ vm) (validL vN vQ vm) (validR vN vQ vm)) in E.
+  - destruct E as [hl' [hr' H]]. exact (conj (conj hl' hr') H).
+  - exact (symSplitL_ok hP).
+  - exact symSplitR_ok.
+  - exact (symStripOnesL_ok hP).
+  - exact (symPopL_ok hP).
+  - exact (symPopR_ok hP).
+  - exact exSL_pushL0.
+  - exact exSL_pushL1.
+  - intros a ha. pose proof (exSL_pushL110 _ a hc ha) as H. rewrite hcN in H. exact H.
+  - exact exSR_pushR0.
+  - intros a ha. exact (conj ha eq_refl).
+  - intros a ha. pose proof (exSR_pushR001 _ a hc ha) as H. rewrite hcN in H. exact H.
+  - intros a b. apply evstep_one. apply @step_left. reflexivity.
+  - exact reach_R1_lb.
+  - exact reach_R2_lb.
+  - exact reach_R3_lb.
+  - exact reach_L1_lb.
+  - exact reach_L2_lb.
+  - exact reach_L3_lb.
+  - exact hl.
+  - exact hr.
 Qed.
 
 Lemma symStep_sound {P : SymPred} {vN vQ vm : nat} (hP : ValidPred P vN vQ vm)
@@ -3021,3 +2866,5 @@ Proof.
   eapply multistep_nonhalt; [exact (etrans stageA_reaches_p60 hBC) |].
   eapply (progress_nonhalt tm InAttractor); [exact attractor_closed | exact hIn].
 Qed.
+
+Print Assumptions nonhalt.
