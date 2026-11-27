@@ -1,0 +1,9142 @@
+(** * BB(6) Holdout 608:#44 / 797:#64: 1RB0LF_1RC0RB_0RD1LE_0LE0RA_1LC1LA_0LD--- *)
+
+From BusyCoq Require Import Individual62.
+From Coq Require Import String Bool List Arith Lia PArith BinNat.
+Import ListNotations.
+
+Definition tm : TM := TM_from_str "1RB0LF_1RC0RB_0RD1LE_0LE0RA_1LC1LA_0LD---"%string.
+
+Module M44.
+
+Local Open Scope bool_scope.
+Local Open Scope list_scope.
+Local Open Scope nat_scope.
+
+(** ** 1. Elementary 11-Rule Micro-Steps *)
+
+Notation f0 := S0.
+Notation f1 := S1.
+Notation blank := (const S0).
+
+Lemma z00 : f0 >> blank = blank.
+Proof. symmetry. exact (const_unfold Sym f0). Qed.
+
+Lemma stepB_1 (l r : side) :
+  (l {{B}}> (f1 >> r)) -[ tm ]->+ ((f0 >> l) {{B}}> r).
+Proof. start_progress. Qed.
+
+Lemma stepB_01 (l r : side) :
+  (l {{B}}> (f0 >> f1 >> r)) -[ tm ]->+ ((f1 >> l) <{{E}} (f1 >> r)).
+Proof. start_progress. Qed.
+
+Lemma stepB_000 (l r : side) :
+  (l {{B}}> (f0 >> f0 >> f0 >> r)) -[ tm ]->+ ((f0 >> f1 >> l) <{{E}} (f0 >> r)).
+Proof. start_progress. Qed.
+
+Lemma stepB_0010 (l r : side) :
+  (l {{B}}> (f0 >> f0 >> f1 >> f0 >> r)) -[ tm ]->+ ((f1 >> f0 >> f0 >> f1 >> l) {{B}}> r).
+Proof. start_progress. Qed.
+
+Lemma stepB_0011 (l r : side) :
+  (l {{B}}> (f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->+ ((f1 >> l) <{{E}} (f0 >> f0 >> f0 >> r)).
+Proof. start_progress. Qed.
+
+Lemma stepE_01 (l r : side) :
+  ((f0 >> f1 >> l) <{{E}} r) -[ tm ]->+ (l <{{E}} (f1 >> f1 >> r)).
+Proof. start_progress. Qed.
+
+Lemma stepE_00_0 (l r : side) :
+  ((f0 >> f0 >> l) <{{E}} (f0 >> r)) -[ tm ]->+ ((f1 >> f0 >> f0 >> l) {{B}}> r).
+Proof. start_progress. Qed.
+
+Lemma stepE_00_1 (l r : side) :
+  ((f0 >> f0 >> l) <{{E}} (f1 >> r)) -[ tm ]->+ (l <{{E}} (f0 >> f0 >> f0 >> r)).
+Proof. start_progress. Qed.
+
+Lemma stepE_10 (l r : side) :
+  ((f1 >> f0 >> l) <{{E}} r) -[ tm ]->+ ((f0 >> f1 >> l) {{B}}> r).
+Proof. start_progress. Qed.
+
+Lemma stepE_1100 (l r : side) :
+  ((f1 >> f1 >> f0 >> f0 >> l) <{{E}} r) -[ tm ]->+ (l <{{E}} (f0 >> f0 >> f0 >> f1 >> r)).
+Proof. start_progress. Qed.
+
+Lemma stepE_1101 (l r : side) :
+  ((f1 >> f1 >> f0 >> f1 >> l) <{{E}} r) -[ tm ]->+ ((f1 >> f0 >> l) {{B}}> (f0 >> f1 >> r)).
+Proof. start_progress. Qed.
+
+(** ** 2. Exact Bit-List Micro-Executor ([sim1] / [simN]) *)
+
+Definition finOfBool (b : bool) : Sym := if b then f1 else f0.
+
+Fixpoint decBits (bs : list bool) (lb : side) : side :=
+  match bs with
+  | [] => lb
+  | false :: bs' => f0 >> decBits bs' lb
+  | true  :: bs' => f1 >> decBits bs' lb
+  end.
+
+Lemma decBits_cons (b : bool) (bs : list bool) (lb : side) :
+  decBits (b :: bs) lb = finOfBool b >> decBits bs lb.
+Proof. destruct b; reflexivity. Qed.
+
+Lemma decBits_append (a b : list bool) (lb : side) :
+  decBits (a ++ b) lb = decBits a (decBits b lb).
+Proof.
+  induction a as [|x xs IH]; [reflexivity |].
+  destruct x; cbn [app decBits]; rewrite IH; reflexivity.
+Qed.
+
+Inductive SimState : Type :=
+  | Sim_mk : bool -> list bool -> list bool -> SimState.
+
+Definition decSim (l0 r0 : side) (s : SimState) : Q * tape :=
+  match s with
+  | Sim_mk false l r => decBits l l0 {{B}}> decBits r r0
+  | Sim_mk true  l r => decBits l l0 <{{E}} decBits r r0
+  end.
+
+Definition sim1 (s : SimState) : SimState :=
+  match s with
+  | Sim_mk false l (true :: r) => Sim_mk false (false :: l) r
+  | Sim_mk false l (false :: true :: r) => Sim_mk true (true :: l) (true :: r)
+  | Sim_mk false l (false :: false :: false :: r) => Sim_mk true (false :: true :: l) (false :: r)
+  | Sim_mk false l (false :: false :: true :: false :: r) => Sim_mk false (true :: false :: false :: true :: l) r
+  | Sim_mk false l (false :: false :: true :: true :: r) => Sim_mk true (true :: l) (false :: false :: false :: r)
+  | Sim_mk true (false :: true :: l) r => Sim_mk true l (true :: true :: r)
+  | Sim_mk true (false :: false :: l) (false :: r) => Sim_mk false (true :: false :: false :: l) r
+  | Sim_mk true (false :: false :: l) (true :: r) => Sim_mk true l (false :: false :: false :: r)
+  | Sim_mk true (true :: false :: l) r => Sim_mk false (false :: true :: l) r
+  | Sim_mk true (true :: true :: false :: false :: l) r => Sim_mk true l (false :: false :: false :: true :: r)
+  | Sim_mk true (true :: true :: false :: true :: l) r => Sim_mk false (true :: false :: l) (false :: true :: r)
+  | _ => s
+  end.
+
+Fixpoint simN (n : nat) (s : SimState) : SimState :=
+  match n with
+  | 0 => s
+  | S n' => simN n' (sim1 s)
+  end.
+
+Lemma sim1_sound (l0 r0 : side) (s : SimState) :
+  decSim l0 r0 s -[ tm ]->* decSim l0 r0 (sim1 s).
+Proof.
+  destruct s as [[|] l r].
+  - destruct l as [|[|] l]; [apply evstep_refl | | ].
+    + destruct l as [|[|] l]; [apply evstep_refl | | ].
+      * destruct l as [|[|] l]; [apply evstep_refl | apply evstep_refl | ].
+        destruct l as [|[|] l];
+          [apply evstep_refl | apply progress_evstep, stepE_1101 | apply progress_evstep, stepE_1100].
+      * apply progress_evstep, stepE_10.
+    + destruct l as [|[|] l]; [apply evstep_refl | apply progress_evstep, stepE_01 | ].
+      destruct r as [|[|] r];
+        [apply evstep_refl | apply progress_evstep, stepE_00_1 | apply progress_evstep, stepE_00_0].
+  - destruct r as [|[|] r]; [apply evstep_refl | apply progress_evstep, stepB_1 | ].
+    destruct r as [|[|] r]; [apply evstep_refl | apply progress_evstep, stepB_01 | ].
+    destruct r as [|[|] r]; [apply evstep_refl | | apply progress_evstep, stepB_000].
+    destruct r as [|[|] r];
+      [apply evstep_refl | apply progress_evstep, stepB_0011 | apply progress_evstep, stepB_0010].
+Qed.
+
+Lemma simN_sound (l0 r0 : side) (n : nat) (s : SimState) :
+  decSim l0 r0 s -[ tm ]->* decSim l0 r0 (simN n s).
+Proof.
+  revert s. induction n as [|n IH]; intros s; [apply evstep_refl |].
+  cbn [simN]. eapply evstep_trans; [apply sim1_sound | apply IH].
+Qed.
+
+Lemma simN_eq {l0 r0 : side} (n : nat) (s1 s2 : SimState) (H : simN n s1 = s2) :
+  decSim l0 r0 s1 -[ tm ]->* decSim l0 r0 s2.
+Proof. subst s2. apply simN_sound. Qed.
+
+(** ** 3. Finite Macro Rules via [simN_eq] *)
+
+Lemma br1_step (l r : side) :
+  ((f1 >> f1 >> f0 >> f0 >> l) <{{E}} r) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> r)).
+Proof. apply progress_evstep, stepE_1100. Qed.
+
+Lemma br3_step (l r : side) :
+  (l {{B}}> (f0 >> f0 >> f1 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f1 >> l) {{B}}> r).
+Proof. apply progress_evstep, stepB_0010. Qed.
+
+Lemma br2_step (l r : side) :
+  ((f0 >> f1 >> f0 >> f0 >> l) <{{E}} r) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 2 (Sim_mk true [false; true; false; false] []) (Sim_mk true [] [false; false; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma br4_step (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false] [true; true; true; false; true]) (Sim_mk true [true; false; false; false; false; true; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma br5_step (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 18 (Sim_mk false [] [true; true; true; true; false; true; false; true; false; false; false; true]) (Sim_mk false [false; true; false; false] [true; true; true; true; false; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma br6_step (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> l) <{{E}} (f1 >> f0 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 18 (Sim_mk true [true; false; false; false] [true; false; true; false; false; false; true; false]) (Sim_mk true [true; false; false; false; false; false; true; false] [true; false; true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma br7_step (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> f1 >> f0 >> f0 >> f1 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f1 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 18 (Sim_mk true [false; true; false; true; true; false; false; true] [false; false; false; true; false; false; false; true]) (Sim_mk true [false; true; false; true] [false; false; false; true; false; false; false; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lpa_0 (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false] [false; false; false]) (Sim_mk true [] [false; false; false; true; true; true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lpa_1 (l r : side) :
+  ((f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 2 (Sim_mk true [false; true; false; false] [false; false; false]) (Sim_mk true [] [false; false; false; true; false; false; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lb_p0_q1_t (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false; true; false] [false; false; false; true]) (Sim_mk true [true; false] [false; false; false; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lb_p0_q1_f (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 6 (Sim_mk true [true; false; false; true; false; false] [false; false; false; true]) (Sim_mk true [] [false; false; false; true; true; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lb_p1_base (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f1 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 11 (Sim_mk true [true; false; false; false; true; false; false; true; false; false] [false; false; false]) (Sim_mk true [] [false; false; false; true; true; true; true; true; false; true; true; true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lb_p1_true (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false; true; false; false] [false; false; false]) (Sim_mk true [true; false; false] [false; false; false; true; true; true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lb_p1_false (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->* ((f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 6 (Sim_mk true [true; false; false; true; false; false; false] [false; false; false]) (Sim_mk true [false] [false; false; false; true; true; true; true; true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_entry (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 9 (Sim_mk false [] [true; true; true; true; false; true; false; true]) (Sim_mk false [false; true; false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_mid_zero (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 9 (Sim_mk false [false; true; false; true; false; false; false] [true; false; false; false; true]) (Sim_mk false [false; true; false; false] [true; true; true; true; false; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_mid_1011 (l r : side) :
+  ((f0 >> f1 >> f0 >> l) {{B}}> (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk false [false; true; false] [true; true; true; false; true]) (Sim_mk false [false; true; false; false; false; true; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_mid_1000_t (l r : side) :
+  ((f0 >> f1 >> f0 >> l) {{B}}> (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 4 (Sim_mk false [false; true; false] [true; false; false; false; true]) (Sim_mk true [true; false] [false; false; false; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_back_end (l r : side) :
+  ((f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; true; false; false; false] [false; false; false; true]) (Sim_mk false [false; true; false; false] [true; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma fwd_101111 (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 6 (Sim_mk false [] [true; true; true; true; false; true]) (Sim_mk false [false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_fwd_step (l r : side) :
+  ((f0 >> l) {{B}}> (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk false [false] [true; true; true; false; true]) (Sim_mk false [false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rp_fwd_fin (l r : side) :
+  ((f0 >> l) {{B}}> (f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 3 (Sim_mk false [false] [true; false; true]) (Sim_mk false [false; true; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma sb_fwd_step (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk false [] [true; true; true; false; true]) (Sim_mk false [false; true; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma sb_fwd_fin (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 4 (Sim_mk false [] [true; true; true; false; true; false]) (Sim_mk true [true; false; false; false] [true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p4_turn (l r : side) :
+  ((f0 >> l) {{B}}> (f1 >> f0 >> f0 >> f0 >> r)) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 4 (Sim_mk false [false] [true; false; false; false]) (Sim_mk true [] [false; false; false; true; false]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p4_back_0001 (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; false; false] [false; false; false; true]) (Sim_mk true [] [false; false; false; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p4_bounce_0101 (l r : side) :
+  ((f1 >> f0 >> f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> l) {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5 (Sim_mk true [true; false; true; false] [false; false; false; true]) (Sim_mk false [false; true] [true; true; true; true; false; true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p4_finish_01 (l r : side) :
+  (l {{B}}> (f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> l) <{{E}} (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 2 (Sim_mk false [] [true; false; true]) (Sim_mk true [true; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p4b_true (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->* ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 18 (Sim_mk true [true; false; false; true; false; false; false] [true; false; false; false; true]) (Sim_mk true [true; false; false; true; false; false; false; false; true; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p4b_false_enter (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->* ((f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> (f1 >> r)).
+Proof.
+  exact (@simN_eq l r 6 (Sim_mk true [true; false; false; true; false; false; false] [true; true; true; false; true]) (Sim_mk false [false; true; false; false; false; true; false; true; false; false; false] [true]) ltac:(vm_compute; reflexivity)).
+Qed.
+
+
+(** ** 4. Bit-Block Repetition, Word Encodings, and Shift Identities *)
+
+Fixpoint repBits (u : list bool) (k : nat) (lb : side) : side :=
+  match k with
+  | 0 => lb
+  | S k' => decBits u (repBits u k' lb)
+  end.
+
+Lemma repBits_add (u : list bool) (a b : nat) (lb : side) :
+  repBits u (a + b) lb = repBits u a (repBits u b lb).
+Proof.
+  induction a as [|a IH]; [reflexivity |].
+  cbn [Nat.add repBits]. rewrite IH. reflexivity.
+Qed.
+
+Lemma repBits_succ_right (u : list bool) (k : nat) (lb : side) :
+  repBits u (S k) lb = repBits u k (decBits u lb).
+Proof.
+  induction k as [|k IH]; [reflexivity |].
+  change (decBits u (repBits u (S k) lb) = decBits u (repBits u k (decBits u lb))).
+  rewrite IH. reflexivity.
+Qed.
+
+Fixpoint flipW (w : list bool) : list bool :=
+  match w with
+  | [] => []
+  | b :: bs => negb b :: flipW bs
+  end.
+
+Lemma flipW_append (a b : list bool) : flipW (a ++ b) = flipW a ++ flipW b.
+Proof.
+  induction a as [|x xs IH]; [reflexivity |].
+  cbn [app flipW]. rewrite IH. reflexivity.
+Qed.
+
+Lemma flipW_repeat (k : nat) (b : bool) :
+  flipW (List.repeat b k) = List.repeat (negb b) k.
+Proof.
+  induction k as [|k IH]; [reflexivity |].
+  cbn [List.repeat flipW]. rewrite IH. reflexivity.
+Qed.
+
+Lemma flipW_involutive (w : list bool) : flipW (flipW w) = w.
+Proof.
+  induction w as [|x xs IH]; [reflexivity |].
+  cbn [flipW]. rewrite Bool.negb_involutive, IH. reflexivity.
+Qed.
+
+Lemma flip_cond (f : bool) (w : list bool) :
+  (if negb f then flipW w else w) = flipW (if f then flipW w else w).
+Proof. destruct f; cbn; [symmetry; apply flipW_involutive | reflexivity]. Qed.
+
+Lemma repeat_snoc {X : Type} (b : X) (k : nat) :
+  List.repeat b k ++ [b] = b :: List.repeat b k.
+Proof.
+  induction k as [|k IH]; [reflexivity |].
+  cbn [List.repeat app]. rewrite IH. reflexivity.
+Qed.
+
+Lemma rev_repeat {X : Type} (b : X) (k : nat) :
+  List.rev (List.repeat b k) = List.repeat b k.
+Proof.
+  induction k as [|k IH]; [reflexivity |].
+  cbn [List.repeat List.rev]. rewrite IH, repeat_snoc. reflexivity.
+Qed.
+
+Lemma repeat_len {X : Type} (b : X) (k : nat) :
+  List.length (List.repeat b k) = k.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity].
+Qed.
+
+Lemma cons_repeat_append {X : Type} (b : X) (m : nat) (tl : list X) :
+  b :: (List.repeat b m ++ tl) = List.repeat b m ++ b :: tl.
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn; rewrite IH; reflexivity].
+Qed.
+
+Fixpoint encWL (w : list bool) (lb : side) : side :=
+  match w with
+  | [] => lb
+  | false :: ws => f1 >> f0 >> f0 >> f0 >> encWL ws lb
+  | true  :: ws => f0 >> f1 >> f0 >> f0 >> encWL ws lb
+  end.
+
+Fixpoint encWR (w : list bool) (lb : side) : side :=
+  match w with
+  | [] => lb
+  | false :: ws => f1 >> f1 >> f1 >> f0 >> encWR ws lb
+  | true  :: ws => f1 >> f0 >> f0 >> f0 >> encWR ws lb
+  end.
+
+Fixpoint encWL_b0 (w : list bool) (lb : side) : side :=
+  match w with
+  | [] => lb
+  | false :: ws => f0 >> f1 >> f0 >> f0 >> encWL_b0 ws lb
+  | true  :: ws => f0 >> f0 >> f1 >> f0 >> encWL_b0 ws lb
+  end.
+
+Fixpoint encWR0 (w : list bool) (lb : side) : side :=
+  match w with
+  | [] => lb
+  | false :: ws => f0 >> f1 >> f1 >> f1 >> encWR0 ws lb
+  | true  :: ws => f0 >> f1 >> f0 >> f0 >> encWR0 ws lb
+  end.
+
+Fixpoint encWR_q1 (w : list bool) (lb : side) : side :=
+  match w with
+  | [] => lb
+  | false :: ws => f1 >> f1 >> f0 >> f1 >> encWR_q1 ws lb
+  | true  :: ws => f0 >> f0 >> f0 >> f1 >> encWR_q1 ws lb
+  end.
+
+Lemma encWL_append (a b : list bool) (lb : side) :
+  encWL (a ++ b) lb = encWL a (encWL b lb).
+Proof. induction a as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma encWR_append (a b : list bool) (lb : side) :
+  encWR (a ++ b) lb = encWR a (encWR b lb).
+Proof. induction a as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma encWL_b0_append (a b : list bool) (lb : side) :
+  encWL_b0 (a ++ b) lb = encWL_b0 a (encWL_b0 b lb).
+Proof. induction a as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma encWR0_append (a b : list bool) (lb : side) :
+  encWR0 (a ++ b) lb = encWR0 a (encWR0 b lb).
+Proof. induction a as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma encWR_q1_append (a b : list bool) (lb : side) :
+  encWR_q1 (a ++ b) lb = encWR_q1 a (encWR_q1 b lb).
+Proof. induction a as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma encWL_rep_false (k : nat) (lb : side) :
+  encWL (List.repeat false k) lb = repBits [true; false; false; false] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma encWL_b0_rep_false (k : nat) (lb : side) :
+  encWL_b0 (List.repeat false k) lb = repBits [false; true; false; false] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma encWL_b0_rep_true (k : nat) (lb : side) :
+  encWL_b0 (List.repeat true k) lb = repBits [false; false; true; false] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma encWR0_rep_false (k : nat) (lb : side) :
+  encWR0 (List.repeat false k) lb = repBits [false; true; true; true] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma encWR0_rep_true (k : nat) (lb : side) :
+  encWR0 (List.repeat true k) lb = repBits [false; true; false; false] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma encWR_q1_rep_false (k : nat) (lb : side) :
+  encWR_q1 (List.repeat false k) lb = repBits [true; true; false; true] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma encWR_rep_false (k : nat) (lb : side) :
+  encWR (List.repeat false k) lb = repBits [true; true; true; false] k lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_0_encWL (w : list bool) (lb : side) :
+  f0 >> encWL w lb = encWL_b0 w (f0 >> lb).
+Proof. induction w as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma shift_0_encWR (u : list bool) (lb : side) :
+  f0 >> encWR u lb = encWR0 u (f0 >> lb).
+Proof. induction u as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma shift_encWR_1 (u : list bool) (lb : side) :
+  encWR u (f1 >> lb) = f1 >> encWR_q1 u lb.
+Proof. induction u as [|[|] xs IH]; cbn; try rewrite IH; reflexivity. Qed.
+
+Lemma shift_lb_p0_1 (k : nat) (lb : side) :
+  repBits [false; false; false; true] k (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> lb) =
+    f0 >> repBits [false; false; true; false] k (f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> lb).
+Proof. induction k as [|k IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_lb_p0_2 (k : nat) (lb : side) :
+  f1 >> repBits [true; false; false; true] k (f1 >> f0 >> f0 >> lb) =
+    repBits [true; true; false; false] (S k) lb.
+Proof. induction k as [|k IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_lb_p0_3 (k : nat) (lb : side) :
+  repBits [false; false; false; true] (S k) (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> lb) =
+    f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f1 >> f1 >> lb).
+Proof. induction k as [|k IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_lb_p0_4 (m : nat) (lb : side) :
+  f0 >> f1 >> repBits [true; true; false; true] m (f0 >> f0 >> lb) =
+    repBits [false; true; true; true] m (f0 >> f1 >> f0 >> f0 >> lb).
+Proof. induction m as [|m IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_rp_1_core (k : nat) (lb : side) :
+  f1 >> repBits [true; true; false; true] k (f0 >> f1 >> lb) =
+    repBits [true; true; true; false] k (f1 >> f0 >> f1 >> lb).
+Proof. induction k as [|k IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_rp_1 (k : nat) (lb : side) :
+  f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> repBits [true; true; false; true] k (f0 >> f1 >> lb) =
+    f1 >> f1 >> f1 >> f1 >> f0 >> repBits [true; true; true; false] k (f1 >> f0 >> f1 >> lb).
+Proof. repeat f_equal. apply shift_rp_1_core. Qed.
+
+Lemma shift_p4_1 (m : nat) (lb : side) :
+  repBits [false; true; false; false] m (f0 >> f1 >> f0 >> f1 >> f0 >> lb) =
+    f0 >> repBits [true; false; false; false] m (f1 >> f0 >> f1 >> f0 >> lb).
+Proof. induction m as [|m IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_sb_1_core (k : nat) (lb : side) :
+  f1 >> repBits [true; true; false; true] k (f0 >> lb) =
+    repBits [true; true; true; false] k (f1 >> f0 >> lb).
+Proof. induction k as [|k IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity]. Qed.
+
+Lemma shift_sb_1 (k : nat) (lb : side) :
+  f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> repBits [true; true; false; true] k (f0 >> lb) =
+    f1 >> f1 >> f1 >> f1 >> f0 >> repBits [true; true; true; false] k (f1 >> f0 >> lb).
+Proof. repeat f_equal. apply shift_sb_1_core. Qed.
+
+Lemma splitLeading (b : bool) (w : list bool) :
+  exists (k : nat) (rest : list bool), w = List.repeat b k ++ rest /\
+    (rest = [] \/ exists t, rest = negb b :: t).
+Proof.
+  induction w as [|x xs IH].
+  - exists 0, (@nil bool). split; [reflexivity | left; reflexivity].
+  - destruct (Bool.bool_dec x b) as [-> | Hne].
+    + destruct IH as [k [rest [H1 H2]]].
+      exists (S k), rest. split; [cbn; f_equal; exact H1 | exact H2].
+    + assert (Hx : x = negb b) by (destruct x, b; congruence || reflexivity).
+      subst x. exists 0, (negb b :: xs). split; [reflexivity | right; exists xs; reflexivity].
+Qed.
+
+(** ** 5. Loop & SafeWord Transducer Soundness Proofs *)
+
+Lemma loop_br1 (k : nat) (l r : side) :
+  (repBits [true; true; false; false] k l <{{E}} r) -[ tm ]->*
+    (l <{{E}} repBits [false; false; false; true] k r).
+Proof.
+  revert r. induction k as [|k IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; false; false; true]). eapply evstep_trans; [apply br1_step | apply IH].
+Qed.
+
+Lemma loop_br2 (k : nat) (l r : side) :
+  (repBits [false; true; false; false] k l <{{E}} r) -[ tm ]->*
+    (l <{{E}} repBits [false; false; false; true] k r).
+Proof.
+  revert r. induction k as [|k IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; false; false; true]). eapply evstep_trans; [apply br2_step | apply IH].
+Qed.
+
+Lemma loop_br3 (k : nat) (l r : side) :
+  (l {{B}}> repBits [false; false; true; false] k r) -[ tm ]->*
+    (repBits [true; false; false; true] k l {{B}}> r).
+Proof.
+  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
+  rewrite (repBits_succ_right [true; false; false; true]). eapply evstep_trans; [apply br3_step | apply IH].
+Qed.
+
+Lemma loop_q1_t (m : nat) (l r : side) :
+  ((f1 >> f0 >> repBits [false; false; true; false] m l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> repBits [true; true; false; true] m r)).
+Proof.
+  revert r. induction m as [|m IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [true; true; false; true]). eapply evstep_trans; [apply lb_p0_q1_t | apply IH].
+Qed.
+
+Lemma loop_p4_back (m : nat) (l r : side) :
+  (repBits [true; false; false; false] m l <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> repBits [true; true; false; true] m r)).
+Proof.
+  revert r. induction m as [|m IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [true; true; false; true]). eapply evstep_trans; [apply p4_back_0001 | apply IH].
+Qed.
+
+Lemma loop_sb_fwd (k : nat) (l r : side) :
+  (l {{B}}> repBits [true; true; true; false] k (f1 >> r)) -[ tm ]->*
+    (repBits [false; true; false; false] k l {{B}}> (f1 >> r)).
+Proof.
+  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
+  destruct k as [|k']; [apply sb_fwd_step |].
+  rewrite (repBits_succ_right [false; true; false; false] (S k')).
+  eapply evstep_trans.
+  - exact (sb_fwd_step l (f1 >> f1 >> f0 >> repBits [true; true; true; false] k' (f1 >> r))).
+  - exact (IH (f0 >> f1 >> f0 >> f0 >> l)).
+Qed.
+
+Lemma loop_rp_fwd (k : nat) (l r : side) :
+  ((f0 >> l) {{B}}> repBits [true; true; true; false] k (f1 >> r)) -[ tm ]->*
+    ((f0 >> repBits [true; false; false; false] k l) {{B}}> (f1 >> r)).
+Proof.
+  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
+  destruct k as [|k']; [apply rp_fwd_step |].
+  rewrite (repBits_succ_right [true; false; false; false] (S k')).
+  eapply evstep_trans.
+  - exact (rp_fwd_step l (f1 >> f1 >> f0 >> repBits [true; true; true; false] k' (f1 >> r))).
+  - exact (IH (f1 >> f0 >> f0 >> f0 >> l)).
+Qed.
+
+Lemma loop_rp_mid_1011 (k : nat) (l r : side) :
+  ((f0 >> f1 >> f0 >> l) {{B}}> (f1 >> repBits [true; true; false; true] k r)) -[ tm ]->*
+    ((f0 >> f1 >> f0 >> repBits [false; false; true; false] k l) {{B}}> (f1 >> r)).
+Proof.
+  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; false; true; false]). eapply evstep_trans; [apply rp_mid_1011 | apply IH].
+Qed.
+
+Lemma leftPassA_reaches (w : list bool) (l r : side) :
+  (encWL w l <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> encWR (List.rev w) r)).
+Proof.
+  revert r. induction w as [|[|] ws IH]; intros r; [apply evstep_refl | | ].
+  - cbn [encWL List.rev]. rewrite encWR_append. cbn [encWR].
+    eapply evstep_trans; [apply lpa_1 | apply IH].
+  - cbn [encWL List.rev]. rewrite encWR_append. cbn [encWR].
+    eapply evstep_trans; [apply lpa_0 | apply IH].
+Qed.
+
+Lemma rep0010_shift (m : nat) (l : side) :
+  repBits [false; false; true; false] m (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) =
+    f0 >> f0 >> f1 >> f0 >> repBits [false; false; true; false] m (f0 >> f1 >> f0 >> f0 >> l).
+Proof. induction m as [|m IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity]. Qed.
+
+Lemma leftB_p0_run (k m : nat) (l r : side) :
+  (repBits [false; true; false; false] k (repBits [false; false; true; false] m (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l))
+    <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> r)) -[ tm ]->*
+  (l <{{E}}
+    (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> repBits [false; true; true; true] m (repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)))).
+Proof.
+  rewrite rep0010_shift.
+  pose proof (loop_br2 k (f0 >> f0 >> f1 >> f0 >> repBits [false; false; true; false] m (f0 >> f1 >> f0 >> f0 >> l))
+                         (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> r)) as H1.
+  rewrite shift_lb_p0_1 in H1.
+  pose proof (progress_evstep _ _ _ (stepE_00_0 (f1 >> f0 >> repBits [false; false; true; false] m (f0 >> f1 >> f0 >> f0 >> l))
+                         (repBits [false; false; true; false] k (f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> r)))) as H2.
+  pose proof (loop_br3 k (f1 >> f0 >> f0 >> f1 >> f0 >> repBits [false; false; true; false] m (f0 >> f1 >> f0 >> f0 >> l))
+                         (f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> r)) as H3.
+  pose proof (progress_evstep _ _ _ (stepB_0011 (repBits [true; false; false; true] k (f1 >> f0 >> f0 >> f1 >> f0 >> repBits [false; false; true; false] m (f0 >> f1 >> f0 >> f0 >> l)))
+                         (f1 >> f1 >> f1 >> r))) as H4.
+  rewrite shift_lb_p0_2 in H4.
+  pose proof (loop_br1 (S k) (f1 >> f0 >> repBits [false; false; true; false] m (f0 >> f1 >> f0 >> f0 >> l))
+                             (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)) as H5.
+  rewrite shift_lb_p0_3 in H5.
+  pose proof (loop_q1_t m (f0 >> f1 >> f0 >> f0 >> l)
+                          (f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f1 >> f1 >> r))) as H6.
+  pose proof (lb_p0_q1_f l (repBits [true; true; false; true] m (f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f1 >> f1 >> r)))) as H7.
+  assert (HR7 : f0 >> f1 >> repBits [true; true; false; true] m (f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f1 >> f1 >> r)) =
+                repBits [false; true; true; true] m (repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r))).
+  { rewrite shift_lb_p0_4. f_equal.
+    change (f0 >> f1 >> f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f1 >> f1 >> r))
+      with (repBits [false; true; false; false] (S k) (f0 >> f1 >> f1 >> f1 >> r)).
+    rewrite repBits_succ_right. reflexivity. }
+  rewrite <- HR7.
+  eapply evstep_trans; [exact H1 |].
+  eapply evstep_trans; [exact H2 |].
+  eapply evstep_trans; [exact H3 |].
+  eapply evstep_trans; [exact H4 |].
+  eapply evstep_trans; [exact H5 |].
+  eapply evstep_trans; [exact H6 | exact H7].
+Qed.
+
+Lemma leftPassB_p0_reaches (w : list bool) (l r : side) :
+  (encWL_b0 w (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)
+    <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> r)) -[ tm ]->*
+  (l <{{E}}
+    (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> encWR0 (List.rev (flipW w)) (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r))).
+Proof.
+  remember (List.length w) as n eqn:Hn.
+  revert w Hn l r.
+  induction n as [n IH] using strong_induction.
+  intros w Hn l r. subst n.
+  destruct (splitLeading false w) as [k [rest1 [Hw1 Hrest1]]].
+  destruct Hrest1 as [-> | [t1 ->]].
+  - rewrite app_nil_r in Hw1. subst w.
+    rewrite encWL_b0_rep_false, flipW_repeat; cbn [negb].
+    rewrite rev_repeat, encWR0_rep_true.
+    exact (leftB_p0_run k 0 l r).
+  - cbn [negb] in Hw1.
+    destruct (splitLeading true t1) as [m [rest2 [Ht1 Hrest2]]].
+    subst t1.
+    destruct Hrest2 as [-> | [w' ->]].
+    + rewrite app_nil_r in Hw1. subst w.
+      change (true :: List.repeat true m) with (List.repeat true (S m)).
+      rewrite encWL_b0_append, encWL_b0_rep_false, encWL_b0_rep_true.
+      rewrite flipW_append, !flipW_repeat; cbn [negb].
+      rewrite List.rev_app_distr, !rev_repeat, encWR0_append, encWR0_rep_false, encWR0_rep_true.
+      exact (leftB_p0_run k (S m) l r).
+    + cbn [negb] in Hw1. subst w.
+      assert (Hlen : List.length w' < List.length (List.repeat false k ++ true :: List.repeat true m ++ false :: w')).
+      { rewrite !length_app; cbn [List.length]; rewrite !length_app; cbn [List.length]; rewrite !repeat_len; lia. }
+      assert (HL : encWL_b0 (List.repeat false k ++ true :: List.repeat true m ++ false :: w')
+                     (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) =
+                   repBits [false; true; false; false] k
+                     (repBits [false; false; true; false] m
+                       (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >>
+                         encWL_b0 w' (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)))).
+      { rewrite encWL_b0_append, encWL_b0_rep_false. f_equal.
+        rewrite cons_repeat_append, encWL_b0_append, encWL_b0_rep_true. reflexivity. }
+      pose proof (leftB_p0_run k m (encWL_b0 w' (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)) r) as Hstep1.
+      pose proof (IH (List.length w') Hlen w' eq_refl l
+        (repBits [false; true; true; true] m (repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)))) as Hstep2.
+      assert (HR : encWR0 (List.rev (flipW w'))
+                     (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >>
+                       repBits [false; true; true; true] m (repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r))) =
+                   encWR0 (List.rev (flipW (List.repeat false k ++ true :: List.repeat true m ++ false :: w')))
+                     (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)).
+      { rewrite cons_repeat_append.
+        replace (List.repeat false k ++ List.repeat true m ++ true :: false :: w')
+          with (List.repeat false k ++ List.repeat true m ++ [true; false] ++ w')
+          by reflexivity.
+        rewrite !flipW_append, !flipW_repeat; cbn [negb].
+        rewrite !List.rev_app_distr, !rev_repeat; cbn [List.rev app].
+        rewrite !encWR0_append, encWR0_rep_false, encWR0_rep_true; cbn [encWR0].
+        reflexivity. }
+      rewrite HL. rewrite HR in Hstep2.
+      eapply evstep_trans; [exact Hstep1 | exact Hstep2].
+Qed.
+
+Lemma leftPassB_p1_reaches (w : list bool) (l r : side) :
+  ((f1 >> f0 >> f0 >> encWL w (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l))
+    <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+  (l <{{E}}
+    (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f1 >> f1 >> f0 >> encWR (List.rev (flipW w)) (f1 >> f1 >> f1 >> f0 >> r))).
+Proof.
+  revert r. induction w as [|[|] ws IH]; intros r; [apply lb_p1_base | | ].
+  - cbn [encWL flipW negb List.rev]. rewrite encWR_append; cbn [encWR].
+    eapply evstep_trans; [apply lb_p1_true | apply IH].
+  - pose proof (lb_p1_false (encWL ws (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)) r) as H1.
+    pose proof (leftPassB_p0_reaches ws l (f0 >> r)) as H2.
+    rewrite <- shift_0_encWL in H2.
+    assert (HR : encWR0 (List.rev (flipW ws)) (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> r) =
+                 f0 >> encWR (List.rev (flipW (false :: ws))) (f1 >> f1 >> f1 >> f0 >> r)).
+    { cbn [flipW negb List.rev]. rewrite encWR_append; cbn [encWR].
+      rewrite shift_0_encWR. reflexivity. }
+    rewrite HR in H2.
+    eapply evstep_trans; [exact H1 | exact H2].
+Qed.
+
+Lemma rp_mid_run (k : nat) (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}>
+    (f1 >> repBits [true; true; false; true] k (f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+  ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] k (f0 >> f1 >> f0 >> f0 >> l))
+    {{B}}> (f1 >> r)).
+Proof.
+  destruct k as [|k'].
+  - eapply evstep_trans; [apply rp_mid_zero | apply rp_entry].
+  - pose proof (loop_rp_mid_1011 (S k') (f1 >> f0 >> f0 >> f0 >> l) (f0 >> f0 >> f0 >> f1 >> r)) as H1.
+    pose proof (rp_mid_1000_t (repBits [false; false; true; false] (S k') (f1 >> f0 >> f0 >> f0 >> l)) r) as H2.
+    pose proof (loop_q1_t (S k') (f1 >> f0 >> f0 >> f0 >> l) (f0 >> f1 >> r)) as H3.
+    pose proof (rp_back_end l (repBits [true; true; false; true] (S k') (f0 >> f1 >> r))) as H4.
+    rewrite shift_rp_1 in H4.
+    pose proof (fwd_101111 (f0 >> f1 >> f0 >> f0 >> l)
+                  (f1 >> f1 >> f0 >> repBits [true; true; true; false] k' (f1 >> f0 >> f1 >> r))) as H5.
+    pose proof (loop_rp_fwd (S k') (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) (f0 >> f1 >> r)) as H6.
+    pose proof (rp_fwd_fin (repBits [true; false; false; false] (S k') (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)) r) as H7.
+    assert (HL : f0 >> f1 >> f0 >> repBits [true; false; false; false] (S k') (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) =
+                 f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] (S k') (f0 >> f1 >> f0 >> f0 >> l)).
+    { repeat f_equal.
+      change (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)
+        with (decBits [true; false; false; false] (f0 >> f1 >> f0 >> f0 >> l)).
+      rewrite <- repBits_succ_right. reflexivity. }
+    rewrite HL in H7.
+    eapply evstep_trans; [exact H1 |].
+    eapply evstep_trans; [exact H2 |].
+    eapply evstep_trans; [exact H3 |].
+    eapply evstep_trans; [exact H4 |].
+    eapply evstep_trans; [exact H5 |].
+    eapply evstep_trans; [exact H6 | exact H7].
+Qed.
+
+Lemma rp_mid_all (v : list bool) (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}>
+    (f1 >> encWR_q1 v (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+  ((f0 >> f1 >> f0 >> f0 >> encWL (List.rev v) (f0 >> f1 >> f0 >> f0 >> l))
+    {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  remember (List.length v) as n eqn:Hn.
+  revert v Hn l r.
+  induction n as [n IH] using strong_induction.
+  intros v Hn l r. subst n.
+  destruct (splitLeading false v) as [k [rest [Hv1 Hrest]]].
+  destruct Hrest as [-> | [v' ->]].
+  - rewrite app_nil_r in Hv1. subst v.
+    rewrite encWR_q1_rep_false, rev_repeat, encWL_rep_false.
+    destruct k as [|k'].
+    + eapply evstep_trans; [apply rp_mid_zero | apply br5_step].
+    + eapply evstep_trans; [apply rp_mid_run | apply rp_mid_zero].
+  - cbn [negb] in Hv1. subst v.
+    assert (Hlen : List.length v' < List.length (List.repeat false k ++ true :: v')).
+    { rewrite length_app; cbn [List.length]; rewrite repeat_len; lia. }
+    rewrite encWR_q1_append, encWR_q1_rep_false; cbn [encWR_q1].
+    pose proof (rp_mid_run k l (encWR_q1 v' (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r))) as H1.
+    pose proof (IH (List.length v') Hlen v' eq_refl (repBits [true; false; false; false] k (f0 >> f1 >> f0 >> f0 >> l)) r) as H2.
+    assert (HL : encWL (List.rev v') (f0 >> f1 >> f0 >> f0 >> repBits [true; false; false; false] k (f0 >> f1 >> f0 >> f0 >> l)) =
+                 encWL (List.rev (List.repeat false k ++ true :: v')) (f0 >> f1 >> f0 >> f0 >> l)).
+    { rewrite List.rev_app_distr; cbn [List.rev app]; rewrite rev_repeat, !encWL_append, encWL_rep_false; cbn [encWL].
+      reflexivity. }
+    rewrite HL in H2.
+    eapply evstep_trans; [exact H1 | exact H2].
+Qed.
+
+Lemma rightPassQ1_reaches (v : list bool) (l r : side) :
+  ((f0 >> f1 >> f0 >> f0 >> l) {{B}}>
+    (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> encWR_q1 v (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+  ((f0 >> f1 >> f0 >> f0 >> encWL (List.rev v) (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l))
+    {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  eapply evstep_trans; [apply rp_entry | apply rp_mid_all].
+Qed.
+
+Lemma superBounce_reaches (k : nat) (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f1 >> f0 >> l))
+    <{{E}} (f1 >> f0 >> f0 >> f0 >> r)) -[ tm ]->*
+  ((f1 >> f0 >> f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l))
+    <{{E}} (f1 >> f0 >> r)).
+Proof.
+  pose proof (progress_evstep _ _ _ (stepE_10 (f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f1 >> f0 >> l))
+                       (f1 >> f0 >> f0 >> f0 >> r))) as H1.
+  change (f0 >> f1 >> f0 >> f0 >> repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f1 >> f0 >> l))
+    with (repBits [false; true; false; false] (S k) (f0 >> f1 >> f0 >> f1 >> f0 >> l)) in H1.
+  rewrite (shift_p4_1 (S k)) in H1.
+  pose proof (p4_turn (repBits [true; false; false; false] (S k) (f1 >> f0 >> f1 >> f0 >> l)) r) as H2.
+  pose proof (loop_p4_back (S k) (f1 >> f0 >> f1 >> f0 >> l) (f0 >> r)) as H3.
+  pose proof (p4_bounce_0101 l (repBits [true; true; false; true] (S k) (f0 >> r))) as H4.
+  rewrite shift_sb_1 in H4.
+  pose proof (fwd_101111 (f0 >> f1 >> l)
+                (f1 >> f1 >> f0 >> repBits [true; true; true; false] k (f1 >> f0 >> r))) as H5.
+  pose proof (loop_sb_fwd k (f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)
+                            (f1 >> f1 >> f0 >> f1 >> f0 >> r)) as H6.
+  change (f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> r)
+    with (decBits [true; true; true; false] (f1 >> f0 >> r)) in H6.
+  rewrite <- repBits_succ_right in H6.
+  pose proof (sb_fwd_fin (repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)) r) as H7.
+  eapply evstep_trans; [exact H1 |].
+  eapply evstep_trans; [exact H2 |].
+  eapply evstep_trans; [exact H3 |].
+  eapply evstep_trans; [exact H4 |].
+  eapply evstep_trans; [exact H5 |].
+  eapply evstep_trans; [exact H6 | exact H7].
+Qed.
+
+Lemma pass4_bounce (m : nat) (l r : side) :
+  (repBits [false; true; false; false] (S m) (f0 >> f1 >> f0 >> f1 >> f0 >> l)
+    {{B}}> (f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+  ((f1 >> f0 >> f0 >> repBits [true; false; false; false] (S m) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l))
+    <{{E}} (f1 >> r)).
+Proof.
+  rewrite shift_p4_1.
+  pose proof (p4_turn (repBits [true; false; false; false] (S m) (f1 >> f0 >> f1 >> f0 >> l)) (f1 >> r)) as H1.
+  pose proof (loop_p4_back (S m) (f1 >> f0 >> f1 >> f0 >> l) (f0 >> f1 >> r)) as H2.
+  pose proof (p4_bounce_0101 l (repBits [true; true; false; true] (S m) (f0 >> f1 >> r))) as H3.
+  rewrite shift_rp_1 in H3.
+  pose proof (fwd_101111 (f0 >> f1 >> l)
+                (f1 >> f1 >> f0 >> repBits [true; true; true; false] m (f1 >> f0 >> f1 >> r))) as H4.
+  pose proof (loop_rp_fwd (S m) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l) (f0 >> f1 >> r)) as H5.
+  pose proof (p4_finish_01 (f0 >> repBits [true; false; false; false] (S m) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)) r) as H6.
+  eapply evstep_trans; [exact H1 |].
+  eapply evstep_trans; [exact H2 |].
+  eapply evstep_trans; [exact H3 |].
+  eapply evstep_trans; [exact H4 |].
+  eapply evstep_trans; [exact H5 | exact H6].
+Qed.
+
+Lemma p4b_false_run (k : nat) (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}}
+    (repBits [true; true; true; false] (S k) (f1 >> f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] (S k) (f0 >> f1 >> f0 >> f0 >> l))
+    <{{E}} (f1 >> r)).
+Proof.
+  assert (H1 : ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}}
+                 (repBits [true; true; true; false] (S k) (f1 >> f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+               ((f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}>
+                 repBits [true; true; true; false] k (f1 >> f0 >> f0 >> f0 >> f1 >> r))).
+  { destruct k as [|k']; [apply p4b_false_enter | apply p4b_false_enter]. }
+  pose proof (loop_sb_fwd k (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) (f0 >> f0 >> f0 >> f1 >> r)) as H2.
+  change (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l)
+    with (decBits [false; true; false; false] (f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l)) in H2.
+  rewrite <- repBits_succ_right in H2.
+  pose proof (pass4_bounce k (f0 >> f0 >> l) r) as H3.
+  assert (HL3 : f1 >> f0 >> f0 >> repBits [true; false; false; false] (S k) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l) =
+                f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] (S k) (f0 >> f1 >> f0 >> f0 >> l)).
+  { repeat f_equal.
+    change (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> l)
+      with (decBits [true; false; false; false] (f0 >> f1 >> f0 >> f0 >> l)).
+    rewrite <- repBits_succ_right. reflexivity. }
+  rewrite HL3 in H3.
+  eapply evstep_trans; [exact H1 |].
+  eapply evstep_trans; [exact H2 | exact H3].
+Qed.
+
+Lemma p4b_all (v : list bool) (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}}
+    (encWR v (f1 >> f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> encWL (List.rev v) (f0 >> f1 >> f0 >> f0 >> l))
+    <{{E}} (f1 >> r)).
+Proof.
+  remember (List.length v) as n eqn:Hn.
+  revert v Hn l r.
+  induction n as [n IH] using strong_induction.
+  intros v Hn l r. subst n.
+  destruct (splitLeading false v) as [k [rest [Hv1 Hrest]]].
+  destruct Hrest as [-> | [v' ->]].
+  - rewrite app_nil_r in Hv1. subst v.
+    destruct k as [|k']; [apply p4b_true |].
+    rewrite encWR_rep_false, rev_repeat, encWL_rep_false.
+    exact (p4b_false_run k' l r).
+  - cbn [negb] in Hv1. subst v.
+    assert (Hlen : List.length v' < List.length (List.repeat false k ++ true :: v')).
+    { rewrite length_app; cbn [List.length]; rewrite repeat_len; lia. }
+    rewrite encWR_append, encWR_rep_false; cbn [encWR].
+    assert (Hhead1 : exists rt : side, encWR v' (f1 >> f0 >> f0 >> f0 >> f1 >> r) = f1 >> rt).
+    { destruct v' as [|[|] ?]; eexists; reflexivity. }
+    destruct Hhead1 as [rt Hrt].
+    assert (H1 : ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}}
+                   (repBits [true; true; true; false] k (f1 >> f0 >> f0 >> f0 >> encWR v' (f1 >> f0 >> f0 >> f0 >> f1 >> r)))) -[ tm ]->*
+                 ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] k (f0 >> f1 >> f0 >> f0 >> l))
+                   <{{E}} (encWR v' (f1 >> f0 >> f0 >> f0 >> f1 >> r)))).
+    { rewrite Hrt. destruct k as [|k']; [apply p4b_true | apply p4b_false_run]. }
+    pose proof (IH (List.length v') Hlen v' eq_refl (repBits [true; false; false; false] k (f0 >> f1 >> f0 >> f0 >> l)) r) as H2.
+    assert (HL : encWL (List.rev v') (f0 >> f1 >> f0 >> f0 >> repBits [true; false; false; false] k (f0 >> f1 >> f0 >> f0 >> l)) =
+                 encWL (List.rev (List.repeat false k ++ true :: v')) (f0 >> f1 >> f0 >> f0 >> l)).
+    { rewrite List.rev_app_distr; cbn [List.rev app]; rewrite rev_repeat, !encWL_append, encWL_rep_false; cbn [encWL].
+      reflexivity. }
+    rewrite HL in H2.
+    eapply evstep_trans; [exact H1 | exact H2].
+Qed.
+
+Lemma pass4_111_reaches (v : list bool) (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) <{{E}}
+    (f1 >> f1 >> f1 >> f0 >> encWR v (f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r))) -[ tm ]->*
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> encWL (List.rev v) (f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l))
+    <{{E}} (f1 >> f1 >> f1 >> r)).
+Proof.
+  destruct (splitLeading false v) as [k [rest [Hv1 Hrest]]].
+  destruct Hrest as [-> | [v' ->]].
+  - rewrite app_nil_r in Hv1. subst v.
+    rewrite encWR_rep_false, rev_repeat, encWL_rep_false.
+    pose proof (progress_evstep _ _ _ (stepE_10 (f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l)
+                         (f1 >> f1 >> f1 >> f0 >> repBits [true; true; true; false] k (f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)))) as H1.
+    pose proof (loop_sb_fwd (S k) (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l)
+                                  (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)) as H2.
+    change (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l)
+      with (decBits [false; true; false; false] (f0 >> f1 >> f0 >> f1 >> f0 >> l)) in H2.
+    rewrite <- repBits_succ_right in H2.
+    pose proof (pass4_bounce (S k) l (f1 >> f1 >> r)) as H3.
+    assert (HL3 : f1 >> f0 >> f0 >> repBits [true; false; false; false] (S (S k)) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l) =
+                  f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] k (f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)).
+    { change (repBits [true; false; false; false] (S (S k)) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l))
+        with (f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] (S k) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)).
+      rewrite (repBits_succ_right [true; false; false; false] k). reflexivity. }
+    rewrite HL3 in H3.
+    eapply evstep_trans; [exact H1 |].
+    eapply evstep_trans; [exact H2 | exact H3].
+  - cbn [negb] in Hv1. subst v.
+    rewrite encWR_append, encWR_rep_false; cbn [encWR].
+    assert (Hhead1 : exists rt : side, encWR v' (f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r) = f1 >> rt).
+    { destruct v' as [|[|] ?]; eexists; reflexivity. }
+    destruct Hhead1 as [rt Hrt].
+    pose proof (progress_evstep _ _ _ (stepE_10 (f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l)
+                         (f1 >> f1 >> f1 >> f0 >> repBits [true; true; true; false] k (f1 >> f0 >> f0 >> f0 >> encWR v' (f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r))))) as H1.
+    assert (H2 : ((f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) {{B}}>
+                   (f1 >> f1 >> f1 >> f0 >> repBits [true; true; true; false] k (f1 >> f0 >> f0 >> f0 >> encWR v' (f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> r)))) -[ tm ]->*
+                 (repBits [false; true; false; false] (S (S k)) (f0 >> f1 >> f0 >> f1 >> f0 >> l)
+                   {{B}}> (f1 >> f0 >> f0 >> f0 >> f1 >> rt))).
+    { rewrite Hrt.
+      pose proof (loop_sb_fwd (S k) (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) (f0 >> f0 >> f0 >> f1 >> rt)) as Hs.
+      change (f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l)
+        with (decBits [false; true; false; false] (f0 >> f1 >> f0 >> f1 >> f0 >> l)) in Hs.
+      rewrite <- repBits_succ_right in Hs. exact Hs. }
+    pose proof (pass4_bounce (S k) l rt) as H3.
+    assert (HL3 : f1 >> f0 >> f0 >> repBits [true; false; false; false] (S (S k)) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l) =
+                  f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] k (f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)).
+    { change (repBits [true; false; false; false] (S (S k)) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l))
+        with (f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] (S k) (f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)).
+      rewrite (repBits_succ_right [true; false; false; false] k). reflexivity. }
+    rewrite HL3 in H3.
+    pose proof (p4b_all v' (repBits [true; false; false; false] k (f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)) (f1 >> f1 >> r)) as H4.
+    rewrite Hrt in H4.
+    assert (HL4 : encWL (List.rev v') (f0 >> f1 >> f0 >> f0 >> repBits [true; false; false; false] k (f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)) =
+                  encWL (List.rev (List.repeat false k ++ true :: v')) (f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l)).
+    { rewrite List.rev_app_distr; cbn [List.rev app]; rewrite rev_repeat, !encWL_append, encWL_rep_false; cbn [encWL].
+      reflexivity. }
+    rewrite HL4 in H4.
+    eapply evstep_trans; [exact H1 |].
+    eapply evstep_trans; [exact H2 |].
+    eapply evstep_trans; [exact H3 | exact H4].
+Qed.
+
+(** ** 6. Periodic-66 ([P66]) Encodings, Peel/Scan Commutation, and 5 Macro Rules *)
+
+Definition plTopIs1 (n : nat) : bool :=
+  match n with
+  | 0 | 1 | 5 | 9 | 14 | 15 | 20 | 23 | 28 | 29 | 33 | 38 | 39 | 44 | 47 | 51 | 56 | 57 | 61 => true
+  | _ => false
+  end.
+
+Definition prTopIs1 (n : nat) : bool :=
+  match n with
+  | 0 | 4 | 8 | 12 | 14 | 18 | 22 | 24 | 28 | 32 | 36 | 38 | 39 | 40 | 42 | 46 | 50 | 52 | 56 | 60 | 62 | 63 | 64 => true
+  | _ => false
+  end.
+
+Definition prev66 (n : nat) : nat :=
+  match n with
+  | 0 => 65
+  | S k => k
+  end.
+
+Definition pL0List : list bool :=
+  [true; false; false; false; false; true; false; false; false; true; true;
+   false; false; false; false; true; false; false; false; true; false; false;
+   true; false; false; false; false; true; true; false; false; false; false;
+   true; false; false; false; true; true; false; false; false; false; true;
+   false; false; true; false; false; false; false; true; true; false; false;
+   false; false; true; false; false; false; true; false; false; false; true].
+
+Definition pR0List : list bool :=
+  [true; false; true; true; true; false; true; false; false; false; true;
+   false; false; false; true; false; true; false; false; false; true; false;
+   false; false; true; false; true; true; true; false; true; false; false;
+   false; true; false; false; false; true; false; false; false; true; false;
+   true; false; false; false; true; false; false; false; true; false; true;
+   false; false; false; true; false; false; false; true; false; false; false].
+
+Definition rotList (u : list bool) (k : nat) : list bool :=
+  skipn k u ++ firstn k u.
+
+Definition pLList (r : nat) : list bool := rotList pL0List ((66 - r mod 66) mod 66).
+Definition pRList (r : nat) : list bool := rotList pR0List ((66 - r mod 66) mod 66).
+
+Lemma prev66_lt (r : nat) : r < 66 -> prev66 r < 66.
+Proof. destruct r; cbn [prev66]; lia. Qed.
+
+Definition pLBits (r : nat) (lb : side) : side := decBits (pLList r) lb.
+Definition pRBits (r : nat) (lb : side) : side := decBits (pRList r) lb.
+
+Fixpoint repPL (r c : nat) (lb : side) : side :=
+  match c with
+  | 0 => lb
+  | S c' => pLBits r (repPL r c' lb)
+  end.
+
+Fixpoint repPR (r c : nat) (lb : side) : side :=
+  match c with
+  | 0 => lb
+  | S c' => pRBits r (repPR r c' lb)
+  end.
+
+Lemma repPL_add (r a b : nat) (lb : side) :
+  repPL r (a + b) lb = repPL r a (repPL r b lb).
+Proof.
+  induction a as [|a IH]; [reflexivity |].
+  cbn [Nat.add repPL]. rewrite IH. reflexivity.
+Qed.
+
+Lemma repPL_succ_right (r c : nat) (lb : side) :
+  repPL r c (pLBits r lb) = repPL r (S c) lb.
+Proof.
+  induction c as [|c IH]; [reflexivity | cbn [repPL]; rewrite IH; reflexivity].
+Qed.
+
+Lemma repPR_succ_right (r c : nat) (lb : side) :
+  repPR r c (pRBits r lb) = repPR r (S c) lb.
+Proof.
+  induction c as [|c IH]; [reflexivity | cbn [repPR]; rewrite IH; reflexivity].
+Qed.
+
+Fixpoint beqBoolList (a b : list bool) : bool :=
+  match a, b with
+  | [], [] => true
+  | x :: xs, y :: ys => Bool.eqb x y && beqBoolList xs ys
+  | _, _ => false
+  end.
+
+Lemma beqBoolList_eq (a b : list bool) : beqBoolList a b = true -> a = b.
+Proof.
+  revert b. induction a as [|x xs IH]; intros [|y ys] H; try discriminate H; [reflexivity |].
+  cbn [beqBoolList] in H. apply Bool.andb_true_iff in H as [Hxy Hrest].
+  apply Bool.eqb_prop in Hxy. subst y. f_equal. exact (IH ys Hrest).
+Qed.
+
+Fixpoint checkAllNat (f : nat -> bool) (n : nat) : bool :=
+  match n with
+  | 0 => true
+  | S k => f k && checkAllNat f k
+  end.
+
+Lemma checkAllNat_spec (f : nat -> bool) (n : nat) :
+  checkAllNat f n = true -> forall r, r < n -> f r = true.
+Proof.
+  induction n as [|n IH]; intros H r Hr; [lia |].
+  cbn [checkAllNat] in H. apply Bool.andb_true_iff in H as [Hn Hrest].
+  destruct (Nat.eq_dec r n) as [-> | Hne]; [exact Hn | apply IH; [exact Hrest | lia]].
+Qed.
+
+Lemma pLList_comm (r : nat) (Hr : r < 66) :
+  plTopIs1 r :: pLList (prev66 r) = pLList r ++ [plTopIs1 r].
+Proof.
+  apply beqBoolList_eq.
+  apply (checkAllNat_spec (fun k => beqBoolList (plTopIs1 k :: pLList (prev66 k)) (pLList k ++ [plTopIs1 k])) 66);
+    [vm_compute; reflexivity | exact Hr].
+Qed.
+
+Lemma pRList_comm (r : nat) (Hr : r < 66) :
+  prTopIs1 r :: pRList (prev66 r) = pRList r ++ [prTopIs1 r].
+Proof.
+  apply beqBoolList_eq.
+  apply (checkAllNat_spec (fun k => beqBoolList (prTopIs1 k :: pRList (prev66 k)) (pRList k ++ [prTopIs1 k])) 66);
+    [vm_compute; reflexivity | exact Hr].
+Qed.
+
+Lemma pLBits_comm (r : nat) (Hr : r < 66) (lb : side) :
+  finOfBool (plTopIs1 r) >> pLBits (prev66 r) lb = pLBits r (finOfBool (plTopIs1 r) >> lb).
+Proof.
+  unfold pLBits. rewrite <- decBits_cons, (pLList_comm r Hr), decBits_append, decBits_cons.
+  reflexivity.
+Qed.
+
+Lemma pRBits_comm (r : nat) (Hr : r < 66) (lb : side) :
+  finOfBool (prTopIs1 r) >> pRBits (prev66 r) lb = pRBits r (finOfBool (prTopIs1 r) >> lb).
+Proof.
+  unfold pRBits. rewrite <- decBits_cons, (pRList_comm r Hr), decBits_append, decBits_cons.
+  reflexivity.
+Qed.
+
+Lemma repPL_comm (r : nat) (Hr : r < 66) (c : nat) (lb : side) :
+  finOfBool (plTopIs1 r) >> repPL (prev66 r) c lb = repPL r c (finOfBool (plTopIs1 r) >> lb).
+Proof.
+  induction c as [|c IH]; [reflexivity |].
+  cbn [repPL]. rewrite (pLBits_comm r Hr), IH. reflexivity.
+Qed.
+
+Lemma repPR_comm (r : nat) (Hr : r < 66) (c : nat) (lb : side) :
+  finOfBool (prTopIs1 r) >> repPR (prev66 r) c lb = repPR r c (finOfBool (prTopIs1 r) >> lb).
+Proof.
+  induction c as [|c IH]; [reflexivity |].
+  cbn [repPR]. rewrite (pRBits_comm r Hr), IH. reflexivity.
+Qed.
+
+Lemma p66_L16 (l r : side) :
+  (pLBits 16 l <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> pRBits 64 r)).
+Proof.
+  change (f0 >> f0 >> f0 >> pRBits 64 r) with (decBits ([false; false; false] ++ pRList 64) r).
+  exact (@simN_eq l r 69 (Sim_mk true (pLList 16) [false; false; false])
+                         (Sim_mk true [] ([false; false; false] ++ pRList 64))
+                         ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p66_L9 (l r : side) :
+  (pLBits 9 l <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> pRBits 36 r)).
+Proof.
+  change (f0 >> f0 >> f0 >> pRBits 36 r) with (decBits ([false; false; false] ++ pRList 36) r).
+  exact (@simN_eq l r 77 (Sim_mk true (pLList 9) [false; false; false])
+                         (Sim_mk true [] ([false; false; false] ++ pRList 36))
+                         ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p66_L29 (l r : side) :
+  (pLBits 29 l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> pRBits 14 r)).
+Proof.
+  change (f0 >> f0 >> f0 >> f1 >> f1 >> pRBits 14 r)
+    with (decBits ([false; false; false; true; true] ++ pRList 14) r).
+  exact (@simN_eq l r 77 (Sim_mk true (pLList 29) [false; false; false; true; true])
+                         (Sim_mk true [] ([false; false; false; true; true] ++ pRList 14))
+                         ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p66_R63 (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> l) <{{E}} (f1 >> pRBits 63 r)) -[ tm ]->*
+    ((f1 >> f0 >> f0 >> f1 >> f0 >> pLBits 14 l) <{{E}} (f1 >> r)).
+Proof.
+  change (f1 >> f0 >> f0 >> f1 >> f0 >> pLBits 14 l)
+    with (decBits ([true; false; false; true; false] ++ pLList 14) l).
+  exact (@simN_eq l r 261 (Sim_mk true [true; false; false; true; false] (true :: pRList 63))
+                          (Sim_mk true ([true; false; false; true; false] ++ pLList 14) [true])
+                          ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p66_R4 (l r : side) :
+  ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) <{{E}} (f0 >> pRBits 4 r)) -[ tm ]->*
+    ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> pLBits 4 l) <{{E}} (f0 >> r)).
+Proof.
+  change (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> pLBits 4 l)
+    with (decBits ([false; true; false; false; true; false; true; false] ++ pLList 4) l).
+  exact (@simN_eq l r 261 (Sim_mk true [false; true; false; false; true; false; true; false] (false :: pRList 4))
+                          (Sim_mk true ([false; true; false; false; true; false; true; false] ++ pLList 4) [false])
+                          ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma p66_L16_rep (c : nat) (l r : side) :
+  (repPL 16 c l <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> repPR 64 c r)).
+Proof.
+  revert r. induction c as [|c IH]; intros r; [apply evstep_refl |].
+  cbn [repPL]. rewrite <- repPR_succ_right.
+  eapply evstep_trans; [apply p66_L16 | apply IH].
+Qed.
+
+Lemma p66_L9_rep (c : nat) (l r : side) :
+  (repPL 9 c l <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> repPR 36 c r)).
+Proof.
+  revert r. induction c as [|c IH]; intros r; [apply evstep_refl |].
+  cbn [repPL]. rewrite <- repPR_succ_right.
+  eapply evstep_trans; [apply p66_L9 | apply IH].
+Qed.
+
+Lemma p66_L29_rep (c : nat) (l r : side) :
+  (repPL 29 c l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> repPR 14 c r)).
+Proof.
+  revert r. induction c as [|c IH]; intros r; [apply evstep_refl |].
+  cbn [repPL]. rewrite <- repPR_succ_right.
+  eapply evstep_trans; [apply p66_L29 | apply IH].
+Qed.
+
+Lemma p66_R63_rep (c : nat) (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> l) <{{E}} (f1 >> repPR 63 c r)) -[ tm ]->*
+    ((f1 >> f0 >> f0 >> f1 >> f0 >> repPL 14 c l) <{{E}} (f1 >> r)).
+Proof.
+  revert l. induction c as [|c IH]; intros l; [apply evstep_refl |].
+  cbn [repPR]. rewrite <- repPL_succ_right.
+  eapply evstep_trans; [apply p66_R63 | apply IH].
+Qed.
+
+Lemma p66_R4_rep (c : nat) (l r : side) :
+  ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> l) <{{E}} (f0 >> repPR 4 c r)) -[ tm ]->*
+    ((f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> repPL 4 c l) <{{E}} (f0 >> r)).
+Proof.
+  revert l. induction c as [|c IH]; intros l; [apply evstep_refl |].
+  cbn [repPR]. rewrite <- repPL_succ_right.
+  eapply evstep_trans; [apply p66_R4 | apply IH].
+Qed.
+
+
+(** ** 6b. Extra Finite Macro Rules, RLE Loops, and [Sw]/[Bz] Bulk Transducers *)
+
+Lemma rsB_enter_B (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> r).
+Proof.
+  exact (@simN_eq l r 10
+    (Sim_mk false [] [true; true; true; true; false; true; false; true])
+    (Sim_mk false [false; false; true; false; true; false; false; false] [])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rsB_enter_E (l r : side) :
+  ((f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> r).
+Proof.
+  exact (@simN_eq l r 2
+    (Sim_mk true [true; false; false; true; false; false; false] [true])
+    (Sim_mk false [false; false; true; false; true; false; false; false] [])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rsB_1101 (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> l) {{B}}> r).
+Proof.
+  exact (@simN_eq l r 5
+    (Sim_mk false [] [true; true; false; true])
+    (Sim_mk false [false; false; true; false] [])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rsB_0_01 (l r : side) :
+  ((f0 >> l) {{B}}> (f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> l) {{B}}> r).
+Proof.
+  exact (@simN_eq l r 3
+    (Sim_mk false [false] [false; true])
+    (Sim_mk false [false; false; true] [])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rsB_0001_enter (l r : side) :
+  (l {{B}}> (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 2
+    (Sim_mk false [] [false; false; false; true])
+    (Sim_mk true [] [true; true; false; true])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma rsB_111101 (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> r).
+Proof.
+  exact (@simN_eq l r 7
+    (Sim_mk false [] [true; true; true; true; false; true])
+    (Sim_mk false [false; false; true; false; false; false] [])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_0010_11 (l r : side) :
+  ((f0 >> f0 >> f1 >> f0 >> l) <{{E}} (f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5
+    (Sim_mk true [false; false; true; false] [true; true])
+    (Sim_mk true [] [true; true; true; true; false; true])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_10_0001 (l r : side) :
+  ((f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 4
+    (Sim_mk true [true; false] [false; false; false; true])
+    (Sim_mk true [] [true; true; true; true; false; true])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_011000_000 (l r : side) :
+  ((f0 >> f1 >> f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 9
+    (Sim_mk true [false; true; true; false; false; false] [false; false; false])
+    (Sim_mk true [] [false; false; false; true; false; false; false; true; false])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_010100_000 (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f0 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 3
+    (Sim_mk true [false; true; false; true; false; false] [false; false; false])
+    (Sim_mk true [] [false; false; false; true; true; true; false; false; false])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_00_00011 (l r : side) :
+  ((f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> r)).
+Proof.
+  exact (@simN_eq l r 3
+    (Sim_mk true [false; false] [false; false; false; true; true])
+    (Sim_mk true [] [false; false; false; true; false; false; false])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_0101_0010 (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> l) <{{E}} r) -[ tm ]->*
+    ((f0 >> f1 >> f0 >> f1 >> l) <{{E}} (f0 >> f1 >> f1 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 5
+    (Sim_mk true [false; true; false; true; false; false; true; false] [])
+    (Sim_mk true [false; true; false; true] [false; true; true; true])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma lsE_0_1100_step (l r : side) :
+  ((f0 >> f1 >> f1 >> f0 >> f0 >> l) <{{E}} (f1 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> l) <{{E}} (f1 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  exact (@simN_eq l r 18
+    (Sim_mk true [false; true; true; false; false] [true; true; false; false; false; true; false; false; false; true])
+    (Sim_mk true [false] [true; true; false; false; false; true; false; false; false; true; true; true; false; true])
+    ltac:(vm_compute; reflexivity)).
+Qed.
+
+Lemma shift_lsE_0001 (m : nat) (r : side) :
+  repBits [false; false; false; true] (S m) (f1 >> f1 >> r) =
+    f0 >> repBits [false; false; true; false] m (f0 >> f0 >> f1 >> f1 >> f1 >> r).
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_lsE_1001 (m : nat) (l : side) :
+  f1 >> repBits [true; false; false; true] m (f1 >> f0 >> f0 >> f1 >> f0 >> l) =
+    repBits [true; true; false; false] (S m) (f1 >> f0 >> l).
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_lsE_0001_tail (m : nat) (r : side) :
+  repBits [false; false; false; true] (S m) (f0 >> f0 >> f0 >> f1 >> r) =
+    f0 >> f0 >> f0 >> f1 >> repBits [false; false; false; true] (S m) r.
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma lsE_0010_k (k : nat) (l r : side) :
+  ((f0 >> f0 >> f1 >> f0 >> l) <{{E}} repBits [false; false; false; true] k (f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> repBits [false; false; false; true] k r)).
+Proof.
+  destruct k as [|m].
+  - exact (lsE_0010_11 l r).
+  - rewrite shift_lsE_0001.
+    eapply evstep_trans; [apply progress_evstep; apply stepE_00_0 |].
+    eapply evstep_trans; [apply (loop_br3 m (f1 >> f0 >> f0 >> f1 >> f0 >> l) (f0 >> f0 >> f1 >> f1 >> f1 >> r)) |].
+    pose proof (progress_evstep _ _ _ (stepB_0011 (repBits [true; false; false; true] m (f1 >> f0 >> f0 >> f1 >> f0 >> l)) (f1 >> r))) as H3.
+    rewrite shift_lsE_1001 in H3.
+    eapply evstep_trans; [exact H3 |].
+    pose proof (loop_br1 (S m) (f1 >> f0 >> l) (f0 >> f0 >> f0 >> f1 >> r)) as H4.
+    rewrite shift_lsE_0001_tail in H4.
+    eapply evstep_trans; [exact H4 |].
+    exact (lsE_10_0001 l (repBits [false; false; false; true] (S m) r)).
+Qed.
+
+Lemma loop_lsE_0010_11 (k : nat) (l r : side) :
+  (repBits [false; false; true; false] k l <{{E}} (f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f1 >> f1 >> repBits [true; true; false; true] k r)).
+Proof.
+  revert r. induction k as [|k IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [true; true; false; true]).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply lsE_0010_11 | apply (IH (f1 >> f1 >> f0 >> f1 >> r))].
+Qed.
+
+Lemma loop_rsB_1101 (k : nat) (l r : side) :
+  (l {{B}}> repBits [true; true; false; true] k r) -[ tm ]->*
+    (repBits [false; false; true; false] k l {{B}}> r).
+Proof.
+  revert l. induction k as [|k IH]; intros l; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; false; true; false]).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply rsB_1101 | apply IH].
+Qed.
+
+Lemma shift_rsB_0010 (k : nat) (l : side) :
+  repBits [false; false; true; false] k (f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) =
+    f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] k l.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma rsB_0001_k (k : nat) (l r : side) :
+  ((f0 >> f0 >> f1 >> f0 >> repBits [false; false; true; false] k (f1 >> f0 >> l)) {{B}}> (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] k (f0 >> f1 >> l)) {{B}}> r).
+Proof.
+  eapply evstep_trans; [apply rsB_0001_enter |].
+  eapply evstep_trans; [apply (loop_lsE_0010_11 (S k) (f1 >> f0 >> l) (f0 >> f1 >> r)) |].
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply progress_evstep; apply stepE_10 |].
+  eapply evstep_trans; [apply rsB_111101 |].
+  pose proof (loop_rsB_1101 k (f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> l) (f0 >> f1 >> r)) as H6.
+  rewrite shift_rsB_0010 in H6.
+  eapply evstep_trans; [exact H6 |].
+  apply rsB_0_01.
+Qed.
+
+Lemma rsB_11_rR1101 (m : nat) (l r : side) :
+  (l {{B}}> (f1 >> f1 >> repBits [true; true; false; true] (S m) r)) -[ tm ]->*
+    (repBits [false; false; true; false] (S m) (f0 >> f0 >> l) {{B}}> r).
+Proof.
+  rewrite (repBits_succ_right [false; false; true; false] m).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply rsB_111101 |].
+  exact (loop_rsB_1101 m (f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) r).
+Qed.
+
+Lemma lsE_0010_mk (m k : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) l <{{E}} repBits [false; false; false; true] k (f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f1 >> f1 >> repBits [true; true; false; true] (S m) (repBits [false; false; false; true] k r))).
+Proof.
+  rewrite (repBits_succ_right [true; true; false; true] m).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply (lsE_0010_k k (repBits [false; false; true; false] m l) r) |].
+  exact (loop_lsE_0010_11 m l (f1 >> f1 >> f0 >> f1 >> repBits [false; false; false; true] k r)).
+Qed.
+
+Lemma rsB_0001_kn_go (n : nat) (l r : side) :
+  ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> l) {{B}}> repBits [false; false; false; true] n r) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [false; true; false; false] n l) {{B}}> r).
+Proof.
+  revert l. induction n as [|n IH]; intros l; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; true; false; false] n).
+  cbn [repBits decBits].
+  pose proof (rsB_0001_k 0 (f0 >> f0 >> l) (repBits [false; false; false; true] n r)) as H1.
+  cbn [repBits decBits] in H1.
+  eapply evstep_trans; [exact H1 | apply (IH (f0 >> f1 >> f0 >> f0 >> l))].
+Qed.
+
+Lemma rsB_0001_kn (k n : nat) (l r : side) :
+  (repBits [false; false; true; false] (S k) (f1 >> f0 >> l) {{B}}> repBits [false; false; false; true] (S n) r) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> repBits [false; true; false; false] n (repBits [true; false; false; false] k (f0 >> f1 >> l))) {{B}}> r).
+Proof.
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply (rsB_0001_k k l (repBits [false; false; false; true] n r)) |].
+  exact (rsB_0001_kn_go n (repBits [true; false; false; false] k (f0 >> f1 >> l)) r).
+Qed.
+
+Lemma shift_001_0001 (n : nat) (r : side) :
+  f0 >> f0 >> f1 >> repBits [false; false; false; true] n r =
+    repBits [false; false; true; false] n (f0 >> f0 >> f1 >> r).
+Proof.
+  induction n as [|n IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma rsB_001_rR0001 (n : nat) (l r : side) :
+  (l {{B}}> (f0 >> f0 >> f1 >> repBits [false; false; false; true] n r)) -[ tm ]->*
+    (repBits [true; false; false; true] n l {{B}}> (f0 >> f0 >> f1 >> r)).
+Proof.
+  rewrite shift_001_0001. exact (loop_br3 n l (f0 >> f0 >> f1 >> r)).
+Qed.
+
+Lemma shift_1001_100 (m : nat) (l : side) :
+  repBits [true; false; false; true] m (f1 >> f0 >> f0 >> l) =
+    f1 >> f0 >> f0 >> repBits [true; true; false; false] m l.
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_1001_any (m : nat) (l : side) :
+  repBits [true; false; false; true] (S m) l =
+    f1 >> f0 >> f0 >> repBits [true; true; false; false] m (f1 >> l).
+Proof.
+  cbn [repBits decBits]. rewrite <- shift_1001_100.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_1000k_01 (k : nat) (l : side) :
+  repBits [true; false; false; false] (S k) (f0 >> f1 >> l) =
+    f1 >> f0 >> repBits [false; false; true; false] k (f0 >> f0 >> f0 >> f1 >> l).
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma lsE_0101_rL0010 (n : nat) (l r : side) :
+  ((f0 >> f1 >> f0 >> f1 >> repBits [false; false; true; false] n l) <{{E}} r) -[ tm ]->*
+    ((f0 >> f1 >> f0 >> f1 >> l) <{{E}} repBits [false; true; true; true] n r).
+Proof.
+  revert r. induction n as [|n IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; true; true; true] n).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply lsE_0101_0010 | apply (IH (f0 >> f1 >> f1 >> f1 >> r))].
+Qed.
+
+Lemma shift_0111_01 (n : nat) (r : side) :
+  repBits [false; true; true; true] n (f0 >> f1 >> r) =
+    f0 >> f1 >> repBits [true; true; false; true] n r.
+Proof.
+  induction n as [|n IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_0111_any (n : nat) (r : side) :
+  repBits [false; true; true; true] (S n) r =
+    f0 >> f1 >> repBits [true; true; false; true] n (f1 >> f1 >> r).
+Proof.
+  induction n as [|n IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_010_0010 (n : nat) (l : side) :
+  f0 >> f1 >> f0 >> repBits [false; false; true; false] n l =
+    repBits [false; true; false; false] n (f0 >> f1 >> f0 >> l).
+Proof.
+  induction n as [|n IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma lsE_010_rL0010 (n : nat) (l r : side) :
+  ((f0 >> f1 >> f0 >> repBits [false; false; true; false] n l) <{{E}} r) -[ tm ]->*
+    ((f0 >> f1 >> f0 >> l) <{{E}} repBits [false; false; false; true] n r).
+Proof.
+  rewrite shift_010_0010. exact (loop_br2 n (f0 >> f1 >> f0 >> l) r).
+Qed.
+
+Lemma shift_0_0100 (n : nat) (l : side) :
+  f0 >> repBits [false; true; false; false] n l =
+    repBits [false; false; true; false] n (f0 >> l).
+Proof.
+  induction n as [|n IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma lsE_0_rL0100_mk (n k : nat) (l r : side) :
+  ((f0 >> repBits [false; true; false; false] (S n) l) <{{E}} repBits [false; false; false; true] k (f1 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> l) <{{E}} (f1 >> f1 >> repBits [true; true; false; true] (S n) (repBits [false; false; false; true] k r))).
+Proof.
+  rewrite shift_0_0100. exact (lsE_0010_mk n k (f0 >> l) r).
+Qed.
+
+Lemma loop_lpa_0 (m : nat) (l r : side) :
+  (repBits [true; false; false; false] m l <{{E}} (f0 >> f0 >> f0 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> repBits [true; true; true; false] m r)).
+Proof.
+  revert r. induction m as [|m IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [true; true; true; false] m).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply lpa_0 | apply (IH (f1 >> f1 >> f1 >> f0 >> r))].
+Qed.
+
+Lemma shift_10_0010 (m : nat) (l : side) :
+  f1 >> f0 >> repBits [false; false; true; false] m l =
+    repBits [true; false; false; false] m (f1 >> f0 >> l).
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma shift_1110_1 (m : nat) (r : side) :
+  repBits [true; true; true; false] m (f1 >> r) =
+    f1 >> repBits [true; true; false; true] m r.
+Proof.
+  induction m as [|m IH]; [reflexivity | cbn [repBits decBits] in *; rewrite IH; reflexivity].
+Qed.
+
+Lemma lsE_10_rL0010_0001 (m : nat) (l r : side) :
+  ((f1 >> f0 >> repBits [false; false; true; false] m l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f1 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> repBits [true; true; false; true] m r)).
+Proof.
+  rewrite shift_10_0010.
+  pose proof (loop_lpa_0 m (f1 >> f0 >> l) (f1 >> r)) as H.
+  rewrite shift_1110_1 in H. exact H.
+Qed.
+
+Lemma lsE_1000_0001 (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> f1 >> f1 >> f0 >> f1 >> r)).
+Proof. exact (lpa_0 l (f1 >> r)). Qed.
+
+Lemma lsE_0_rL1100 (n : nat) (l r : side) :
+  ((f0 >> repBits [true; true; false; false] n l) <{{E}} (f1 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> l) <{{E}} (f1 >> f1 >> f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> repBits [true; true; false; true] n r)).
+Proof.
+  revert r. induction n as [|n IH]; intros r; [apply evstep_refl |].
+  rewrite (repBits_succ_right [true; true; false; true] n).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply lsE_0_1100_step | apply (IH (f1 >> f1 >> f0 >> f1 >> r))].
+Qed.
+
+Lemma loop_br4_r (m : nat) (l r : side) :
+  ((f1 >> f0 >> f0 >> f0 >> l) <{{E}} (f1 >> repBits [true; true; false; true] m r)) -[ tm ]->*
+    ((f1 >> f0 >> f0 >> f0 >> repBits [false; true; false; false] m l) <{{E}} (f1 >> r)).
+Proof.
+  revert l. induction m as [|m IH]; intros l; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; true; false; false] m).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply br4_step | apply (IH (f0 >> f1 >> f0 >> f0 >> l))].
+Qed.
+
+Lemma loop_br5_r (n : nat) (l r : side) :
+  (l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> repBits [false; false; false; true] n r)) -[ tm ]->*
+    (repBits [false; true; false; false] n l {{B}}> (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> r)).
+Proof.
+  revert l. induction n as [|n IH]; intros l; [apply evstep_refl |].
+  rewrite (repBits_succ_right [false; true; false; false] n).
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply br5_step | apply (IH (f0 >> f1 >> f0 >> f0 >> l))].
+Qed.
+
+Lemma flipW_rev (w : list bool) : flipW (rev w) = rev (flipW w).
+Proof.
+  induction w as [|x xs IH]; [reflexivity |].
+  cbn [rev flipW]. rewrite flipW_append, IH. reflexivity.
+Qed.
+
+Lemma encWL_rep_true (k : nat) (lb : side) :
+  encWL (repeat true k) lb = repBits [false; true; false; false] k lb.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repeat encWL repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Definition xorB (a b : bool) : bool := if a then negb b else b.
+
+Definition flipBits (inv : bool) (u : list bool) : list bool :=
+  if inv then flipW u else u.
+
+Definition decSW (inv : bool) (f b : list bool) : list bool :=
+  flipBits inv (f ++ rev b).
+
+Lemma flipBits_append (inv : bool) (a b : list bool) :
+  flipBits inv (a ++ b) = flipBits inv a ++ flipBits inv b.
+Proof. destruct inv; [exact (flipW_append a b) | reflexivity]. Qed.
+
+Lemma flipBits_rev (inv : bool) (u : list bool) :
+  flipBits inv (rev u) = rev (flipBits inv u).
+Proof. destruct inv; [exact (flipW_rev u) | reflexivity]. Qed.
+
+Lemma flipBits_cons (inv x : bool) (xs : list bool) :
+  flipBits inv (x :: xs) = xorB inv x :: flipBits inv xs.
+Proof. destruct inv; reflexivity. Qed.
+
+Lemma flipBits_not (inv : bool) (u : list bool) :
+  flipBits (negb inv) u = flipW (flipBits inv u).
+Proof. destruct inv; cbn [negb flipBits]; [ symmetry; exact (flipW_involutive u) | reflexivity ]. Qed.
+
+Lemma xorB_self (inv x : bool) : xorB inv (xorB inv x) = x.
+Proof. destruct inv, x; reflexivity. Qed.
+
+Lemma decSW_swap (inv : bool) (f b : list bool) :
+  decSW inv b f = rev (decSW inv f b).
+Proof.
+  unfold decSW. rewrite <- flipBits_rev, rev_app_distr, rev_involutive. reflexivity.
+Qed.
+
+Lemma decSW_swap_not (inv : bool) (f b : list bool) :
+  decSW (negb inv) b f = flipW (rev (decSW inv f b)).
+Proof.
+  rewrite <- decSW_swap. unfold decSW. exact (flipBits_not inv (b ++ rev f)).
+Qed.
+
+Lemma decSW_cons (inv x : bool) (f b : list bool) :
+  decSW inv (xorB inv x :: f) b = x :: decSW inv f b.
+Proof.
+  unfold decSW. cbn [app]. rewrite flipBits_cons, xorB_self. reflexivity.
+Qed.
+
+Fixpoint consRepBool (x : bool) (n : nat) (xs : list bool) : list bool :=
+  match n with
+  | 0 => xs
+  | S n' => consRepBool x n' (x :: xs)
+  end.
+
+Lemma consRepBool_eq (x : bool) (n : nat) (xs : list bool) :
+  consRepBool x n xs = repeat x n ++ xs.
+Proof.
+  revert xs. induction n as [|n IH]; intros xs; [reflexivity |].
+  cbn [consRepBool]. rewrite (IH (x :: xs)), <- cons_repeat_append. reflexivity.
+Qed.
+
+Lemma flipBits_repeat (inv x : bool) (n : nat) :
+  flipBits inv (repeat x n) = repeat (xorB inv x) n.
+Proof. destruct inv; cbn [flipBits xorB]; [exact (flipW_repeat n x) | reflexivity]. Qed.
+
+Lemma decSW_consRepBool (inv x : bool) (n : nat) (f b : list bool) :
+  decSW inv (consRepBool (xorB inv x) n f) b = repeat x n ++ decSW inv f b.
+Proof.
+  unfold decSW. rewrite consRepBool_eq, <- app_assoc, flipBits_append, flipBits_repeat, xorB_self.
+  reflexivity.
+Qed.
+
+Lemma lsE_00_0001k_11 (k : nat) (l r : side) :
+  ((f0 >> f0 >> l) <{{E}} repBits [false; false; false; true] k (f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> repBits [false; false; false; true] k r)).
+Proof.
+  destruct k as [|m].
+  - apply progress_evstep. exact (stepE_00_1 l (f1 >> r)).
+  - rewrite shift_lsE_0001.
+    eapply evstep_trans; [apply progress_evstep; apply stepE_00_0 |].
+    eapply evstep_trans; [apply (loop_br3 m (f1 >> f0 >> f0 >> l) (f0 >> f0 >> f1 >> f1 >> f1 >> r)) |].
+    pose proof (progress_evstep _ _ _ (stepB_0011 (repBits [true; false; false; true] m (f1 >> f0 >> f0 >> l)) (f1 >> r))) as H3.
+    rewrite shift_lb_p0_2 in H3.
+    eapply evstep_trans; [exact H3 |].
+    pose proof (loop_br1 (S m) l (f0 >> f0 >> f0 >> f1 >> r)) as H4.
+    rewrite shift_lsE_0001_tail in H4.
+    exact H4.
+Qed.
+
+Lemma swL_left_E (u : list bool) (l r : side) :
+  (encWL u l <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> encWR_q1 (rev u) r)).
+Proof.
+  revert r. induction u as [|b ws IH]; intros r; [apply evstep_refl |].
+  destruct b; cbn [encWL rev]; rewrite encWR_q1_append; cbn [encWR_q1].
+  - eapply evstep_trans; [apply br2_step | apply (IH (f0 >> f0 >> f0 >> f1 >> r))].
+  - eapply evstep_trans; [apply lsE_1000_0001 | apply (IH (f1 >> f1 >> f0 >> f1 >> r))].
+Qed.
+
+Lemma swL_0_0_left_E (u : list bool) (k : nat) (l r : side) :
+  ((f0 >> encWL u (f0 >> l)) <{{E}} repBits [false; false; false; true] k (f1 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> encWR_q1 (flipW (rev u)) (repBits [false; false; false; true] k r))).
+Proof.
+  revert k r. induction u as [|b ws IH]; intros k r; [exact (lsE_00_0001k_11 k l r) |].
+  destruct b; cbn [encWL rev]; rewrite flipW_append; cbn [flipW negb]; rewrite encWR_q1_append; cbn [encWR_q1].
+  - eapply evstep_trans; [apply lsE_0010_k | apply (IH 0 (f1 >> f1 >> f0 >> f1 >> repBits [false; false; false; true] k r))].
+  - pose proof (IH (S k) r) as H2. cbn [repBits decBits] in H2.
+    eapply evstep_trans; [apply br2_step | exact H2].
+Qed.
+
+Lemma swR_right_B (v : list bool) (m : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) (f1 >> f0 >> l) {{B}}> encWR_q1 v (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> encWL (rev v) (repBits [true; false; false; false] m (f0 >> f1 >> l))) {{B}}> r).
+Proof.
+  revert m l. induction v as [|b ws IH]; intros m l; [exact (rsB_0001_k m l r) |].
+  destruct b; cbn [encWR_q1 rev]; rewrite encWL_append; cbn [encWL].
+  - pose proof (IH 0 (f0 >> f0 >> repBits [true; false; false; false] m (f0 >> f1 >> l))) as H2.
+    cbn [repBits decBits] in H2.
+    eapply evstep_trans; [apply rsB_0001_k | exact H2].
+  - pose proof (IH (S m) l) as H2. cbn [repBits decBits] in H2.
+    eapply evstep_trans; [apply rsB_1101 | exact H2].
+Qed.
+
+Lemma swR_right_B_p (v : list bool) (m p : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) (f1 >> f0 >> l) {{B}}>
+    encWR_q1 v (repBits [true; true; false; true] p (f0 >> f0 >> f0 >> f1 >> r))) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >>
+      encWL (repeat false p) (encWL (rev v) (encWL (repeat false m) (f0 >> f1 >> l)))) {{B}}> r).
+Proof.
+  pose proof (swR_right_B (v ++ repeat false p) m l r) as H.
+  rewrite encWR_q1_append, encWR_q1_rep_false, rev_app_distr, rev_repeat, encWL_append, <- encWL_rep_false in H.
+  exact H.
+Qed.
+
+Inductive SwSym : Type :=
+  | SwSym_w0 : SwSym
+  | SwSym_w1 : SwSym
+  | SwSym_d  : SwSym.
+
+Definition symOfBool (b : bool) : SwSym :=
+  if b then SwSym_w1 else SwSym_w0.
+
+Fixpoint encWL3 (u : list SwSym) (lb : side) : side :=
+  match u with
+  | [] => lb
+  | SwSym_w0 :: ws => f1 >> f0 >> f0 >> f0 >> encWL3 ws lb
+  | SwSym_w1 :: ws => f0 >> f1 >> f0 >> f0 >> encWL3 ws lb
+  | SwSym_d  :: ws => f0 >> f1 >> f1 >> f0 >> f0 >> f0 >> encWL3 ws lb
+  end.
+
+Fixpoint encWR3 (u : list SwSym) (lb : side) : side :=
+  match u with
+  | [] => lb
+  | SwSym_w0 :: ws => f1 >> f1 >> f0 >> f1 >> encWR3 ws lb
+  | SwSym_w1 :: ws => f0 >> f0 >> f0 >> f1 >> encWR3 ws lb
+  | SwSym_d  :: ws => f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> encWR3 ws lb
+  end.
+
+Lemma encWL3_append (a b : list SwSym) (lb : side) :
+  encWL3 (a ++ b) lb = encWL3 a (encWL3 b lb).
+Proof.
+  induction a as [|x xs IH]; [reflexivity | destruct x; cbn [app encWL3]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWR3_append (a b : list SwSym) (lb : side) :
+  encWR3 (a ++ b) lb = encWR3 a (encWR3 b lb).
+Proof.
+  induction a as [|x xs IH]; [reflexivity | destruct x; cbn [app encWR3]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWL3_map_symOfBool (u : list bool) (lb : side) :
+  encWL3 (map symOfBool u) lb = encWL u lb.
+Proof.
+  induction u as [|b ws IH]; [reflexivity | destruct b; cbn [map symOfBool encWL3 encWL]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWR3_map_symOfBool (u : list bool) (lb : side) :
+  encWR3 (map symOfBool u) lb = encWR_q1 u lb.
+Proof.
+  induction u as [|b ws IH]; [reflexivity | destruct b; cbn [map symOfBool encWR3 encWR_q1]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWR_q1_rep_true (k : nat) (lb : side) :
+  encWR_q1 (repeat true k) lb = repBits [false; false; false; true] k lb.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repeat encWR_q1 repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWL3_rep_w0 (k : nat) (lb : side) :
+  encWL3 (repeat SwSym_w0 k) lb = repBits [true; false; false; false] k lb.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repeat encWL3 repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWL3_rep_w1 (k : nat) (lb : side) :
+  encWL3 (repeat SwSym_w1 k) lb = repBits [false; true; false; false] k lb.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repeat encWL3 repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWR3_rep_w0 (k : nat) (lb : side) :
+  encWR3 (repeat SwSym_w0 k) lb = repBits [true; true; false; true] k lb.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repeat encWR3 repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma encWR3_rep_w1 (k : nat) (lb : side) :
+  encWR3 (repeat SwSym_w1 k) lb = repBits [false; false; false; true] k lb.
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repeat encWR3 repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Definition decBZ (f b : list SwSym) : list SwSym :=
+  f ++ rev b.
+
+Lemma decBZ_swap (f b : list SwSym) :
+  decBZ b f = rev (decBZ f b).
+Proof.
+  unfold decBZ. rewrite rev_app_distr, rev_involutive. reflexivity.
+Qed.
+
+Lemma decBZ_cons (x : SwSym) (f b : list SwSym) :
+  decBZ (x :: f) b = x :: decBZ f b.
+Proof. reflexivity. Qed.
+
+Fixpoint consRepSym (x : SwSym) (n : nat) (xs : list SwSym) : list SwSym :=
+  match n with
+  | 0 => xs
+  | S n' => consRepSym x n' (x :: xs)
+  end.
+
+Lemma consRepSym_eq (x : SwSym) (n : nat) (xs : list SwSym) :
+  consRepSym x n xs = repeat x n ++ xs.
+Proof.
+  revert xs. induction n as [|n IH]; intros xs; [reflexivity |].
+  cbn [consRepSym]. rewrite (IH (x :: xs)), <- cons_repeat_append. reflexivity.
+Qed.
+
+Lemma decBZ_consRepSym (x : SwSym) (n : nat) (f b : list SwSym) :
+  decBZ (consRepSym x n f) b = repeat x n ++ decBZ f b.
+Proof.
+  unfold decBZ. rewrite consRepSym_eq, <- app_assoc. reflexivity.
+Qed.
+
+Fixpoint mapFlipSymRev (xs : list bool) (acc : list SwSym) : list SwSym :=
+  match xs with
+  | [] => acc
+  | false :: rest => mapFlipSymRev rest (SwSym_w1 :: acc)
+  | true  :: rest => mapFlipSymRev rest (SwSym_w0 :: acc)
+  end.
+
+Definition mapFlipSym (bs : list bool) (tl : list SwSym) : list SwSym :=
+  mapFlipSymRev (List.rev_append bs []) tl.
+
+Lemma mapFlipSymRev_eq (xs : list bool) (acc : list SwSym) :
+  mapFlipSymRev xs acc = map symOfBool (flipW (rev xs)) ++ acc.
+Proof.
+  revert acc. induction xs as [|b rest IH]; intros acc; [reflexivity |].
+  destruct b; cbn [mapFlipSymRev rev]; rewrite flipW_append, map_app, <- app_assoc; cbn [flipW map symOfBool app];
+    exact (IH _).
+Qed.
+
+Lemma mapFlipSym_eq (bs : list bool) (tl : list SwSym) :
+  mapFlipSym bs tl = map symOfBool (flipW bs) ++ tl.
+Proof.
+  unfold mapFlipSym. rewrite <- rev_alt, mapFlipSymRev_eq, rev_involutive. reflexivity.
+Qed.
+
+Lemma bzL_left_E (u : list SwSym) (l r : side) :
+  (encWL3 u l <{{E}} (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    (l <{{E}} (f0 >> f0 >> f0 >> f1 >> encWR3 (rev u) r)).
+Proof.
+  revert r. induction u as [|s ws IH]; intros r; [apply evstep_refl |].
+  destruct s; cbn [encWL3 rev]; rewrite encWR3_append; cbn [encWR3].
+  - eapply evstep_trans; [apply lsE_1000_0001 | apply (IH (f1 >> f1 >> f0 >> f1 >> r))].
+  - eapply evstep_trans; [apply br2_step | apply (IH (f0 >> f0 >> f0 >> f1 >> r))].
+  - eapply evstep_trans; [apply (lsE_011000_000 (encWL3 ws l) (f1 >> r)) | apply (IH (f0 >> f0 >> f0 >> f1 >> f0 >> f1 >> r))].
+Qed.
+
+Lemma bzR_right_B (v : list SwSym) (m : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) (f1 >> f0 >> l) {{B}}> encWR3 v (f0 >> f0 >> f0 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> f0 >> f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> encWL3 (rev v) (repBits [true; false; false; false] m (f0 >> f1 >> l))) {{B}}> r).
+Proof.
+  revert m l. induction v as [|s ws IH]; intros m l; [exact (rsB_0001_k m l r) |].
+  destruct s; cbn [encWR3 rev]; rewrite encWL3_append; cbn [encWL3].
+  - pose proof (IH (S m) l) as H2. cbn [repBits decBits] in H2.
+    eapply evstep_trans; [apply rsB_1101 | exact H2].
+  - pose proof (IH 0 (f0 >> f0 >> repBits [true; false; false; false] m (f0 >> f1 >> l))) as H2.
+    cbn [repBits decBits] in H2.
+    eapply evstep_trans; [apply rsB_0001_k | exact H2].
+  - pose proof (IH 0 (f1 >> f0 >> f0 >> f0 >> repBits [true; false; false; false] m (f0 >> f1 >> l))) as H3.
+    cbn [repBits decBits] in H3.
+    eapply evstep_trans; [apply (rsB_0001_k m l (f0 >> f1 >> encWR3 ws (f0 >> f0 >> f0 >> f1 >> r))) |].
+    eapply evstep_trans; [apply rsB_0_01 | exact H3].
+Qed.
+
+Lemma swR_right_B_endW1 (u : list bool) (m p : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) (f1 >> f0 >> l) {{B}}>
+    encWR_q1 (u ++ true :: repeat false p) r) -[ tm ]->*
+    (repBits [false; false; true; false] (S p)
+      (f1 >> f0 >> f0 >> f0 >> encWL (rev u) (repBits [true; false; false; false] m (f0 >> f1 >> l))) {{B}}> r).
+Proof.
+  rewrite encWR_q1_append. cbn [encWR_q1]. rewrite encWR_q1_rep_false.
+  rewrite (repBits_succ_right [false; false; true; false] p). cbn [repBits decBits].
+  eapply evstep_trans; [apply (swR_right_B u m l (repBits [true; true; false; true] p r)) |].
+  apply loop_rsB_1101.
+Qed.
+
+Lemma bzR_right_B_endW1 (u : list SwSym) (m p : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) (f1 >> f0 >> l) {{B}}>
+    encWR3 (u ++ SwSym_w1 :: repeat SwSym_w0 p) r) -[ tm ]->*
+    (repBits [false; false; true; false] (S p)
+      (f1 >> f0 >> f0 >> f0 >> encWL3 (rev u) (repBits [true; false; false; false] m (f0 >> f1 >> l))) {{B}}> r).
+Proof.
+  rewrite encWR3_append. cbn [encWR3]. rewrite encWR3_rep_w0.
+  rewrite (repBits_succ_right [false; false; true; false] p). cbn [repBits decBits].
+  eapply evstep_trans; [apply (bzR_right_B u m l (repBits [true; true; false; true] p r)) |].
+  apply loop_rsB_1101.
+Qed.
+
+Lemma bzR_right_B_endD (u : list SwSym) (m p : nat) (l r : side) :
+  (repBits [false; false; true; false] (S m) (f1 >> f0 >> l) {{B}}>
+    encWR3 (u ++ SwSym_d :: repeat SwSym_w0 p) r) -[ tm ]->*
+    (repBits [false; false; true; false] (S p)
+      (f1 >> f0 >> f1 >> f0 >> f0 >> f0 >> encWL3 (rev u) (repBits [true; false; false; false] m (f0 >> f1 >> l))) {{B}}> r).
+Proof.
+  rewrite encWR3_append. cbn [encWR3]. rewrite encWR3_rep_w0.
+  rewrite (repBits_succ_right [false; false; true; false] p). cbn [repBits decBits].
+  eapply evstep_trans; [apply (bzR_right_B u m l (f0 >> f1 >> repBits [true; true; false; true] p r)) |].
+  eapply evstep_trans; [apply rsB_0_01 |].
+  apply loop_rsB_1101.
+Qed.
+
+Lemma bzL_0_split_d_left_E (u : list bool) (k : nat) (l r : side) :
+  ((f0 >> encWL3 (map symOfBool u ++ [SwSym_d]) l) <{{E}} repBits [false; false; false; true] k (f1 >> f1 >> r)) -[ tm ]->*
+    ((f0 >> l) <{{E}} (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> encWR_q1 (flipW (rev u)) (repBits [false; false; false; true] k r))).
+Proof.
+  rewrite encWL3_append, encWL3_map_symOfBool. cbn [encWL3].
+  eapply evstep_trans; [apply (swL_0_0_left_E u k (f1 >> f1 >> f0 >> f0 >> f0 >> l) r) |].
+  apply br1_step.
+Qed.
+
+Lemma shift_0_1000 (k : nat) (l : side) :
+  f0 >> repBits [true; false; false; false] k l =
+    repBits [false; true; false; false] k (f0 >> l).
+Proof.
+  induction k as [|k IH]; [reflexivity | cbn [repBits decBits]; rewrite IH; reflexivity].
+Qed.
+
+Lemma lsE_0_rep1000 (k : nat) (l r : side) :
+  ((f0 >> repBits [true; false; false; false] k l) <{{E}} r) -[ tm ]->*
+    ((f0 >> l) <{{E}} repBits [false; false; false; true] k r).
+Proof.
+  rewrite shift_0_1000. exact (loop_br2 k (f0 >> l) r).
+Qed.
+
+Lemma lsE_00_rR0001_enter (m : nat) (l r : side) :
+  ((f0 >> f0 >> l) <{{E}} repBits [false; false; false; true] (S (S m)) r) -[ tm ]->*
+    (repBits [true; false; false; true] (S m) (f1 >> f0 >> f0 >> l) {{B}}> (f0 >> f0 >> f1 >> r)).
+Proof.
+  cbn [repBits decBits].
+  eapply evstep_trans; [apply progress_evstep; apply stepE_00_0 |].
+  pose proof (rsB_001_rR0001 (S m) (f1 >> f0 >> f0 >> l) r) as H2.
+  cbn [repBits decBits] in H2. exact H2.
+Qed.
+
+
+(** ** 7. Symbolic [Chunk] / [RState] Representation & Helper Algebra *)
+
+Inductive Chunk : Type :=
+  | b0 : Chunk
+  | b1 : Chunk
+  | wL : bool -> Chunk
+  | wR : bool -> Chunk
+  | pL : nat -> Chunk
+  | pR : nat -> Chunk
+  | rL0100 : nat -> Chunk
+  | rL0010 : nat -> Chunk
+  | rL1100 : nat -> Chunk
+  | rR0001 : nat -> Chunk
+  | rR1101 : nat -> Chunk
+  | swL : bool -> list bool -> list bool -> Chunk
+  | swR : bool -> list bool -> list bool -> Chunk
+  | bzL : list SwSym -> list SwSym -> Chunk
+  | bzR : list SwSym -> list SwSym -> Chunk.
+
+Inductive RState : Type :=
+  | RState_mk : bool -> list Chunk -> list Chunk -> RState.
+
+Inductive OptRState : Type :=
+  | OptRState_none : OptRState
+  | OptRState_some : RState -> OptRState.
+
+Inductive OptPureState : Type :=
+  | OptPureState_none : OptPureState
+  | OptPureState_some : nat -> list Chunk -> OptPureState.
+
+Inductive OptList : Type :=
+  | OptList_none : OptList
+  | OptList_some : list Chunk -> OptList.
+
+Inductive OptPair : Type :=
+  | OptPair_none : OptPair
+  | OptPair_some : list Chunk -> list Chunk -> OptPair.
+
+Inductive OptNatList : Type :=
+  | OptNatList_none : OptNatList
+  | OptNatList_some : nat -> list Chunk -> OptNatList.
+
+Inductive OptBool : Type :=
+  | OptBool_none : OptBool
+  | OptBool_some : bool -> OptBool.
+
+Inductive OptSwSym : Type :=
+  | OptSwSym_none : OptSwSym
+  | OptSwSym_some : SwSym -> OptSwSym.
+
+Inductive OptSwPop : Type :=
+  | OptSwPop_none : OptSwPop
+  | OptSwPop_some : bool -> list bool -> list bool -> OptSwPop.
+
+Inductive OptBzPop : Type :=
+  | OptBzPop_none : OptBzPop
+  | OptBzPop_some : SwSym -> list SwSym -> list SwSym -> OptBzPop.
+
+Inductive PopLeadBool : Type :=
+  | PopLeadBool_mk : nat -> list bool -> list bool -> PopLeadBool.
+
+Inductive PopLeadSym : Type :=
+  | PopLeadSym_mk : nat -> list SwSym -> list SwSym -> PopLeadSym.
+
+Inductive SwTrail0 : Type :=
+  | SwTrail0_allW0 : nat -> SwTrail0
+  | SwTrail0_endW1 : list bool -> list bool -> nat -> SwTrail0.
+
+Inductive BzTrail0 : Type :=
+  | BzTrail0_allW0 : nat -> BzTrail0
+  | BzTrail0_endW1 : list SwSym -> list SwSym -> nat -> BzTrail0
+  | BzTrail0_endD  : list SwSym -> list SwSym -> nat -> BzTrail0.
+
+Inductive BzSplitD : Type :=
+  | BzSplitD_hitD : list bool -> list SwSym -> list SwSym -> BzSplitD
+  | BzSplitD_allBool : list bool -> BzSplitD.
+
+Inductive OptBzRMatch : Type :=
+  | OptBzRMatch_none : OptBzRMatch
+  | OptBzRMatch_mode123 : nat -> list Chunk -> OptBzRMatch
+  | OptBzRMatch_mode4 : nat -> list SwSym -> list SwSym -> list Chunk -> OptBzRMatch.
+
+Inductive SweepStep : Type :=
+  | SweepStep_cont : list Chunk -> list Chunk -> nat -> list Chunk -> SweepStep
+  | SweepStep_stop : SweepStep.
+
+Inductive SweepRun : Type :=
+  | SR_cont : bool -> list Chunk -> list Chunk -> nat -> list Chunk -> SweepRun
+  | SR_done : OptRState -> SweepRun.
+
+Fixpoint decodeList (w : list bool) (c : nat) (xs : list Chunk) (lb : side) : side :=
+  match xs with
+  | [] => lb
+  | b0 :: rest => f0 >> decodeList w c rest lb
+  | b1 :: rest => f1 >> decodeList w c rest lb
+  | wL f :: rest => encWL (if f then flipW w else w) (decodeList w c rest lb)
+  | wR f :: rest => encWR (rev (if f then flipW w else w)) (decodeList w c rest lb)
+  | pL r :: rest => repPL r c (decodeList w c rest lb)
+  | pR r :: rest => repPR r c (decodeList w c rest lb)
+  | rL0100 n :: rest => repBits [false; true; false; false] (S n) (decodeList w c rest lb)
+  | rL0010 n :: rest => repBits [false; false; true; false] (S n) (decodeList w c rest lb)
+  | rL1100 n :: rest => repBits [true; true; false; false] (S n) (decodeList w c rest lb)
+  | rR0001 n :: rest => repBits [false; false; false; true] (S n) (decodeList w c rest lb)
+  | rR1101 n :: rest => repBits [true; true; false; true] (S n) (decodeList w c rest lb)
+  | swL inv f b :: rest => encWL (decSW inv f b) (decodeList w c rest lb)
+  | swR inv f b :: rest => encWR_q1 (decSW inv f b) (decodeList w c rest lb)
+  | bzL f b :: rest => encWL3 (decBZ f b) (decodeList w c rest lb)
+  | bzR f b :: rest => encWR3 (decBZ f b) (decodeList w c rest lb)
+  end.
+
+Definition decode (w : list bool) (c : nat) (s : RState) : Q * tape :=
+  match s with
+  | RState_mk false l r => (decodeList w c l blank) {{B}}> (decodeList w c r blank)
+  | RState_mk true  l r => (decodeList w c l blank) <{{E}} (decodeList w c r blank)
+  end.
+
+Lemma decodeList_append (w : list bool) (c : nat) (a b : list Chunk) (lb : side) :
+  decodeList w c (a ++ b) lb = decodeList w c a (decodeList w c b lb).
+Proof.
+  induction a as [|x xs IH]; [reflexivity | destruct x; cbn [app decodeList]; rewrite IH; reflexivity].
+Qed.
+
+Lemma repeat_add {X : Type} (x : X) (a b : nat) :
+  repeat x (a + b) = repeat x a ++ repeat x b.
+Proof.
+  induction a as [|a IH]; [reflexivity | cbn [Nat.add repeat app]; rewrite IH; reflexivity].
+Qed.
+
+Lemma rev_eq_nil {X : Type} (xs : list X) : rev xs = [] -> xs = [].
+Proof.
+  intros H. pose proof (f_equal (@rev X) H) as H2.
+  rewrite rev_involutive in H2. exact H2.
+Qed.
+
+Lemma list_strong_ind {X : Type} (P : list X -> Prop) :
+  (forall xs, (forall ys, length ys < length xs -> P ys) -> P xs) ->
+  forall xs, P xs.
+Proof.
+  intros Hstep xs.
+  assert (Hgen : forall n ys, length ys <= n -> P ys).
+  { induction n as [|n IH]; intros ys Hlen.
+    - apply Hstep. intros zs Hzs. lia.
+    - apply Hstep. intros zs Hzs. apply IH. lia. }
+  exact (Hgen (length xs) xs (Nat.le_refl _)).
+Qed.
+
+(* --- SafeWord & BzZone Deque Operations --- *)
+
+Fixpoint listLastBool (xs : list bool) : OptBool :=
+  match xs with
+  | [] => OptBool_none
+  | x :: rest =>
+    match rest with
+    | [] => OptBool_some x
+    | _ :: _ => listLastBool rest
+    end
+  end.
+
+Lemma listLastBool_eq_head_rev (b : list bool) :
+  match listLastBool b, rev b with
+  | OptBool_none, [] => True
+  | OptBool_some x, y :: _ => x = y
+  | _, _ => False
+  end.
+Proof.
+  induction b as [|a [|c0 cs] IH]; [exact I | reflexivity |].
+  change (listLastBool (a :: c0 :: cs)) with (listLastBool (c0 :: cs)).
+  change (rev (a :: c0 :: cs)) with (rev (c0 :: cs) ++ [a]).
+  destruct (rev (c0 :: cs)) as [|y ys] eqn:Hr.
+  - exfalso. apply rev_eq_nil in Hr. discriminate Hr.
+  - cbn [app]. destruct (listLastBool (c0 :: cs)) as [|x]; exact IH.
+Qed.
+
+Definition swHead (inv : bool) (f b : list bool) : OptBool :=
+  match f with
+  | x :: _ => OptBool_some (xorB inv x)
+  | [] =>
+    match listLastBool b with
+    | OptBool_none => OptBool_none
+    | OptBool_some x => OptBool_some (xorB inv x)
+    end
+  end.
+
+Definition swPop (inv : bool) (f b : list bool) : OptSwPop :=
+  match f with
+  | x :: f' => OptSwPop_some (xorB inv x) f' b
+  | [] =>
+    match List.rev_append b [] with
+    | [] => OptSwPop_none
+    | x :: f' => OptSwPop_some (xorB inv x) f' []
+    end
+  end.
+
+Lemma swPop_none (inv : bool) (f b : list bool) (H : swPop inv f b = OptSwPop_none) :
+  decSW inv f b = [].
+Proof.
+  destruct f as [|x f']; [| discriminate H].
+  cbn [swPop] in H. rewrite <- rev_alt in H.
+  destruct (rev b) eqn:Hr; [| discriminate H].
+  unfold decSW; cbn [app]; rewrite Hr; destruct inv; reflexivity.
+Qed.
+
+Lemma swPop_some (inv : bool) (f b : list bool) (bit : bool) (f' b' : list bool)
+  (H : swPop inv f b = OptSwPop_some bit f' b') :
+  decSW inv f b = bit :: decSW inv f' b'.
+Proof.
+  destruct f as [|x f0].
+  - cbn [swPop] in H. rewrite <- rev_alt in H.
+    destruct (rev b) as [|x f0] eqn:Hr; [discriminate H |].
+    inversion H; subst.
+    unfold decSW; cbn [app rev]; rewrite Hr, app_nil_r, flipBits_cons; reflexivity.
+  - cbn [swPop] in H. inversion H; subst.
+    unfold decSW; cbn [app]; rewrite flipBits_cons; reflexivity.
+Qed.
+
+Lemma swPop_bit_eq_swHead (inv : bool) (f b : list bool) (bit bit0 : bool) (f' b' : list bool)
+  (H1 : swHead inv f b = OptBool_some bit0) (H2 : swPop inv f b = OptSwPop_some bit f' b') :
+  bit = bit0.
+Proof.
+  destruct f as [|x f0].
+  - cbn [swHead] in H1. cbn [swPop] in H2. rewrite <- rev_alt in H2.
+    pose proof (listLastBool_eq_head_rev b) as Hrel.
+    destruct (listLastBool b) as [|x]; [discriminate H1 |].
+    destruct (rev b) as [|y ys]; [discriminate H2 |].
+    inversion H1; inversion H2; subst. reflexivity.
+  - cbn [swHead] in H1. cbn [swPop] in H2. inversion H1; inversion H2; subst; reflexivity.
+Qed.
+
+Definition pushSwL (inv : bool) (f b : list bool) (xs : list Chunk) : list Chunk :=
+  match f, b with
+  | [], [] => xs
+  | _, _ => swL inv f b :: xs
+  end.
+
+Definition pushSwR (inv : bool) (f b : list bool) (xs : list Chunk) : list Chunk :=
+  match f, b with
+  | [], [] => xs
+  | _, _ => swR inv f b :: xs
+  end.
+
+Lemma decodeList_pushSwL (w : list bool) (c : nat) (inv : bool) (f b : list bool) (xs : list Chunk) (lb : side) :
+  decodeList w c (pushSwL inv f b xs) lb = encWL (decSW inv f b) (decodeList w c xs lb).
+Proof. destruct f, b, inv; reflexivity. Qed.
+
+Lemma decodeList_pushSwR (w : list bool) (c : nat) (inv : bool) (f b : list bool) (xs : list Chunk) (lb : side) :
+  decodeList w c (pushSwR inv f b xs) lb = encWR_q1 (decSW inv f b) (decodeList w c xs lb).
+Proof. destruct f, b, inv; reflexivity. Qed.
+
+Definition consSwL (x : bool) (xs : list Chunk) : list Chunk :=
+  match xs with
+  | swL inv f b :: rest => swL inv (xorB inv x :: f) b :: rest
+  | _ => swL false [x] [] :: xs
+  end.
+
+Lemma decodeList_consSwL (w : list bool) (c : nat) (x : bool) (xs : list Chunk) (lb : side) :
+  decodeList w c (consSwL x xs) lb = encWL [x] (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [destruct x; reflexivity |].
+  destruct ch; try (destruct x; reflexivity).
+  cbn [consSwL decodeList]. rewrite decSW_cons. destruct x; reflexivity.
+Qed.
+
+Definition consSwLRep (x : bool) (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with
+  | 0 => xs
+  | S _ =>
+    match xs with
+    | swL inv f b :: rest => swL inv (consRepBool (xorB inv x) n f) b :: rest
+    | _ => swL false (consRepBool x n []) [] :: xs
+    end
+  end.
+
+Lemma decodeList_consSwLRep (w : list bool) (c : nat) (x : bool) (n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consSwLRep x n xs) lb = encWL (repeat x n) (decodeList w c xs lb).
+Proof.
+  destruct n as [|n']; [reflexivity |].
+  assert (Hfb : decSW false (consRepBool x (S n') []) [] = repeat x (S n')).
+  { unfold decSW, flipBits. cbn [rev]. rewrite consRepBool_eq, !app_nil_r. reflexivity. }
+  destruct xs as [|ch rest].
+  - cbn [consSwLRep decodeList]. rewrite Hfb. reflexivity.
+  - destruct ch; try (cbn [consSwLRep decodeList]; rewrite Hfb; reflexivity).
+    cbn [consSwLRep decodeList]. rewrite decSW_consRepBool, encWL_append. reflexivity.
+Qed.
+
+Definition beqSwSym (a b : SwSym) : bool :=
+  match a, b with
+  | SwSym_w0, SwSym_w0 => true
+  | SwSym_w1, SwSym_w1 => true
+  | SwSym_d,  SwSym_d  => true
+  | _, _ => false
+  end.
+
+Lemma beqSwSym_eq {a b : SwSym} (H : beqSwSym a b = true) : a = b.
+Proof. destruct a, b; try reflexivity; discriminate H. Qed.
+
+Fixpoint listLastSym (xs : list SwSym) : OptSwSym :=
+  match xs with
+  | [] => OptSwSym_none
+  | x :: rest =>
+    match rest with
+    | [] => OptSwSym_some x
+    | _ :: _ => listLastSym rest
+    end
+  end.
+
+Lemma listLastSym_eq_head_rev (b : list SwSym) :
+  match listLastSym b, rev b with
+  | OptSwSym_none, [] => True
+  | OptSwSym_some x, y :: _ => x = y
+  | _, _ => False
+  end.
+Proof.
+  induction b as [|a [|c0 cs] IH]; [exact I | reflexivity |].
+  change (listLastSym (a :: c0 :: cs)) with (listLastSym (c0 :: cs)).
+  change (rev (a :: c0 :: cs)) with (rev (c0 :: cs) ++ [a]).
+  destruct (rev (c0 :: cs)) as [|y ys] eqn:Hr.
+  - exfalso. apply rev_eq_nil in Hr. discriminate Hr.
+  - cbn [app]. destruct (listLastSym (c0 :: cs)) as [|x]; exact IH.
+Qed.
+
+Definition bzHead (f b : list SwSym) : OptSwSym :=
+  match f with
+  | x :: _ => OptSwSym_some x
+  | [] => listLastSym b
+  end.
+
+Definition bzPop (f b : list SwSym) : OptBzPop :=
+  match f with
+  | x :: f' => OptBzPop_some x f' b
+  | [] =>
+    match List.rev_append b [] with
+    | [] => OptBzPop_none
+    | x :: f' => OptBzPop_some x f' []
+    end
+  end.
+
+Lemma bzPop_none (f b : list SwSym) (H : bzPop f b = OptBzPop_none) :
+  decBZ f b = [].
+Proof.
+  destruct f as [|x f']; [| discriminate H].
+  cbn [bzPop] in H. rewrite <- rev_alt in H.
+  destruct (rev b) eqn:Hr; [| discriminate H].
+  unfold decBZ; cbn [app]; rewrite Hr; reflexivity.
+Qed.
+
+Lemma bzPop_some (f b : list SwSym) (s : SwSym) (f' b' : list SwSym)
+  (H : bzPop f b = OptBzPop_some s f' b') :
+  decBZ f b = s :: decBZ f' b'.
+Proof.
+  destruct f as [|x f0].
+  - cbn [bzPop] in H. rewrite <- rev_alt in H.
+    destruct (rev b) as [|x f0] eqn:Hr; [discriminate H |].
+    inversion H; subst. unfold decBZ; cbn [app rev]; rewrite Hr, app_nil_r; reflexivity.
+  - cbn [bzPop] in H. inversion H; subst; reflexivity.
+Qed.
+
+Lemma bzPop_sym_eq_bzHead (f b : list SwSym) (s s0 : SwSym) (f' b' : list SwSym)
+  (H1 : bzHead f b = OptSwSym_some s0) (H2 : bzPop f b = OptBzPop_some s f' b') :
+  s = s0.
+Proof.
+  destruct f as [|x f0].
+  - cbn [bzHead] in H1. cbn [bzPop] in H2. rewrite <- rev_alt in H2.
+    pose proof (listLastSym_eq_head_rev b) as Hrel.
+    rewrite H1 in Hrel.
+    destruct (rev b) as [|y ys]; [discriminate H2 |].
+    inversion H2; subst; reflexivity.
+  - cbn [bzHead] in H1. cbn [bzPop] in H2. inversion H1; inversion H2; subst; reflexivity.
+Qed.
+
+Definition pushBzL (f b : list SwSym) (xs : list Chunk) : list Chunk :=
+  match f, b with
+  | [], [] => xs
+  | _, _ => bzL f b :: xs
+  end.
+
+Definition pushBzR (f b : list SwSym) (xs : list Chunk) : list Chunk :=
+  match f, b with
+  | [], [] => xs
+  | _, _ => bzR f b :: xs
+  end.
+
+Lemma decodeList_pushBzL (w : list bool) (c : nat) (f b : list SwSym) (xs : list Chunk) (lb : side) :
+  decodeList w c (pushBzL f b xs) lb = encWL3 (decBZ f b) (decodeList w c xs lb).
+Proof. destruct f, b; reflexivity. Qed.
+
+Lemma decodeList_pushBzR (w : list bool) (c : nat) (f b : list SwSym) (xs : list Chunk) (lb : side) :
+  decodeList w c (pushBzR f b xs) lb = encWR3 (decBZ f b) (decodeList w c xs lb).
+Proof. destruct f, b; reflexivity. Qed.
+
+Definition consBzLSym (s : SwSym) (xs : list Chunk) : list Chunk :=
+  match xs with
+  | bzL f b :: rest => bzL (s :: f) b :: rest
+  | _ =>
+    match s with
+    | SwSym_w0 => consSwL false xs
+    | SwSym_w1 => consSwL true xs
+    | SwSym_d  => bzL [SwSym_d] [] :: xs
+    end
+  end.
+
+Lemma decodeList_consBzLSym (w : list bool) (c : nat) (s : SwSym) (xs : list Chunk) (lb : side) :
+  decodeList w c (consBzLSym s xs) lb = encWL3 [s] (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [destruct s; reflexivity |].
+  destruct ch; try (destruct s; [cbn [consBzLSym]; rewrite decodeList_consSwL; reflexivity
+                                | cbn [consBzLSym]; rewrite decodeList_consSwL; reflexivity
+                                | reflexivity]).
+  destruct s; reflexivity.
+Qed.
+
+Definition consBzLRepBool (x : bool) (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with
+  | 0 => xs
+  | S _ =>
+    match xs with
+    | bzL f b :: rest => bzL (consRepSym (symOfBool x) n f) b :: rest
+    | _ => consSwLRep x n xs
+    end
+  end.
+
+Lemma decodeList_consBzLRepBool (w : list bool) (c : nat) (x : bool) (n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consBzLRepBool x n xs) lb = encWL (repeat x n) (decodeList w c xs lb).
+Proof.
+  destruct n as [|n']; [reflexivity |].
+  destruct xs as [|ch rest]; [exact (decodeList_consSwLRep w c x (S n') [] lb) |].
+  destruct ch; try exact (decodeList_consSwLRep w c x (S n') _ lb).
+  cbn [consBzLRepBool decodeList]. rewrite decBZ_consRepSym, encWL3_append.
+  destruct x; cbn [symOfBool]; [rewrite encWL3_rep_w1, encWL_rep_true | rewrite encWL3_rep_w0, encWL_rep_false]; reflexivity.
+Qed.
+
+Definition consBzRSym (s : SwSym) (xs : list Chunk) : list Chunk :=
+  match xs with
+  | bzR f b :: rest => bzR (s :: f) b :: rest
+  | _ => bzR [s] [] :: xs
+  end.
+
+Lemma decodeList_consBzRSym (w : list bool) (c : nat) (s : SwSym) (xs : list Chunk) (lb : side) :
+  decodeList w c (consBzRSym s xs) lb = encWR3 [s] (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [destruct s; reflexivity |].
+  destruct ch; destruct s; reflexivity.
+Qed.
+
+Definition cons01BzL (xs : list Chunk) : list Chunk :=
+  match xs with
+  | b0 :: b0 :: rest => consBzLSym SwSym_w1 rest
+  | b1 :: b0 :: b0 :: b0 :: rest => consBzLSym SwSym_d rest
+  | swL inv f b :: rest =>
+    match swHead inv f b with
+    | OptBool_some false =>
+      match swPop inv f b with
+      | OptSwPop_some _ f' b' => consBzLSym SwSym_d (pushSwL inv f' b' rest)
+      | OptSwPop_none => b0 :: b1 :: swL inv f b :: rest
+      end
+    | _ => b0 :: b1 :: swL inv f b :: rest
+    end
+  | bzL f b :: rest =>
+    match bzHead f b with
+    | OptSwSym_some SwSym_w0 =>
+      match bzPop f b with
+      | OptBzPop_some _ f' b' => consBzLSym SwSym_d (pushBzL f' b' rest)
+      | OptBzPop_none => b0 :: b1 :: bzL f b :: rest
+      end
+    | _ => b0 :: b1 :: bzL f b :: rest
+    end
+  | _ => b0 :: b1 :: xs
+  end.
+
+Lemma decodeList_cons01BzL (w : list bool) (c : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (cons01BzL xs) lb = f0 >> f1 >> decodeList w c xs lb.
+Proof.
+  destruct xs as [|ch1 xs1]; [reflexivity |].
+  destruct ch1; try reflexivity.
+  - destruct xs1 as [|ch2 xs2]; [reflexivity | destruct ch2; try reflexivity].
+    cbn [cons01BzL]. rewrite decodeList_consBzLSym. reflexivity.
+  - destruct xs1 as [|ch2 xs2]; [reflexivity | destruct ch2; try reflexivity].
+    destruct xs2 as [|ch3 xs3]; [reflexivity | destruct ch3; try reflexivity].
+    destruct xs3 as [|ch4 xs4]; [reflexivity | destruct ch4; try reflexivity].
+    cbn [cons01BzL]. rewrite decodeList_consBzLSym. reflexivity.
+  - rename b into inv, l into f, l0 into b.
+    cbn [cons01BzL].
+    destruct (swHead inv f b) as [|[|]] eqn:Hh; try reflexivity.
+    destruct (swPop inv f b) as [|bit f' b'] eqn:Hp; [reflexivity |].
+    pose proof (swPop_bit_eq_swHead inv f b bit false f' b' Hh Hp) as Hbit; subst bit.
+    rewrite decodeList_consBzLSym, decodeList_pushSwL.
+    cbn [decodeList encWL3]. rewrite (swPop_some inv f b false f' b' Hp). reflexivity.
+  - rename l into f, l0 into b.
+    cbn [cons01BzL].
+    destruct (bzHead f b) as [|[| |]] eqn:Hh; try reflexivity.
+    destruct (bzPop f b) as [|s f' b'] eqn:Hp; [reflexivity |].
+    pose proof (bzPop_sym_eq_bzHead f b s SwSym_w0 f' b' Hh Hp) as Hs; subst s.
+    rewrite decodeList_consBzLSym, decodeList_pushBzL.
+    cbn [decodeList encWL3]. rewrite (bzPop_some f b SwSym_w0 f' b' Hp). reflexivity.
+Qed.
+
+Definition swPopBack (inv : bool) (f b : list bool) : OptSwPop :=
+  match b with
+  | x :: b' => OptSwPop_some (xorB inv x) f b'
+  | [] =>
+    match List.rev_append f [] with
+    | [] => OptSwPop_none
+    | x :: b' => OptSwPop_some (xorB inv x) [] b'
+    end
+  end.
+
+Lemma swPopBack_none (inv : bool) (f b : list bool) (H : swPopBack inv f b = OptSwPop_none) :
+  decSW inv f b = [].
+Proof.
+  destruct b as [|x b']; [| discriminate H].
+  cbn [swPopBack] in H. rewrite <- rev_alt in H.
+  destruct (rev f) eqn:Hr; [| discriminate H].
+  apply rev_eq_nil in Hr; subst f. destruct inv; reflexivity.
+Qed.
+
+Lemma swPopBack_some (inv : bool) (f b : list bool) (bit : bool) (f' b' : list bool)
+  (H : swPopBack inv f b = OptSwPop_some bit f' b') :
+  decSW inv f b = decSW inv f' b' ++ [bit].
+Proof.
+  destruct b as [|x b0].
+  - cbn [swPopBack] in H. rewrite <- rev_alt in H.
+    destruct (rev f) as [|x b0] eqn:Hr; [discriminate H |].
+    inversion H; subst.
+    pose proof (f_equal (@rev bool) Hr) as Hf.
+    rewrite rev_involutive in Hf; cbn [rev] in Hf; subst f.
+    unfold decSW. cbn [rev app]. rewrite app_nil_r, flipBits_append, flipBits_cons.
+    destruct inv; reflexivity.
+  - cbn [swPopBack] in H. inversion H; subst.
+    unfold decSW. cbn [rev]. rewrite app_assoc, flipBits_append, flipBits_cons.
+    destruct inv; reflexivity.
+Qed.
+
+Definition bzPopBack (f b : list SwSym) : OptBzPop :=
+  match b with
+  | x :: b' => OptBzPop_some x f b'
+  | [] =>
+    match List.rev_append f [] with
+    | [] => OptBzPop_none
+    | x :: b' => OptBzPop_some x [] b'
+    end
+  end.
+
+Lemma bzPopBack_none (f b : list SwSym) (H : bzPopBack f b = OptBzPop_none) :
+  decBZ f b = [].
+Proof.
+  destruct b as [|x b']; [| discriminate H].
+  cbn [bzPopBack] in H. rewrite <- rev_alt in H.
+  destruct (rev f) eqn:Hr; [| discriminate H].
+  apply rev_eq_nil in Hr; subst f; reflexivity.
+Qed.
+
+Lemma bzPopBack_some (f b : list SwSym) (s : SwSym) (f' b' : list SwSym)
+  (H : bzPopBack f b = OptBzPop_some s f' b') :
+  decBZ f b = decBZ f' b' ++ [s].
+Proof.
+  destruct b as [|x b0].
+  - cbn [bzPopBack] in H. rewrite <- rev_alt in H.
+    destruct (rev f) as [|x b0] eqn:Hr; [discriminate H |].
+    inversion H; subst.
+    pose proof (f_equal (@rev SwSym) Hr) as Hf.
+    rewrite rev_involutive in Hf; cbn [rev] in Hf; subst f.
+    unfold decBZ; cbn [rev app]; rewrite app_nil_r; reflexivity.
+  - cbn [bzPopBack] in H. inversion H; subst.
+    unfold decBZ; cbn [rev]; rewrite app_assoc; reflexivity.
+Qed.
+
+Fixpoint peelBackSwRGo (inv : bool) (k : nat) (f b : list bool) (rest : list Chunk) : list Chunk :=
+  match k with
+  | 0 => pushSwR inv f b rest
+  | S k' =>
+    match swPopBack inv f b with
+    | OptSwPop_none => rest
+    | OptSwPop_some false f' b' => peelBackSwRGo inv k' f' b' (b1 :: b1 :: b0 :: b1 :: rest)
+    | OptSwPop_some true  f' b' => peelBackSwRGo inv k' f' b' (b0 :: b0 :: b0 :: b1 :: rest)
+    end
+  end.
+
+Lemma peelBackSwRGo_eq (w : list bool) (c : nat) (inv : bool) (k : nat) (f b : list bool) (rest : list Chunk) (lb : side) :
+  decodeList w c (peelBackSwRGo inv k f b rest) lb = encWR_q1 (decSW inv f b) (decodeList w c rest lb).
+Proof.
+  revert f b rest. induction k as [|k IH]; intros f b rest; [exact (decodeList_pushSwR w c inv f b rest lb) |].
+  cbn [peelBackSwRGo]. destruct (swPopBack inv f b) as [|[|] f' b'] eqn:Hp.
+  - rewrite (swPopBack_none inv f b Hp). reflexivity.
+  - rewrite IH, (swPopBack_some inv f b true f' b' Hp), encWR_q1_append. reflexivity.
+  - rewrite IH, (swPopBack_some inv f b false f' b' Hp), encWR_q1_append. reflexivity.
+Qed.
+
+Fixpoint peelBackBzRGo (k : nat) (f b : list SwSym) (rest : list Chunk) : list Chunk :=
+  match k with
+  | 0 => pushBzR f b rest
+  | S k' =>
+    match bzPopBack f b with
+    | OptBzPop_none => rest
+    | OptBzPop_some SwSym_w0 f' b' => peelBackBzRGo k' f' b' (b1 :: b1 :: b0 :: b1 :: rest)
+    | OptBzPop_some SwSym_w1 f' b' => peelBackBzRGo k' f' b' (b0 :: b0 :: b0 :: b1 :: rest)
+    | OptBzPop_some SwSym_d  f' b' => peelBackBzRGo k' f' b' (b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: rest)
+    end
+  end.
+
+Lemma peelBackBzRGo_eq (w : list bool) (c : nat) (k : nat) (f b : list SwSym) (rest : list Chunk) (lb : side) :
+  decodeList w c (peelBackBzRGo k f b rest) lb = encWR3 (decBZ f b) (decodeList w c rest lb).
+Proof.
+  revert f b rest. induction k as [|k IH]; intros f b rest; [exact (decodeList_pushBzR w c f b rest lb) |].
+  cbn [peelBackBzRGo]. destruct (bzPopBack f b) as [|[| |] f' b'] eqn:Hp.
+  - rewrite (bzPopBack_none f b Hp). reflexivity.
+  - rewrite IH, (bzPopBack_some f b SwSym_w0 f' b' Hp), encWR3_append. reflexivity.
+  - rewrite IH, (bzPopBack_some f b SwSym_w1 f' b' Hp), encWR3_append. reflexivity.
+  - rewrite IH, (bzPopBack_some f b SwSym_d f' b' Hp), encWR3_append. reflexivity.
+Qed.
+
+Fixpoint peelBackSwLGo (inv : bool) (k : nat) (f b : list bool) (rest : list Chunk) : list Chunk :=
+  match k with
+  | 0 => pushSwL inv f b rest
+  | S k' =>
+    match swPopBack inv f b with
+    | OptSwPop_none => rest
+    | OptSwPop_some false f' b' => peelBackSwLGo inv k' f' b' (b1 :: b0 :: b0 :: b0 :: rest)
+    | OptSwPop_some true  f' b' => peelBackSwLGo inv k' f' b' (b0 :: b1 :: b0 :: b0 :: rest)
+    end
+  end.
+
+Lemma peelBackSwLGo_eq (w : list bool) (c : nat) (inv : bool) (k : nat) (f b : list bool) (rest : list Chunk) (lb : side) :
+  decodeList w c (peelBackSwLGo inv k f b rest) lb = encWL (decSW inv f b) (decodeList w c rest lb).
+Proof.
+  revert f b rest. induction k as [|k IH]; intros f b rest; [exact (decodeList_pushSwL w c inv f b rest lb) |].
+  cbn [peelBackSwLGo]. destruct (swPopBack inv f b) as [|[|] f' b'] eqn:Hp.
+  - rewrite (swPopBack_none inv f b Hp). reflexivity.
+  - rewrite IH, (swPopBack_some inv f b true f' b' Hp), encWL_append. reflexivity.
+  - rewrite IH, (swPopBack_some inv f b false f' b' Hp), encWL_append. reflexivity.
+Qed.
+
+Fixpoint peelBackBzLGo (k : nat) (f b : list SwSym) (rest : list Chunk) : list Chunk :=
+  match k with
+  | 0 => pushBzL f b rest
+  | S k' =>
+    match bzPopBack f b with
+    | OptBzPop_none => rest
+    | OptBzPop_some SwSym_w0 f' b' => peelBackBzLGo k' f' b' (b1 :: b0 :: b0 :: b0 :: rest)
+    | OptBzPop_some SwSym_w1 f' b' => peelBackBzLGo k' f' b' (b0 :: b1 :: b0 :: b0 :: rest)
+    | OptBzPop_some SwSym_d  f' b' => peelBackBzLGo k' f' b' (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: rest)
+    end
+  end.
+
+Lemma peelBackBzLGo_eq (w : list bool) (c : nat) (k : nat) (f b : list SwSym) (rest : list Chunk) (lb : side) :
+  decodeList w c (peelBackBzLGo k f b rest) lb = encWL3 (decBZ f b) (decodeList w c rest lb).
+Proof.
+  revert f b rest. induction k as [|k IH]; intros f b rest; [exact (decodeList_pushBzL w c f b rest lb) |].
+  cbn [peelBackBzLGo]. destruct (bzPopBack f b) as [|[| |] f' b'] eqn:Hp.
+  - rewrite (bzPopBack_none f b Hp). reflexivity.
+  - rewrite IH, (bzPopBack_some f b SwSym_w0 f' b' Hp), encWL3_append. reflexivity.
+  - rewrite IH, (bzPopBack_some f b SwSym_w1 f' b' Hp), encWL3_append. reflexivity.
+  - rewrite IH, (bzPopBack_some f b SwSym_d f' b' Hp), encWL3_append. reflexivity.
+Qed.
+
+Fixpoint stripLeadBool (rawT : bool) (k : nat) (xs : list bool) : nat * list bool :=
+  match xs with
+  | [] => (k, [])
+  | x :: rest => if Bool.eqb x rawT then stripLeadBool rawT (S k) rest else (k, x :: rest)
+  end.
+
+Lemma stripLeadBool_spec (rawT : bool) (k : nat) (xs : list bool) (q : nat) (rem : list bool)
+  (H : stripLeadBool rawT k xs = (q, rem)) :
+  exists d, q = k + d /\ xs = repeat rawT d ++ rem.
+Proof.
+  revert k H. induction xs as [|x rest IH]; intros k H.
+  - cbn [stripLeadBool] in H. inversion H; subst. exists 0; split; [lia | reflexivity].
+  - cbn [stripLeadBool] in H. destruct (Bool.eqb x rawT) eqn:Heq.
+    + apply Bool.eqb_prop in Heq; subst x.
+      destruct (IH (S k) H) as [d [Hq Hxs]].
+      exists (S d); split; [lia | cbn [repeat app]; rewrite Hxs; reflexivity].
+    + inversion H; subst. exists 0; split; [lia | reflexivity].
+Qed.
+
+Definition swPopLeading (inv target : bool) (f b : list bool) : PopLeadBool :=
+  let rawT := xorB inv target in
+  match stripLeadBool rawT 0 f with
+  | (k1, []) =>
+    match b with
+    | [] => PopLeadBool_mk k1 [] []
+    | _ :: _ =>
+      let '(k2, f') := stripLeadBool rawT k1 (List.rev_append b []) in
+      PopLeadBool_mk k2 f' []
+    end
+  | (k1, f') => PopLeadBool_mk k1 f' b
+  end.
+
+Lemma swPopLeading_spec (inv target : bool) (f b : list bool) (k : nat) (f' b' : list bool)
+  (H : swPopLeading inv target f b = PopLeadBool_mk k f' b') :
+  decSW inv f b = repeat target k ++ decSW inv f' b'.
+Proof.
+  unfold swPopLeading in H.
+  destruct (stripLeadBool (xorB inv target) 0 f) as [k1 r1] eqn:Hs1.
+  destruct (stripLeadBool_spec (xorB inv target) 0 f k1 r1 Hs1) as [d1 [Hk1 Hf1]].
+  cbn [Nat.add] in Hk1; subst k1.
+  destruct r1 as [|y ys].
+  - rewrite app_nil_r in Hf1.
+    destruct b as [|b0 bs].
+    + inversion H; subst.
+      unfold decSW. try rewrite Hf1; cbn [rev]; rewrite !app_nil_r, flipBits_repeat, xorB_self.
+      destruct inv; cbn [flipBits flipW]; rewrite app_nil_r; reflexivity.
+    + rewrite <- rev_alt in H.
+      destruct (stripLeadBool (xorB inv target) d1 (rev (b0 :: bs))) as [k2 r2] eqn:Hs2.
+      inversion H; subst.
+      destruct (stripLeadBool_spec (xorB inv target) d1 (rev (b0 :: bs)) k f' Hs2) as [d2 [Hk2 Hb2]].
+      unfold decSW. try rewrite Hf1; rewrite Hb2; cbn [rev]; rewrite app_nil_r, app_assoc, <- repeat_add,
+        flipBits_append, flipBits_repeat, xorB_self.
+      replace (d1 + d2) with k by lia. reflexivity.
+  - inversion H; subst.
+    unfold decSW. try rewrite Hf1; rewrite <- app_assoc, flipBits_append, flipBits_repeat, xorB_self. reflexivity.
+Qed.
+
+Fixpoint stripLeadSym (target : SwSym) (k : nat) (xs : list SwSym) : nat * list SwSym :=
+  match xs with
+  | [] => (k, [])
+  | x :: rest => if beqSwSym x target then stripLeadSym target (S k) rest else (k, x :: rest)
+  end.
+
+Lemma stripLeadSym_spec (target : SwSym) (k : nat) (xs : list SwSym) (q : nat) (rem : list SwSym)
+  (H : stripLeadSym target k xs = (q, rem)) :
+  exists d, q = k + d /\ xs = repeat target d ++ rem.
+Proof.
+  revert k H. induction xs as [|x rest IH]; intros k H.
+  - cbn [stripLeadSym] in H. inversion H; subst. exists 0; split; [lia | reflexivity].
+  - cbn [stripLeadSym] in H. destruct (beqSwSym x target) eqn:Heq.
+    + apply beqSwSym_eq in Heq; subst x.
+      destruct (IH (S k) H) as [d [Hq Hxs]].
+      exists (S d); split; [lia | cbn [repeat app]; rewrite Hxs; reflexivity].
+    + inversion H; subst. exists 0; split; [lia | reflexivity].
+Qed.
+
+Definition bzPopLeading (target : SwSym) (f b : list SwSym) : PopLeadSym :=
+  match stripLeadSym target 0 f with
+  | (k1, []) =>
+    match b with
+    | [] => PopLeadSym_mk k1 [] []
+    | _ :: _ =>
+      let '(k2, f') := stripLeadSym target k1 (List.rev_append b []) in
+      PopLeadSym_mk k2 f' []
+    end
+  | (k1, f') => PopLeadSym_mk k1 f' b
+  end.
+
+Lemma bzPopLeading_spec (target : SwSym) (f b : list SwSym) (k : nat) (f' b' : list SwSym)
+  (H : bzPopLeading target f b = PopLeadSym_mk k f' b') :
+  decBZ f b = repeat target k ++ decBZ f' b'.
+Proof.
+  unfold bzPopLeading in H.
+  destruct (stripLeadSym target 0 f) as [k1 r1] eqn:Hs1.
+  destruct (stripLeadSym_spec target 0 f k1 r1 Hs1) as [d1 [Hk1 Hf1]].
+  cbn [Nat.add] in Hk1; subst k1.
+  destruct r1 as [|y ys].
+  - rewrite app_nil_r in Hf1.
+    destruct b as [|b0 bs].
+    + inversion H; subst.
+      unfold decBZ. try rewrite Hf1; cbn [rev app]; rewrite app_nil_r; reflexivity.
+    + rewrite <- rev_alt in H.
+      destruct (stripLeadSym target d1 (rev (b0 :: bs))) as [k2 r2] eqn:Hs2.
+      inversion H; subst.
+      destruct (stripLeadSym_spec target d1 (rev (b0 :: bs)) k f' Hs2) as [d2 [Hk2 Hb2]].
+      unfold decBZ. try rewrite Hf1; rewrite Hb2; cbn [rev]; rewrite app_nil_r, app_assoc, <- repeat_add.
+      replace (d1 + d2) with k by lia. reflexivity.
+  - inversion H; subst.
+    unfold decBZ. try rewrite Hf1; rewrite <- app_assoc. reflexivity.
+Qed.
+
+Fixpoint swSplitTrail0List (raw0 : bool) (p : nat) (xs : list bool) : SwTrail0 :=
+  match xs with
+  | [] => SwTrail0_allW0 p
+  | x :: rest => if Bool.eqb x raw0 then swSplitTrail0List raw0 (S p) rest else SwTrail0_endW1 [] rest p
+  end.
+
+Lemma swSplitTrail0List_allW0 (raw0 : bool) (p : nat) (xs : list bool) (q : nat)
+  (H : swSplitTrail0List raw0 p xs = SwTrail0_allW0 q) :
+  exists d, q = p + d /\ xs = repeat raw0 d.
+Proof.
+  revert p H. induction xs as [|x rest IH]; intros p H.
+  - cbn [swSplitTrail0List] in H. inversion H; subst. exists 0; split; [lia | reflexivity].
+  - cbn [swSplitTrail0List] in H. destruct (Bool.eqb x raw0) eqn:Heq; [| discriminate H].
+    apply Bool.eqb_prop in Heq; subst x.
+    destruct (IH (S p) H) as [d [Hq Hxs]].
+    exists (S d); split; [lia | cbn [repeat]; rewrite Hxs; reflexivity].
+Qed.
+
+Lemma swSplitTrail0List_endW1 (raw0 : bool) (p : nat) (xs f0 b' : list bool) (q : nat)
+  (H : swSplitTrail0List raw0 p xs = SwTrail0_endW1 f0 b' q) :
+  f0 = [] /\ exists d, q = p + d /\ xs = repeat raw0 d ++ negb raw0 :: b'.
+Proof.
+  revert p H. induction xs as [|x rest IH]; intros p H; [discriminate H |].
+  cbn [swSplitTrail0List] in H. destruct (Bool.eqb x raw0) eqn:Heq.
+  - apply Bool.eqb_prop in Heq; subst x.
+    destruct (IH (S p) H) as [Hf0 [d [Hq Hxs]]].
+    split; [exact Hf0 | exists (S d); split; [lia | cbn [repeat app]; rewrite Hxs; reflexivity]].
+  - inversion H; subst.
+    assert (Hx : x = negb raw0) by (destruct x, raw0; try reflexivity; discriminate Heq).
+    subst x. split; [reflexivity | exists 0; split; [lia | reflexivity]].
+Qed.
+
+Definition swSplitTrail0 (inv : bool) (f b : list bool) : SwTrail0 :=
+  match swSplitTrail0List inv 0 b with
+  | SwTrail0_endW1 _ b' p => SwTrail0_endW1 f b' p
+  | SwTrail0_allW0 p =>
+    match f with
+    | [] => SwTrail0_allW0 p
+    | _ :: _ => swSplitTrail0List inv p (List.rev_append f [])
+    end
+  end.
+
+Lemma xorB_self_false (inv : bool) : xorB inv inv = false.
+Proof. destruct inv; reflexivity. Qed.
+
+Lemma xorB_not_true (inv : bool) : xorB inv (negb inv) = true.
+Proof. destruct inv; reflexivity. Qed.
+
+Lemma swSplitTrail0_allW0 (inv : bool) (f b : list bool) (p : nat)
+  (H : swSplitTrail0 inv f b = SwTrail0_allW0 p) :
+  decSW inv f b = repeat false p.
+Proof.
+  unfold swSplitTrail0 in H.
+  destruct (swSplitTrail0List inv 0 b) as [p1 | f0 b0 p0] eqn:Hs1; [| discriminate H].
+  destruct (swSplitTrail0List_allW0 inv 0 b p1 Hs1) as [d1 [Hp1 Hb1]].
+  cbn [Nat.add] in Hp1; subst p1.
+  destruct f as [|x xs].
+  - inversion H; subst.
+    unfold decSW. try rewrite Hb1; cbn [app]; rewrite rev_repeat, flipBits_repeat, xorB_self_false. reflexivity.
+  - rewrite <- rev_alt in H.
+    destruct (swSplitTrail0List_allW0 inv d1 (rev (x :: xs)) p H) as [d2 [Hp2 Hf2]].
+    pose proof (f_equal (@rev bool) Hf2) as Hf.
+    rewrite rev_involutive, rev_repeat in Hf.
+    unfold decSW. rewrite Hf, Hb1, rev_repeat, <- repeat_add, flipBits_repeat, xorB_self_false.
+    replace (d2 + d1) with p by lia. reflexivity.
+Qed.
+
+Lemma swSplitTrail0_endW1 (inv : bool) (f b f' b' : list bool) (p : nat)
+  (H : swSplitTrail0 inv f b = SwTrail0_endW1 f' b' p) :
+  decSW inv f b = decSW inv f' b' ++ true :: repeat false p.
+Proof.
+  unfold swSplitTrail0 in H.
+  destruct (swSplitTrail0List inv 0 b) as [p1 | f0 b0 p0] eqn:Hs1.
+  - destruct (swSplitTrail0List_allW0 inv 0 b p1 Hs1) as [d1 [Hp1 Hb1]].
+    destruct f as [|x xs]; [discriminate H |].
+    rewrite <- rev_alt in H.
+    destruct (swSplitTrail0List_endW1 inv p1 (rev (x :: xs)) f' b' p H) as [Hf0 [d2 [Hp2 Hf2]]].
+    subst f'.
+    pose proof (f_equal (@rev bool) Hf2) as Hf.
+    rewrite rev_involutive, rev_app_distr, rev_repeat in Hf; cbn [rev] in Hf.
+    rewrite <- app_assoc in Hf; cbn [app] in Hf.
+    unfold decSW. rewrite Hf, Hb1, rev_repeat; cbn [app].
+    rewrite <- app_assoc; cbn [app]; rewrite <- repeat_add, flipBits_append, flipBits_cons,
+      flipBits_repeat, xorB_not_true, xorB_self_false.
+    replace (d2 + d1) with p by lia. reflexivity.
+  - inversion H; subst.
+    destruct (swSplitTrail0List_endW1 inv 0 b f0 b' p Hs1) as [_ [d1 [Hp1 Hb1]]].
+    replace d1 with p in Hb1 by lia.
+    unfold decSW. rewrite Hb1, rev_app_distr, rev_repeat; cbn [rev].
+    rewrite <- app_assoc; cbn [app].
+    rewrite app_assoc, flipBits_append, flipBits_cons, flipBits_repeat, xorB_not_true, xorB_self_false.
+    reflexivity.
+Qed.
+
+Fixpoint bzSplitTrail0List (p : nat) (xs : list SwSym) : BzTrail0 :=
+  match xs with
+  | [] => BzTrail0_allW0 p
+  | SwSym_w0 :: rest => bzSplitTrail0List (S p) rest
+  | SwSym_w1 :: rest => BzTrail0_endW1 [] rest p
+  | SwSym_d  :: rest => BzTrail0_endD [] rest p
+  end.
+
+Lemma bzSplitTrail0List_allW0 (p : nat) (xs : list SwSym) (q : nat)
+  (H : bzSplitTrail0List p xs = BzTrail0_allW0 q) :
+  exists d, q = p + d /\ xs = repeat SwSym_w0 d.
+Proof.
+  revert p H. induction xs as [|x rest IH]; intros p H.
+  - cbn [bzSplitTrail0List] in H. inversion H; subst. exists 0; split; [lia | reflexivity].
+  - destruct x; cbn [bzSplitTrail0List] in H; try discriminate H.
+    destruct (IH (S p) H) as [d [Hq Hxs]].
+    exists (S d); split; [lia | cbn [repeat]; rewrite Hxs; reflexivity].
+Qed.
+
+Lemma bzSplitTrail0List_endW1 (p : nat) (xs f0 b' : list SwSym) (q : nat)
+  (H : bzSplitTrail0List p xs = BzTrail0_endW1 f0 b' q) :
+  f0 = [] /\ exists d, q = p + d /\ xs = repeat SwSym_w0 d ++ SwSym_w1 :: b'.
+Proof.
+  revert p H. induction xs as [|x rest IH]; intros p H; [discriminate H |].
+  destruct x; cbn [bzSplitTrail0List] in H; try discriminate H.
+  - destruct (IH (S p) H) as [Hf0 [d [Hq Hxs]]].
+    split; [exact Hf0 | exists (S d); split; [lia | cbn [repeat app]; rewrite Hxs; reflexivity]].
+  - inversion H; subst. split; [reflexivity | exists 0; split; [lia | reflexivity]].
+Qed.
+
+Lemma bzSplitTrail0List_endD (p : nat) (xs f0 b' : list SwSym) (q : nat)
+  (H : bzSplitTrail0List p xs = BzTrail0_endD f0 b' q) :
+  f0 = [] /\ exists d, q = p + d /\ xs = repeat SwSym_w0 d ++ SwSym_d :: b'.
+Proof.
+  revert p H. induction xs as [|x rest IH]; intros p H; [discriminate H |].
+  destruct x; cbn [bzSplitTrail0List] in H; try discriminate H.
+  - destruct (IH (S p) H) as [Hf0 [d [Hq Hxs]]].
+    split; [exact Hf0 | exists (S d); split; [lia | cbn [repeat app]; rewrite Hxs; reflexivity]].
+  - inversion H; subst. split; [reflexivity | exists 0; split; [lia | reflexivity]].
+Qed.
+
+Definition bzSplitTrail0 (f b : list SwSym) : BzTrail0 :=
+  match bzSplitTrail0List 0 b with
+  | BzTrail0_endW1 _ b' p => BzTrail0_endW1 f b' p
+  | BzTrail0_endD  _ b' p => BzTrail0_endD f b' p
+  | BzTrail0_allW0 p =>
+    match f with
+    | [] => BzTrail0_allW0 p
+    | _ :: _ => bzSplitTrail0List p (List.rev_append f [])
+    end
+  end.
+
+Lemma bzSplitTrail0_allW0 (f b : list SwSym) (p : nat)
+  (H : bzSplitTrail0 f b = BzTrail0_allW0 p) :
+  decBZ f b = repeat SwSym_w0 p.
+Proof.
+  unfold bzSplitTrail0 in H.
+  destruct (bzSplitTrail0List 0 b) as [p1 | f0 b0 p0 | f0 b0 p0] eqn:Hs1; try discriminate H.
+  destruct (bzSplitTrail0List_allW0 0 b p1 Hs1) as [d1 [Hp1 Hb1]].
+  cbn [Nat.add] in Hp1; subst p1.
+  destruct f as [|x xs].
+  - inversion H; subst.
+    unfold decBZ. try rewrite Hb1; cbn [app]; rewrite rev_repeat; reflexivity.
+  - rewrite <- rev_alt in H.
+    destruct (bzSplitTrail0List_allW0 d1 (rev (x :: xs)) p H) as [d2 [Hp2 Hf2]].
+    pose proof (f_equal (@rev SwSym) Hf2) as Hf.
+    rewrite rev_involutive, rev_repeat in Hf.
+    unfold decBZ. rewrite Hf, Hb1, rev_repeat, <- repeat_add.
+    replace (d2 + d1) with p by lia. reflexivity.
+Qed.
+
+Lemma bzSplitTrail0_endW1 (f b f' b' : list SwSym) (p : nat)
+  (H : bzSplitTrail0 f b = BzTrail0_endW1 f' b' p) :
+  decBZ f b = decBZ f' b' ++ SwSym_w1 :: repeat SwSym_w0 p.
+Proof.
+  unfold bzSplitTrail0 in H.
+  destruct (bzSplitTrail0List 0 b) as [p1 | f0 b0 p0 | f0 b0 p0] eqn:Hs1; try discriminate H.
+  - destruct (bzSplitTrail0List_allW0 0 b p1 Hs1) as [d1 [Hp1 Hb1]].
+    destruct f as [|x xs]; [discriminate H |].
+    rewrite <- rev_alt in H.
+    destruct (bzSplitTrail0List_endW1 p1 (rev (x :: xs)) f' b' p H) as [Hf0 [d2 [Hp2 Hf2]]].
+    subst f'.
+    pose proof (f_equal (@rev SwSym) Hf2) as Hf.
+    rewrite rev_involutive, rev_app_distr, rev_repeat in Hf; cbn [rev] in Hf.
+    rewrite <- app_assoc in Hf; cbn [app] in Hf.
+    unfold decBZ. rewrite Hf, Hb1, rev_repeat; cbn [app].
+    rewrite <- app_assoc; cbn [app]; rewrite <- repeat_add.
+    replace (d2 + d1) with p by lia. reflexivity.
+  - inversion H; subst.
+    destruct (bzSplitTrail0List_endW1 0 b f0 b' p Hs1) as [_ [d1 [Hp1 Hb1]]].
+    replace d1 with p in Hb1 by lia.
+    unfold decBZ. rewrite Hb1, rev_app_distr, rev_repeat; cbn [rev].
+    rewrite <- app_assoc; cbn [app]; rewrite app_assoc. reflexivity.
+Qed.
+
+Lemma bzSplitTrail0_endD (f b f' b' : list SwSym) (p : nat)
+  (H : bzSplitTrail0 f b = BzTrail0_endD f' b' p) :
+  decBZ f b = decBZ f' b' ++ SwSym_d :: repeat SwSym_w0 p.
+Proof.
+  unfold bzSplitTrail0 in H.
+  destruct (bzSplitTrail0List 0 b) as [p1 | f0 b0 p0 | f0 b0 p0] eqn:Hs1; try discriminate H.
+  - destruct (bzSplitTrail0List_allW0 0 b p1 Hs1) as [d1 [Hp1 Hb1]].
+    destruct f as [|x xs]; [discriminate H |].
+    rewrite <- rev_alt in H.
+    destruct (bzSplitTrail0List_endD p1 (rev (x :: xs)) f' b' p H) as [Hf0 [d2 [Hp2 Hf2]]].
+    subst f'.
+    pose proof (f_equal (@rev SwSym) Hf2) as Hf.
+    rewrite rev_involutive, rev_app_distr, rev_repeat in Hf; cbn [rev] in Hf.
+    rewrite <- app_assoc in Hf; cbn [app] in Hf.
+    unfold decBZ. rewrite Hf, Hb1, rev_repeat; cbn [app].
+    rewrite <- app_assoc; cbn [app]; rewrite <- repeat_add.
+    replace (d2 + d1) with p by lia. reflexivity.
+  - inversion H; subst.
+    destruct (bzSplitTrail0List_endD 0 b f0 b' p Hs1) as [_ [d1 [Hp1 Hb1]]].
+    replace d1 with p in Hb1 by lia.
+    unfold decBZ. rewrite Hb1, rev_app_distr, rev_repeat; cbn [rev].
+    rewrite <- app_assoc; cbn [app]; rewrite app_assoc. reflexivity.
+Qed.
+
+Fixpoint bzSplitUntilDList (acc : list bool) (xs : list SwSym) : BzSplitD :=
+  match xs with
+  | [] => BzSplitD_allBool acc
+  | SwSym_w0 :: rest => bzSplitUntilDList (false :: acc) rest
+  | SwSym_w1 :: rest => bzSplitUntilDList (true :: acc) rest
+  | SwSym_d  :: rest => BzSplitD_hitD acc rest []
+  end.
+
+Lemma bzSplitUntilDList_hitD (acc : list bool) (xs : list SwSym) (revPref : list bool) (f' b' : list SwSym)
+  (H : bzSplitUntilDList acc xs = BzSplitD_hitD revPref f' b') :
+  b' = [] /\ exists u, revPref = rev u ++ acc /\ xs = map symOfBool u ++ SwSym_d :: f'.
+Proof.
+  revert acc H. induction xs as [|s rest IH]; intros acc H; [discriminate H |].
+  destruct s; cbn [bzSplitUntilDList] in H.
+  - destruct (IH (false :: acc) H) as [Hb [u [Hrev Hxs]]].
+    split; [exact Hb | exists (false :: u); split; [cbn [rev]; rewrite <- app_assoc; exact Hrev | cbn [map app]; rewrite Hxs; reflexivity]].
+  - destruct (IH (true :: acc) H) as [Hb [u [Hrev Hxs]]].
+    split; [exact Hb | exists (true :: u); split; [cbn [rev]; rewrite <- app_assoc; exact Hrev | cbn [map app]; rewrite Hxs; reflexivity]].
+  - inversion H; subst. split; [reflexivity | exists (@nil bool); split; reflexivity].
+Qed.
+
+Lemma bzSplitUntilDList_allBool (acc : list bool) (xs : list SwSym) (revPref : list bool)
+  (H : bzSplitUntilDList acc xs = BzSplitD_allBool revPref) :
+  exists u, revPref = rev u ++ acc /\ xs = map symOfBool u.
+Proof.
+  revert acc H. induction xs as [|s rest IH]; intros acc H.
+  - cbn [bzSplitUntilDList] in H. inversion H; subst. exists (@nil bool); split; reflexivity.
+  - destruct s; cbn [bzSplitUntilDList] in H; try discriminate H.
+    + destruct (IH (false :: acc) H) as [u [Hrev Hxs]].
+      exists (false :: u); split; [cbn [rev]; rewrite <- app_assoc; exact Hrev | cbn [map]; rewrite Hxs; reflexivity].
+    + destruct (IH (true :: acc) H) as [u [Hrev Hxs]].
+      exists (true :: u); split; [cbn [rev]; rewrite <- app_assoc; exact Hrev | cbn [map]; rewrite Hxs; reflexivity].
+Qed.
+
+Definition bzSplitUntilD (f b : list SwSym) : BzSplitD :=
+  match bzSplitUntilDList [] f with
+  | BzSplitD_hitD revPref f' _ => BzSplitD_hitD revPref f' b
+  | BzSplitD_allBool revPref =>
+    match b with
+    | [] => BzSplitD_allBool revPref
+    | _ :: _ => bzSplitUntilDList revPref (List.rev_append b [])
+    end
+  end.
+
+Lemma bzSplitUntilD_hitD (f b : list SwSym) (revPref : list bool) (f' b' : list SwSym)
+  (H : bzSplitUntilD f b = BzSplitD_hitD revPref f' b') :
+  decBZ f b = map symOfBool (rev revPref) ++ SwSym_d :: decBZ f' b'.
+Proof.
+  unfold bzSplitUntilD in H.
+  destruct (bzSplitUntilDList [] f) as [rp1 f1 b1 | rp1] eqn:Hs1.
+  - inversion H; subst.
+    destruct (bzSplitUntilDList_hitD [] f revPref f' b1 Hs1) as [_ [u [Hrev Hf]]].
+    rewrite app_nil_r in Hrev. subst revPref. rewrite rev_involutive.
+    unfold decBZ. rewrite Hf, <- app_assoc. reflexivity.
+  - destruct (bzSplitUntilDList_allBool [] f rp1 Hs1) as [u1 [Hrev1 Hf1]].
+    rewrite app_nil_r in Hrev1.
+    destruct b as [|x xs]; [discriminate H |].
+    rewrite <- rev_alt in H.
+    destruct (bzSplitUntilDList_hitD rp1 (rev (x :: xs)) revPref f' b' H) as [Hb' [u2 [Hrev2 Hb2]]].
+    subst b' rp1 revPref.
+    rewrite rev_app_distr, !rev_involutive, map_app.
+    unfold decBZ. rewrite Hf1, Hb2; cbn [rev]; rewrite app_nil_r, <- app_assoc. reflexivity.
+Qed.
+
+Lemma bzSplitUntilD_allBool (f b : list SwSym) (revPref : list bool)
+  (H : bzSplitUntilD f b = BzSplitD_allBool revPref) :
+  decBZ f b = map symOfBool (rev revPref).
+Proof.
+  unfold bzSplitUntilD in H.
+  destruct (bzSplitUntilDList [] f) as [rp1 f1 b1 | rp1] eqn:Hs1; [discriminate H |].
+  destruct (bzSplitUntilDList_allBool [] f rp1 Hs1) as [u1 [Hrev1 Hf1]].
+  rewrite app_nil_r in Hrev1.
+  destruct b as [|x xs].
+  - inversion H; subst. rewrite rev_involutive. unfold decBZ. try rewrite Hf1; cbn [rev]; rewrite app_nil_r; reflexivity.
+  - rewrite <- rev_alt in H.
+    destruct (bzSplitUntilDList_allBool rp1 (rev (x :: xs)) revPref H) as [u2 [Hrev2 Hb2]].
+    subst rp1 revPref.
+    rewrite rev_app_distr, !rev_involutive, map_app.
+    unfold decBZ. rewrite Hf1, Hb2. reflexivity.
+Qed.
+
+(* --- Lookahead Heuristics & RLE Constructors --- *)
+
+Fixpoint boundedLen {X : Type} (n : nat) (l : list X) : nat :=
+  match n, l with
+  | 0, _ => 0
+  | _, [] => 0
+  | S n', _ :: xs => boundedLen n' xs + 1
+  end.
+
+Definition boundedLen2 {X : Type} (lim : nat) (f b : list X) : nat :=
+  let lf := boundedLen lim f in
+  if Nat.leb lim lf then lim else lf + boundedLen (lim - lf) b.
+
+Definition pureLB (ch : Chunk) : nat :=
+  match ch with
+  | b0 | b1 => 1
+  | rL0100 n | rL0010 n | rL1100 n | rR0001 n | rR1101 n =>
+    if Nat.leb 17 n then 72 else 4 * (n + 1)
+  | swL _ f b | swR _ f b =>
+    let sz := boundedLen2 18 f b in if Nat.leb 18 sz then 72 else 4 * sz
+  | bzL f b | bzR f b =>
+    let sz := boundedLen2 18 f b in if Nat.leb 18 sz then 72 else 4 * sz
+  | _ => 0
+  end.
+
+Fixpoint refillPure (target rem : nat) (xs : list Chunk) {struct xs} : OptPureState :=
+  if Nat.leb target rem then OptPureState_some rem xs else
+  match xs with
+  | [] => OptPureState_some target []
+  | ch :: rest =>
+    let w := pureLB ch in
+    if Nat.eqb w 0 then OptPureState_none else refillPure target (rem + w) rest
+  end.
+
+Definition advancePureInit (target : nat) (xs : list Chunk) : OptPureState :=
+  refillPure target 0 xs.
+
+Definition canAdvancePure (target : nat) (xsRem : list Chunk) (cb pushBits rem : nat) (ahead : list Chunk) : OptPureState :=
+  if Nat.leb cb rem then refillPure target (rem - cb + pushBits) ahead
+  else refillPure target pushBits xsRem.
+
+Definition swOptLB (inv : bool) (f b : list bool) : nat :=
+  match f, b with [], [] => 0 | _, _ => pureLB (swR inv f b) end.
+
+Definition bzOptLB (f b : list SwSym) : nat :=
+  match f, b with [], [] => 0 | _, _ => pureLB (bzR f b) end.
+
+Definition peel0PushB (ch : Chunk) : nat :=
+  match ch with
+  | b0 => 0
+  | x => pureLB x - 1
+  end.
+
+Definition consRL0100 (n : nat) (xs : list Chunk) : list Chunk :=
+  match xs with rL0100 m :: rest => rL0100 (n + m + 1) :: rest | _ => rL0100 n :: xs end.
+Definition consRL0010 (n : nat) (xs : list Chunk) : list Chunk :=
+  match xs with rL0010 m :: rest => rL0010 (n + m + 1) :: rest | _ => rL0010 n :: xs end.
+Definition consRL1100 (n : nat) (xs : list Chunk) : list Chunk :=
+  match xs with rL1100 m :: rest => rL1100 (n + m + 1) :: rest | _ => rL1100 n :: xs end.
+Definition consRR0001 (n : nat) (xs : list Chunk) : list Chunk :=
+  match xs with rR0001 m :: rest => rR0001 (n + m + 1) :: rest | _ => rR0001 n :: xs end.
+Definition consRR1101 (n : nat) (xs : list Chunk) : list Chunk :=
+  match xs with rR1101 m :: rest => rR1101 (n + m + 1) :: rest | _ => rR1101 n :: xs end.
+
+Definition consRL0100Opt (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with 0 => xs | S n' => consRL0100 n' xs end.
+Definition consRL0010Opt (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with 0 => xs | S n' => consRL0010 n' xs end.
+Definition consRL1100Opt (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with 0 => xs | S n' => consRL1100 n' xs end.
+Definition consRR0001Opt (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with 0 => xs | S n' => consRR0001 n' xs end.
+Definition consRR1101Opt (n : nat) (xs : list Chunk) : list Chunk :=
+  match n with 0 => xs | S n' => consRR1101 n' xs end.
+
+Lemma decodeList_consRL0100 (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRL0100 n xs) lb = repBits [false; true; false; false] (S n) (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [reflexivity | destruct ch; try reflexivity].
+  cbn [consRL0100 decodeList].
+  replace (S (n + n0 + 1)) with (S n + S n0) by lia.
+  rewrite repBits_add. reflexivity.
+Qed.
+
+Lemma decodeList_consRL0010 (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRL0010 n xs) lb = repBits [false; false; true; false] (S n) (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [reflexivity | destruct ch; try reflexivity].
+  cbn [consRL0010 decodeList].
+  replace (S (n + n0 + 1)) with (S n + S n0) by lia.
+  rewrite repBits_add. reflexivity.
+Qed.
+
+Lemma decodeList_consRL1100 (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRL1100 n xs) lb = repBits [true; true; false; false] (S n) (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [reflexivity | destruct ch; try reflexivity].
+  cbn [consRL1100 decodeList].
+  replace (S (n + n0 + 1)) with (S n + S n0) by lia.
+  rewrite repBits_add. reflexivity.
+Qed.
+
+Lemma decodeList_consRR0001 (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRR0001 n xs) lb = repBits [false; false; false; true] (S n) (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [reflexivity | destruct ch; try reflexivity].
+  cbn [consRR0001 decodeList].
+  replace (S (n + n0 + 1)) with (S n + S n0) by lia.
+  rewrite repBits_add. reflexivity.
+Qed.
+
+Lemma decodeList_consRR1101 (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRR1101 n xs) lb = repBits [true; true; false; true] (S n) (decodeList w c xs lb).
+Proof.
+  destruct xs as [|ch rest]; [reflexivity | destruct ch; try reflexivity].
+  cbn [consRR1101 decodeList].
+  replace (S (n + n0 + 1)) with (S n + S n0) by lia.
+  rewrite repBits_add. reflexivity.
+Qed.
+
+Lemma decodeList_consRL0100Opt (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRL0100Opt n xs) lb = repBits [false; true; false; false] n (decodeList w c xs lb).
+Proof. destruct n; [reflexivity | apply decodeList_consRL0100]. Qed.
+
+Lemma decodeList_consRL0010Opt (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRL0010Opt n xs) lb = repBits [false; false; true; false] n (decodeList w c xs lb).
+Proof. destruct n; [reflexivity | apply decodeList_consRL0010]. Qed.
+
+Lemma decodeList_consRL1100Opt (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRL1100Opt n xs) lb = repBits [true; true; false; false] n (decodeList w c xs lb).
+Proof. destruct n; [reflexivity | apply decodeList_consRL1100]. Qed.
+
+Lemma decodeList_consRR0001Opt (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRR0001Opt n xs) lb = repBits [false; false; false; true] n (decodeList w c xs lb).
+Proof. destruct n; [reflexivity | apply decodeList_consRR0001]. Qed.
+
+Lemma decodeList_consRR1101Opt (w : list bool) (c n : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (consRR1101Opt n xs) lb = repBits [true; true; false; true] n (decodeList w c xs lb).
+Proof. destruct n; [reflexivity | apply decodeList_consRR1101]. Qed.
+
+Definition push1001M (m : nat) (l : list Chunk) : list Chunk :=
+  match l with
+  | b1 :: b0 :: b0 :: l' => b1 :: b0 :: b0 :: consRL1100 m l'
+  | _ => b1 :: b0 :: b0 :: consRL1100Opt m (b1 :: l)
+  end.
+
+Definition push1001MOpt (k : nat) (l : list Chunk) : list Chunk :=
+  match k with 0 => l | S m => push1001M m l end.
+
+Lemma decodeList_push1001M (w : list bool) (c m : nat) (l : list Chunk) (lb : side) :
+  decodeList w c (push1001M m l) lb = repBits [true; false; false; true] (S m) (decodeList w c l lb).
+Proof.
+  assert (Hfb : decodeList w c (b1 :: b0 :: b0 :: consRL1100Opt m (b1 :: l)) lb =
+                repBits [true; false; false; true] (S m) (decodeList w c l lb)).
+  { cbn [decodeList]. rewrite decodeList_consRL1100Opt; cbn [decodeList]. symmetry; apply shift_1001_any. }
+  destruct l as [|ch1 l1]; [exact Hfb | destruct ch1; try exact Hfb].
+  destruct l1 as [|ch2 l2]; [exact Hfb | destruct ch2; try exact Hfb].
+  destruct l2 as [|ch3 l3]; [exact Hfb | destruct ch3; try exact Hfb].
+  cbn [push1001M decodeList]. rewrite decodeList_consRL1100.
+  rewrite <- shift_1001_100. reflexivity.
+Qed.
+
+Lemma decodeList_push1001MOpt (w : list bool) (c k : nat) (l : list Chunk) (lb : side) :
+  decodeList w c (push1001MOpt k l) lb = repBits [true; false; false; true] k (decodeList w c l lb).
+Proof. destruct k; [reflexivity | apply decodeList_push1001M]. Qed.
+
+Definition push0111M (n : nat) (r : list Chunk) : list Chunk :=
+  match r with
+  | b0 :: b1 :: r' => b0 :: b1 :: consRR1101 n r'
+  | _ => b0 :: b1 :: consRR1101Opt n (b1 :: b1 :: r)
+  end.
+
+Lemma decodeList_push0111M (w : list bool) (c n : nat) (r : list Chunk) (lb : side) :
+  decodeList w c (push0111M n r) lb = repBits [false; true; true; true] (S n) (decodeList w c r lb).
+Proof.
+  assert (Hfb : decodeList w c (b0 :: b1 :: consRR1101Opt n (b1 :: b1 :: r)) lb =
+                repBits [false; true; true; true] (S n) (decodeList w c r lb)).
+  { cbn [decodeList]. rewrite decodeList_consRR1101Opt; cbn [decodeList]. symmetry; apply shift_0111_any. }
+  destruct r as [|ch1 r1]; [exact Hfb | destruct ch1; try exact Hfb].
+  destruct r1 as [|ch2 r2]; [exact Hfb | destruct ch2; try exact Hfb].
+  cbn [push0111M decodeList]. rewrite decodeList_consRR1101.
+  rewrite <- shift_0111_01. reflexivity.
+Qed.
+
+Definition peelHead (xs : list Chunk) : OptList :=
+  match xs with
+  | rL0100 0 :: rest => OptList_some (b0 :: b1 :: b0 :: b0 :: rest)
+  | rL0100 (S n) :: rest => OptList_some (b0 :: b1 :: b0 :: b0 :: rL0100 n :: rest)
+  | rL0010 0 :: rest => OptList_some (b0 :: b0 :: b1 :: b0 :: rest)
+  | rL0010 (S n) :: rest => OptList_some (b0 :: b0 :: b1 :: b0 :: rL0010 n :: rest)
+  | rL1100 0 :: rest => OptList_some (b1 :: b1 :: b0 :: b0 :: rest)
+  | rL1100 (S n) :: rest => OptList_some (b1 :: b1 :: b0 :: b0 :: rL1100 n :: rest)
+  | rR0001 0 :: rest => OptList_some (b0 :: b0 :: b0 :: b1 :: rest)
+  | rR0001 (S n) :: rest => OptList_some (b0 :: b0 :: b0 :: b1 :: rR0001 n :: rest)
+  | rR1101 0 :: rest => OptList_some (b1 :: b1 :: b0 :: b1 :: rest)
+  | rR1101 (S n) :: rest => OptList_some (b1 :: b1 :: b0 :: b1 :: rR1101 n :: rest)
+  | swL inv f b :: rest =>
+    match swPop inv f b with
+    | OptSwPop_none => OptList_some rest
+    | OptSwPop_some true f' b' => OptList_some (b0 :: b1 :: b0 :: b0 :: pushSwL inv f' b' rest)
+    | OptSwPop_some false f' b' => OptList_some (b1 :: b0 :: b0 :: b0 :: pushSwL inv f' b' rest)
+    end
+  | swR inv f b :: rest =>
+    match swPop inv f b with
+    | OptSwPop_none => OptList_some rest
+    | OptSwPop_some true f' b' => OptList_some (b0 :: b0 :: b0 :: b1 :: pushSwR inv f' b' rest)
+    | OptSwPop_some false f' b' => OptList_some (b1 :: b1 :: b0 :: b1 :: pushSwR inv f' b' rest)
+    end
+  | bzL f b :: rest =>
+    match bzPop f b with
+    | OptBzPop_none => OptList_some rest
+    | OptBzPop_some SwSym_w0 f' b' => OptList_some (b1 :: b0 :: b0 :: b0 :: pushBzL f' b' rest)
+    | OptBzPop_some SwSym_w1 f' b' => OptList_some (b0 :: b1 :: b0 :: b0 :: pushBzL f' b' rest)
+    | OptBzPop_some SwSym_d  f' b' => OptList_some (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: pushBzL f' b' rest)
+    end
+  | bzR f b :: rest =>
+    match bzPop f b with
+    | OptBzPop_none => OptList_some rest
+    | OptBzPop_some SwSym_w0 f' b' => OptList_some (b1 :: b1 :: b0 :: b1 :: pushBzR f' b' rest)
+    | OptBzPop_some SwSym_w1 f' b' => OptList_some (b0 :: b0 :: b0 :: b1 :: pushBzR f' b' rest)
+    | OptBzPop_some SwSym_d  f' b' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: pushBzR f' b' rest)
+    end
+  | _ => OptList_none
+  end.
+
+Lemma peelHead_eq (w : list bool) (c : nat) (xs out : list Chunk) (lb : side)
+  (H : peelHead xs = OptList_some out) :
+  decodeList w c xs lb = decodeList w c out lb.
+Proof.
+  destruct xs as [|ch rest]; [discriminate H |].
+  destruct ch; try discriminate H; cbn [peelHead] in H.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct (swPop b l l0) as [|[|] f' b'] eqn:Hp; inversion H; subst; cbn [decodeList].
+    + rewrite (swPop_none b l l0 Hp); reflexivity.
+    + rewrite (swPop_some b l l0 true f' b' Hp), decodeList_pushSwL; reflexivity.
+    + rewrite (swPop_some b l l0 false f' b' Hp), decodeList_pushSwL; reflexivity.
+  - destruct (swPop b l l0) as [|[|] f' b'] eqn:Hp; inversion H; subst; cbn [decodeList].
+    + rewrite (swPop_none b l l0 Hp); reflexivity.
+    + rewrite (swPop_some b l l0 true f' b' Hp), decodeList_pushSwR; reflexivity.
+    + rewrite (swPop_some b l l0 false f' b' Hp), decodeList_pushSwR; reflexivity.
+  - destruct (bzPop l l0) as [|[| |] f' b'] eqn:Hp; inversion H; subst; cbn [decodeList].
+    + rewrite (bzPop_none l l0 Hp); reflexivity.
+    + rewrite (bzPop_some l l0 SwSym_w0 f' b' Hp), decodeList_pushBzL; reflexivity.
+    + rewrite (bzPop_some l l0 SwSym_w1 f' b' Hp), decodeList_pushBzL; reflexivity.
+    + rewrite (bzPop_some l l0 SwSym_d f' b' Hp), decodeList_pushBzL; reflexivity.
+  - destruct (bzPop l l0) as [|[| |] f' b'] eqn:Hp; inversion H; subst; cbn [decodeList].
+    + rewrite (bzPop_none l l0 Hp); reflexivity.
+    + rewrite (bzPop_some l l0 SwSym_w0 f' b' Hp), decodeList_pushBzR; reflexivity.
+    + rewrite (bzPop_some l l0 SwSym_w1 f' b' Hp), decodeList_pushBzR; reflexivity.
+    + rewrite (bzPop_some l l0 SwSym_d f' b' Hp), decodeList_pushBzR; reflexivity.
+Qed.
+
+Fixpoint peelRunInWindow (d : nat) (xs : list Chunk) : OptList :=
+  match d, xs with
+  | 0, _ => OptList_none
+  | _, [] => OptList_none
+  | S d', ch :: rest =>
+    match peelHead (ch :: rest) with
+    | OptList_some out => OptList_some out
+    | OptList_none =>
+      match peelRunInWindow d' rest with
+      | OptList_some out => OptList_some (ch :: out)
+      | OptList_none => OptList_none
+      end
+    end
+  end.
+
+Lemma peelRunInWindow_eq (w : list bool) (c d : nat) (xs out : list Chunk) (lb : side)
+  (H : peelRunInWindow d xs = OptList_some out) :
+  decodeList w c xs lb = decodeList w c out lb.
+Proof.
+  revert xs out H. induction d as [|d IH]; intros xs out H; [discriminate H |].
+  destruct xs as [|ch rest]; [discriminate H |].
+  cbn [peelRunInWindow] in H.
+  destruct (peelHead (ch :: rest)) as [|out0] eqn:Hp.
+  - destruct (peelRunInWindow d rest) as [|out0] eqn:Hr; [discriminate H |].
+    inversion H; subst.
+    pose proof (IH rest out0 Hr) as Heq.
+    destruct ch; cbn [decodeList]; rewrite Heq; reflexivity.
+  - inversion H; subst. exact (peelHead_eq w c (ch :: rest) out lb Hp).
+Qed.
+
+Fixpoint hasPRWithin (bits : nat) (xs : list Chunk) : bool :=
+  match xs with
+  | [] => false
+  | ch :: rest =>
+    match bits with
+    | 0 => false
+    | _ =>
+      match ch with
+      | pR _ => true
+      | _ =>
+        let w := pureLB ch in
+        let step := if Nat.eqb w 0 then 1 else w in
+        hasPRWithin (bits - step) rest
+      end
+    end
+  end.
+
+Fixpoint hasPLWithin (bits : nat) (xs : list Chunk) : bool :=
+  match xs with
+  | [] => false
+  | ch :: rest =>
+    match bits with
+    | 0 => false
+    | _ =>
+      match ch with
+      | pL _ => true
+      | _ =>
+        let w := pureLB ch in
+        let step := if Nat.eqb w 0 then 1 else w in
+        hasPLWithin (bits - step) rest
+      end
+    end
+  end.
+
+Definition matchBit (b : bool) (ch : Chunk) : bool :=
+  match b, ch with
+  | false, b0 => true
+  | true, b1 => true
+  | _, _ => false
+  end.
+
+Lemma matchBit_eq {b : bool} {ch : Chunk} (H : matchBit b ch = true)
+  (w : list bool) (c : nat) (rest : list Chunk) (lb : side) :
+  decodeList w c (ch :: rest) lb = finOfBool b >> decodeList w c rest lb.
+Proof.
+  destruct b, ch; try discriminate H; reflexivity.
+Qed.
+
+Fixpoint scanPL (fuel bitLim rCur : nat) (xs : list Chunk) {struct fuel} : OptList :=
+  match xs with
+  | [] => OptList_none
+  | pL r :: rest => if Nat.eqb r rCur then OptList_some rest else OptList_none
+  | ch :: rest =>
+    match fuel with
+    | 0 => OptList_none
+    | S fuel' =>
+      match peelHead (ch :: rest) with
+      | OptList_some xs' => scanPL fuel' bitLim rCur xs'
+      | OptList_none =>
+        match bitLim with
+        | 0 => OptList_none
+        | S bitLim' =>
+          if matchBit (plTopIs1 rCur) ch then
+            match scanPL fuel' bitLim' (prev66 rCur) rest with
+            | OptList_none => OptList_none
+            | OptList_some out => OptList_some (ch :: out)
+            end
+          else OptList_none
+        end
+      end
+    end
+  end.
+
+Fixpoint scanPR (fuel bitLim rCur : nat) (xs : list Chunk) {struct fuel} : OptList :=
+  match xs with
+  | [] => OptList_none
+  | pR r :: rest => if Nat.eqb r rCur then OptList_some rest else OptList_none
+  | ch :: rest =>
+    match fuel with
+    | 0 => OptList_none
+    | S fuel' =>
+      match peelHead (ch :: rest) with
+      | OptList_some xs' => scanPR fuel' bitLim rCur xs'
+      | OptList_none =>
+        match bitLim with
+        | 0 => OptList_none
+        | S bitLim' =>
+          if matchBit (prTopIs1 rCur) ch then
+            match scanPR fuel' bitLim' (prev66 rCur) rest with
+            | OptList_none => OptList_none
+            | OptList_some out => OptList_some (ch :: out)
+            end
+          else OptList_none
+        end
+      end
+    end
+  end.
+
+Lemma scanPL_spec (fuel bitLim rCur : nat) (Hr : rCur < 66) (xs out : list Chunk)
+  (H : scanPL fuel bitLim rCur xs = OptList_some out) (w : list bool) (c : nat) (lb : side) :
+  decodeList w c xs lb = repPL rCur c (decodeList w c out lb).
+Proof.
+  revert bitLim rCur Hr xs out H.
+  induction fuel as [|fuel IH]; intros bitLim rCur Hr xs out H.
+  - destruct xs as [|ch rest]; [discriminate H |].
+    destruct ch; try discriminate H.
+    cbn [scanPL] in H. destruct (Nat.eqb n rCur) eqn:Heq; [| discriminate H].
+    apply Nat.eqb_eq in Heq; subst n; inversion H; subst; reflexivity.
+  - destruct xs as [|ch rest]; [discriminate H |].
+    assert (Hstep :
+      (match peelHead (ch :: rest) with
+       | OptList_some xs' => scanPL fuel bitLim rCur xs'
+       | OptList_none =>
+         match bitLim with
+         | 0 => OptList_none
+         | S bitLim' =>
+           if matchBit (plTopIs1 rCur) ch then
+             match scanPL fuel bitLim' (prev66 rCur) rest with
+             | OptList_none => OptList_none
+             | OptList_some out => OptList_some (ch :: out)
+             end
+           else OptList_none
+         end
+       end = OptList_some out) ->
+      decodeList w c (ch :: rest) lb = repPL rCur c (decodeList w c out lb)).
+    { intros H1.
+      destruct (peelHead (ch :: rest)) as [|xs'] eqn:Hp;
+        [ | rewrite (peelHead_eq w c (ch :: rest) xs' lb Hp); exact (IH bitLim rCur Hr xs' out H1) ].
+      destruct bitLim as [|bitLim']; [discriminate H1 |].
+      destruct (matchBit (plTopIs1 rCur) ch) eqn:Hm; [| discriminate H1].
+      destruct (scanPL fuel bitLim' (prev66 rCur) rest) as [|out0] eqn:Hsc; [discriminate H1 |].
+      inversion H1; subst.
+      rewrite (matchBit_eq Hm w c rest lb),
+              (IH bitLim' (prev66 rCur) (prev66_lt _ Hr) rest out0 Hsc),
+              (repPL_comm rCur Hr),
+              (matchBit_eq Hm w c out0 lb).
+      reflexivity. }
+    destruct ch; try exact (Hstep H).
+    cbn [scanPL] in H. destruct (Nat.eqb n rCur) eqn:Heq; [| discriminate H].
+    apply Nat.eqb_eq in Heq; subst n; inversion H; subst; reflexivity.
+Qed.
+
+Lemma scanPR_spec (fuel bitLim rCur : nat) (Hr : rCur < 66) (xs out : list Chunk)
+  (H : scanPR fuel bitLim rCur xs = OptList_some out) (w : list bool) (c : nat) (lb : side) :
+  decodeList w c xs lb = repPR rCur c (decodeList w c out lb).
+Proof.
+  revert bitLim rCur Hr xs out H.
+  induction fuel as [|fuel IH]; intros bitLim rCur Hr xs out H.
+  - destruct xs as [|ch rest]; [discriminate H |].
+    destruct ch; try discriminate H.
+    cbn [scanPR] in H. destruct (Nat.eqb n rCur) eqn:Heq; [| discriminate H].
+    apply Nat.eqb_eq in Heq; subst n; inversion H; subst; reflexivity.
+  - destruct xs as [|ch rest]; [discriminate H |].
+    assert (Hstep :
+      (match peelHead (ch :: rest) with
+       | OptList_some xs' => scanPR fuel bitLim rCur xs'
+       | OptList_none =>
+         match bitLim with
+         | 0 => OptList_none
+         | S bitLim' =>
+           if matchBit (prTopIs1 rCur) ch then
+             match scanPR fuel bitLim' (prev66 rCur) rest with
+             | OptList_none => OptList_none
+             | OptList_some out => OptList_some (ch :: out)
+             end
+           else OptList_none
+         end
+       end = OptList_some out) ->
+      decodeList w c (ch :: rest) lb = repPR rCur c (decodeList w c out lb)).
+    { intros H1.
+      destruct (peelHead (ch :: rest)) as [|xs'] eqn:Hp;
+        [ | rewrite (peelHead_eq w c (ch :: rest) xs' lb Hp); exact (IH bitLim rCur Hr xs' out H1) ].
+      destruct bitLim as [|bitLim']; [discriminate H1 |].
+      destruct (matchBit (prTopIs1 rCur) ch) eqn:Hm; [| discriminate H1].
+      destruct (scanPR fuel bitLim' (prev66 rCur) rest) as [|out0] eqn:Hsc; [discriminate H1 |].
+      inversion H1; subst.
+      rewrite (matchBit_eq Hm w c rest lb),
+              (IH bitLim' (prev66 rCur) (prev66_lt _ Hr) rest out0 Hsc),
+              (repPR_comm rCur Hr),
+              (matchBit_eq Hm w c out0 lb).
+      reflexivity. }
+    destruct ch; try exact (Hstep H).
+    cbn [scanPR] in H. destruct (Nat.eqb n rCur) eqn:Heq; [| discriminate H].
+    apply Nat.eqb_eq in Heq; subst n; inversion H; subst; reflexivity.
+Qed.
+
+Fixpoint stripBits (pat : list bool) (xs : list Chunk) : OptList :=
+  match pat, xs with
+  | [], _ => OptList_some xs
+  | b :: pat', ch :: xs' =>
+    if matchBit b ch then stripBits pat' xs' else OptList_none
+  | _, [] => OptList_none
+  end.
+
+Fixpoint preBits (pat : list bool) (tl : list Chunk) : list Chunk :=
+  match pat with
+  | [] => tl
+  | false :: pat' => b0 :: preBits pat' tl
+  | true :: pat' => b1 :: preBits pat' tl
+  end.
+
+Lemma stripBits_eq_preBits (pat : list bool) (xs rest : list Chunk) :
+  stripBits pat xs = OptList_some rest -> xs = preBits pat rest.
+Proof.
+  revert xs. induction pat as [|[|] pat' IH]; intros xs H.
+  - cbn [stripBits] in H. inversion H; subst. reflexivity.
+  - destruct xs as [|ch xs']; [discriminate H | destruct ch; try discriminate H].
+    cbn [stripBits matchBit] in H. cbn [preBits]. f_equal. exact (IH xs' H).
+  - destruct xs as [|ch xs']; [discriminate H | destruct ch; try discriminate H].
+    cbn [stripBits matchBit] in H. cbn [preBits]. f_equal. exact (IH xs' H).
+Qed.
+
+Lemma preBits_spec (w : list bool) (c : nat) (pat : list bool) (tl : list Chunk) (lb : side) :
+  decodeList w c (preBits pat tl) lb = decBits pat (decodeList w c tl lb).
+Proof.
+  induction pat as [|[|] pat' IH]; [reflexivity | | ];
+    cbn [preBits decodeList decBits]; rewrite IH; reflexivity.
+Qed.
+
+Lemma stripBits_spec (w : list bool) (c : nat) (pat : list bool) (xs rest : list Chunk) (lb : side) :
+  stripBits pat xs = OptList_some rest ->
+  decodeList w c xs lb = decBits pat (decodeList w c rest lb).
+Proof.
+  intros H. rewrite (stripBits_eq_preBits pat xs rest H). apply preBits_spec.
+Qed.
+
+Definition pL0_66  : list bool := Eval vm_compute in pLList 0.
+Definition pL14_66 : list bool := Eval vm_compute in pLList 14.
+Definition pL16_66 : list bool := Eval vm_compute in pLList 16.
+Definition pL9_66  : list bool := Eval vm_compute in pLList 9.
+Definition pL29_66 : list bool := Eval vm_compute in pLList 29.
+Definition pR64_66 : list bool := Eval vm_compute in pRList 64.
+Definition pR36_66 : list bool := Eval vm_compute in pRList 36.
+Definition pR14_66 : list bool := Eval vm_compute in pRList 14.
+Definition pR63_66 : list bool := Eval vm_compute in pRList 63.
+
+Definition stripP16 (xs : list Chunk) : OptList := stripBits pL16_66 xs.
+Definition stripP9  (xs : list Chunk) : OptList := stripBits pL9_66 xs.
+Definition stripP29 (xs : list Chunk) : OptList := stripBits pL29_66 xs.
+Definition stripR63 (xs : list Chunk) : OptList := stripBits pR63_66 xs.
+
+Definition preR64 (tl : list Chunk) : list Chunk := preBits pR64_66 tl.
+Definition preR36 (tl : list Chunk) : list Chunk := preBits pR36_66 tl.
+Definition preR14 (tl : list Chunk) : list Chunk := preBits pR14_66 tl.
+Definition preP14 (tl : list Chunk) : list Chunk := preBits pL14_66 tl.
+Definition prePL0 (tl : list Chunk) : list Chunk := preBits pL0_66 tl.
+
+Lemma pL0_66_eq  : pL0_66  = pLList 0.  Proof. vm_compute. reflexivity. Qed.
+Lemma pL14_66_eq : pL14_66 = pLList 14. Proof. vm_compute. reflexivity. Qed.
+Lemma pL16_66_eq : pL16_66 = pLList 16. Proof. vm_compute. reflexivity. Qed.
+Lemma pL9_66_eq  : pL9_66  = pLList 9.  Proof. vm_compute. reflexivity. Qed.
+Lemma pL29_66_eq : pL29_66 = pLList 29. Proof. vm_compute. reflexivity. Qed.
+Lemma pR64_66_eq : pR64_66 = pRList 64. Proof. vm_compute. reflexivity. Qed.
+Lemma pR36_66_eq : pR36_66 = pRList 36. Proof. vm_compute. reflexivity. Qed.
+Lemma pR14_66_eq : pR14_66 = pRList 14. Proof. vm_compute. reflexivity. Qed.
+Lemma pR63_66_eq : pR63_66 = pRList 63. Proof. vm_compute. reflexivity. Qed.
+
+Lemma stripP16_spec (w : list bool) (c : nat) (xs rest : list Chunk) (lb : side) :
+  stripP16 xs = OptList_some rest -> decodeList w c xs lb = pLBits 16 (decodeList w c rest lb).
+Proof. unfold stripP16, pLBits. rewrite <- pL16_66_eq. apply stripBits_spec. Qed.
+Lemma stripP9_spec (w : list bool) (c : nat) (xs rest : list Chunk) (lb : side) :
+  stripP9 xs = OptList_some rest -> decodeList w c xs lb = pLBits 9 (decodeList w c rest lb).
+Proof. unfold stripP9, pLBits. rewrite <- pL9_66_eq. apply stripBits_spec. Qed.
+Lemma stripP29_spec (w : list bool) (c : nat) (xs rest : list Chunk) (lb : side) :
+  stripP29 xs = OptList_some rest -> decodeList w c xs lb = pLBits 29 (decodeList w c rest lb).
+Proof. unfold stripP29, pLBits. rewrite <- pL29_66_eq. apply stripBits_spec. Qed.
+Lemma stripR63_spec (w : list bool) (c : nat) (xs rest : list Chunk) (lb : side) :
+  stripR63 xs = OptList_some rest -> decodeList w c xs lb = pRBits 63 (decodeList w c rest lb).
+Proof. unfold stripR63, pRBits. rewrite <- pR63_66_eq. apply stripBits_spec. Qed.
+Lemma preR64_spec (w : list bool) (c : nat) (tl : list Chunk) (lb : side) :
+  decodeList w c (preR64 tl) lb = pRBits 64 (decodeList w c tl lb).
+Proof. unfold preR64, pRBits. rewrite <- pR64_66_eq. apply preBits_spec. Qed.
+Lemma preR36_spec (w : list bool) (c : nat) (tl : list Chunk) (lb : side) :
+  decodeList w c (preR36 tl) lb = pRBits 36 (decodeList w c tl lb).
+Proof. unfold preR36, pRBits. rewrite <- pR36_66_eq. apply preBits_spec. Qed.
+Lemma preR14_spec (w : list bool) (c : nat) (tl : list Chunk) (lb : side) :
+  decodeList w c (preR14 tl) lb = pRBits 14 (decodeList w c tl lb).
+Proof. unfold preR14, pRBits. rewrite <- pR14_66_eq. apply preBits_spec. Qed.
+Lemma preP14_spec (w : list bool) (c : nat) (tl : list Chunk) (lb : side) :
+  decodeList w c (preP14 tl) lb = pLBits 14 (decodeList w c tl lb).
+Proof. unfold preP14, pLBits. rewrite <- pL14_66_eq. apply preBits_spec. Qed.
+Lemma prePL0_spec (w : list bool) (c : nat) (tl : list Chunk) (lb : side) :
+  decodeList w c (prePL0 tl) lb = pLBits 0 (decodeList w c tl lb).
+Proof. unfold prePL0, pLBits. rewrite <- pL0_66_eq. apply preBits_spec. Qed.
+
+Fixpoint loopP16 (k : nat) (xs acc : list Chunk) : OptPair :=
+  match k with 0 => OptPair_some xs acc | S k' =>
+    match stripP16 xs with OptList_some xs' => loopP16 k' xs' (preR64 acc) | OptList_none => OptPair_some xs acc end end.
+Fixpoint loopP9 (k : nat) (xs acc : list Chunk) : OptPair :=
+  match k with 0 => OptPair_some xs acc | S k' =>
+    match stripP9 xs with OptList_some xs' => loopP9 k' xs' (preR36 acc) | OptList_none => OptPair_some xs acc end end.
+Fixpoint loopP29 (k : nat) (xs acc : list Chunk) : OptPair :=
+  match k with 0 => OptPair_some xs acc | S k' =>
+    match stripP29 xs with OptList_some xs' => loopP29 k' xs' (preR14 acc) | OptList_none => OptPair_some xs acc end end.
+Fixpoint loopR63 (k : nat) (xs acc : list Chunk) : OptPair :=
+  match k with 0 => OptPair_some xs acc | S k' =>
+    match stripR63 xs with OptList_some xs' => loopR63 k' xs' (preP14 acc) | OptList_none => OptPair_some xs acc end end.
+
+Lemma loopP16_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
+  (H : loopP16 k xs acc = OptPair_some l' r') :
+  decode w c (RState_mk true xs (b0 :: b0 :: b0 :: acc)) -[ tm ]->*
+    decode w c (RState_mk true l' (b0 :: b0 :: b0 :: r')).
+Proof.
+  revert xs acc H. induction k as [|k IH]; intros xs acc H; [inversion H; subst; apply evstep_refl |].
+  cbn [loopP16] in H. destruct (stripP16 xs) as [|xs'] eqn:Hst; [inversion H; subst; apply evstep_refl |].
+  eapply evstep_trans; [| exact (IH xs' (preR64 acc) H)].
+  cbn [decode decodeList]. rewrite (stripP16_spec w c xs xs' blank Hst), preR64_spec. apply p66_L16.
+Qed.
+
+Lemma loopP9_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
+  (H : loopP9 k xs acc = OptPair_some l' r') :
+  decode w c (RState_mk true xs (b0 :: b0 :: b0 :: acc)) -[ tm ]->*
+    decode w c (RState_mk true l' (b0 :: b0 :: b0 :: r')).
+Proof.
+  revert xs acc H. induction k as [|k IH]; intros xs acc H; [inversion H; subst; apply evstep_refl |].
+  cbn [loopP9] in H. destruct (stripP9 xs) as [|xs'] eqn:Hst; [inversion H; subst; apply evstep_refl |].
+  eapply evstep_trans; [| exact (IH xs' (preR36 acc) H)].
+  cbn [decode decodeList]. rewrite (stripP9_spec w c xs xs' blank Hst), preR36_spec. apply p66_L9.
+Qed.
+
+Lemma loopP29_sound (w : list bool) (c k : nat) (xs acc l' r' : list Chunk)
+  (H : loopP29 k xs acc = OptPair_some l' r') :
+  decode w c (RState_mk true xs (b0 :: b0 :: b0 :: b1 :: b1 :: acc)) -[ tm ]->*
+    decode w c (RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: r')).
+Proof.
+  revert xs acc H. induction k as [|k IH]; intros xs acc H; [inversion H; subst; apply evstep_refl |].
+  cbn [loopP29] in H. destruct (stripP29 xs) as [|xs'] eqn:Hst; [inversion H; subst; apply evstep_refl |].
+  eapply evstep_trans; [| exact (IH xs' (preR14 acc) H)].
+  cbn [decode decodeList]. rewrite (stripP29_spec w c xs xs' blank Hst), preR14_spec. apply p66_L29.
+Qed.
+
+Lemma loopR63_sound (w : list bool) (c k : nat) (xs acc r' l' : list Chunk)
+  (H : loopR63 k xs acc = OptPair_some r' l') :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: acc) (b1 :: xs)) -[ tm ]->*
+    decode w c (RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: l') (b1 :: r')).
+Proof.
+  revert xs acc H. induction k as [|k IH]; intros xs acc H; [inversion H; subst; apply evstep_refl |].
+  cbn [loopR63] in H. destruct (stripR63 xs) as [|xs'] eqn:Hst; [inversion H; subst; apply evstep_refl |].
+  eapply evstep_trans; [| exact (IH xs' (preP14 acc) H)].
+  cbn [decode decodeList]. rewrite (stripR63_spec w c xs xs' blank Hst), preP14_spec. apply p66_R63.
+Qed.
+
+(* --- Direct Bit-Pattern Helpers & Scanners --- *)
+
+Definition m0100100 (xs : list Chunk) : OptList :=
+  match xs with b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: rest => OptList_some rest | _ => OptList_none end.
+Definition m00010001 (xs : list Chunk) : OptList :=
+  match xs with b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: rest => OptList_some rest | _ => OptList_none end.
+Definition m0100 (xs : list Chunk) : OptList :=
+  match xs with b0 :: b1 :: b0 :: b0 :: rest => OptList_some rest | _ => OptList_none end.
+Definition m1000 (xs : list Chunk) : OptList :=
+  match xs with b1 :: b0 :: b0 :: b0 :: rest => OptList_some rest | _ => OptList_none end.
+Definition m0001 (xs : list Chunk) : OptList :=
+  match xs with b0 :: b0 :: b0 :: b1 :: rest => OptList_some rest | _ => OptList_none end.
+Definition m1101 (xs : list Chunk) : OptList :=
+  match xs with b1 :: b1 :: b0 :: b1 :: rest => OptList_some rest | _ => OptList_none end.
+
+Local Ltac solve_mpat H :=
+  repeat match type of H with
+  | match ?xs with _ => _ end = _ =>
+    let ch := fresh "ch" in let tl := fresh "tl" in
+    destruct xs as [|ch tl]; [discriminate H | destruct ch; try discriminate H]
+  end;
+  inversion H; reflexivity.
+
+Lemma m0100100_eq (xs rest : list Chunk) :
+  m0100100 xs = OptList_some rest -> xs = b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: rest.
+Proof. unfold m0100100; intros H; solve_mpat H. Qed.
+Lemma m00010001_eq (xs rest : list Chunk) :
+  m00010001 xs = OptList_some rest -> xs = b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: rest.
+Proof. unfold m00010001; intros H; solve_mpat H. Qed.
+Lemma m0100_eq (xs rest : list Chunk) :
+  m0100 xs = OptList_some rest -> xs = b0 :: b1 :: b0 :: b0 :: rest.
+Proof. unfold m0100; intros H; solve_mpat H. Qed.
+Lemma m1000_eq (xs rest : list Chunk) :
+  m1000 xs = OptList_some rest -> xs = b1 :: b0 :: b0 :: b0 :: rest.
+Proof. unfold m1000; intros H; solve_mpat H. Qed.
+Lemma m0001_eq (xs rest : list Chunk) :
+  m0001 xs = OptList_some rest -> xs = b0 :: b0 :: b0 :: b1 :: rest.
+Proof. unfold m0001; intros H; solve_mpat H. Qed.
+Lemma m1101_eq (xs rest : list Chunk) :
+  m1101 xs = OptList_some rest -> xs = b1 :: b1 :: b0 :: b1 :: rest.
+Proof. unfold m1101; intros H; solve_mpat H. Qed.
+
+Fixpoint scanLeftB_p0 (k : nat) (xs accR : list Chunk) : OptPair :=
+  match m0100100 xs with
+  | OptList_some restL => OptPair_some restL accR
+  | OptList_none =>
+    match k with
+    | 0 => OptPair_none
+    | S k' =>
+      match m0100 xs with
+      | OptList_some restL =>
+        match peelRunInWindow 3 restL with
+        | OptList_some restL' => scanLeftB_p0 k' (b0 :: b1 :: b0 :: b0 :: restL') accR
+        | OptList_none => scanLeftB_p0 k' restL (b0 :: b1 :: b1 :: b1 :: accR)
+        end
+      | OptList_none =>
+        match m1000 xs with
+        | OptList_some restL => scanLeftB_p0 k' restL (b0 :: b1 :: b0 :: b0 :: accR)
+        | OptList_none =>
+          match peelRunInWindow 7 xs with
+          | OptList_some xs' => scanLeftB_p0 k' xs' accR
+          | OptList_none => OptPair_none
+          end
+        end
+      end
+    end
+  end.
+
+Lemma scanLeftB_p0_spec (w : list bool) (c k : nat) (xs accR restL outR : list Chunk)
+  (H : scanLeftB_p0 k xs accR = OptPair_some restL outR) :
+  exists u : list bool,
+    decodeList w c xs blank = encWL u (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> decodeList w c restL blank) /\
+    decodeList w c outR blank = encWR0 (rev (flipW u)) (decodeList w c accR blank).
+Proof.
+  revert xs accR H. induction k as [|k IH]; intros xs accR H.
+  - cbn [scanLeftB_p0] in H. destruct (m0100100 xs) as [|rL] eqn:Hm; [discriminate H |].
+    inversion H; subst. rewrite (m0100100_eq xs restL Hm). exists (@nil bool); split; reflexivity.
+  - cbn [scanLeftB_p0] in H. destruct (m0100100 xs) as [|rL] eqn:Hm1.
+    + destruct (m0100 xs) as [|restL0] eqn:Hm2.
+      * destruct (m1000 xs) as [|restL0] eqn:Hm3.
+        -- destruct (peelRunInWindow 7 xs) as [|xs'] eqn:Hp; [discriminate H |].
+           destruct (IH xs' accR H) as [u [HL HR]].
+           exists u; split; [rewrite (peelRunInWindow_eq w c 7 xs xs' blank Hp); exact HL | exact HR].
+        -- rewrite (m1000_eq xs restL0 Hm3).
+           destruct (IH restL0 (b0 :: b1 :: b0 :: b0 :: accR) H) as [u [HL HR]].
+           exists (false :: u); split; [cbn [decodeList encWL]; rewrite HL; reflexivity |].
+           cbn [flipW negb rev]. rewrite encWR0_append; cbn [encWR0]; rewrite HR; reflexivity.
+      * rewrite (m0100_eq xs restL0 Hm2).
+        destruct (peelRunInWindow 3 restL0) as [|restL'] eqn:Hp.
+        -- destruct (IH restL0 (b0 :: b1 :: b1 :: b1 :: accR) H) as [u [HL HR]].
+           exists (true :: u); split; [cbn [decodeList encWL]; rewrite HL; reflexivity |].
+           cbn [flipW negb rev]. rewrite encWR0_append; cbn [encWR0]; rewrite HR; reflexivity.
+        -- destruct (IH (b0 :: b1 :: b0 :: b0 :: restL') accR H) as [u [HL HR]].
+           exists u; split; [cbn [decodeList] in *; rewrite (peelRunInWindow_eq w c 3 restL0 restL' blank Hp); exact HL | exact HR].
+    + inversion H; subst. rewrite (m0100100_eq xs restL Hm1). exists (@nil bool); split; reflexivity.
+Qed.
+
+Fixpoint scanLeftB_p1 (k : nat) (xs accR : list Chunk) : OptPair :=
+  match m0100100 xs with
+  | OptList_some restL => OptPair_some restL accR
+  | OptList_none =>
+    match k with
+    | 0 => OptPair_none
+    | S k' =>
+      match m0100 xs with
+      | OptList_some restL =>
+        match peelRunInWindow 3 restL with
+        | OptList_some restL' => scanLeftB_p1 k' (b0 :: b1 :: b0 :: b0 :: restL') accR
+        | OptList_none => scanLeftB_p1 k' restL (b1 :: b1 :: b1 :: b0 :: accR)
+        end
+      | OptList_none =>
+        match m1000 xs with
+        | OptList_some restL => scanLeftB_p1 k' restL (b1 :: b0 :: b0 :: b0 :: accR)
+        | OptList_none =>
+          match peelRunInWindow 7 xs with
+          | OptList_some xs' => scanLeftB_p1 k' xs' accR
+          | OptList_none => OptPair_none
+          end
+        end
+      end
+    end
+  end.
+
+Lemma scanLeftB_p1_spec (w : list bool) (c k : nat) (xs accR restL outR : list Chunk)
+  (H : scanLeftB_p1 k xs accR = OptPair_some restL outR) :
+  exists u : list bool,
+    decodeList w c xs blank = encWL u (f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> decodeList w c restL blank) /\
+    decodeList w c outR blank = encWR (rev (flipW u)) (decodeList w c accR blank).
+Proof.
+  revert xs accR H. induction k as [|k IH]; intros xs accR H.
+  - cbn [scanLeftB_p1] in H. destruct (m0100100 xs) as [|rL] eqn:Hm; [discriminate H |].
+    inversion H; subst. rewrite (m0100100_eq xs restL Hm). exists (@nil bool); split; reflexivity.
+  - cbn [scanLeftB_p1] in H. destruct (m0100100 xs) as [|rL] eqn:Hm1.
+    + destruct (m0100 xs) as [|restL0] eqn:Hm2.
+      * destruct (m1000 xs) as [|restL0] eqn:Hm3.
+        -- destruct (peelRunInWindow 7 xs) as [|xs'] eqn:Hp; [discriminate H |].
+           destruct (IH xs' accR H) as [u [HL HR]].
+           exists u; split; [rewrite (peelRunInWindow_eq w c 7 xs xs' blank Hp); exact HL | exact HR].
+        -- rewrite (m1000_eq xs restL0 Hm3).
+           destruct (IH restL0 (b1 :: b0 :: b0 :: b0 :: accR) H) as [u [HL HR]].
+           exists (false :: u); split; [cbn [decodeList encWL]; rewrite HL; reflexivity |].
+           cbn [flipW negb rev]. rewrite encWR_append; cbn [encWR]; rewrite HR; reflexivity.
+      * rewrite (m0100_eq xs restL0 Hm2).
+        destruct (peelRunInWindow 3 restL0) as [|restL'] eqn:Hp.
+        -- destruct (IH restL0 (b1 :: b1 :: b1 :: b0 :: accR) H) as [u [HL HR]].
+           exists (true :: u); split; [cbn [decodeList encWL]; rewrite HL; reflexivity |].
+           cbn [flipW negb rev]. rewrite encWR_append; cbn [encWR]; rewrite HR; reflexivity.
+        -- destruct (IH (b0 :: b1 :: b0 :: b0 :: restL') accR H) as [u [HL HR]].
+           exists u; split; [cbn [decodeList] in *; rewrite (peelRunInWindow_eq w c 3 restL0 restL' blank Hp); exact HL | exact HR].
+    + inversion H; subst. rewrite (m0100100_eq xs restL Hm1). exists (@nil bool); split; reflexivity.
+Qed.
+
+Fixpoint scanRightQ1 (k : nat) (xs accL : list Chunk) : OptPair :=
+  match m00010001 xs with
+  | OptList_some restR => OptPair_some accL restR
+  | OptList_none =>
+    match k with
+    | 0 => OptPair_none
+    | S k' =>
+      match m0001 xs with
+      | OptList_some restR =>
+        match peelRunInWindow 4 restR with
+        | OptList_some restR' => scanRightQ1 k' (b0 :: b0 :: b0 :: b1 :: restR') accL
+        | OptList_none => scanRightQ1 k' restR (consRL0100 0 accL)
+        end
+      | OptList_none =>
+        match m1101 xs with
+        | OptList_some restR => scanRightQ1 k' restR (b1 :: b0 :: b0 :: b0 :: accL)
+        | OptList_none =>
+          match peelRunInWindow 8 xs with
+          | OptList_some xs' => scanRightQ1 k' xs' accL
+          | OptList_none => OptPair_none
+          end
+        end
+      end
+    end
+  end.
+
+Lemma scanRightQ1_spec (w : list bool) (c k : nat) (xs accL outL restR : list Chunk)
+  (H : scanRightQ1 k xs accL = OptPair_some outL restR) :
+  exists u : list bool,
+    decodeList w c xs blank = encWR_q1 u (f0 >> f0 >> f0 >> f1 >> f0 >> f0 >> f0 >> f1 >> decodeList w c restR blank) /\
+    decodeList w c outL blank = encWL (rev u) (decodeList w c accL blank).
+Proof.
+  revert xs accL H. induction k as [|k IH]; intros xs accL H.
+  - cbn [scanRightQ1] in H. destruct (m00010001 xs) as [|rR] eqn:Hm; [discriminate H |].
+    inversion H; subst. rewrite (m00010001_eq xs restR Hm). exists (@nil bool); split; reflexivity.
+  - cbn [scanRightQ1] in H. destruct (m00010001 xs) as [|rR] eqn:Hm1.
+    + destruct (m0001 xs) as [|restR0] eqn:Hm2.
+      * destruct (m1101 xs) as [|restR0] eqn:Hm3.
+        -- destruct (peelRunInWindow 8 xs) as [|xs'] eqn:Hp; [discriminate H |].
+           destruct (IH xs' accL H) as [u [HR HL]].
+           exists u; split; [rewrite (peelRunInWindow_eq w c 8 xs xs' blank Hp); exact HR | exact HL].
+        -- rewrite (m1101_eq xs restR0 Hm3).
+           destruct (IH restR0 (b1 :: b0 :: b0 :: b0 :: accL) H) as [u [HR HL]].
+           exists (false :: u); split; [cbn [decodeList encWR_q1]; rewrite HR; reflexivity |].
+           cbn [rev]. rewrite encWL_append; cbn [encWL]; rewrite HL; reflexivity.
+      * rewrite (m0001_eq xs restR0 Hm2).
+        destruct (peelRunInWindow 4 restR0) as [|restR'] eqn:Hp.
+        -- destruct (IH restR0 (consRL0100 0 accL) H) as [u [HR HL]].
+           exists (true :: u); split; [cbn [decodeList encWR_q1]; rewrite HR; reflexivity |].
+           cbn [rev]. rewrite encWL_append; cbn [encWL]; rewrite HL, decodeList_consRL0100; reflexivity.
+        -- destruct (IH (b0 :: b0 :: b0 :: b1 :: restR') accL H) as [u [HR HL]].
+           exists u; split; [cbn [decodeList] in *; rewrite (peelRunInWindow_eq w c 4 restR0 restR' blank Hp); exact HR | exact HL].
+    + inversion H; subst. rewrite (m00010001_eq xs restR Hm1). exists (@nil bool); split; reflexivity.
+Qed.
+
+Fixpoint concSafeLeftA (xs accR : list Chunk) : OptPair :=
+  match xs with
+  | b1 :: b0 :: b0 :: b0 :: restL => concSafeLeftA restL (b1 :: b1 :: b1 :: b0 :: accR)
+  | b0 :: b1 :: b0 :: b0 :: restL => concSafeLeftA restL (b1 :: b0 :: b0 :: b0 :: accR)
+  | restL => OptPair_some restL accR
+  end.
+
+Local Ltac peel_refl fn :=
+  cbn [fn]; intros H; inversion H; subst; apply evstep_refl.
+
+Lemma concSafeLeftA_sound (w : list bool) (c : nat) (l accR l' r' : list Chunk) :
+  concSafeLeftA l accR = OptPair_some l' r' ->
+  decode w c (RState_mk true l (b0 :: b0 :: b0 :: accR)) -[ tm ]->*
+    decode w c (RState_mk true l' (b0 :: b0 :: b0 :: r')).
+Proof.
+  revert accR l' r'.
+  induction l as [xs IH] using list_strong_ind; intros accR l' r'.
+  destruct xs as [|ch1 xs1]; [peel_refl concSafeLeftA |].
+  destruct ch1; try (peel_refl concSafeLeftA).
+  - destruct xs1 as [|ch2 xs2]; [peel_refl concSafeLeftA | destruct ch2; try (peel_refl concSafeLeftA)].
+    destruct xs2 as [|ch3 xs3]; [peel_refl concSafeLeftA | destruct ch3; try (peel_refl concSafeLeftA)].
+    destruct xs3 as [|ch4 restL]; [peel_refl concSafeLeftA | destruct ch4; try (peel_refl concSafeLeftA)].
+    cbn [concSafeLeftA]; intros H.
+    eapply evstep_trans; [apply lpa_1 | exact (IH restL ltac:(cbn [length]; lia) _ _ _ H)].
+  - destruct xs1 as [|ch2 xs2]; [peel_refl concSafeLeftA | destruct ch2; try (peel_refl concSafeLeftA)].
+    destruct xs2 as [|ch3 xs3]; [peel_refl concSafeLeftA | destruct ch3; try (peel_refl concSafeLeftA)].
+    destruct xs3 as [|ch4 restL]; [peel_refl concSafeLeftA | destruct ch4; try (peel_refl concSafeLeftA)].
+    cbn [concSafeLeftA]; intros H.
+    eapply evstep_trans; [apply lpa_0 | exact (IH restL ltac:(cbn [length]; lia) _ _ _ H)].
+Qed.
+
+Fixpoint concSafeLeftBGo (fl : bool) (xs accR : list Chunk) (best : OptPair) {struct xs} : OptPair :=
+  match xs with
+  | b0 :: b0 :: b1 :: b0 :: tail4 =>
+    let best' :=
+      if fl then
+        match m0100 tail4 with
+        | OptList_some restL => OptPair_some restL accR
+        | OptList_none => best
+        end
+      else best
+    in
+    concSafeLeftBGo true tail4 (b0 :: b1 :: b1 :: b1 :: accR) best'
+  | b0 :: b1 :: b0 :: b0 :: restL =>
+    concSafeLeftBGo true restL (b0 :: b1 :: b0 :: b0 :: accR) best
+  | _ => best
+  end.
+
+Lemma concSafeLeftBGo_spec (w : list bool) (c : nat)
+  (fl : bool) (xs accR : list Chunk) (best : OptPair) (restL outR : list Chunk) :
+  concSafeLeftBGo fl xs accR best = OptPair_some restL outR ->
+  best = OptPair_some restL outR \/
+  exists u : list bool,
+    decodeList w c xs blank = encWL_b0 u (f0 >> f0 >> f1 >> f0 >> f0 >> f1 >> f0 >> f0 >> decodeList w c restL blank) /\
+    decodeList w c outR blank = encWR0 (rev (flipW u)) (decodeList w c accR blank).
+Proof.
+  revert fl accR best restL outR.
+  induction xs as [xs IH] using list_strong_ind; intros fl accR best restL outR.
+  destruct xs as [|ch1 xs1]; [intros H; left; exact H |].
+  destruct ch1; try (intros H; left; exact H).
+  destruct xs1 as [|ch2 xs2]; [intros H; left; exact H | destruct ch2; try (intros H; left; exact H)].
+  - destruct xs2 as [|ch3 xs3]; [intros H; left; exact H | destruct ch3; try (intros H; left; exact H)].
+    destruct xs3 as [|ch4 tail4]; [intros H; left; exact H | destruct ch4; try (intros H; left; exact H)].
+    cbn [concSafeLeftBGo]; intros H.
+    destruct (IH tail4 ltac:(cbn [length]; lia) true (b0 :: b1 :: b1 :: b1 :: accR) _ restL outR H)
+      as [Hb | [u [HL HR]]].
+    + destruct fl; [| left; exact Hb].
+      destruct (m0100 tail4) as [|rL0] eqn:Hm; [left; exact Hb |].
+      inversion Hb; subst. rewrite (m0100_eq tail4 restL Hm).
+      right; exists (@nil bool); split; reflexivity.
+    + right; exists (true :: u); split; [cbn [decodeList encWL_b0]; rewrite HL; reflexivity |].
+      cbn [flipW negb rev]. rewrite encWR0_append; cbn [encWR0]; rewrite HR; reflexivity.
+  - destruct xs2 as [|ch3 xs3]; [intros H; left; exact H | destruct ch3; try (intros H; left; exact H)].
+    destruct xs3 as [|ch4 restL0]; [intros H; left; exact H | destruct ch4; try (intros H; left; exact H)].
+    cbn [concSafeLeftBGo]; intros H.
+    destruct (IH restL0 ltac:(cbn [length]; lia) true (b0 :: b1 :: b0 :: b0 :: accR) best restL outR H)
+      as [Hb | [u [HL HR]]].
+    + left; exact Hb.
+    + right; exists (false :: u); split; [cbn [decodeList encWL_b0]; rewrite HL; reflexivity |].
+      cbn [flipW negb rev]. rewrite encWR0_append; cbn [encWR0]; rewrite HR; reflexivity.
+Qed.
+
+Fixpoint scanSuperBounce (xs : list Chunk) : OptList :=
+  match xs with
+  | rL0100 m :: restL =>
+    match scanSuperBounce restL with OptList_none => OptList_none | OptList_some out => OptList_some (consRL0100 m out) end
+  | b0 :: b1 :: b0 :: b0 :: restL =>
+    match scanSuperBounce restL with OptList_none => OptList_none | OptList_some out => OptList_some (consRL0100 0 out) end
+  | b0 :: b1 :: b0 :: b1 :: b0 :: restL =>
+    OptList_some (b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: restL)
+  | _ => OptList_none
+  end.
+
+Lemma scanSuperBounce_spec (w : list bool) (c : nat) (xs out : list Chunk) :
+  scanSuperBounce xs = OptList_some out ->
+  exists (k : nat) (tail : side),
+    decodeList w c xs blank = repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f1 >> f0 >> tail) /\
+    decodeList w c out blank = repBits [false; true; false; false] k (f0 >> f1 >> f0 >> f0 >> f0 >> f0 >> f1 >> tail).
+Proof.
+  revert out. induction xs as [xs IH] using list_strong_ind; intros out H.
+  destruct xs as [|ch1 xs1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct xs1 as [|ch2 xs2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct xs2 as [|ch3 xs3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct xs3 as [|ch4 xs4]; [discriminate H | destruct ch4; try discriminate H].
+    + cbn [scanSuperBounce] in H.
+      destruct (scanSuperBounce xs4) as [|out0] eqn:Hsc; [discriminate H |].
+      inversion H; subst.
+      destruct (IH xs4 ltac:(cbn [length]; lia) out0 Hsc) as [k [tail [H1 H2]]].
+      exists (S k), tail; split; [cbn [decodeList repBits decBits]; rewrite H1; reflexivity |].
+      rewrite decodeList_consRL0100; cbn [repBits decBits]; rewrite H2; reflexivity.
+    + destruct xs4 as [|ch5 restL]; [discriminate H | destruct ch5; try discriminate H].
+      cbn [scanSuperBounce] in H; inversion H; subst.
+      exists 0, (decodeList w c restL blank); split; reflexivity.
+  - cbn [scanSuperBounce] in H.
+    destruct (scanSuperBounce xs1) as [|out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst.
+    destruct (IH xs1 ltac:(cbn [length]; lia) out0 Hsc) as [k [tail [H1 H2]]].
+    exists (S n + k), tail; split.
+    + cbn [decodeList]. rewrite H1, <- repBits_add. reflexivity.
+    + rewrite decodeList_consRL0100, H2, <- repBits_add. reflexivity.
+Qed.
+
+Fixpoint br1Loop (l r : list Chunk) : RState :=
+  match l with
+  | rL1100 n :: l' => br1Loop l' (consRR0001 n r)
+  | b1 :: b1 :: b0 :: b0 :: l' => br1Loop l' (consRR0001 0 r)
+  | _ => RState_mk true l r
+  end.
+
+Fixpoint br2Loop (l r : list Chunk) : RState :=
+  match l with
+  | rL0100 n :: l' => br2Loop l' (consRR0001 n r)
+  | b0 :: b1 :: b0 :: b0 :: l' => br2Loop l' (consRR0001 0 r)
+  | _ => RState_mk true l r
+  end.
+
+Fixpoint br3Loop (l r : list Chunk) {struct r} : RState :=
+  match r with
+  | b0 :: b0 :: b1 :: b0 :: r' => br3Loop (push1001M 0 l) r'
+  | _ => RState_mk false l r
+  end.
+
+Fixpoint br4Loop (l r : list Chunk) {struct r} : RState :=
+  match r with
+  | rR1101 m :: r' => br4Loop (consRL0100 m l) r'
+  | b1 :: b1 :: b0 :: b1 :: r' => br4Loop (consRL0100 0 l) r'
+  | _ => RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: r)
+  end.
+
+Fixpoint br5Loop (l r : list Chunk) {struct r} : RState :=
+  match r with
+  | rR0001 n :: r' => br5Loop (consRL0100 n l) r'
+  | b0 :: b0 :: b0 :: b1 :: r' => br5Loop (consRL0100 0 l) r'
+  | _ => RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: r)
+  end.
+
+Fixpoint br6Loop (l r : list Chunk) {struct r} : RState :=
+  match r with
+  | b0 :: b0 :: b1 :: b0 :: r' => br6Loop (consRL0010 0 l) r'
+  | _ => RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b0 :: b1 :: b0 :: r)
+  end.
+
+Fixpoint br7Loop (l r : list Chunk) : RState :=
+  match l with
+  | b1 :: b0 :: b0 :: b1 :: l' => br7Loop l' (consRR1101 0 r)
+  | _ => RState_mk true (b0 :: b1 :: b0 :: b1 :: l) (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r)
+  end.
+
+Lemma br1Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (br1Loop l r).
+Proof.
+  revert r. induction l as [l IH] using list_strong_ind; intros r.
+  destruct l as [|ch1 l1]; [apply evstep_refl | destruct ch1; try (cbn [br1Loop]; apply evstep_refl)].
+  - destruct l1 as [|ch2 l2]; [apply evstep_refl | destruct ch2; try (cbn [br1Loop]; apply evstep_refl)].
+    destruct l2 as [|ch3 l3]; [apply evstep_refl | destruct ch3; try (cbn [br1Loop]; apply evstep_refl)].
+    destruct l3 as [|ch4 l4]; [apply evstep_refl | destruct ch4; try (cbn [br1Loop]; apply evstep_refl)].
+    cbn [br1Loop]. eapply evstep_trans; [| exact (IH l4 ltac:(cbn [length]; lia) (consRR0001 0 r))].
+    cbn [decode decodeList]. rewrite decodeList_consRR0001. apply br1_step.
+  - cbn [br1Loop]. eapply evstep_trans; [| exact (IH l1 ltac:(cbn [length]; lia) (consRR0001 n r))].
+    cbn [decode decodeList]. rewrite decodeList_consRR0001. apply (loop_br1 (S n)).
+Qed.
+
+Lemma br2Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (br2Loop l r).
+Proof.
+  revert r. induction l as [l IH] using list_strong_ind; intros r.
+  destruct l as [|ch1 l1]; [apply evstep_refl | destruct ch1; try (cbn [br2Loop]; apply evstep_refl)].
+  - destruct l1 as [|ch2 l2]; [apply evstep_refl | destruct ch2; try (cbn [br2Loop]; apply evstep_refl)].
+    destruct l2 as [|ch3 l3]; [apply evstep_refl | destruct ch3; try (cbn [br2Loop]; apply evstep_refl)].
+    destruct l3 as [|ch4 l4]; [apply evstep_refl | destruct ch4; try (cbn [br2Loop]; apply evstep_refl)].
+    cbn [br2Loop]. eapply evstep_trans; [| exact (IH l4 ltac:(cbn [length]; lia) (consRR0001 0 r))].
+    cbn [decode decodeList]. rewrite decodeList_consRR0001. apply br2_step.
+  - cbn [br2Loop]. eapply evstep_trans; [| exact (IH l1 ltac:(cbn [length]; lia) (consRR0001 n r))].
+    cbn [decode decodeList]. rewrite decodeList_consRR0001. apply (loop_br2 (S n)).
+Qed.
+
+Lemma br3Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (br3Loop l r).
+Proof.
+  revert l. induction r as [r IH] using list_strong_ind; intros l.
+  destruct r as [|ch1 r1]; [apply evstep_refl | destruct ch1; try (cbn [br3Loop]; apply evstep_refl)].
+  destruct r1 as [|ch2 r2]; [apply evstep_refl | destruct ch2; try (cbn [br3Loop]; apply evstep_refl)].
+  destruct r2 as [|ch3 r3]; [apply evstep_refl | destruct ch3; try (cbn [br3Loop]; apply evstep_refl)].
+  destruct r3 as [|ch4 r4]; [apply evstep_refl | destruct ch4; try (cbn [br3Loop]; apply evstep_refl)].
+  cbn [br3Loop]. eapply evstep_trans; [| exact (IH r4 ltac:(cbn [length]; lia) (push1001M 0 l))].
+  cbn [decode decodeList]. rewrite decodeList_push1001M. apply br3_step.
+Qed.
+
+Lemma br4Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: r)) -[ tm ]->* decode w c (br4Loop l r).
+Proof.
+  revert l. induction r as [r IH] using list_strong_ind; intros l.
+  destruct r as [|ch1 r1]; [apply evstep_refl | destruct ch1; try (cbn [br4Loop]; apply evstep_refl)].
+  - destruct r1 as [|ch2 r2]; [apply evstep_refl | destruct ch2; try (cbn [br4Loop]; apply evstep_refl)].
+    destruct r2 as [|ch3 r3]; [apply evstep_refl | destruct ch3; try (cbn [br4Loop]; apply evstep_refl)].
+    destruct r3 as [|ch4 r4]; [apply evstep_refl | destruct ch4; try (cbn [br4Loop]; apply evstep_refl)].
+    cbn [br4Loop]. eapply evstep_trans; [| exact (IH r4 ltac:(cbn [length]; lia) (consRL0100 0 l))].
+    cbn [decode decodeList]. rewrite decodeList_consRL0100. apply br4_step.
+  - cbn [br4Loop]. eapply evstep_trans; [| exact (IH r1 ltac:(cbn [length]; lia) (consRL0100 n l))].
+    cbn [decode decodeList]. rewrite decodeList_consRL0100. apply (loop_br4_r (S n)).
+Qed.
+
+Lemma br5Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: r)) -[ tm ]->*
+    decode w c (br5Loop l r).
+Proof.
+  revert l. induction r as [r IH] using list_strong_ind; intros l.
+  destruct r as [|ch1 r1]; [apply evstep_refl | destruct ch1; try (cbn [br5Loop]; apply evstep_refl)].
+  - destruct r1 as [|ch2 r2]; [apply evstep_refl | destruct ch2; try (cbn [br5Loop]; apply evstep_refl)].
+    destruct r2 as [|ch3 r3]; [apply evstep_refl | destruct ch3; try (cbn [br5Loop]; apply evstep_refl)].
+    destruct r3 as [|ch4 r4]; [apply evstep_refl | destruct ch4; try (cbn [br5Loop]; apply evstep_refl)].
+    cbn [br5Loop]. eapply evstep_trans; [| exact (IH r4 ltac:(cbn [length]; lia) (consRL0100 0 l))].
+    cbn [decode decodeList]. rewrite decodeList_consRL0100. apply br5_step.
+  - cbn [br5Loop]. eapply evstep_trans; [| exact (IH r1 ltac:(cbn [length]; lia) (consRL0100 n l))].
+    cbn [decode decodeList]. rewrite decodeList_consRL0100. apply (loop_br5_r (S n)).
+Qed.
+
+Lemma br6Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b0 :: b1 :: b0 :: r)) -[ tm ]->*
+    decode w c (br6Loop l r).
+Proof.
+  revert l. induction r as [r IH] using list_strong_ind; intros l.
+  destruct r as [|ch1 r1]; [apply evstep_refl | destruct ch1; try (cbn [br6Loop]; apply evstep_refl)].
+  destruct r1 as [|ch2 r2]; [apply evstep_refl | destruct ch2; try (cbn [br6Loop]; apply evstep_refl)].
+  destruct r2 as [|ch3 r3]; [apply evstep_refl | destruct ch3; try (cbn [br6Loop]; apply evstep_refl)].
+  destruct r3 as [|ch4 r4]; [apply evstep_refl | destruct ch4; try (cbn [br6Loop]; apply evstep_refl)].
+  cbn [br6Loop]. eapply evstep_trans; [| exact (IH r4 ltac:(cbn [length]; lia) (consRL0010 0 l))].
+  cbn [decode decodeList]. rewrite decodeList_consRL0010. apply br6_step.
+Qed.
+
+Lemma br7Loop_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b0 :: b1 :: b0 :: b1 :: l) (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r)) -[ tm ]->*
+    decode w c (br7Loop l r).
+Proof.
+  revert r. induction l as [l IH] using list_strong_ind; intros r.
+  destruct l as [|ch1 l1]; [apply evstep_refl | destruct ch1; try (cbn [br7Loop]; apply evstep_refl)].
+  destruct l1 as [|ch2 l2]; [apply evstep_refl | destruct ch2; try (cbn [br7Loop]; apply evstep_refl)].
+  destruct l2 as [|ch3 l3]; [apply evstep_refl | destruct ch3; try (cbn [br7Loop]; apply evstep_refl)].
+  destruct l3 as [|ch4 l4]; [apply evstep_refl | destruct ch4; try (cbn [br7Loop]; apply evstep_refl)].
+  cbn [br7Loop]. eapply evstep_trans; [| exact (IH l4 ltac:(cbn [length]; lia) (consRR1101 0 r))].
+  cbn [decode decodeList]. rewrite decodeList_consRR1101. apply br7_step.
+Qed.
+
+(* --- Fallback Peelers & Elementary Pop Loops --- *)
+
+Definition peelPLStep (r : nat) (b : Chunk) (rest : list Chunk) : OptList :=
+  match peelHead (b :: rest) with
+  | OptList_some rest' => OptList_some (pL r :: rest')
+  | OptList_none =>
+    if andb (Nat.leb r 65) (matchBit (plTopIs1 r) b)
+    then OptList_some (b :: pL (prev66 r) :: rest) else OptList_none
+  end.
+
+Definition peelPRStep (r : nat) (b : Chunk) (rest : list Chunk) : OptList :=
+  match peelHead (b :: rest) with
+  | OptList_some rest' => OptList_some (pR r :: rest')
+  | OptList_none =>
+    if andb (Nat.leb r 65) (matchBit (prTopIs1 r) b)
+    then OptList_some (b :: pR (prev66 r) :: rest) else OptList_none
+  end.
+
+Lemma peelPLStep_eq (w : list bool) (c r : nat) (b : Chunk) (rest out : list Chunk) (lb : side)
+  (H : peelPLStep r b rest = OptList_some out) :
+  decodeList w c (pL r :: b :: rest) lb = decodeList w c out lb.
+Proof.
+  unfold peelPLStep in H. destruct (peelHead (b :: rest)) as [|rest'] eqn:Hp.
+  - destruct (Nat.leb r 65) eqn:Hle; [| discriminate H].
+    destruct (matchBit (plTopIs1 r) b) eqn:Hm; [| discriminate H].
+    inversion H; subst. apply Nat.leb_le in Hle. assert (Hr : r < 66) by lia.
+    change (decodeList w c (pL r :: b :: rest) lb) with (repPL r c (decodeList w c (b :: rest) lb)).
+    rewrite (matchBit_eq Hm w c rest lb), <- (repPL_comm r Hr), (matchBit_eq Hm w c (pL (prev66 r) :: rest) lb). reflexivity.
+  - inversion H; subst.
+    change (decodeList w c (pL r :: b :: rest) lb) with (repPL r c (decodeList w c (b :: rest) lb)).
+    change (decodeList w c (pL r :: rest') lb) with (repPL r c (decodeList w c rest' lb)).
+    rewrite (peelHead_eq w c (b :: rest) rest' lb Hp). reflexivity.
+Qed.
+
+Lemma peelPRStep_eq (w : list bool) (c r : nat) (b : Chunk) (rest out : list Chunk) (lb : side)
+  (H : peelPRStep r b rest = OptList_some out) :
+  decodeList w c (pR r :: b :: rest) lb = decodeList w c out lb.
+Proof.
+  unfold peelPRStep in H. destruct (peelHead (b :: rest)) as [|rest'] eqn:Hp.
+  - destruct (Nat.leb r 65) eqn:Hle; [| discriminate H].
+    destruct (matchBit (prTopIs1 r) b) eqn:Hm; [| discriminate H].
+    inversion H; subst. apply Nat.leb_le in Hle. assert (Hr : r < 66) by lia.
+    change (decodeList w c (pR r :: b :: rest) lb) with (repPR r c (decodeList w c (b :: rest) lb)).
+    rewrite (matchBit_eq Hm w c rest lb), <- (repPR_comm r Hr), (matchBit_eq Hm w c (pR (prev66 r) :: rest) lb). reflexivity.
+  - inversion H; subst.
+    change (decodeList w c (pR r :: b :: rest) lb) with (repPR r c (decodeList w c (b :: rest) lb)).
+    change (decodeList w c (pR r :: rest') lb) with (repPR r c (decodeList w c rest' lb)).
+    rewrite (peelHead_eq w c (b :: rest) rest' lb Hp). reflexivity.
+Qed.
+
+Fixpoint peelPL (k : nat) (xs : list Chunk) {struct xs} : OptList :=
+  match xs with
+  | [] => OptList_none
+  | ch :: rest =>
+    match peelHead (ch :: rest) with
+    | OptList_some out => OptList_some out
+    | OptList_none =>
+      match ch with
+      | pL r => match rest with b :: rest' => peelPLStep r b rest' | [] => OptList_none end
+      | _ =>
+        match k with
+        | 0 => OptList_none
+        | S k' => match peelPL k' rest with OptList_none => OptList_none | OptList_some out => OptList_some (ch :: out) end
+        end
+      end
+    end
+  end.
+
+Fixpoint peelPR (k : nat) (xs : list Chunk) {struct xs} : OptList :=
+  match xs with
+  | [] => OptList_none
+  | ch :: rest =>
+    match peelHead (ch :: rest) with
+    | OptList_some out => OptList_some out
+    | OptList_none =>
+      match ch with
+      | pR r => match rest with b :: rest' => peelPRStep r b rest' | [] => OptList_none end
+      | _ =>
+        match k with
+        | 0 => OptList_none
+        | S k' => match peelPR k' rest with OptList_none => OptList_none | OptList_some out => OptList_some (ch :: out) end
+        end
+      end
+    end
+  end.
+
+Lemma peelPL_eq (w : list bool) (c k : nat) (xs out : list Chunk) (lb : side)
+  (H : peelPL k xs = OptList_some out) :
+  decodeList w c xs lb = decodeList w c out lb.
+Proof.
+  revert k out H. induction xs as [|ch rest IH]; intros k out H; [discriminate H |].
+  cbn [peelPL] in H. destruct (peelHead (ch :: rest)) as [|out0] eqn:Hp.
+  - destruct ch;
+      try (destruct k as [|k']; [discriminate H |];
+           destruct (peelPL k' rest) as [|out1] eqn:Hp2; [discriminate H |];
+           inversion H; subst; cbn [decodeList]; rewrite (IH k' out1 Hp2); reflexivity).
+    destruct rest as [|b rest']; [discriminate H | exact (peelPLStep_eq w c n b rest' out lb H)].
+  - inversion H; subst. exact (peelHead_eq w c (ch :: rest) out lb Hp).
+Qed.
+
+Lemma peelPR_eq (w : list bool) (c k : nat) (xs out : list Chunk) (lb : side)
+  (H : peelPR k xs = OptList_some out) :
+  decodeList w c xs lb = decodeList w c out lb.
+Proof.
+  revert k out H. induction xs as [|ch rest IH]; intros k out H; [discriminate H |].
+  cbn [peelPR] in H. destruct (peelHead (ch :: rest)) as [|out0] eqn:Hp.
+  - destruct ch;
+      try (destruct k as [|k']; [discriminate H |];
+           destruct (peelPR k' rest) as [|out1] eqn:Hp2; [discriminate H |];
+           inversion H; subst; cbn [decodeList]; rewrite (IH k' out1 Hp2); reflexivity).
+    destruct rest as [|b rest']; [discriminate H | exact (peelPRStep_eq w c n b rest' out lb H)].
+  - inversion H; subst. exact (peelHead_eq w c (ch :: rest) out lb Hp).
+Qed.
+
+Definition pop1B_fallback (l r : list Chunk) : RState :=
+  match peelPR 4 r with OptList_some r' => RState_mk false l r' | OptList_none => RState_mk false l r end.
+
+Lemma pop1B_fallback_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (pop1B_fallback l r).
+Proof.
+  unfold pop1B_fallback. destruct (peelPR 4 r) as [|r'] eqn:Hp; [apply evstep_refl |].
+  cbn [decode]. rewrite (peelPR_eq w c 4 r r' blank Hp). apply evstep_refl.
+Qed.
+
+Fixpoint pop1B (l r : list Chunk) {struct r} : RState :=
+  match r with
+  | b1 :: r' => pop1B (b0 :: l) r'
+  | b0 :: b1 :: r' => RState_mk true (b1 :: l) (b1 :: r')
+  | b0 :: b0 :: b0 :: r' => RState_mk true (b0 :: b1 :: l) (b0 :: r')
+  | b0 :: b0 :: b1 :: b0 :: r' => RState_mk false (push1001M 0 l) r'
+  | b0 :: b0 :: b1 :: b1 :: r' => RState_mk true (b1 :: l) (b0 :: b0 :: b0 :: r')
+  | [] => RState_mk true (b0 :: b1 :: l) [b0]
+  | [b0] => RState_mk true (b0 :: b1 :: l) [b0]
+  | [b0; b0] => RState_mk true (b0 :: b1 :: l) [b0]
+  | [b0; b0; b1] => RState_mk false (b1 :: b0 :: b0 :: b1 :: l) []
+  | _ => pop1B_fallback l r
+  end.
+
+Lemma pop1B_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (pop1B l r).
+Proof.
+  revert l. induction r as [|ch1 r1 IH]; intros l.
+  - cbn [pop1B decode decodeList]. pose proof (progress_evstep _ _ _ (stepB_000 (decodeList w c l blank) blank)) as H.
+    repeat rewrite z00 in H; repeat rewrite z00; exact H.
+  - destruct ch1; try exact (pop1B_fallback_sound w c l _).
+    + destruct r1 as [|ch2 r2].
+      * cbn [pop1B decode decodeList]. pose proof (progress_evstep _ _ _ (stepB_000 (decodeList w c l blank) blank)) as H.
+        repeat rewrite z00 in H; repeat rewrite z00; exact H.
+      * destruct ch2; try exact (pop1B_fallback_sound w c l _).
+        -- destruct r2 as [|ch3 r3].
+           ++ cbn [pop1B decode decodeList]. pose proof (progress_evstep _ _ _ (stepB_000 (decodeList w c l blank) blank)) as H.
+              repeat rewrite z00 in H; repeat rewrite z00; exact H.
+           ++ destruct ch3; try exact (pop1B_fallback_sound w c l _).
+              ** cbn [pop1B decode decodeList]. apply progress_evstep, stepB_000.
+              ** destruct r3 as [|ch4 r4].
+                 --- cbn [pop1B decode decodeList]. pose proof (progress_evstep _ _ _ (stepB_0010 (decodeList w c l blank) blank)) as H.
+                     repeat rewrite z00 in H; repeat rewrite z00; exact H.
+                 --- destruct ch4; try exact (pop1B_fallback_sound w c l _).
+                     +++ cbn [pop1B decode decodeList]. rewrite decodeList_push1001M. apply progress_evstep, stepB_0010.
+                     +++ cbn [pop1B decode decodeList]. apply progress_evstep, stepB_0011.
+        -- cbn [pop1B decode decodeList]. apply progress_evstep, stepB_01.
+    + cbn [pop1B]. eapply evstep_trans; [apply progress_evstep, stepB_1 | exact (IH (b0 :: l))].
+Qed.
+
+Definition pop10E_fallback (l r : list Chunk) : RState :=
+  match peelPL 4 l with
+  | OptList_some l' => RState_mk true l' r
+  | OptList_none => match peelPR 4 r with OptList_some r' => RState_mk true l r' | OptList_none => RState_mk true l r end
+  end.
+
+Lemma pop10E_fallback_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (pop10E_fallback l r).
+Proof.
+  unfold pop10E_fallback.
+  destruct (peelPL 4 l) as [|l'] eqn:Hpl.
+  - destruct (peelPR 4 r) as [|r'] eqn:Hpr; [apply evstep_refl |].
+    cbn [decode]. rewrite (peelPR_eq w c 4 r r' blank Hpr). apply evstep_refl.
+  - cbn [decode]. rewrite (peelPL_eq w c 4 l l' blank Hpl). apply evstep_refl.
+Qed.
+
+Fixpoint pop10E (l r : list Chunk) {struct l} : RState :=
+  match l, r with
+  | b0 :: b1 :: l', _ => pop10E l' (b1 :: b1 :: r)
+  | b0 :: b0 :: l', b0 :: r' => RState_mk false (b1 :: b0 :: b0 :: l') r'
+  | b0 :: b0 :: l', [] => RState_mk false (b1 :: b0 :: b0 :: l') []
+  | b0 :: b0 :: l', b1 :: r' => RState_mk true l' (b0 :: b0 :: b0 :: r')
+  | [b0], b0 :: r' => RState_mk false [b1; b0; b0] r'
+  | [b0], [] => RState_mk false [b1; b0; b0] []
+  | [b0], b1 :: r' => RState_mk true [] (b0 :: b0 :: b0 :: r')
+  | [], b0 :: r' => RState_mk false [b1; b0; b0] r'
+  | [], [] => RState_mk false [b1; b0; b0] []
+  | [], b1 :: r' => RState_mk true [] (b0 :: b0 :: b0 :: r')
+  | b1 :: b0 :: l', _ => RState_mk false (b0 :: b1 :: l') r
+  | [b1], _ => RState_mk false [b0; b1] r
+  | b1 :: b1 :: b0 :: b0 :: l', _ => RState_mk true l' (consRR0001 0 r)
+  | [b1; b1; b0], _ => RState_mk true [] (consRR0001 0 r)
+  | [b1; b1], _ => RState_mk true [] (consRR0001 0 r)
+  | b1 :: b1 :: b0 :: b1 :: l', _ => RState_mk false (b1 :: b0 :: l') (b0 :: b1 :: r)
+  | _, _ => pop10E_fallback l r
+  end.
+
+Local Ltac solve_stepE rule l0 r0 :=
+  cbn [pop10E decode decodeList];
+  try rewrite decodeList_consRR0001;
+  pose proof (progress_evstep _ _ _ (rule l0 r0)) as Hst;
+  repeat rewrite z00 in Hst; repeat rewrite z00; exact Hst.
+
+Lemma pop10E_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (pop10E l r).
+Proof.
+  revert r. induction l as [l IH] using list_strong_ind; intros r.
+  destruct l as [|ch1 l1].
+  - destruct r as [|rch r']; [solve_stepE stepE_00_0 (const S0) (const S0) |].
+    destruct rch; try exact (pop10E_fallback_sound w c _ _).
+    + solve_stepE stepE_00_0 (const S0) (decodeList w c r' blank).
+    + solve_stepE stepE_00_1 (const S0) (decodeList w c r' blank).
+  - destruct ch1; try exact (pop10E_fallback_sound w c _ _).
+    + destruct l1 as [|ch2 l2].
+      * destruct r as [|rch r']; [solve_stepE stepE_00_0 (const S0) (const S0) |].
+        destruct rch; try exact (pop10E_fallback_sound w c _ _).
+        -- solve_stepE stepE_00_0 (const S0) (decodeList w c r' blank).
+        -- solve_stepE stepE_00_1 (const S0) (decodeList w c r' blank).
+      * destruct ch2; try exact (pop10E_fallback_sound w c _ _).
+        -- destruct r as [|rch r']; [solve_stepE stepE_00_0 (decodeList w c l2 blank) (const S0) |].
+           destruct rch; try exact (pop10E_fallback_sound w c _ _).
+           ++ solve_stepE stepE_00_0 (decodeList w c l2 blank) (decodeList w c r' blank).
+           ++ solve_stepE stepE_00_1 (decodeList w c l2 blank) (decodeList w c r' blank).
+        -- cbn [pop10E]. eapply evstep_trans; [apply progress_evstep, stepE_01 | exact (IH l2 ltac:(cbn [length]; lia) (b1 :: b1 :: r))].
+    + destruct l1 as [|ch2 l2]; [solve_stepE stepE_10 (const S0) (decodeList w c r blank) |].
+      destruct ch2; try exact (pop10E_fallback_sound w c _ _).
+      * solve_stepE stepE_10 (decodeList w c l2 blank) (decodeList w c r blank).
+      * destruct l2 as [|ch3 l3]; [solve_stepE stepE_1100 (const S0) (decodeList w c r blank) |].
+        destruct ch3; try exact (pop10E_fallback_sound w c _ _).
+        destruct l3 as [|ch4 l4]; [solve_stepE stepE_1100 (const S0) (decodeList w c r blank) |].
+        destruct ch4; try exact (pop10E_fallback_sound w c _ _).
+        -- solve_stepE stepE_1100 (decodeList w c l4 blank) (decodeList w c r blank).
+        -- solve_stepE stepE_1101 (decodeList w c l4 blank) (decodeList w c r blank).
+Qed.
+
+(* --- Specialized Sweep Peelers & Matchers --- *)
+
+Definition peelSwL1000 (inv : bool) (f b : list bool) (rest : list Chunk) : OptList :=
+  match swHead inv f b with
+  | OptBool_some false =>
+    match swPop inv f b with OptSwPop_some _ f' b' => OptList_some (b0 :: b0 :: pushSwL inv f' b' rest) | OptSwPop_none => OptList_none end
+  | _ => OptList_none
+  end.
+
+Lemma peelSwL1000_eq (w : list bool) (c : nat) (inv : bool) (f b : list bool) (rest out : list Chunk) (lb : side)
+  (H : peelSwL1000 inv f b rest = OptList_some out) :
+  decodeList w c (swL inv f b :: rest) lb = f1 >> f0 >> decodeList w c out lb.
+Proof.
+  unfold peelSwL1000 in H. destruct (swHead inv f b) as [|[|]] eqn:Hh; try discriminate H.
+  destruct (swPop inv f b) as [|bit f' b'] eqn:Hp; [discriminate H |].
+  inversion H; subst. pose proof (swPop_bit_eq_swHead inv f b bit false f' b' Hh Hp); subst bit.
+  cbn [decodeList]. rewrite (swPop_some inv f b false f' b' Hp), decodeList_pushSwL; reflexivity.
+Qed.
+
+Definition peelBzL1000 (f b : list SwSym) (rest : list Chunk) : OptList :=
+  match bzHead f b with
+  | OptSwSym_some SwSym_w0 =>
+    match bzPop f b with OptBzPop_some _ f' b' => OptList_some (b0 :: b0 :: pushBzL f' b' rest) | OptBzPop_none => OptList_none end
+  | _ => OptList_none
+  end.
+
+Lemma peelBzL1000_eq (w : list bool) (c : nat) (f b : list SwSym) (rest out : list Chunk) (lb : side)
+  (H : peelBzL1000 f b rest = OptList_some out) :
+  decodeList w c (bzL f b :: rest) lb = f1 >> f0 >> decodeList w c out lb.
+Proof.
+  unfold peelBzL1000 in H. destruct (bzHead f b) as [|[| |]] eqn:Hh; try discriminate H.
+  destruct (bzPop f b) as [|s f' b'] eqn:Hp; [discriminate H |].
+  inversion H; subst. pose proof (bzPop_sym_eq_bzHead f b s SwSym_w0 f' b' Hh Hp); subst s.
+  cbn [decodeList]. rewrite (bzPop_some f b SwSym_w0 f' b' Hp), decodeList_pushBzL; reflexivity.
+Qed.
+
+Definition peelSwL0100 (inv : bool) (f b : list bool) (rest : list Chunk) : OptList :=
+  match swHead inv f b with
+  | OptBool_some true =>
+    match swPop inv f b with OptSwPop_some _ f' b' => OptList_some (b1 :: b0 :: b0 :: pushSwL inv f' b' rest) | OptSwPop_none => OptList_none end
+  | _ => OptList_none
+  end.
+
+Lemma peelSwL0100_eq (w : list bool) (c : nat) (inv : bool) (f b : list bool) (rest out : list Chunk) (lb : side)
+  (H : peelSwL0100 inv f b rest = OptList_some out) :
+  decodeList w c (swL inv f b :: rest) lb = f0 >> decodeList w c out lb.
+Proof.
+  unfold peelSwL0100 in H. destruct (swHead inv f b) as [|[|]] eqn:Hh; try discriminate H.
+  destruct (swPop inv f b) as [|bit f' b'] eqn:Hp; [discriminate H |].
+  inversion H; subst. pose proof (swPop_bit_eq_swHead inv f b bit true f' b' Hh Hp); subst bit.
+  cbn [decodeList]. rewrite (swPop_some inv f b true f' b' Hp), decodeList_pushSwL; reflexivity.
+Qed.
+
+Definition peelBzL0Start (f b : list SwSym) (rest : list Chunk) : OptList :=
+  match bzHead f b with
+  | OptSwSym_some SwSym_w1 =>
+    match bzPop f b with OptBzPop_some _ f' b' => OptList_some (b1 :: b0 :: b0 :: pushBzL f' b' rest) | OptBzPop_none => OptList_none end
+  | OptSwSym_some SwSym_d =>
+    match bzPop f b with OptBzPop_some _ f' b' => OptList_some (b1 :: b1 :: b0 :: b0 :: b0 :: pushBzL f' b' rest) | OptBzPop_none => OptList_none end
+  | _ => OptList_none
+  end.
+
+Lemma peelBzL0Start_eq (w : list bool) (c : nat) (f b : list SwSym) (rest out : list Chunk) (lb : side)
+  (H : peelBzL0Start f b rest = OptList_some out) :
+  decodeList w c (bzL f b :: rest) lb = f0 >> decodeList w c out lb.
+Proof.
+  unfold peelBzL0Start in H. destruct (bzHead f b) as [|[| |]] eqn:Hh; try discriminate H.
+  - destruct (bzPop f b) as [|s f' b'] eqn:Hp; [discriminate H |].
+    inversion H; subst. pose proof (bzPop_sym_eq_bzHead f b s SwSym_w1 f' b' Hh Hp); subst s.
+    cbn [decodeList]. rewrite (bzPop_some f b SwSym_w1 f' b' Hp), decodeList_pushBzL; reflexivity.
+  - destruct (bzPop f b) as [|s f' b'] eqn:Hp; [discriminate H |].
+    inversion H; subst. pose proof (bzPop_sym_eq_bzHead f b s SwSym_d f' b' Hh Hp); subst s.
+    cbn [decodeList]. rewrite (bzPop_some f b SwSym_d f' b' Hp), decodeList_pushBzL; reflexivity.
+Qed.
+
+Definition peelSwR1101 (inv : bool) (f b : list bool) (rest : list Chunk) : OptList :=
+  match swHead inv f b with
+  | OptBool_some false =>
+    match swPop inv f b with OptSwPop_some _ f' b' => OptList_some (b0 :: b1 :: pushSwR inv f' b' rest) | OptSwPop_none => OptList_none end
+  | _ => OptList_none
+  end.
+
+Lemma peelSwR1101_eq (w : list bool) (c : nat) (inv : bool) (f b : list bool) (rest out : list Chunk) (lb : side)
+  (H : peelSwR1101 inv f b rest = OptList_some out) :
+  decodeList w c (swR inv f b :: rest) lb = f1 >> f1 >> decodeList w c out lb.
+Proof.
+  unfold peelSwR1101 in H. destruct (swHead inv f b) as [|[|]] eqn:Hh; try discriminate H.
+  destruct (swPop inv f b) as [|bit f' b'] eqn:Hp; [discriminate H |].
+  inversion H; subst. pose proof (swPop_bit_eq_swHead inv f b bit false f' b' Hh Hp); subst bit.
+  cbn [decodeList]. rewrite (swPop_some inv f b false f' b' Hp), decodeList_pushSwR; reflexivity.
+Qed.
+
+Definition peelBzR1101 (f b : list SwSym) (rest : list Chunk) : OptList :=
+  match bzHead f b with
+  | OptSwSym_some SwSym_w0 =>
+    match bzPop f b with OptBzPop_some _ f' b' => OptList_some (b0 :: b1 :: pushBzR f' b' rest) | OptBzPop_none => OptList_none end
+  | _ => OptList_none
+  end.
+
+Lemma peelBzR1101_eq (w : list bool) (c : nat) (f b : list SwSym) (rest out : list Chunk) (lb : side)
+  (H : peelBzR1101 f b rest = OptList_some out) :
+  decodeList w c (bzR f b :: rest) lb = f1 >> f1 >> decodeList w c out lb.
+Proof.
+  unfold peelBzR1101 in H. destruct (bzHead f b) as [|[| |]] eqn:Hh; try discriminate H.
+  destruct (bzPop f b) as [|s f' b'] eqn:Hp; [discriminate H |].
+  inversion H; subst. pose proof (bzPop_sym_eq_bzHead f b s SwSym_w0 f' b' Hh Hp); subst s.
+  cbn [decodeList]. rewrite (bzPop_some f b SwSym_w0 f' b' Hp), decodeList_pushBzR; reflexivity.
+Qed.
+
+Fixpoint scanRsB0001Count (xs : list Chunk) : OptNatList :=
+  match xs with
+  | rL0010 m :: rest =>
+    match scanRsB0001Count rest with OptNatList_some k out => OptNatList_some (m + 1 + k) out | OptNatList_none => OptNatList_none end
+  | b0 :: b0 :: b1 :: b0 :: rest =>
+    match scanRsB0001Count rest with OptNatList_some k out => OptNatList_some (S k) out | OptNatList_none => OptNatList_none end
+  | swL inv f b :: rest =>
+    match peelSwL1000 inv f b rest with OptList_some out => OptNatList_some 0 out | OptList_none => OptNatList_none end
+  | bzL f b :: rest =>
+    match peelBzL1000 f b rest with OptList_some out => OptNatList_some 0 out | OptList_none => OptNatList_none end
+  | b1 :: b0 :: rest => OptNatList_some 0 rest
+  | b1 :: rL0100 0 :: rest => OptNatList_some 0 (b1 :: b0 :: b0 :: rest)
+  | b1 :: rL0100 (S m) :: rest => OptNatList_some 0 (b1 :: b0 :: b0 :: rL0100 m :: rest)
+  | b1 :: rL0010 0 :: rest => OptNatList_some 0 (b0 :: b1 :: b0 :: rest)
+  | b1 :: rL0010 (S m) :: rest => OptNatList_some 0 (b0 :: b1 :: b0 :: rL0010 m :: rest)
+  | _ => OptNatList_none
+  end.
+
+Lemma scanRsB0001Count_spec (w : list bool) (c : nat) (xs : list Chunk) (k : nat) (out : list Chunk) (lb : side) :
+  scanRsB0001Count xs = OptNatList_some k out ->
+  decodeList w c xs lb = repBits [false; false; true; false] k (f1 >> f0 >> decodeList w c out lb).
+Proof.
+  revert k out. induction xs as [xs IH] using list_strong_ind; intros k out H.
+  destruct xs as [|ch1 xs1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct xs1 as [|ch2 xs2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct xs2 as [|ch3 xs3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct xs3 as [|ch4 rest]; [discriminate H | destruct ch4; try discriminate H].
+    cbn [scanRsB0001Count] in H. destruct (scanRsB0001Count rest) as [|k0 out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst. cbn [decodeList repBits decBits].
+    rewrite (IH rest ltac:(cbn [length]; lia) k0 out Hsc). reflexivity.
+  - destruct xs1 as [|ch2 rest]; [discriminate H | destruct ch2; try discriminate H].
+    + cbn [scanRsB0001Count] in H; inversion H; subst; reflexivity.
+    + destruct n; cbn [scanRsB0001Count] in H; inversion H; subst; reflexivity.
+    + destruct n; cbn [scanRsB0001Count] in H; inversion H; subst; reflexivity.
+  - cbn [scanRsB0001Count] in H. destruct (scanRsB0001Count xs1) as [|k0 out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst. cbn [decodeList].
+    rewrite (IH xs1 ltac:(cbn [length]; lia) k0 out Hsc).
+    replace (n + 1 + k0) with (S n + k0) by lia. rewrite <- repBits_add. reflexivity.
+  - cbn [scanRsB0001Count] in H. destruct (peelSwL1000 b l l0 xs1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelSwL1000_eq w c b l l0 xs1 out lb Hp).
+  - cbn [scanRsB0001Count] in H. destruct (peelBzL1000 l l0 xs1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelBzL1000_eq w c l l0 xs1 out lb Hp).
+Qed.
+
+Definition tryRsB0001 (n : nat) (l : list Chunk) : OptList :=
+  match scanRsB0001Count l with
+  | OptNatList_some (S k) rest =>
+    OptList_some (consRL0010 0 (b1 :: b0 :: b0 :: b0 :: consBzLRepBool true n (consBzLRepBool false k (cons01BzL rest))))
+  | _ => OptList_none
+  end.
+
+Lemma tryRsB0001_sound (w : list bool) (c n : nat) (l l' r : list Chunk)
+  (H : tryRsB0001 n l = OptList_some l') :
+  (decodeList w c l blank {{B}}> repBits [false; false; false; true] (S n) (decodeList w c r blank)) -[ tm ]->*
+    decode w c (RState_mk false l' r).
+Proof.
+  unfold tryRsB0001 in H.
+  destruct (scanRsB0001Count l) as [|[|k] rest] eqn:Hsc; try discriminate H.
+  inversion H; subst.
+  rewrite (scanRsB0001Count_spec w c l (S k) rest blank Hsc).
+  cbn [decode]. try rewrite decodeList_consRL0010; cbn [decodeList].
+  rewrite !decodeList_consBzLRepBool, encWL_rep_true, encWL_rep_false, decodeList_cons01BzL.
+  cbn [repBits decBits]. apply rsB_0001_kn.
+Qed.
+
+Fixpoint scanR0001k11 (xs : list Chunk) : OptNatList :=
+  match xs with
+  | rR0001 k :: rest =>
+    match scanR0001k11 rest with OptNatList_some n out => OptNatList_some (k + 1 + n) out | OptNatList_none => OptNatList_none end
+  | b0 :: b0 :: b0 :: b1 :: rest =>
+    match scanR0001k11 rest with OptNatList_some n out => OptNatList_some (S n) out | OptNatList_none => OptNatList_none end
+  | b1 :: b1 :: rest => OptNatList_some 0 rest
+  | rR1101 0 :: rest => OptNatList_some 0 (b0 :: b1 :: rest)
+  | rR1101 (S j) :: rest => OptNatList_some 0 (b0 :: b1 :: rR1101 j :: rest)
+  | swR inv f b :: rest =>
+    match peelSwR1101 inv f b rest with OptList_some out => OptNatList_some 0 out | OptList_none => OptNatList_none end
+  | bzR f b :: rest =>
+    match peelBzR1101 f b rest with OptList_some out => OptNatList_some 0 out | OptList_none => OptNatList_none end
+  | _ => OptNatList_none
+  end.
+
+Lemma scanR0001k11_spec (w : list bool) (c : nat) (xs : list Chunk) (k : nat) (out : list Chunk) (lb : side) :
+  scanR0001k11 xs = OptNatList_some k out ->
+  decodeList w c xs lb = repBits [false; false; false; true] k (f1 >> f1 >> decodeList w c out lb).
+Proof.
+  revert k out. induction xs as [xs IH] using list_strong_ind; intros k out H.
+  destruct xs as [|ch1 xs1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct xs1 as [|ch2 xs2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct xs2 as [|ch3 xs3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct xs3 as [|ch4 rest]; [discriminate H | destruct ch4; try discriminate H].
+    cbn [scanR0001k11] in H. destruct (scanR0001k11 rest) as [|n0 out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst. cbn [decodeList repBits decBits].
+    rewrite (IH rest ltac:(cbn [length]; lia) n0 out Hsc). reflexivity.
+  - destruct xs1 as [|ch2 rest]; [discriminate H | destruct ch2; try discriminate H].
+    cbn [scanR0001k11] in H; inversion H; subst; reflexivity.
+  - cbn [scanR0001k11] in H. destruct (scanR0001k11 xs1) as [|n0 out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst. cbn [decodeList].
+    rewrite (IH xs1 ltac:(cbn [length]; lia) n0 out Hsc).
+    replace (n + 1 + n0) with (S n + n0) by lia. rewrite <- repBits_add. reflexivity.
+  - destruct n; cbn [scanR0001k11] in H; inversion H; subst; reflexivity.
+  - cbn [scanR0001k11] in H. destruct (peelSwR1101 b l l0 xs1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelSwR1101_eq w c b l l0 xs1 out lb Hp).
+  - cbn [scanR0001k11] in H. destruct (peelBzR1101 l l0 xs1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelBzR1101_eq w c l l0 xs1 out lb Hp).
+Qed.
+
+Definition tryLsE0010 (m : nat) (r : list Chunk) : OptList :=
+  match scanR0001k11 r with
+  | OptNatList_some k rest => OptList_some (b1 :: b1 :: consRR1101 m (consRR0001Opt k rest))
+  | OptNatList_none => OptList_none
+  end.
+
+Lemma tryLsE0010_sound (w : list bool) (c m : nat) (l r r' : list Chunk)
+  (H : tryLsE0010 m r = OptList_some r') :
+  (repBits [false; false; true; false] (S m) (decodeList w c l blank) <{{E}} decodeList w c r blank) -[ tm ]->*
+    decode w c (RState_mk true l r').
+Proof.
+  unfold tryLsE0010 in H. destruct (scanR0001k11 r) as [|k rest] eqn:Hsc; [discriminate H |].
+  inversion H; subst. rewrite (scanR0001k11_spec w c r k rest blank Hsc).
+  cbn [decode decodeList]. rewrite decodeList_consRR1101, decodeList_consRR0001Opt.
+  apply lsE_0010_mk.
+Qed.
+
+Definition peelHead0B (xs : list Chunk) : OptList :=
+  match xs with
+  | b0 :: l0 => OptList_some l0
+  | rL0100 0 :: l0 => OptList_some (b1 :: b0 :: b0 :: l0)
+  | rL0100 (S n) :: l0 => OptList_some (b1 :: b0 :: b0 :: rL0100 n :: l0)
+  | rL0010 0 :: l0 => OptList_some (b0 :: b1 :: b0 :: l0)
+  | rL0010 (S n) :: l0 => OptList_some (b0 :: b1 :: b0 :: rL0010 n :: l0)
+  | swL inv f b :: l0 => peelSwL0100 inv f b l0
+  | bzL f b :: l0 => peelBzL0Start f b l0
+  | _ => OptList_none
+  end.
+
+Lemma peelHead0B_eq (w : list bool) (c : nat) (xs out : list Chunk) (lb : side)
+  (H : peelHead0B xs = OptList_some out) :
+  decodeList w c xs lb = f0 >> decodeList w c out lb.
+Proof.
+  destruct xs as [|ch rest]; [discriminate H | destruct ch; try discriminate H; cbn [peelHead0B] in H].
+  - inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - exact (peelSwL0100_eq w c b l l0 rest out lb H).
+  - exact (peelBzL0Start_eq w c l l0 rest out lb H).
+Qed.
+
+Definition peelHead0BSwOnly (xs : list Chunk) : OptList :=
+  match xs with
+  | b0 :: l0 => OptList_some l0
+  | rL0100 0 :: l0 => OptList_some (b1 :: b0 :: b0 :: l0)
+  | rL0100 (S n) :: l0 => OptList_some (b1 :: b0 :: b0 :: rL0100 n :: l0)
+  | rL0010 0 :: l0 => OptList_some (b0 :: b1 :: b0 :: l0)
+  | rL0010 (S n) :: l0 => OptList_some (b0 :: b1 :: b0 :: rL0010 n :: l0)
+  | swL inv f b :: l0 => peelSwL0100 inv f b l0
+  | _ => OptList_none
+  end.
+
+Lemma peelHead0BSwOnly_eq (w : list bool) (c : nat) (xs out : list Chunk) (lb : side)
+  (H : peelHead0BSwOnly xs = OptList_some out) :
+  decodeList w c xs lb = f0 >> decodeList w c out lb.
+Proof.
+  destruct xs as [|ch rest]; [discriminate H | destruct ch; try discriminate H; cbn [peelHead0BSwOnly] in H].
+  - inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - destruct n; inversion H; subst; reflexivity.
+  - exact (peelSwL0100_eq w c b l l0 rest out lb H).
+Qed.
+
+Fixpoint scanSwRL (xs : list Chunk) : OptNatList :=
+  match xs with
+  | rL0010 m :: rest =>
+    match scanSwRL rest with OptNatList_some k out => OptNatList_some (m + 1 + k) out | OptNatList_none => OptNatList_none end
+  | b0 :: b0 :: b1 :: b0 :: rest =>
+    match scanSwRL rest with OptNatList_some k out => OptNatList_some (S k) out | OptNatList_none => OptNatList_none end
+  | b1 :: b0 :: b0 :: b0 :: rest => OptNatList_some 0 (b0 :: b0 :: rest)
+  | swL inv f b :: rest =>
+    match peelSwL1000 inv f b rest with OptList_some out => OptNatList_some 0 out | OptList_none => OptNatList_none end
+  | bzL f b :: rest =>
+    match peelBzL1000 f b rest with OptList_some out => OptNatList_some 0 out | OptList_none => OptNatList_none end
+  | b1 :: b0 :: rest => OptNatList_some 0 rest
+  | _ => OptNatList_none
+  end.
+
+Lemma scanSwRL_spec (w : list bool) (c : nat) (xs : list Chunk) (k : nat) (out : list Chunk) (lb : side) :
+  scanSwRL xs = OptNatList_some k out ->
+  decodeList w c xs lb = repBits [false; false; true; false] k (f1 >> f0 >> decodeList w c out lb).
+Proof.
+  revert k out. induction xs as [xs IH] using list_strong_ind; intros k out H.
+  destruct xs as [|ch1 xs1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct xs1 as [|ch2 xs2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct xs2 as [|ch3 xs3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct xs3 as [|ch4 rest]; [discriminate H | destruct ch4; try discriminate H].
+    cbn [scanSwRL] in H. destruct (scanSwRL rest) as [|k0 out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst. cbn [decodeList repBits decBits].
+    rewrite (IH rest ltac:(cbn [length]; lia) k0 out Hsc). reflexivity.
+  - destruct xs1 as [|ch2 xs2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct xs2 as [|ch3 xs3]; [cbn [scanSwRL] in H; inversion H; subst; reflexivity |].
+    destruct ch3; try (cbn [scanSwRL] in H; inversion H; subst; reflexivity).
+    destruct xs3 as [|ch4 rest]; [cbn [scanSwRL] in H; inversion H; subst; reflexivity |].
+    destruct ch4; cbn [scanSwRL] in H; inversion H; subst; reflexivity.
+  - cbn [scanSwRL] in H. destruct (scanSwRL xs1) as [|k0 out0] eqn:Hsc; [discriminate H |].
+    inversion H; subst. cbn [decodeList].
+    rewrite (IH xs1 ltac:(cbn [length]; lia) k0 out Hsc).
+    replace (n + 1 + k0) with (S n + k0) by lia. rewrite <- repBits_add. reflexivity.
+  - cbn [scanSwRL] in H. destruct (peelSwL1000 b l l0 xs1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelSwL1000_eq w c b l l0 xs1 out lb Hp).
+  - cbn [scanSwRL] in H. destruct (peelBzL1000 l l0 xs1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelBzL1000_eq w c l l0 xs1 out lb Hp).
+Qed.
+
+Definition matchL0010_10Bool (l : list Chunk) : bool :=
+  match scanSwRL l with OptNatList_some (S _) _ => true | _ => false end.
+
+Fixpoint matchR0001k11Bz (xs : list Chunk) : OptBzRMatch :=
+  match xs with
+  | rR0001 k :: rest =>
+    match matchR0001k11Bz rest with
+    | OptBzRMatch_mode123 n out => OptBzRMatch_mode123 (k + 1 + n) out
+    | OptBzRMatch_mode4 n f' b' out => OptBzRMatch_mode4 (k + 1 + n) f' b' out
+    | OptBzRMatch_none => OptBzRMatch_none
+    end
+  | b0 :: b0 :: b0 :: b1 :: rest =>
+    match matchR0001k11Bz rest with
+    | OptBzRMatch_mode123 n out => OptBzRMatch_mode123 (S n) out
+    | OptBzRMatch_mode4 n f' b' out => OptBzRMatch_mode4 (S n) f' b' out
+    | OptBzRMatch_none => OptBzRMatch_none
+    end
+  | b1 :: b1 :: rest => OptBzRMatch_mode123 0 rest
+  | rR1101 0 :: rest => OptBzRMatch_mode123 0 (b0 :: b1 :: rest)
+  | rR1101 (S j) :: rest => OptBzRMatch_mode123 0 (b0 :: b1 :: rR1101 j :: rest)
+  | swR inv f b :: rest =>
+    match peelSwR1101 inv f b rest with OptList_some out => OptBzRMatch_mode123 0 out | OptList_none => OptBzRMatch_none end
+  | bzR f b :: rest =>
+    let '(PopLeadSym_mk j fb bb) := bzPopLeading SwSym_w1 f b in
+    match bzPop fb bb with
+    | OptBzPop_some SwSym_w0 f' b' => OptBzRMatch_mode4 j f' b' rest
+    | _ => OptBzRMatch_none
+    end
+  | _ => OptBzRMatch_none
+  end.
+
+Lemma matchR0001k11Bz_mode123 (w : list bool) (c : nat) (r : list Chunk) (k : nat) (out : list Chunk) (lb : side) :
+  matchR0001k11Bz r = OptBzRMatch_mode123 k out ->
+  decodeList w c r lb = repBits [false; false; false; true] k (f1 >> f1 >> decodeList w c out lb).
+Proof.
+  revert k out. induction r as [r IH] using list_strong_ind; intros k out H.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct r3 as [|ch4 rest]; [discriminate H | destruct ch4; try discriminate H].
+    cbn [matchR0001k11Bz] in H. destruct (matchR0001k11Bz rest) as [|n0 out0 | n0 fa ba out0] eqn:Hm; try discriminate H.
+    inversion H; subst. cbn [decodeList repBits decBits].
+    rewrite (IH rest ltac:(cbn [length]; lia) n0 out Hm). reflexivity.
+  - destruct r1 as [|ch2 rest]; [discriminate H | destruct ch2; try discriminate H].
+    cbn [matchR0001k11Bz] in H; inversion H; subst; reflexivity.
+  - cbn [matchR0001k11Bz] in H. destruct (matchR0001k11Bz r1) as [|n0 out0 | n0 fa ba out0] eqn:Hm; try discriminate H.
+    inversion H; subst. cbn [decodeList].
+    rewrite (IH r1 ltac:(cbn [length]; lia) n0 out Hm).
+    replace (n + 1 + n0) with (S n + n0) by lia. rewrite <- repBits_add. reflexivity.
+  - destruct n; cbn [matchR0001k11Bz] in H; inversion H; subst; reflexivity.
+  - cbn [matchR0001k11Bz] in H. destruct (peelSwR1101 b l l0 r1) as [|out0] eqn:Hp; [discriminate H |].
+    inversion H; subst. exact (peelSwR1101_eq w c b l l0 r1 out lb Hp).
+  - cbn [matchR0001k11Bz] in H. destruct (bzPopLeading SwSym_w1 l l0) as [j fb bb].
+    destruct (bzPop fb bb) as [|[| |] f' b']; discriminate H.
+Qed.
+
+Lemma matchR0001k11Bz_mode4 (w : list bool) (c : nat) (r : list Chunk)
+  (k : nat) (f' b' : list SwSym) (out : list Chunk) (lb : side) :
+  matchR0001k11Bz r = OptBzRMatch_mode4 k f' b' out ->
+  decodeList w c r lb =
+    repBits [false; false; false; true] k (f1 >> f1 >> f0 >> f1 >> encWR3 (decBZ f' b') (decodeList w c out lb)).
+Proof.
+  revert k f' b' out. induction r as [r IH] using list_strong_ind; intros k f' b' out H.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct r3 as [|ch4 rest]; [discriminate H | destruct ch4; try discriminate H].
+    cbn [matchR0001k11Bz] in H. destruct (matchR0001k11Bz rest) as [|n0 out0 | n0 fa ba out0] eqn:Hm; try discriminate H.
+    inversion H; subst. cbn [decodeList repBits decBits].
+    rewrite (IH rest ltac:(cbn [length]; lia) n0 f' b' out Hm). reflexivity.
+  - destruct r1 as [|ch2 rest]; [discriminate H | destruct ch2; discriminate H].
+  - cbn [matchR0001k11Bz] in H. destruct (matchR0001k11Bz r1) as [|n0 out0 | n0 fa ba out0] eqn:Hm; try discriminate H.
+    inversion H; subst. cbn [decodeList].
+    rewrite (IH r1 ltac:(cbn [length]; lia) n0 f' b' out Hm).
+    replace (n + 1 + n0) with (S n + n0) by lia. rewrite <- repBits_add. reflexivity.
+  - destruct n; discriminate H.
+  - cbn [matchR0001k11Bz] in H. destruct (peelSwR1101 b l l0 r1); discriminate H.
+  - cbn [matchR0001k11Bz] in H. destruct (bzPopLeading SwSym_w1 l l0) as [j fb bb] eqn:Hlead.
+    destruct (bzPop fb bb) as [|[| |] fa ba] eqn:Hpop; try discriminate H.
+    inversion H; subst. cbn [decodeList].
+    rewrite (bzPopLeading_spec SwSym_w1 l l0 k fb bb Hlead), (bzPop_some fb bb SwSym_w0 f' b' Hpop),
+            encWR3_append, encWR3_rep_w1. reflexivity.
+Qed.
+
+Definition emitTryBzL0R (m : OptBzRMatch) (revPref : list bool) (topM : nat) : list Chunk :=
+  match m with
+  | OptBzRMatch_none => []
+  | OptBzRMatch_mode4 rk f' b' rRest =>
+    match rk with
+    | 0 => consRR0001 topM (pushBzR (mapFlipSym revPref []) [] (b0 :: b1 :: pushBzR f' b' rRest))
+    | S k => consRR0001 topM (bzR (mapFlipSym revPref (consRepSym SwSym_w1 k (SwSym_d :: f'))) b' :: rRest)
+    end
+  | OptBzRMatch_mode123 rk rRest =>
+    match rk, rRest with
+    | S k, b0 :: b1 :: bzR fa ba :: rRest3 =>
+      consRR0001 topM (bzR (mapFlipSym revPref (consRepSym SwSym_w1 k (SwSym_d :: fa))) ba :: rRest3)
+    | S k, b0 :: b1 :: rRest2 =>
+      consRR0001 topM (bzR (mapFlipSym revPref (consRepSym SwSym_w1 k [SwSym_d])) [] :: rRest2)
+    | _, bzR fa ba :: rRest2 =>
+      consRR0001 topM (bzR (mapFlipSym revPref (consRepSym SwSym_w1 rk fa)) ba :: rRest2)
+    | _, _ =>
+      consRR0001 topM (pushBzR (mapFlipSym revPref []) [] (consRR0001Opt rk rRest))
+    end
+  end.
+
+Lemma emitTryBzL0R_spec (w : list bool) (c : nat) (r : list Chunk) (m : OptBzRMatch)
+  (revPref : list bool) (topM : nat) (lb : side)
+  (Hm : matchR0001k11Bz r = m) (Hne : m <> OptBzRMatch_none) :
+  exists k tail,
+    decodeList w c r lb = repBits [false; false; false; true] k (f1 >> f1 >> tail) /\
+    decodeList w c (emitTryBzL0R m revPref topM) lb =
+      repBits [false; false; false; true] (S topM)
+        (encWR_q1 (flipW revPref) (repBits [false; false; false; true] k tail)).
+Proof.
+  destruct m as [|rk rRest | rk f' b' rRest]; [exfalso; exact (Hne eq_refl) | |].
+  - exists rk, (decodeList w c rRest lb).
+    split; [exact (matchR0001k11Bz_mode123 w c r rk rRest lb Hm) |].
+    assert (Hfb : decodeList w c (consRR0001 topM (pushBzR (mapFlipSym revPref []) [] (consRR0001Opt rk rRest))) lb =
+                  repBits [false; false; false; true] (S topM)
+                    (encWR_q1 (flipW revPref) (repBits [false; false; false; true] rk (decodeList w c rRest lb)))).
+    { rewrite decodeList_consRR0001, decodeList_pushBzR, decodeList_consRR0001Opt.
+      unfold decBZ; cbn [rev]; rewrite mapFlipSym_eq, !app_nil_r, encWR3_map_symOfBool. reflexivity. }
+    assert (Hbz0 : forall fa ba rRest2,
+              rRest = bzR fa ba :: rRest2 ->
+              decodeList w c (consRR0001 topM (bzR (mapFlipSym revPref (consRepSym SwSym_w1 rk fa)) ba :: rRest2)) lb =
+                repBits [false; false; false; true] (S topM)
+                  (encWR_q1 (flipW revPref) (repBits [false; false; false; true] rk (decodeList w c rRest lb)))).
+    { intros fa ba rRest2 Hr; subst rRest.
+      try rewrite decodeList_consRR0001; cbn [decodeList]; unfold decBZ.
+      rewrite mapFlipSym_eq, consRepSym_eq, <- !app_assoc, !encWR3_append, encWR3_map_symOfBool, encWR3_rep_w1.
+      reflexivity. }
+    destruct rk as [|k].
+    + destruct rRest as [|ch1 r1]; [exact Hfb | destruct ch1; try exact Hfb].
+      exact (Hbz0 l l0 r1 eq_refl).
+    + destruct rRest as [|ch1 r1]; [exact Hfb | destruct ch1; try exact Hfb].
+      * destruct r1 as [|ch2 r2]; [exact Hfb | destruct ch2; try exact Hfb].
+        assert (H01 : decodeList w c (consRR0001 topM (bzR (mapFlipSym revPref (consRepSym SwSym_w1 k [SwSym_d])) [] :: r2)) lb =
+                      repBits [false; false; false; true] (S topM)
+                        (encWR_q1 (flipW revPref) (repBits [false; false; false; true] (S k) (decodeList w c (b0 :: b1 :: r2) lb)))).
+        { try rewrite decodeList_consRR0001; cbn [decodeList]; unfold decBZ; cbn [rev]; rewrite app_nil_r.
+          rewrite mapFlipSym_eq, consRepSym_eq, !encWR3_append, encWR3_map_symOfBool, encWR3_rep_w1; cbn [encWR3].
+          rewrite (repBits_succ_right [false; false; false; true] k); reflexivity. }
+        destruct r2 as [|ch3 r3]; [exact H01 | destruct ch3; try exact H01].
+        cbn [emitTryBzL0R]. try rewrite decodeList_consRR0001; cbn [decodeList]; unfold decBZ.
+        rewrite mapFlipSym_eq, consRepSym_eq, <- !app_assoc, !encWR3_append, encWR3_map_symOfBool, encWR3_rep_w1; cbn [encWR3].
+        rewrite (repBits_succ_right [false; false; false; true] k); reflexivity.
+      * exact (Hbz0 l l0 r1 eq_refl).
+  - exists rk, (f0 >> f1 >> encWR3 (decBZ f' b') (decodeList w c rRest lb)).
+    split; [exact (matchR0001k11Bz_mode4 w c r rk f' b' rRest lb Hm) |].
+    destruct rk as [|k]; cbn [emitTryBzL0R].
+    + try rewrite decodeList_consRR0001; rewrite decodeList_pushBzR; cbn [decodeList]; rewrite decodeList_pushBzR.
+      unfold decBZ at 1; cbn [rev]; rewrite mapFlipSym_eq, !app_nil_r, encWR3_map_symOfBool; reflexivity.
+    + try rewrite decodeList_consRR0001; cbn [decodeList]; unfold decBZ.
+      rewrite mapFlipSym_eq, consRepSym_eq, <- !app_assoc, !encWR3_append, encWR3_map_symOfBool, encWR3_rep_w1; cbn [encWR3].
+      rewrite (repBits_succ_right [false; false; false; true] k); reflexivity.
+Qed.
+
+
+(* --- Sweep Engines & Fast Macro-Simulator --- *)
+
+Lemma br1_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b1 :: b1 :: b0 :: b0 :: l) r) -[ tm ]->*
+    decode w c (br1Loop l (consRR0001 0 r)).
+Proof.
+  eapply evstep_trans; [| exact (br1Loop_sound w c l (consRR0001 0 r))].
+  unfold decode; rewrite decodeList_consRR0001; cbn [decodeList repBits decBits].
+  apply br1_step.
+Qed.
+
+Lemma br2_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b0 :: b1 :: b0 :: b0 :: l) r) -[ tm ]->*
+    decode w c (br2Loop l (consRR0001 0 r)).
+Proof.
+  eapply evstep_trans; [| exact (br2Loop_sound w c l (consRR0001 0 r))].
+  unfold decode; rewrite decodeList_consRR0001; cbn [decodeList repBits decBits].
+  apply br2_step.
+Qed.
+
+Lemma br3_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l (b0 :: b0 :: b1 :: b0 :: r)) -[ tm ]->*
+    decode w c (br3Loop (push1001M 0 l) r).
+Proof.
+  eapply evstep_trans; [| exact (br3Loop_sound w c (push1001M 0 l) r)].
+  unfold decode; rewrite decodeList_push1001M; cbn [decodeList repBits decBits].
+  apply br3_step.
+Qed.
+
+Lemma br4_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b1 :: b1 :: b0 :: b1 :: r)) -[ tm ]->*
+    decode w c (br4Loop (consRL0100 0 l) r).
+Proof.
+  eapply evstep_trans; [| exact (br4Loop_sound w c (consRL0100 0 l) r)].
+  unfold decode; cbn [decodeList]; rewrite decodeList_consRL0100; cbn [repBits decBits].
+  apply br4_step.
+Qed.
+
+Lemma br4_enter_r (w : list bool) (c m : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: rR1101 m :: r)) -[ tm ]->*
+    decode w c (br4Loop (consRL0100 m l) r).
+Proof.
+  eapply evstep_trans; [| exact (br4Loop_sound w c (consRL0100 m l) r)].
+  unfold decode; cbn [decodeList]; rewrite decodeList_consRL0100.
+  apply (loop_br4_r (S m)).
+Qed.
+
+Lemma br5_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r)) -[ tm ]->*
+    decode w c (br5Loop (consRL0100 0 l) r).
+Proof.
+  eapply evstep_trans; [| exact (br5Loop_sound w c (consRL0100 0 l) r)].
+  unfold decode; rewrite decodeList_consRL0100; cbn [decodeList repBits decBits].
+  apply br5_step.
+Qed.
+
+Lemma br6_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: b0 :: l) (b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: r)) -[ tm ]->*
+    decode w c (br6Loop (consRL0010 0 l) r).
+Proof.
+  eapply evstep_trans; [| exact (br6Loop_sound w c (consRL0010 0 l) r)].
+  unfold decode; cbn [decodeList]; rewrite decodeList_consRL0010; cbn [repBits decBits].
+  apply br6_step.
+Qed.
+
+Lemma br7_enter (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true (b0 :: b1 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: l) (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: r)) -[ tm ]->*
+    decode w c (br7Loop l (consRR1101 0 r)).
+Proof.
+  eapply evstep_trans; [| exact (br7Loop_sound w c l (consRR1101 0 r))].
+  unfold decode; cbn [decodeList]; rewrite decodeList_consRR1101; cbn [repBits decBits].
+  apply br7_step.
+Qed.
+
+Definition sweepRet (isE moved : bool) (l r : list Chunk) : OptRState :=
+  if moved then OptRState_some (RState_mk isE l r) else OptRState_none.
+
+Definition srSound (isE : bool) (w : list bool) (c : nat) (l r : list Chunk) (sr : SweepRun) : Prop :=
+  match sr with
+  | SR_done OptRState_none => True
+  | SR_done (OptRState_some st) => decode w c (RState_mk isE l r) -[ tm ]->* decode w c st
+  | SR_cont _ l' r' _ _ => decode w c (RState_mk isE l r) -[ tm ]->* decode w c (RState_mk isE l' r')
+  end.
+
+Definition stepRightSwR (inv : bool) (f b : list bool) (l r' : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match scanSwRL l with
+  | OptNatList_some (S m) lRest =>
+    match canAdvancePure 12 r' (pureLB (swR inv f b)) 0 rem ahead with
+    | OptPureState_some rem' ahead' =>
+      match swSplitTrail0 inv f b with
+      | SwTrail0_allW0 p => SweepStep_cont (consRL0010Opt p l) r' rem' ahead'
+      | SwTrail0_endW1 f' b' p =>
+        let lOut := consRL0010 p (b1 :: b0 :: b0 :: b0 ::
+          pushSwL inv b' f' (consBzLRepBool false m (cons01BzL lRest))) in
+        SweepStep_cont lOut r' rem' ahead'
+      end
+    | OptPureState_none => SweepStep_stop
+    end
+  | _ =>
+    match swHead inv f b with
+    | OptBool_some false =>
+      let '(PopLeadBool_mk k f' b') := swPopLeading inv false f b in
+      match canAdvancePure 12 r' (pureLB (swR inv f b)) (swOptLB inv f' b') rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont (consRL0010Opt k l) (pushSwR inv f' b' r') rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ =>
+      match peelHead (swR inv f b :: r') with
+      | OptList_some r'' => SweepStep_cont l r'' rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  end.
+
+Lemma stepRightSwR_sound (w : list bool) (c : nat) (inv : bool) (f b : list bool)
+  (l r' : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepRightSwR inv f b l r' rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk false l (swR inv f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut).
+Proof.
+  unfold stepRightSwR in H.
+  assert (Hfb :
+    match swHead inv f b with
+    | OptBool_some false =>
+      let '(PopLeadBool_mk k f' b') := swPopLeading inv false f b in
+      match canAdvancePure 12 r' (pureLB (swR inv f b)) (swOptLB inv f' b') rem ahead with
+      | OptPureState_some rem1 ahead1 => SweepStep_cont (consRL0010Opt k l) (pushSwR inv f' b' r') rem1 ahead1
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ =>
+      match peelHead (swR inv f b :: r') with
+      | OptList_some r'' => SweepStep_cont l r'' rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk false l (swR inv f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut)).
+  { intros H2.
+    assert (Hpeel :
+      match peelHead (swR inv f b :: r') with
+      | OptList_some r'' => SweepStep_cont l r'' rem ahead
+      | OptList_none => SweepStep_stop
+      end = SweepStep_cont lOut rOut rem' ahead' ->
+      decode w c (RState_mk false l (swR inv f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut)).
+    { intros H3. destruct (peelHead (swR inv f b :: r')) as [|r''] eqn:Hp; [discriminate H3 |].
+      inversion H3; subst. unfold decode. rewrite (peelHead_eq w c (swR inv f b :: r') rOut blank Hp).
+      apply evstep_refl. }
+    destruct (swHead inv f b) as [|[|]]; [exact (Hpeel H2) | exact (Hpeel H2) |].
+    destruct (swPopLeading inv false f b) as [k f' b'] eqn:Hlead.
+    destruct (canAdvancePure 12 r' (pureLB (swR inv f b)) (swOptLB inv f' b') rem ahead) as [|rem1 ahead1]; [discriminate H2 |].
+    inversion H2; subst. unfold decode.
+    rewrite decodeList_consRL0010Opt, decodeList_pushSwR; cbn [decodeList].
+    rewrite (swPopLeading_spec inv false f b k f' b' Hlead), encWR_q1_append, encWR_q1_rep_false.
+    apply loop_rsB_1101. }
+  destruct (scanSwRL l) as [|[|m] lRest] eqn:Hsl; [exact (Hfb H) | exact (Hfb H) |].
+  destruct (canAdvancePure 12 r' (pureLB (swR inv f b)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+  destruct (swSplitTrail0 inv f b) as [p | f' b' p] eqn:Hsp; inversion H; subst; unfold decode.
+  - rewrite decodeList_consRL0010Opt; cbn [decodeList].
+    rewrite (swSplitTrail0_allW0 inv f b p Hsp), encWR_q1_rep_false.
+    apply loop_rsB_1101.
+  - rewrite (scanSwRL_spec w c l (S m) lRest blank Hsl); try rewrite decodeList_consRL0010; cbn [decodeList].
+    rewrite decodeList_pushSwL, decodeList_consBzLRepBool, decodeList_cons01BzL, encWL_rep_false.
+    rewrite (swSplitTrail0_endW1 inv f b f' b' p Hsp), (decSW_swap inv f' b').
+    apply swR_right_B_endW1.
+Qed.
+
+Definition stepRightBzR (f b : list SwSym) (l r' : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match scanSwRL l with
+  | OptNatList_some (S m) lRest =>
+    match canAdvancePure 12 r' (pureLB (bzR f b)) 0 rem ahead with
+    | OptPureState_some rem' ahead' =>
+      match bzSplitTrail0 f b with
+      | BzTrail0_allW0 p => SweepStep_cont (consRL0010Opt p l) r' rem' ahead'
+      | BzTrail0_endW1 f' b' p =>
+        let lOut := consRL0010 p (b1 :: b0 :: b0 :: b0 ::
+          pushBzL b' f' (consBzLRepBool false m (cons01BzL lRest))) in
+        SweepStep_cont lOut r' rem' ahead'
+      | BzTrail0_endD f' b' p =>
+        let lOut := consRL0010 p (b1 :: b0 ::
+          consBzLSym SwSym_w0 (pushBzL b' f' (consBzLRepBool false m (cons01BzL lRest)))) in
+        SweepStep_cont lOut r' rem' ahead'
+      end
+    | OptPureState_none => SweepStep_stop
+    end
+  | _ =>
+    match bzHead f b with
+    | OptSwSym_some SwSym_w0 =>
+      let '(PopLeadSym_mk k f' b') := bzPopLeading SwSym_w0 f b in
+      match canAdvancePure 12 r' (pureLB (bzR f b)) (bzOptLB f' b') rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont (consRL0010Opt k l) (pushBzR f' b' r') rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ =>
+      match peelHead (bzR f b :: r') with
+      | OptList_some r'' => SweepStep_cont l r'' rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  end.
+
+Lemma stepRightBzR_sound (w : list bool) (c : nat) (f b : list SwSym)
+  (l r' : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepRightBzR f b l r' rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk false l (bzR f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut).
+Proof.
+  unfold stepRightBzR in H.
+  assert (Hfb :
+    match bzHead f b with
+    | OptSwSym_some SwSym_w0 =>
+      let '(PopLeadSym_mk k f' b') := bzPopLeading SwSym_w0 f b in
+      match canAdvancePure 12 r' (pureLB (bzR f b)) (bzOptLB f' b') rem ahead with
+      | OptPureState_some rem1 ahead1 => SweepStep_cont (consRL0010Opt k l) (pushBzR f' b' r') rem1 ahead1
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ =>
+      match peelHead (bzR f b :: r') with
+      | OptList_some r'' => SweepStep_cont l r'' rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk false l (bzR f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut)).
+  { intros H2.
+    assert (Hpeel :
+      match peelHead (bzR f b :: r') with
+      | OptList_some r'' => SweepStep_cont l r'' rem ahead
+      | OptList_none => SweepStep_stop
+      end = SweepStep_cont lOut rOut rem' ahead' ->
+      decode w c (RState_mk false l (bzR f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut)).
+    { intros H3. destruct (peelHead (bzR f b :: r')) as [|r''] eqn:Hp; [discriminate H3 |].
+      inversion H3; subst. unfold decode. rewrite (peelHead_eq w c (bzR f b :: r') rOut blank Hp).
+      apply evstep_refl. }
+    destruct (bzHead f b) as [|[| |]]; try exact (Hpeel H2).
+    destruct (bzPopLeading SwSym_w0 f b) as [k f' b'] eqn:Hlead.
+    destruct (canAdvancePure 12 r' (pureLB (bzR f b)) (bzOptLB f' b') rem ahead) as [|rem1 ahead1]; [discriminate H2 |].
+    inversion H2; subst. unfold decode.
+    rewrite decodeList_consRL0010Opt, decodeList_pushBzR; cbn [decodeList].
+    rewrite (bzPopLeading_spec SwSym_w0 f b k f' b' Hlead), encWR3_append, encWR3_rep_w0.
+    apply loop_rsB_1101. }
+  destruct (scanSwRL l) as [|[|m] lRest] eqn:Hsl; [exact (Hfb H) | exact (Hfb H) |].
+  destruct (canAdvancePure 12 r' (pureLB (bzR f b)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+  destruct (bzSplitTrail0 f b) as [p | f' b' p | f' b' p] eqn:Hsp; inversion H; subst; unfold decode.
+  - rewrite decodeList_consRL0010Opt; cbn [decodeList].
+    rewrite (bzSplitTrail0_allW0 f b p Hsp), encWR3_rep_w0.
+    apply loop_rsB_1101.
+  - rewrite (scanSwRL_spec w c l (S m) lRest blank Hsl); try rewrite decodeList_consRL0010; cbn [decodeList].
+    rewrite decodeList_pushBzL, decodeList_consBzLRepBool, decodeList_cons01BzL, encWL_rep_false.
+    rewrite (bzSplitTrail0_endW1 f b f' b' p Hsp), (decBZ_swap f' b').
+    apply bzR_right_B_endW1.
+  - rewrite (scanSwRL_spec w c l (S m) lRest blank Hsl); try rewrite decodeList_consRL0010; cbn [decodeList].
+    rewrite decodeList_consBzLSym; cbn [encWL3]; rewrite decodeList_pushBzL, decodeList_consBzLRepBool,
+      decodeList_cons01BzL, encWL_rep_false.
+    rewrite (bzSplitTrail0_endD f b f' b' p Hsp), (decBZ_swap f' b').
+    apply bzR_right_B_endD.
+Qed.
+
+Definition stepRight001SwR (inv : bool) (f b : list bool) (l r' : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match swHead inv f b with
+  | OptBool_some true =>
+    let '(PopLeadBool_mk k f' b') := swPopLeading inv true f b in
+    match canAdvancePure 12 r' (3 + pureLB (swR inv f b)) (3 + swOptLB inv f' b') rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont (push1001MOpt k l) (b0 :: b0 :: b1 :: pushSwR inv f' b' r') rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | _ =>
+    match peelHead (swR inv f b :: r') with
+    | OptList_some r3' => SweepStep_cont l (b0 :: b0 :: b1 :: r3') rem ahead
+    | OptList_none => SweepStep_stop
+    end
+  end.
+
+Lemma stepRight001SwR_sound (w : list bool) (c : nat) (inv : bool) (f b : list bool)
+  (l r' : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepRight001SwR inv f b l r' rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk false l (b0 :: b0 :: b1 :: swR inv f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut).
+Proof.
+  unfold stepRight001SwR in H.
+  assert (Hpeel :
+    match peelHead (swR inv f b :: r') with
+    | OptList_some r3' => SweepStep_cont l (b0 :: b0 :: b1 :: r3') rem ahead
+    | OptList_none => SweepStep_stop
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk false l (b0 :: b0 :: b1 :: swR inv f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut)).
+  { intros H2. destruct (peelHead (swR inv f b :: r')) as [|r3'] eqn:Hp; [discriminate H2 |].
+    inversion H2; subst. unfold decode.
+    change (decodeList w c (b0 :: b0 :: b1 :: swR inv f b :: r') blank)
+      with (f0 >> f0 >> f1 >> decodeList w c (swR inv f b :: r') blank).
+    rewrite (peelHead_eq w c (swR inv f b :: r') r3' blank Hp). apply evstep_refl. }
+  destruct (swHead inv f b) as [|[|]]; [exact (Hpeel H) | | exact (Hpeel H)].
+  destruct (swPopLeading inv true f b) as [k f' b'] eqn:Hlead.
+  destruct (canAdvancePure 12 r' (3 + pureLB (swR inv f b)) (3 + swOptLB inv f' b') rem ahead) as [|rem1 ahead1]; [discriminate H |].
+  inversion H; subst. unfold decode.
+  rewrite decodeList_push1001MOpt; cbn [decodeList]; rewrite decodeList_pushSwR.
+  rewrite (swPopLeading_spec inv true f b k f' b' Hlead), encWR_q1_append, encWR_q1_rep_true.
+  apply rsB_001_rR0001.
+Qed.
+
+Definition stepRight001BzR (f b : list SwSym) (l r' : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match bzHead f b with
+  | OptSwSym_some SwSym_w1 =>
+    let '(PopLeadSym_mk k f' b') := bzPopLeading SwSym_w1 f b in
+    match canAdvancePure 12 r' (3 + pureLB (bzR f b)) (3 + bzOptLB f' b') rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont (push1001MOpt k l) (b0 :: b0 :: b1 :: pushBzR f' b' r') rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | _ =>
+    match peelHead (bzR f b :: r') with
+    | OptList_some r3' => SweepStep_cont l (b0 :: b0 :: b1 :: r3') rem ahead
+    | OptList_none => SweepStep_stop
+    end
+  end.
+
+Lemma stepRight001BzR_sound (w : list bool) (c : nat) (f b : list SwSym)
+  (l r' : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepRight001BzR f b l r' rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk false l (b0 :: b0 :: b1 :: bzR f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut).
+Proof.
+  unfold stepRight001BzR in H.
+  assert (Hpeel :
+    match peelHead (bzR f b :: r') with
+    | OptList_some r3' => SweepStep_cont l (b0 :: b0 :: b1 :: r3') rem ahead
+    | OptList_none => SweepStep_stop
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk false l (b0 :: b0 :: b1 :: bzR f b :: r')) -[ tm ]->* decode w c (RState_mk false lOut rOut)).
+  { intros H2. destruct (peelHead (bzR f b :: r')) as [|r3'] eqn:Hp; [discriminate H2 |].
+    inversion H2; subst. unfold decode.
+    change (decodeList w c (b0 :: b0 :: b1 :: bzR f b :: r') blank)
+      with (f0 >> f0 >> f1 >> decodeList w c (bzR f b :: r') blank).
+    rewrite (peelHead_eq w c (bzR f b :: r') r3' blank Hp). apply evstep_refl. }
+  destruct (bzHead f b) as [|[| |]]; try exact (Hpeel H).
+  destruct (bzPopLeading SwSym_w1 f b) as [k f' b'] eqn:Hlead.
+  destruct (canAdvancePure 12 r' (3 + pureLB (bzR f b)) (3 + bzOptLB f' b') rem ahead) as [|rem1 ahead1]; [discriminate H |].
+  inversion H; subst. unfold decode.
+  rewrite decodeList_push1001MOpt; cbn [decodeList]; rewrite decodeList_pushBzR.
+  rewrite (bzPopLeading_spec SwSym_w1 f b k f' b' Hlead), encWR3_append, encWR3_rep_w1.
+  apply rsB_001_rR0001.
+Qed.
+
+Definition rightSweepB1 (l r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match r with
+  | swR inv f b :: r' => stepRightSwR inv f b l r' rem ahead
+  | bzR f b :: r' => stepRightBzR f b l r' rem ahead
+  | rR1101 m :: r' =>
+    match canAdvancePure 12 r' (pureLB (rR1101 m)) 0 rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont (consRL0010 m l) r' rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | rR0001 n :: r' =>
+    match canAdvancePure 12 r' (pureLB (rR0001 n)) 0 rem ahead with
+    | OptPureState_some rem' ahead' =>
+      match tryRsB0001 n l with
+      | OptList_some l' => SweepStep_cont l' r' rem' ahead'
+      | OptList_none => SweepStep_stop
+      end
+    | OptPureState_none => SweepStep_stop
+    end
+  | b1 :: r1 =>
+    match r1 with
+    | b1 :: r2 =>
+      match r2 with
+      | b0 :: b1 :: r' =>
+        match canAdvancePure 12 r' 4 0 rem ahead with
+        | OptPureState_some rem' ahead' => SweepStep_cont (consRL0010 0 l) r' rem' ahead'
+        | OptPureState_none => SweepStep_stop
+        end
+      | b1 :: b1 :: b0 :: b1 :: r' =>
+        match canAdvancePure 12 r' 6 0 rem ahead with
+        | OptPureState_some rem' ahead' => SweepStep_cont (consRL0010 0 (b0 :: b0 :: l)) r' rem' ahead'
+        | OptPureState_none => SweepStep_stop
+        end
+      | rR1101 m :: r' =>
+        match canAdvancePure 12 r' (2 + pureLB (rR1101 m)) 0 rem ahead with
+        | OptPureState_some rem' ahead' => SweepStep_cont (consRL0010 m (b0 :: b0 :: l)) r' rem' ahead'
+        | OptPureState_none => SweepStep_stop
+        end
+      | _ => SweepStep_stop
+      end
+    | _ => SweepStep_stop
+    end
+  | b0 :: r1 =>
+    match r1 with
+    | b1 :: r' =>
+      match canAdvancePure 12 r' 2 0 rem ahead with
+      | OptPureState_some rem' ahead' =>
+        match peelHead0B l with
+        | OptList_some l0 => SweepStep_cont (b0 :: b0 :: b1 :: l0) r' rem' ahead'
+        | OptList_none => SweepStep_stop
+        end
+      | OptPureState_none => SweepStep_stop
+      end
+    | b0 :: r2 =>
+      match r2 with
+      | b0 :: b1 :: r' =>
+        match canAdvancePure 12 r' 4 0 rem ahead with
+        | OptPureState_some rem' ahead' =>
+          match tryRsB0001 0 l with
+          | OptList_some l' => SweepStep_cont l' r' rem' ahead'
+          | OptList_none => SweepStep_stop
+          end
+        | OptPureState_none => SweepStep_stop
+        end
+      | b1 :: r3 =>
+        match r3 with
+        | swR inv f b :: r' => stepRight001SwR inv f b l r' rem ahead
+        | bzR f b :: r' => stepRight001BzR f b l r' rem ahead
+        | rR0001 n :: r' =>
+          match canAdvancePure 12 r' (3 + pureLB (rR0001 n)) 3 rem ahead with
+          | OptPureState_some rem' ahead' => SweepStep_cont (push1001M n l) (b0 :: b0 :: b1 :: r') rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | b0 :: r' =>
+          match canAdvancePure 12 r' 4 0 rem ahead with
+          | OptPureState_some rem' ahead' => SweepStep_cont (push1001M 0 l) r' rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | _ => SweepStep_stop
+        end
+      | _ => SweepStep_stop
+      end
+    | _ => SweepStep_stop
+    end
+  | _ => SweepStep_stop
+  end.
+
+Lemma rightSweepB1_sound (w : list bool) (c : nat)
+  (l r : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : rightSweepB1 l r rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (RState_mk false lOut rOut).
+Proof.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - (* b0 *)
+    destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    + (* b0 :: b0 *)
+      destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+      * (* b0 :: b0 :: b0 *)
+        destruct r3 as [|ch4 r']; [discriminate H | destruct ch4; try discriminate H].
+        cbn [rightSweepB1] in H.
+        destruct (canAdvancePure 12 r' 4 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+        destruct (tryRsB0001 0 l) as [|l'] eqn:Htr; [discriminate H |].
+        inversion H; subst. exact (tryRsB0001_sound w c 0 l lOut rOut Htr).
+      * (* b0 :: b0 :: b1 *)
+        destruct r3 as [|ch4 r']; [discriminate H | destruct ch4; try discriminate H; cbn [rightSweepB1] in H].
+        -- (* b0 :: b0 :: b1 :: b0 *)
+           destruct (canAdvancePure 12 r' 4 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst. unfold decode; rewrite decodeList_push1001M; cbn [decodeList repBits decBits].
+           apply br3_step.
+        -- (* b0 :: b0 :: b1 :: rR0001 n *)
+           destruct (canAdvancePure 12 r' (3 + pureLB (rR0001 n)) 3 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst. unfold decode; rewrite decodeList_push1001M; cbn [decodeList].
+           apply (rsB_001_rR0001 (S n)).
+        -- (* b0 :: b0 :: b1 :: swR *)
+           exact (stepRight001SwR_sound w c b l0 l1 l r' rem ahead lOut rOut rem' ahead' H).
+        -- (* b0 :: b0 :: b1 :: bzR *)
+           exact (stepRight001BzR_sound w c l0 l1 l r' rem ahead lOut rOut rem' ahead' H).
+    + (* b0 :: b1 *)
+      cbn [rightSweepB1] in H.
+      destruct (canAdvancePure 12 r2 2 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      destruct (peelHead0B l) as [|l0] eqn:Hp; [discriminate H |].
+      inversion H; subst. unfold decode; cbn [decodeList].
+      rewrite (peelHead0B_eq w c l l0 blank Hp). apply rsB_0_01.
+  - (* b1 *)
+    destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    + (* b1 :: b1 :: b0 *)
+      destruct r3 as [|ch4 r']; [discriminate H | destruct ch4; try discriminate H].
+      cbn [rightSweepB1] in H.
+      destruct (canAdvancePure 12 r' 4 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList repBits decBits].
+      apply rsB_1101.
+    + (* b1 :: b1 :: b1 *)
+      destruct r3 as [|ch4 r4]; [discriminate H | destruct ch4; try discriminate H].
+      destruct r4 as [|ch5 r5]; [discriminate H | destruct ch5; try discriminate H].
+      destruct r5 as [|ch6 r']; [discriminate H | destruct ch6; try discriminate H].
+      cbn [rightSweepB1] in H.
+      destruct (canAdvancePure 12 r' 6 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList repBits decBits].
+      apply rsB_111101.
+    + (* b1 :: b1 :: rR1101 n *)
+      cbn [rightSweepB1] in H.
+      destruct (canAdvancePure 12 r3 (2 + pureLB (rR1101 n)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList].
+      apply rsB_11_rR1101.
+  - (* rR0001 n *)
+    cbn [rightSweepB1] in H.
+    destruct (canAdvancePure 12 r1 (pureLB (rR0001 n)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    destruct (tryRsB0001 n l) as [|l'] eqn:Htr; [discriminate H |].
+    inversion H; subst. exact (tryRsB0001_sound w c n l lOut rOut Htr).
+  - (* rR1101 n *)
+    cbn [rightSweepB1] in H.
+    destruct (canAdvancePure 12 r1 (pureLB (rR1101 n)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList].
+    apply (loop_rsB_1101 (S n)).
+  - (* swR *)
+    exact (stepRightSwR_sound w c b l0 l1 l r1 rem ahead lOut rOut rem' ahead' H).
+  - (* bzR *)
+    exact (stepRightBzR_sound w c l0 l1 l r1 rem ahead lOut rOut rem' ahead' H).
+Qed.
+
+Fixpoint rightSweepBPow2 (k : nat) (moved : bool) (l r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepRun :=
+  match k with
+  | 0 =>
+    match rightSweepB1 l r rem ahead with
+    | SweepStep_cont lOut rOut rem' ahead' => SR_cont true lOut rOut rem' ahead'
+    | SweepStep_stop => SR_done (sweepRet false moved l r)
+    end
+  | S k' =>
+    match rightSweepBPow2 k' moved l r rem ahead with
+    | SR_done res => SR_done res
+    | SR_cont mv1 l1 r1 rem1 ahead1 => rightSweepBPow2 k' mv1 l1 r1 rem1 ahead1
+    end
+  end.
+
+Lemma rightSweepBPow2_sound (w : list bool) (c k : nat) (moved : bool)
+  (l r : list Chunk) (rem : nat) (ahead : list Chunk) :
+  srSound false w c l r (rightSweepBPow2 k moved l r rem ahead).
+Proof.
+  revert moved l r rem ahead.
+  induction k as [|k IH]; intros moved l r rem ahead.
+  - cbn [rightSweepBPow2].
+    destruct (rightSweepB1 l r rem ahead) as [lOut rOut rem' ahead' |] eqn:Hs.
+    + cbn [srSound]. exact (rightSweepB1_sound w c l r rem ahead lOut rOut rem' ahead' Hs).
+    + destruct moved; cbn [sweepRet srSound]; [apply evstep_refl | exact I].
+  - cbn [rightSweepBPow2].
+    pose proof (IH moved l r rem ahead) as H1.
+    destruct (rightSweepBPow2 k moved l r rem ahead) as [mv1 la ra rem1 ahead1 | [|st1]]; [| exact I | exact H1].
+    cbn [srSound] in H1.
+    pose proof (IH mv1 la ra rem1 ahead1) as H2.
+    destruct (rightSweepBPow2 k mv1 la ra rem1 ahead1) as [mv2 lb rb rem2 ahead2 | [|st2]];
+      cbn [srSound] in *; [exact (evstep_trans _ _ _ _ H1 H2) | exact I | exact (evstep_trans _ _ _ _ H1 H2)].
+Qed.
+
+Definition callRightSweepBGo (l r : list Chunk) (rem : nat) (ahead : list Chunk) : OptRState :=
+  match rightSweepBPow2 10 false l r rem ahead with
+  | SR_done res => res
+  | SR_cont mv l' r' _ _ => sweepRet false mv l' r'
+  end.
+
+Lemma callRightSweepBGo_sound (w : list bool) (c : nat) (l r : list Chunk)
+  (rem : nat) (ahead : list Chunk) (st : RState)
+  (H : callRightSweepBGo l r rem ahead = OptRState_some st) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c st.
+Proof.
+  unfold callRightSweepBGo in H.
+  pose proof (rightSweepBPow2_sound w c 10 false l r rem ahead) as Hs.
+  destruct (rightSweepBPow2 10 false l r rem ahead) as [mv l' r' rem' ahead' | [|st0]].
+  - destruct mv; cbn [sweepRet] in H; [inversion H; subst; exact Hs | discriminate H].
+  - discriminate H.
+  - inversion H; subst; exact Hs.
+Qed.
+
+Definition rightSweepB (l r : list Chunk) : RState :=
+  match advancePureInit 12 r with
+  | OptPureState_some rem ahead =>
+    match callRightSweepBGo l r rem ahead with
+    | OptRState_some st => st
+    | OptRState_none => RState_mk false l r
+    end
+  | OptPureState_none => RState_mk false l r
+  end.
+
+Lemma rightSweepB_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (rightSweepB l r).
+Proof.
+  unfold rightSweepB.
+  destruct (advancePureInit 12 r) as [|rem ahead]; [apply evstep_refl |].
+  destruct (callRightSweepBGo l r rem ahead) as [|st] eqn:Hgo;
+    [apply evstep_refl | exact (callRightSweepBGo_sound w c l r rem ahead st Hgo)].
+Qed.
+
+(* --- Left-Sweep E Helpers & Engine --- *)
+
+Definition trySwL (inv : bool) (f b : list bool) (r : list Chunk) : OptList :=
+  match r with
+  | rR0001 k :: r' => OptList_some (consRR0001 0 (pushSwR inv b f (consRR0001Opt k r')))
+  | b0 :: b0 :: b0 :: b1 :: r' => OptList_some (consRR0001 0 (pushSwR inv b f r'))
+  | _ => OptList_none
+  end.
+
+Lemma trySwL_sound (w : list bool) (c : nat) (inv : bool) (f b : list bool) (l' r rOut : list Chunk)
+  (H : trySwL inv f b r = OptList_some rOut) :
+  decode w c (RState_mk true (swL inv f b :: l') r) -[ tm ]->* decode w c (RState_mk true l' rOut).
+Proof.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct r3 as [|ch4 r']; [discriminate H | destruct ch4; try discriminate H].
+    cbn [trySwL] in H; inversion H; subst.
+    unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_pushSwR; cbn [decodeList repBits decBits].
+    rewrite (decSW_swap inv f b). apply swL_left_E.
+  - cbn [trySwL] in H; inversion H; subst.
+    unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_pushSwR, decodeList_consRR0001Opt;
+      cbn [decodeList repBits decBits].
+    rewrite (decSW_swap inv f b). apply swL_left_E.
+Qed.
+
+Definition tryBzL (f b : list SwSym) (r : list Chunk) : OptList :=
+  match r with
+  | rR0001 k :: r' => OptList_some (consRR0001 0 (pushBzR b f (consRR0001Opt k r')))
+  | b0 :: b0 :: b0 :: b1 :: r' => OptList_some (consRR0001 0 (pushBzR b f r'))
+  | _ => OptList_none
+  end.
+
+Lemma tryBzL_sound (w : list bool) (c : nat) (f b : list SwSym) (l' r rOut : list Chunk)
+  (H : tryBzL f b r = OptList_some rOut) :
+  decode w c (RState_mk true (bzL f b :: l') r) -[ tm ]->* decode w c (RState_mk true l' rOut).
+Proof.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct r3 as [|ch4 r']; [discriminate H | destruct ch4; try discriminate H].
+    cbn [tryBzL] in H; inversion H; subst.
+    unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_pushBzR; cbn [decodeList repBits decBits].
+    rewrite (decBZ_swap f b). apply bzL_left_E.
+  - cbn [tryBzL] in H; inversion H; subst.
+    unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_pushBzR, decodeList_consRR0001Opt;
+      cbn [decodeList repBits decBits].
+    rewrite (decBZ_swap f b). apply bzL_left_E.
+Qed.
+
+Definition trySwL0Fallback (inv : bool) (f b : list bool) (l2 r : list Chunk) : OptPair :=
+  match peelHead0BSwOnly l2 with
+  | OptList_some lOut =>
+    match scanR0001k11 r with
+    | OptNatList_some k rRest =>
+      OptPair_some lOut (consRR0001 0 (pushSwR (negb inv) b f (consRR0001Opt k rRest)))
+    | OptNatList_none => OptPair_none
+    end
+  | OptList_none => OptPair_none
+  end.
+
+Lemma trySwL0Fallback_sound (w : list bool) (c : nat) (inv : bool) (f b : list bool)
+  (l2 r lOut rOut : list Chunk)
+  (H : trySwL0Fallback inv f b l2 r = OptPair_some lOut rOut) :
+  decode w c (RState_mk true (b0 :: swL inv f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold trySwL0Fallback in H.
+  destruct (peelHead0BSwOnly l2) as [|lOut0] eqn:Hl2; [discriminate H |].
+  destruct (scanR0001k11 r) as [|k rRest] eqn:Hsr; [discriminate H |].
+  inversion H; subst.
+  unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_pushSwR, decodeList_consRR0001Opt;
+    cbn [decodeList repBits decBits].
+  rewrite (peelHead0BSwOnly_eq w c l2 lOut blank Hl2),
+          (scanR0001k11_spec w c r k rRest blank Hsr),
+          (decSW_swap_not inv f b).
+  apply swL_0_0_left_E.
+Qed.
+
+Definition stepLeft0SwLCase2 (inv : bool) (f b : list bool) (l2 r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match swHead inv f b with
+  | OptBool_some false =>
+    let '(PopLeadBool_mk k f' b') := swPopLeading inv false f b in
+    match canAdvancePure 70 l2 (1 + pureLB (swL inv f b)) (1 + swOptLB inv f' b') rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont (b0 :: pushSwL inv f' b' l2) (consRR0001Opt k r) rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | OptBool_some true =>
+    match scanR0001k11 r with
+    | OptNatList_some rk rRest =>
+      match swPopLeading inv true f b with
+      | PopLeadBool_mk 0 _ _ => SweepStep_stop
+      | PopLeadBool_mk (S m) f' b' =>
+        match canAdvancePure 70 l2 (1 + pureLB (swL inv f b)) (1 + swOptLB inv f' b') rem ahead with
+        | OptPureState_some rem' ahead' =>
+          SweepStep_cont (b0 :: pushSwL inv f' b' l2) (b1 :: b1 :: consRR1101 m (consRR0001Opt rk rRest)) rem' ahead'
+        | OptPureState_none => SweepStep_stop
+        end
+      end
+    | OptNatList_none =>
+      match peelHead (swL inv f b :: l2) with
+      | OptList_some l1' => SweepStep_cont (b0 :: l1') r rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  | OptBool_none =>
+    match peelHead (swL inv f b :: l2) with
+    | OptList_some l1' => SweepStep_cont (b0 :: l1') r rem ahead
+    | OptList_none => SweepStep_stop
+    end
+  end.
+
+Lemma stepLeft0SwLCase2_sound (w : list bool) (c : nat) (inv : bool) (f b : list bool)
+  (l2 r : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepLeft0SwLCase2 inv f b l2 r rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true (b0 :: swL inv f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold stepLeft0SwLCase2 in H.
+  assert (Hpeel :
+    match peelHead (swL inv f b :: l2) with
+    | OptList_some l1' => SweepStep_cont (b0 :: l1') r rem ahead
+    | OptList_none => SweepStep_stop
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk true (b0 :: swL inv f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut)).
+  { intros H2. destruct (peelHead (swL inv f b :: l2)) as [|l1'] eqn:Hp; [discriminate H2 |].
+    inversion H2; subst. unfold decode.
+    change (decodeList w c (b0 :: swL inv f b :: l2) blank)
+      with (f0 >> decodeList w c (swL inv f b :: l2) blank).
+    rewrite (peelHead_eq w c (swL inv f b :: l2) l1' blank Hp). apply evstep_refl. }
+  destruct (swHead inv f b) as [|[|]]; [exact (Hpeel H) | |].
+  - destruct (scanR0001k11 r) as [|rk rRest] eqn:Hsr; [exact (Hpeel H) |].
+    destruct (swPopLeading inv true f b) as [[|m] f' b'] eqn:Hlead; [discriminate H |].
+    destruct (canAdvancePure 70 l2 (1 + pureLB (swL inv f b)) (1 + swOptLB inv f' b') rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode.
+    cbn [decodeList]; rewrite decodeList_pushSwL; try rewrite decodeList_consRR1101; cbn [decodeList]; rewrite decodeList_consRR0001Opt.
+    rewrite (swPopLeading_spec inv true f b (S m) f' b' Hlead), encWL_append, encWL_rep_true,
+            (scanR0001k11_spec w c r rk rRest blank Hsr), shift_0_0100.
+    apply lsE_0010_mk.
+  - destruct (swPopLeading inv false f b) as [k f' b'] eqn:Hlead.
+    destruct (canAdvancePure 70 l2 (1 + pureLB (swL inv f b)) (1 + swOptLB inv f' b') rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode.
+    cbn [decodeList]; rewrite decodeList_pushSwL, decodeList_consRR0001Opt.
+    rewrite (swPopLeading_spec inv false f b k f' b' Hlead), encWL_append, encWL_rep_false.
+    apply lsE_0_rep1000.
+Qed.
+
+Definition stepLeft0SwL (inv : bool) (f b : list bool) (l2 r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match l2 with
+  | x :: l3 =>
+    match peelHead0B (x :: l3), scanR0001k11 r with
+    | OptList_some lOut, OptNatList_some k rRest =>
+      match canAdvancePure 70 l3 (1 + pureLB (swL inv f b) + pureLB x) (peel0PushB x) rem ahead with
+      | OptPureState_some rem' ahead' =>
+        SweepStep_cont lOut (consRR0001 0 (pushSwR (negb inv) b f (consRR0001Opt k rRest))) rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | _, _ => stepLeft0SwLCase2 inv f b (x :: l3) r rem ahead
+    end
+  | [] => stepLeft0SwLCase2 inv f b [] r rem ahead
+  end.
+
+Lemma stepLeft0SwL_sound (w : list bool) (c : nat) (inv : bool) (f b : list bool)
+  (l2 r : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepLeft0SwL inv f b l2 r rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true (b0 :: swL inv f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold stepLeft0SwL in H.
+  destruct l2 as [|x l3]; [exact (stepLeft0SwLCase2_sound w c inv f b [] r rem ahead lOut rOut rem' ahead' H) |].
+  destruct (peelHead0B (x :: l3)) as [|lOut0] eqn:Hl2;
+    [exact (stepLeft0SwLCase2_sound w c inv f b (x :: l3) r rem ahead lOut rOut rem' ahead' H) |].
+  destruct (scanR0001k11 r) as [|k rRest] eqn:Hsr;
+    [exact (stepLeft0SwLCase2_sound w c inv f b (x :: l3) r rem ahead lOut rOut rem' ahead' H) |].
+  destruct (canAdvancePure 70 l3 (1 + pureLB (swL inv f b) + pureLB x) (peel0PushB x) rem ahead) as [|rem1 ahead1];
+    [discriminate H |].
+  inversion H; subst.
+  unfold decode.
+  change (decodeList w c (b0 :: swL inv f b :: x :: l3) blank)
+    with (f0 >> encWL (decSW inv f b) (decodeList w c (x :: l3) blank)).
+  rewrite (peelHead0B_eq w c (x :: l3) lOut blank Hl2),
+          (scanR0001k11_spec w c r k rRest blank Hsr).
+  try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_pushSwR, decodeList_consRR0001Opt;
+    cbn [decodeList repBits decBits].
+  rewrite (decSW_swap_not inv f b).
+  apply swL_0_0_left_E.
+Qed.
+
+Definition stepLeft0BzLCase2 (f b : list SwSym) (l2 r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match bzHead f b with
+  | OptSwSym_some SwSym_w0 =>
+    let '(PopLeadSym_mk k f' b') := bzPopLeading SwSym_w0 f b in
+    match canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont (b0 :: pushBzL f' b' l2) (consRR0001Opt k r) rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | OptSwSym_some SwSym_w1 =>
+    match scanR0001k11 r with
+    | OptNatList_some rk rRest =>
+      match bzPopLeading SwSym_w1 f b with
+      | PopLeadSym_mk 0 _ _ => SweepStep_stop
+      | PopLeadSym_mk (S m) f' b' =>
+        match canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead with
+        | OptPureState_some rem' ahead' =>
+          SweepStep_cont (b0 :: pushBzL f' b' l2) (b1 :: b1 :: consRR1101 m (consRR0001Opt rk rRest)) rem' ahead'
+        | OptPureState_none => SweepStep_stop
+        end
+      end
+    | OptNatList_none =>
+      match peelHead (bzL f b :: l2) with
+      | OptList_some l1' => SweepStep_cont (b0 :: l1') r rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  | _ =>
+    match peelHead (bzL f b :: l2) with
+    | OptList_some l1' => SweepStep_cont (b0 :: l1') r rem ahead
+    | OptList_none => SweepStep_stop
+    end
+  end.
+
+Lemma stepLeft0BzLCase2_sound (w : list bool) (c : nat) (f b : list SwSym)
+  (l2 r : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepLeft0BzLCase2 f b l2 r rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true (b0 :: bzL f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold stepLeft0BzLCase2 in H.
+  assert (Hpeel :
+    match peelHead (bzL f b :: l2) with
+    | OptList_some l1' => SweepStep_cont (b0 :: l1') r rem ahead
+    | OptList_none => SweepStep_stop
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk true (b0 :: bzL f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut)).
+  { intros H2. destruct (peelHead (bzL f b :: l2)) as [|l1'] eqn:Hp; [discriminate H2 |].
+    inversion H2; subst. unfold decode.
+    change (decodeList w c (b0 :: bzL f b :: l2) blank)
+      with (f0 >> decodeList w c (bzL f b :: l2) blank).
+    rewrite (peelHead_eq w c (bzL f b :: l2) l1' blank Hp). apply evstep_refl. }
+  destruct (bzHead f b) as [|[| |]]; [exact (Hpeel H) | | | exact (Hpeel H)].
+  - destruct (bzPopLeading SwSym_w0 f b) as [k f' b'] eqn:Hlead.
+    destruct (canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode.
+    cbn [decodeList]; rewrite decodeList_pushBzL, decodeList_consRR0001Opt.
+    rewrite (bzPopLeading_spec SwSym_w0 f b k f' b' Hlead), encWL3_append, encWL3_rep_w0.
+    apply lsE_0_rep1000.
+  - destruct (scanR0001k11 r) as [|rk rRest] eqn:Hsr; [exact (Hpeel H) |].
+    destruct (bzPopLeading SwSym_w1 f b) as [[|m] f' b'] eqn:Hlead; [discriminate H |].
+    destruct (canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode.
+    cbn [decodeList]; rewrite decodeList_pushBzL; try rewrite decodeList_consRR1101; cbn [decodeList]; rewrite decodeList_consRR0001Opt.
+    rewrite (bzPopLeading_spec SwSym_w1 f b (S m) f' b' Hlead), encWL3_append, encWL3_rep_w1,
+            (scanR0001k11_spec w c r rk rRest blank Hsr), shift_0_0100.
+    apply lsE_0010_mk.
+Qed.
+
+Definition stepLeft0BzL (f b : list SwSym) (l2 r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match matchR0001k11Bz r with
+  | OptBzRMatch_none => stepLeft0BzLCase2 f b l2 r rem ahead
+  | mr =>
+    match bzSplitUntilD f b with
+    | BzSplitD_hitD revPref f' b' =>
+      match canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont (b0 :: pushBzL f' b' l2) (emitTryBzL0R mr revPref 1) rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | BzSplitD_allBool revPref =>
+      match l2 with
+      | x :: l3 =>
+        match peelHead0B (x :: l3) with
+        | OptList_some lOut =>
+          match canAdvancePure 70 l3 (1 + pureLB (bzL f b) + pureLB x) (peel0PushB x) rem ahead with
+          | OptPureState_some rem' ahead' => SweepStep_cont lOut (emitTryBzL0R mr revPref 0) rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | OptList_none => stepLeft0BzLCase2 f b (x :: l3) r rem ahead
+        end
+      | [] => stepLeft0BzLCase2 f b [] r rem ahead
+      end
+    end
+  end.
+
+Lemma stepLeft0BzL_sound (w : list bool) (c : nat) (f b : list SwSym)
+  (l2 r : list Chunk) (rem : nat) (ahead : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepLeft0BzL f b l2 r rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true (b0 :: bzL f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold stepLeft0BzL in H.
+  assert (Hmr_body : forall mr,
+    matchR0001k11Bz r = mr -> mr <> OptBzRMatch_none ->
+    match bzSplitUntilD f b with
+    | BzSplitD_hitD revPref f' b' =>
+      match canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead with
+      | OptPureState_some rem1 ahead1 => SweepStep_cont (b0 :: pushBzL f' b' l2) (emitTryBzL0R mr revPref 1) rem1 ahead1
+      | OptPureState_none => SweepStep_stop
+      end
+    | BzSplitD_allBool revPref =>
+      match l2 with
+      | x :: l3 =>
+        match peelHead0B (x :: l3) with
+        | OptList_some lOut0 =>
+          match canAdvancePure 70 l3 (1 + pureLB (bzL f b) + pureLB x) (peel0PushB x) rem ahead with
+          | OptPureState_some rem1 ahead1 => SweepStep_cont lOut0 (emitTryBzL0R mr revPref 0) rem1 ahead1
+          | OptPureState_none => SweepStep_stop
+          end
+        | OptList_none => stepLeft0BzLCase2 f b (x :: l3) r rem ahead
+        end
+      | [] => stepLeft0BzLCase2 f b [] r rem ahead
+      end
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk true (b0 :: bzL f b :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut)).
+  { intros mr Hmr Hne H2.
+    destruct (bzSplitUntilD f b) as [revPref f' b' | revPref] eqn:Hsp.
+    - destruct (canAdvancePure 70 l2 (1 + pureLB (bzL f b)) (1 + bzOptLB f' b') rem ahead) as [|rem1 ahead1];
+        [discriminate H2 |].
+      destruct (emitTryBzL0R_spec w c r mr revPref 1 blank Hmr Hne) as [k [tail [Hr1 Hr2]]].
+      inversion H2; subst.
+      unfold decode; rewrite Hr1, Hr2; cbn [decodeList]; rewrite decodeList_pushBzL; cbn [repBits decBits].
+      rewrite (bzSplitUntilD_hitD f b revPref f' b' Hsp).
+      pose proof (bzL_0_split_d_left_E (rev revPref) k (encWL3 (decBZ f' b') (decodeList w c l2 blank)) tail) as Hmain.
+      rewrite rev_involutive, encWL3_append in Hmain; cbn [encWL3] in Hmain.
+      rewrite encWL3_append; cbn [encWL3]. exact Hmain.
+    - destruct l2 as [|x l3];
+        [exact (stepLeft0BzLCase2_sound w c f b [] r rem ahead lOut rOut rem' ahead' H2) |].
+      destruct (peelHead0B (x :: l3)) as [|lOut0] eqn:Hp;
+        [exact (stepLeft0BzLCase2_sound w c f b (x :: l3) r rem ahead lOut rOut rem' ahead' H2) |].
+      destruct (canAdvancePure 70 l3 (1 + pureLB (bzL f b) + pureLB x) (peel0PushB x) rem ahead) as [|rem1 ahead1];
+        [discriminate H2 |].
+      destruct (emitTryBzL0R_spec w c r mr revPref 0 blank Hmr Hne) as [k [tail [Hr1 Hr2]]].
+      inversion H2; subst.
+      unfold decode.
+      change (decodeList w c (b0 :: bzL f b :: x :: l3) blank)
+        with (f0 >> encWL3 (decBZ f b) (decodeList w c (x :: l3) blank)).
+      rewrite (peelHead0B_eq w c (x :: l3) lOut blank Hp),
+              (bzSplitUntilD_allBool f b revPref Hsp), encWL3_map_symOfBool, Hr1, Hr2;
+        cbn [decodeList repBits decBits].
+      pose proof (swL_0_0_left_E (rev revPref) k (decodeList w c lOut blank) tail) as Hmain.
+      rewrite rev_involutive in Hmain. exact Hmain. }
+  set (mr0 := matchR0001k11Bz r) in H.
+  destruct mr0 as [|rk rRest | rk fa ba rRest] eqn:Hmr.
+  - exact (stepLeft0BzLCase2_sound w c f b l2 r rem ahead lOut rOut rem' ahead' H).
+  - exact (Hmr_body _ Hmr ltac:(discriminate) H).
+  - exact (Hmr_body _ Hmr ltac:(discriminate) H).
+Qed.
+
+Definition lsE00Step (r : list Chunk) : OptList :=
+  match r with
+  | b0 :: b0 :: b0 :: b1 :: b1 :: r'' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: r'')
+  | rR0001 0 :: b1 :: r'' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: r'')
+  | rR0001 0 :: rR1101 0 :: r'' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: r'')
+  | rR0001 0 :: rR1101 (S j) :: r'' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: rR1101 j :: r'')
+  | b1 :: r'' => OptList_some (b0 :: b0 :: b0 :: r'')
+  | rR1101 0 :: r'' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: r'')
+  | rR1101 (S j) :: r'' => OptList_some (b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: rR1101 j :: r'')
+  | _ => OptList_none
+  end.
+
+Lemma lsE00Step_sound (w : list bool) (c : nat) (l2 r r' : list Chunk)
+  (H : lsE00Step r = OptList_some r') :
+  decode w c (RState_mk true (b0 :: b0 :: l2) r) -[ tm ]->* decode w c (RState_mk true l2 r').
+Proof.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    destruct r3 as [|ch4 r4]; [discriminate H | destruct ch4; try discriminate H].
+    destruct r4 as [|ch5 r'']; [discriminate H | destruct ch5; try discriminate H].
+    cbn [lsE00Step] in H; inversion H; subst; apply lsE_00_00011.
+  - cbn [lsE00Step] in H; inversion H; subst; apply progress_evstep, stepE_00_1.
+  - destruct n; [| discriminate H].
+    destruct r1 as [|ch2 r'']; [discriminate H | destruct ch2; try discriminate H; cbn [lsE00Step] in H].
+    + inversion H; subst; apply lsE_00_00011.
+    + destruct n; inversion H; subst; apply lsE_00_00011.
+  - destruct n; cbn [lsE00Step] in H; inversion H; subst; apply progress_evstep, stepE_00_1.
+Qed.
+
+Definition stepLeft100x (x : Chunk) (l4 r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepStep :=
+  match peelHead0B (x :: l4) with
+  | OptList_some lOut =>
+    match r with
+    | rR0001 k :: r' =>
+      match canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont lOut (consRR0001 0 (consRR1101 0 (consRR0001Opt k r'))) rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | b0 :: b0 :: b0 :: b1 :: r' =>
+      match canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont lOut (consRR0001 0 (consRR1101 0 r')) rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | b0 :: b0 :: b0 :: r'' =>
+      match canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont lOut (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b0 :: r'') rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ => SweepStep_stop
+    end
+  | OptList_none => SweepStep_stop
+  end.
+
+Lemma stepLeft100x_sound (w : list bool) (c : nat) (x : Chunk) (l4 r : list Chunk)
+  (rem : nat) (ahead : list Chunk) (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : stepLeft100x x l4 r rem ahead = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true (b1 :: b0 :: b0 :: x :: l4) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold stepLeft100x in H.
+  destruct (peelHead0B (x :: l4)) as [|lOut0] eqn:Hp; [discriminate H |].
+  pose proof (peelHead0B_eq w c (x :: l4) lOut0 blank Hp) as Hpe.
+  destruct r as [|ch1 r1]; [discriminate H | destruct ch1; try discriminate H].
+  - destruct r1 as [|ch2 r2]; [discriminate H | destruct ch2; try discriminate H].
+    destruct r2 as [|ch3 r3]; [discriminate H | destruct ch3; try discriminate H].
+    assert (H000 :
+      match canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead with
+      | OptPureState_some rem1 ahead1 => SweepStep_cont lOut0 (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b0 :: r3) rem1 ahead1
+      | OptPureState_none => SweepStep_stop
+      end = SweepStep_cont lOut rOut rem' ahead' ->
+      decode w c (RState_mk true (b1 :: b0 :: b0 :: x :: l4) (b0 :: b0 :: b0 :: r3)) -[ tm ]->*
+        decode w c (RState_mk true lOut rOut)).
+    { intros H2. destruct (canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead) as [|rem1 ahead1]; [discriminate H2 |].
+      inversion H2; subst. unfold decode.
+      change (decodeList w c (b1 :: b0 :: b0 :: x :: l4) blank)
+        with (f1 >> f0 >> f0 >> decodeList w c (x :: l4) blank).
+      rewrite Hpe; cbn [decodeList]. apply lpa_0. }
+    destruct r3 as [|ch4 r']; [exact (H000 H) | destruct ch4; try exact (H000 H)].
+    destruct (canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst.
+    unfold decode.
+    change (decodeList w c (b1 :: b0 :: b0 :: x :: l4) blank)
+      with (f1 >> f0 >> f0 >> decodeList w c (x :: l4) blank).
+    rewrite Hpe.
+    try rewrite decodeList_consRR0001; cbn [decodeList]; try rewrite decodeList_consRR1101; cbn [decodeList repBits decBits].
+    apply lsE_1000_0001.
+  - destruct (canAdvancePure 70 l4 (3 + pureLB x) (peel0PushB x) rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst.
+    unfold decode.
+    change (decodeList w c (b1 :: b0 :: b0 :: x :: l4) blank)
+      with (f1 >> f0 >> f0 >> decodeList w c (x :: l4) blank).
+    rewrite Hpe.
+    try rewrite decodeList_consRR0001; cbn [decodeList]; try rewrite decodeList_consRR1101; cbn [decodeList];
+      rewrite decodeList_consRR0001Opt; cbn [decodeList repBits decBits].
+    apply lsE_1000_0001.
+Qed.
+
+Definition leftSweepE1_b0_b1_fall (l2 : list Chunk) (rem : nat) (ahead r : list Chunk) : SweepStep :=
+  match r with
+  | rR0001 k :: r' =>
+    match l2 with
+    | b1 :: b0 :: rL0010 0 :: l' =>
+      SweepStep_cont (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: l') r rem ahead
+    | b1 :: b0 :: rL0010 (S m) :: l' =>
+      SweepStep_cont (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: rL0010 m :: l') r rem ahead
+    | b1 :: b0 :: b0 :: b0 :: l6 =>
+      match canAdvancePure 70 l6 6 0 rem ahead with
+      | OptPureState_some rem' ahead' =>
+        SweepStep_cont l6 (consRR0001 0 (consBzRSym SwSym_d (consRR0001Opt k r'))) rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | b0 :: b1 :: b0 :: b0 :: l6 =>
+      match canAdvancePure 70 l6 6 0 rem ahead with
+      | OptPureState_some rem' ahead' =>
+        SweepStep_cont l6 (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b0 :: b0 :: b0 :: b1 :: consRR0001Opt k r') rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ => SweepStep_stop
+    end
+  | b0 :: b0 :: b0 :: r'' =>
+    match l2 with
+    | b1 :: b0 :: rL0010 0 :: l' =>
+      SweepStep_cont (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: l') r rem ahead
+    | b1 :: b0 :: rL0010 (S m) :: l' =>
+      SweepStep_cont (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: rL0010 m :: l') r rem ahead
+    | b1 :: b0 :: b0 :: b0 :: l6 =>
+      match canAdvancePure 70 l6 6 0 rem ahead with
+      | OptPureState_some rem' ahead' =>
+        SweepStep_cont l6 (b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: r'') rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | b0 :: b1 :: b0 :: b0 :: l6 =>
+      match canAdvancePure 70 l6 6 0 rem ahead with
+      | OptPureState_some rem' ahead' =>
+        SweepStep_cont l6 (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b0 :: b0 :: b0 :: r'') rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | _ => SweepStep_stop
+    end
+  | _ =>
+    match canAdvancePure 70 l2 2 0 rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont l2 (b1 :: b1 :: r) rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  end.
+
+Lemma leftSweepE1_b0_b1_fall_sound (w : list bool) (c : nat)
+  (l2 : list Chunk) (rem : nat) (ahead r : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : leftSweepE1_b0_b1_fall l2 rem ahead r = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true (b0 :: b1 :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  unfold leftSweepE1_b0_b1_fall in H.
+  assert (Hdef :
+    match canAdvancePure 70 l2 2 0 rem ahead with
+    | OptPureState_some rem1 ahead1 => SweepStep_cont l2 (b1 :: b1 :: r) rem1 ahead1
+    | OptPureState_none => SweepStep_stop
+    end = SweepStep_cont lOut rOut rem' ahead' ->
+    decode w c (RState_mk true (b0 :: b1 :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut)).
+  { intros H2. destruct (canAdvancePure 70 l2 2 0 rem ahead) as [|rem1 ahead1]; [discriminate H2 |].
+    inversion H2; subst. apply progress_evstep, stepE_01. }
+  destruct r as [|rc1 rr1]; [exact (Hdef H) | destruct rc1; try exact (Hdef H)].
+  - (* r = b0 :: rr1 *)
+    destruct rr1 as [|rc2 rr2]; [exact (Hdef H) | destruct rc2; try exact (Hdef H)].
+    destruct rr2 as [|rc3 r'']; [exact (Hdef H) | destruct rc3; try exact (Hdef H)].
+    destruct l2 as [|lc1 ll1]; [discriminate H | destruct lc1; try discriminate H].
+    + (* l2 = b0 :: ll1 *)
+      destruct ll1 as [|lc2 ll2]; [discriminate H | destruct lc2; try discriminate H].
+      destruct ll2 as [|lc3 ll3]; [discriminate H | destruct lc3; try discriminate H].
+      destruct ll3 as [|lc4 l6]; [discriminate H | destruct lc4; try discriminate H].
+      destruct (canAdvancePure 70 l6 6 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. apply lsE_010100_000.
+    + (* l2 = b1 :: ll1 *)
+      destruct ll1 as [|lc2 ll2]; [discriminate H | destruct lc2; try discriminate H].
+      destruct ll2 as [|lc3 ll3]; [discriminate H | destruct lc3; try discriminate H].
+      * destruct ll3 as [|lc4 l6]; [discriminate H | destruct lc4; try discriminate H].
+        destruct (canAdvancePure 70 l6 6 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+        inversion H; subst. apply lsE_011000_000.
+      * destruct n; inversion H; subst; apply evstep_refl.
+  - (* r = rR0001 n :: rr1 *)
+    destruct l2 as [|lc1 ll1]; [discriminate H | destruct lc1; try discriminate H].
+    + destruct ll1 as [|lc2 ll2]; [discriminate H | destruct lc2; try discriminate H].
+      destruct ll2 as [|lc3 ll3]; [discriminate H | destruct lc3; try discriminate H].
+      destruct ll3 as [|lc4 l6]; [discriminate H | destruct lc4; try discriminate H].
+      destruct (canAdvancePure 70 l6 6 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst.
+      unfold decode; cbn [decodeList]; rewrite decodeList_consRR0001Opt; cbn [repBits decBits].
+      apply lsE_010100_000.
+    + destruct ll1 as [|lc2 ll2]; [discriminate H | destruct lc2; try discriminate H].
+      destruct ll2 as [|lc3 ll3]; [discriminate H | destruct lc3; try discriminate H].
+      * destruct ll3 as [|lc4 l6]; [discriminate H | destruct lc4; try discriminate H].
+        destruct (canAdvancePure 70 l6 6 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+        inversion H; subst.
+        unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; rewrite decodeList_consBzRSym; cbn [encWR3];
+          rewrite decodeList_consRR0001Opt; cbn [decodeList repBits decBits].
+        apply lsE_011000_000.
+      * destruct n0; inversion H; subst; apply evstep_refl.
+Qed.
+
+Definition leftSweepE1 (l : list Chunk) (rem : nat) (ahead r : list Chunk) : SweepStep :=
+  match l with
+  | swL inv f b :: l' =>
+    match trySwL inv f b r with
+    | OptList_some rOut =>
+      match canAdvancePure 70 l' (pureLB (swL inv f b)) 0 rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont l' rOut rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | OptList_none =>
+      match peelHead l with
+      | OptList_some l'' => SweepStep_cont l'' r rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  | bzL f b :: l' =>
+    match tryBzL f b r with
+    | OptList_some rOut =>
+      match canAdvancePure 70 l' (pureLB (bzL f b)) 0 rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont l' rOut rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | OptList_none =>
+      match peelHead l with
+      | OptList_some l'' => SweepStep_cont l'' r rem ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  | rL0100 n :: l' =>
+    match canAdvancePure 70 l' (pureLB (rL0100 n)) 0 rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont l' (consRR0001 n r) rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | rL1100 n :: l' =>
+    match canAdvancePure 70 l' (pureLB (rL1100 n)) 0 rem ahead with
+    | OptPureState_some rem' ahead' => SweepStep_cont l' (consRR0001 n r) rem' ahead'
+    | OptPureState_none => SweepStep_stop
+    end
+  | rL0010 m :: l' =>
+    match canAdvancePure 70 l' (pureLB (rL0010 m)) 0 rem ahead, tryLsE0010 m r with
+    | OptPureState_some rem' ahead', OptList_some r' => SweepStep_cont l' r' rem' ahead'
+    | _, _ =>
+      match lsE00Step r with
+      | OptList_some r' =>
+        let l'' := match m with 0 => b1 :: b0 :: l' | S m' => b1 :: b0 :: rL0010 m' :: l' end in
+        SweepStep_cont l'' r' (rem - 2) ahead
+      | OptList_none => SweepStep_stop
+      end
+    end
+  | b0 :: l1 =>
+    match l1 with
+    | swL inv f b :: l2 => stepLeft0SwL inv f b l2 r rem ahead
+    | bzL f b :: l2 => stepLeft0BzL f b l2 r rem ahead
+    | rL1100 n :: l' =>
+      match r with
+      | b1 :: b1 :: rR0001 (S k) :: r' =>
+        match canAdvancePure 70 l' (1 + pureLB (rL1100 n)) 1 rem ahead with
+        | OptPureState_some rem' ahead' =>
+          SweepStep_cont (b0 :: l') (b1 :: b1 :: consRR0001 1 (consRR1101 n (consRR0001Opt k r'))) rem' ahead'
+        | OptPureState_none => SweepStep_stop
+        end
+      | _ => SweepStep_stop
+      end
+    | rL0100 n :: l' =>
+      match canAdvancePure 70 l' (1 + pureLB (rL0100 n)) 1 rem ahead, tryLsE0010 n r with
+      | OptPureState_some rem' ahead', OptList_some r' => SweepStep_cont (b0 :: l') r' rem' ahead'
+      | _, _ => SweepStep_stop
+      end
+    | b0 :: l2 =>
+      match l2 with
+      | b1 :: b0 :: l4 =>
+        match canAdvancePure 70 l4 4 0 rem ahead, tryLsE0010 0 r with
+        | OptPureState_some rem' ahead', OptList_some r' => SweepStep_cont l4 r' rem' ahead'
+        | _, _ =>
+          match canAdvancePure 70 l2 2 0 rem ahead, lsE00Step r with
+          | OptPureState_some rem' ahead', OptList_some r' => SweepStep_cont l2 r' rem' ahead'
+          | _, _ => SweepStep_stop
+          end
+        end
+      | _ =>
+        match canAdvancePure 70 l2 2 0 rem ahead, lsE00Step r with
+        | OptPureState_some rem' ahead', OptList_some r' => SweepStep_cont l2 r' rem' ahead'
+        | _, _ => SweepStep_stop
+        end
+      end
+    | b1 :: l2 =>
+      match l2 with
+      | rL0010 0 :: l' =>
+        SweepStep_cont (b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: l') r rem ahead
+      | rL0010 (S m) :: l' =>
+        SweepStep_cont (b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: rL0010 m :: l') r rem ahead
+      | b0 :: l3 =>
+        match l3 with
+        | b1 :: rL0010 n :: l' =>
+          match canAdvancePure 70 l' (4 + pureLB (rL0010 n)) 4 rem ahead with
+          | OptPureState_some rem' ahead' => SweepStep_cont (b0 :: b1 :: b0 :: b1 :: l') (push0111M n r) rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | rL0010 n :: l' =>
+          match canAdvancePure 70 l' (3 + pureLB (rL0010 n)) 3 rem ahead with
+          | OptPureState_some rem' ahead' => SweepStep_cont (b0 :: b1 :: b0 :: l') (consRR0001 n r) rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | b0 :: l4 =>
+          match canAdvancePure 70 l4 4 0 rem ahead with
+          | OptPureState_some rem' ahead' => SweepStep_cont l4 (consRR0001 0 r) rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | _ => leftSweepE1_b0_b1_fall l2 rem ahead r
+        end
+      | _ => leftSweepE1_b0_b1_fall l2 rem ahead r
+      end
+    | _ => SweepStep_stop
+    end
+  | b1 :: l1 =>
+    match l1 with
+    | b1 :: b0 :: b0 :: l4 =>
+      match canAdvancePure 70 l4 4 0 rem ahead with
+      | OptPureState_some rem' ahead' => SweepStep_cont l4 (consRR0001 0 r) rem' ahead'
+      | OptPureState_none => SweepStep_stop
+      end
+    | b0 :: l2 =>
+      match l2 with
+      | rL0010 m :: l' =>
+        match r with
+        | rR0001 k :: r' =>
+          match canAdvancePure 70 l' (2 + pureLB (rL0010 m)) 2 rem ahead with
+          | OptPureState_some rem' ahead' =>
+            SweepStep_cont (b1 :: b0 :: l') (consRR0001 0 (consRR1101 m (consRR0001Opt k r'))) rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | b0 :: b0 :: b0 :: b1 :: r' =>
+          match canAdvancePure 70 l' (2 + pureLB (rL0010 m)) 2 rem ahead with
+          | OptPureState_some rem' ahead' =>
+            SweepStep_cont (b1 :: b0 :: l') (consRR0001 0 (consRR1101 m r')) rem' ahead'
+          | OptPureState_none => SweepStep_stop
+          end
+        | _ => SweepStep_stop
+        end
+      | b0 :: x :: l4 => stepLeft100x x l4 r rem ahead
+      | _ => SweepStep_stop
+      end
+    | _ => SweepStep_stop
+    end
+  | _ => SweepStep_stop
+  end.
+
+Lemma leftSweepE1_sound (w : list bool) (c : nat)
+  (l : list Chunk) (rem : nat) (ahead r : list Chunk)
+  (lOut rOut : list Chunk) (rem' : nat) (ahead' : list Chunk)
+  (H : leftSweepE1 l rem ahead r = SweepStep_cont lOut rOut rem' ahead') :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (RState_mk true lOut rOut).
+Proof.
+  destruct l as [|ch1 l1]; [discriminate H | destruct ch1; try discriminate H].
+  - (* b0 *)
+    destruct l1 as [|ch2 l2]; [discriminate H | destruct ch2; try discriminate H; cbn [leftSweepE1] in H].
+    + (* b0 :: b0 *)
+      assert (H00 :
+        match canAdvancePure 70 l2 2 0 rem ahead, lsE00Step r with
+        | OptPureState_some rem1 ahead1, OptList_some r' => SweepStep_cont l2 r' rem1 ahead1
+        | _, _ => SweepStep_stop
+        end = SweepStep_cont lOut rOut rem' ahead' ->
+        decode w c (RState_mk true (b0 :: b0 :: l2) r) -[ tm ]->* decode w c (RState_mk true lOut rOut)).
+      { intros H2. destruct (canAdvancePure 70 l2 2 0 rem ahead) as [|rem1 ahead1]; [discriminate H2 |].
+        destruct (lsE00Step r) as [|r'] eqn:Hst; [discriminate H2 |].
+        inversion H2; subst. exact (lsE00Step_sound w c lOut r rOut Hst). }
+      destruct l2 as [|ch3 l3]; [exact (H00 H) | destruct ch3; try exact (H00 H)].
+      destruct l3 as [|ch4 l4]; [exact (H00 H) | destruct ch4; try exact (H00 H)].
+      destruct (canAdvancePure 70 l4 4 0 rem ahead) as [|rem1 ahead1]; [exact (H00 H) |].
+      destruct (tryLsE0010 0 r) as [|r'] eqn:Htr; [exact (H00 H) |].
+      inversion H; subst. exact (tryLsE0010_sound w c 0 lOut r rOut Htr).
+    + (* b0 :: b1 *)
+      destruct l2 as [|ch3 l3];
+        [exact (leftSweepE1_b0_b1_fall_sound w c [] rem ahead r lOut rOut rem' ahead' H) |
+         destruct ch3; try exact (leftSweepE1_b0_b1_fall_sound w c _ rem ahead r lOut rOut rem' ahead' H)].
+      * (* b0 :: b1 :: b0 *)
+        destruct l3 as [|ch4 l4];
+          [exact (leftSweepE1_b0_b1_fall_sound w c _ rem ahead r lOut rOut rem' ahead' H) |
+           destruct ch4; try exact (leftSweepE1_b0_b1_fall_sound w c _ rem ahead r lOut rOut rem' ahead' H)].
+        -- (* b0 :: b1 :: b0 :: b0 *)
+           destruct (canAdvancePure 70 l4 4 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst. unfold decode; rewrite decodeList_consRR0001; cbn [decodeList repBits decBits].
+           apply br2_step.
+        -- (* b0 :: b1 :: b0 :: b1 *)
+           destruct l4 as [|ch5 l5];
+             [exact (leftSweepE1_b0_b1_fall_sound w c _ rem ahead r lOut rOut rem' ahead' H) |
+              destruct ch5; try exact (leftSweepE1_b0_b1_fall_sound w c _ rem ahead r lOut rOut rem' ahead' H)].
+           destruct (canAdvancePure 70 l5 (4 + pureLB (rL0010 n)) 4 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst. unfold decode; rewrite decodeList_push0111M; cbn [decodeList].
+           apply (lsE_0101_rL0010 (S n)).
+        -- (* b0 :: b1 :: b0 :: rL0010 n *)
+           destruct (canAdvancePure 70 l4 (3 + pureLB (rL0010 n)) 3 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst. unfold decode; rewrite decodeList_consRR0001; cbn [decodeList].
+           apply (lsE_010_rL0010 (S n)).
+      * (* b0 :: b1 :: rL0010 n *)
+        destruct n; inversion H; subst; apply evstep_refl.
+    + (* b0 :: rL0100 n *)
+      destruct (canAdvancePure 70 l2 (1 + pureLB (rL0100 n)) 1 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      destruct (tryLsE0010 n r) as [|r'] eqn:Htr; [discriminate H |].
+      inversion H; subst. unfold decode; cbn [decodeList]; rewrite shift_0_0100.
+      exact (tryLsE0010_sound w c n (b0 :: l2) r rOut Htr).
+    + (* b0 :: rL1100 n *)
+      destruct r as [|rc1 rr1]; [discriminate H | destruct rc1; try discriminate H].
+      destruct rr1 as [|rc2 rr2]; [discriminate H | destruct rc2; try discriminate H].
+      destruct rr2 as [|rc3 r']; [discriminate H | destruct rc3; try discriminate H].
+      destruct n0 as [|k]; [discriminate H |].
+      destruct (canAdvancePure 70 l2 (1 + pureLB (rL1100 n)) 1 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst.
+      unfold decode; cbn [decodeList]; try rewrite decodeList_consRR0001; cbn [decodeList]; try rewrite decodeList_consRR1101; cbn [decodeList]; rewrite decodeList_consRR0001Opt;
+        cbn [repBits decBits].
+      apply (lsE_0_rL1100 (S n)).
+    + (* b0 :: swL *)
+      exact (stepLeft0SwL_sound w c b l l0 l2 r rem ahead lOut rOut rem' ahead' H).
+    + (* b0 :: bzL *)
+      exact (stepLeft0BzL_sound w c l l0 l2 r rem ahead lOut rOut rem' ahead' H).
+  - (* b1 *)
+    destruct l1 as [|ch2 l2]; [discriminate H | destruct ch2; try discriminate H; cbn [leftSweepE1] in H].
+    + (* b1 :: b0 *)
+      destruct l2 as [|ch3 l3]; [discriminate H | destruct ch3; try discriminate H].
+      * (* b1 :: b0 :: b0 *)
+        destruct l3 as [|x l4]; [discriminate H |].
+        exact (stepLeft100x_sound w c x l4 r rem ahead lOut rOut rem' ahead' H).
+      * (* b1 :: b0 :: rL0010 n *)
+        destruct r as [|rc1 rr1]; [discriminate H | destruct rc1; try discriminate H].
+        -- destruct rr1 as [|rc2 rr2]; [discriminate H | destruct rc2; try discriminate H].
+           destruct rr2 as [|rc3 rr3]; [discriminate H | destruct rc3; try discriminate H].
+           destruct rr3 as [|rc4 r']; [discriminate H | destruct rc4; try discriminate H].
+           destruct (canAdvancePure 70 l3 (2 + pureLB (rL0010 n)) 2 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst.
+           unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; try rewrite decodeList_consRR1101; cbn [decodeList repBits decBits].
+           apply (lsE_10_rL0010_0001 (S n)).
+        -- destruct (canAdvancePure 70 l3 (2 + pureLB (rL0010 n)) 2 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+           inversion H; subst.
+           unfold decode; try rewrite decodeList_consRR0001; cbn [decodeList]; try rewrite decodeList_consRR1101; cbn [decodeList]; rewrite decodeList_consRR0001Opt;
+             cbn [decodeList repBits decBits].
+           apply (lsE_10_rL0010_0001 (S n)).
+    + (* b1 :: b1 *)
+      destruct l2 as [|ch3 l3]; [discriminate H | destruct ch3; try discriminate H].
+      destruct l3 as [|ch4 l4]; [discriminate H | destruct ch4; try discriminate H].
+      destruct (canAdvancePure 70 l4 4 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. unfold decode; rewrite decodeList_consRR0001; cbn [decodeList repBits decBits].
+      apply br1_step.
+  - (* rL0100 n *)
+    cbn [leftSweepE1] in H.
+    destruct (canAdvancePure 70 l1 (pureLB (rL0100 n)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode; rewrite decodeList_consRR0001; cbn [decodeList].
+    apply (loop_br2 (S n)).
+  - (* rL0010 n *)
+    cbn [leftSweepE1] in H.
+    assert (Hfb :
+      match lsE00Step r with
+      | OptList_some r' =>
+        let l'' := match n with 0 => b1 :: b0 :: l1 | S m' => b1 :: b0 :: rL0010 m' :: l1 end in
+        SweepStep_cont l'' r' (rem - 2) ahead
+      | OptList_none => SweepStep_stop
+      end = SweepStep_cont lOut rOut rem' ahead' ->
+      decode w c (RState_mk true (rL0010 n :: l1) r) -[ tm ]->* decode w c (RState_mk true lOut rOut)).
+    { intros H2. destruct (lsE00Step r) as [|r'] eqn:Hst; [discriminate H2 |].
+      destruct n as [|m']; inversion H2; subst;
+        [exact (lsE00Step_sound w c (b1 :: b0 :: l1) r rOut Hst) |
+         exact (lsE00Step_sound w c (b1 :: b0 :: rL0010 m' :: l1) r rOut Hst)]. }
+    destruct (canAdvancePure 70 l1 (pureLB (rL0010 n)) 0 rem ahead) as [|rem1 ahead1]; [exact (Hfb H) |].
+    destruct (tryLsE0010 n r) as [|r'] eqn:Htr; [exact (Hfb H) |].
+    inversion H; subst. exact (tryLsE0010_sound w c n lOut r rOut Htr).
+  - (* rL1100 n *)
+    cbn [leftSweepE1] in H.
+    destruct (canAdvancePure 70 l1 (pureLB (rL1100 n)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+    inversion H; subst. unfold decode; rewrite decodeList_consRR0001; cbn [decodeList].
+    apply (loop_br1 (S n)).
+  - (* swL *)
+    cbn [leftSweepE1] in H.
+    destruct (trySwL b l l0 r) as [|rOut0] eqn:Htr.
+    + destruct (peelHead (swL b l l0 :: l1)) as [|l''] eqn:Hp; [discriminate H |].
+      inversion H; subst. unfold decode.
+      rewrite (peelHead_eq w c (swL b l l0 :: l1) lOut blank Hp). apply evstep_refl.
+    + destruct (canAdvancePure 70 l1 (pureLB (swL b l l0)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. exact (trySwL_sound w c b l l0 lOut r rOut Htr).
+  - (* bzL *)
+    cbn [leftSweepE1] in H.
+    destruct (tryBzL l l0 r) as [|rOut0] eqn:Htr.
+    + destruct (peelHead (bzL l l0 :: l1)) as [|l''] eqn:Hp; [discriminate H |].
+      inversion H; subst. unfold decode.
+      rewrite (peelHead_eq w c (bzL l l0 :: l1) lOut blank Hp). apply evstep_refl.
+    + destruct (canAdvancePure 70 l1 (pureLB (bzL l l0)) 0 rem ahead) as [|rem1 ahead1]; [discriminate H |].
+      inversion H; subst. exact (tryBzL_sound w c l l0 lOut r rOut Htr).
+Qed.
+
+Fixpoint leftSweepEPow2 (k : nat) (moved : bool) (l r : list Chunk) (rem : nat) (ahead : list Chunk) : SweepRun :=
+  match k with
+  | 0 =>
+    match leftSweepE1 l rem ahead r with
+    | SweepStep_cont lOut rOut rem' ahead' => SR_cont true lOut rOut rem' ahead'
+    | SweepStep_stop => SR_done (sweepRet true moved l r)
+    end
+  | S k' =>
+    match leftSweepEPow2 k' moved l r rem ahead with
+    | SR_done res => SR_done res
+    | SR_cont mv1 l1 r1 rem1 ahead1 => leftSweepEPow2 k' mv1 l1 r1 rem1 ahead1
+    end
+  end.
+
+Lemma leftSweepEPow2_sound (w : list bool) (c k : nat) (moved : bool)
+  (l r : list Chunk) (rem : nat) (ahead : list Chunk) :
+  srSound true w c l r (leftSweepEPow2 k moved l r rem ahead).
+Proof.
+  revert moved l r rem ahead.
+  induction k as [|k IH]; intros moved l r rem ahead.
+  - cbn [leftSweepEPow2].
+    destruct (leftSweepE1 l rem ahead r) as [lOut rOut rem' ahead' |] eqn:Hs.
+    + cbn [srSound]. exact (leftSweepE1_sound w c l rem ahead r lOut rOut rem' ahead' Hs).
+    + destruct moved; cbn [sweepRet srSound]; [apply evstep_refl | exact I].
+  - cbn [leftSweepEPow2].
+    pose proof (IH moved l r rem ahead) as H1.
+    destruct (leftSweepEPow2 k moved l r rem ahead) as [mv1 la ra rem1 ahead1 | [|st1]]; [| exact I | exact H1].
+    cbn [srSound] in H1.
+    pose proof (IH mv1 la ra rem1 ahead1) as H2.
+    destruct (leftSweepEPow2 k mv1 la ra rem1 ahead1) as [mv2 lb rb rem2 ahead2 | [|st2]];
+      cbn [srSound] in *; [exact (evstep_trans _ _ _ _ H1 H2) | exact I | exact (evstep_trans _ _ _ _ H1 H2)].
+Qed.
+
+Definition callLeftSweepEGo (l : list Chunk) (rem : nat) (ahead r : list Chunk) : OptRState :=
+  match leftSweepEPow2 10 false l r rem ahead with
+  | SR_done res => res
+  | SR_cont mv l' r' _ _ => sweepRet true mv l' r'
+  end.
+
+Lemma callLeftSweepEGo_sound (w : list bool) (c : nat) (l : list Chunk)
+  (rem : nat) (ahead r : list Chunk) (st : RState)
+  (H : callLeftSweepEGo l rem ahead r = OptRState_some st) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c st.
+Proof.
+  unfold callLeftSweepEGo in H.
+  pose proof (leftSweepEPow2_sound w c 10 false l r rem ahead) as Hs.
+  destruct (leftSweepEPow2 10 false l r rem ahead) as [mv l' r' rem' ahead' | [|st0]].
+  - destruct mv; cbn [sweepRet] in H; [inversion H; subst; exact Hs | discriminate H].
+  - discriminate H.
+  - inversion H; subst; exact Hs.
+Qed.
+
+(* --- Top-Level Macro Dispatch: stepFalse, stepTrue, stepFast, runPos --- *)
+
+Definition stepB_1111010 (l r restR : list Chunk) : RState :=
+  match restR with
+  | wR f :: b1 :: restR2 =>
+    match peelRunInWindow 4 l with
+    | OptList_some l' => RState_mk false l' r
+    | OptList_none =>
+      match l with
+      | b0 :: b1 :: b0 :: b0 :: restL =>
+        match scanRightQ1 128 restR2 (wL f :: consRL0100 1 restL) with
+        | OptPair_some outL restR' =>
+          RState_mk false (consRL0100 0 outL) (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: restR')
+        | OptPair_none => pop1B l r
+        end
+      | _ => pop1B l r
+      end
+    end
+  | b1 :: restR1 =>
+    match advancePureInit 12 r with
+    | OptPureState_some _ _ =>
+      rightSweepB (consRL0010 0 (b1 :: b0 :: b0 :: b0 :: l)) restR1
+    | OptPureState_none =>
+      match restR1 with
+      | b0 :: b0 :: b0 :: b1 :: restR5 => br5Loop (consRL0100 0 l) restR5
+      | rR0001 _ :: _ =>
+        match peelHead restR1 with
+        | OptList_some r1' => RState_mk false l (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: r1')
+        | OptList_none => pop1B l r
+        end
+      | _ => pop1B l r
+      end
+    end
+  | _ => pop1B l r
+  end.
+
+Lemma stepB_1111010_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: restR) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (stepB_1111010 l r restR).
+Proof.
+  pose proof (pop1B_sound w c l r) as Hpop.
+  destruct restR as [|ch1 restR1]; [exact Hpop | destruct ch1; try exact Hpop].
+  - (* b1 :: restR1 *)
+    cbn [stepB_1111010].
+    destruct (advancePureInit 12 r) as [|rem ahead].
+    + destruct restR1 as [|rc2 rr2]; [exact Hpop | destruct rc2; try exact Hpop].
+      * destruct rr2 as [|rc3 rr3]; [exact Hpop | destruct rc3; try discriminate; try exact Hpop].
+        destruct rr3 as [|rc4 rr4]; [exact Hpop | destruct rc4; try exact Hpop].
+        destruct rr4 as [|rc5 restR5]; [exact Hpop | destruct rc5; try exact Hpop].
+        subst r. exact (br5_enter w c l restR5).
+      * destruct (peelHead (rR0001 n :: rr2)) as [|r1'] eqn:Hp; [exact Hpop |].
+        subst r. unfold decode.
+        change (decodeList w c (b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: b1 :: rR0001 n :: rr2) blank)
+          with (f1 >> f1 >> f1 >> f1 >> f0 >> f1 >> f0 >> f1 >> decodeList w c (rR0001 n :: rr2) blank).
+        rewrite (peelHead_eq w c (rR0001 n :: rr2) r1' blank Hp). apply evstep_refl.
+    + subst r.
+      eapply evstep_trans; [| exact (rightSweepB_sound w c (consRL0010 0 (b1 :: b0 :: b0 :: b0 :: l)) restR1)].
+      unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList repBits decBits].
+      apply rsB_enter_B.
+  - (* wR f :: restR1 *)
+    destruct restR1 as [|rc2 restR2]; [exact Hpop | destruct rc2; try exact Hpop].
+    cbn [stepB_1111010].
+    destruct (peelRunInWindow 4 l) as [|l'] eqn:Hp.
+    + destruct l as [|lc1 ll1]; [exact Hpop | destruct lc1; try exact Hpop].
+      destruct ll1 as [|lc2 ll2]; [exact Hpop | destruct lc2; try exact Hpop].
+      destruct ll2 as [|lc3 ll3]; [exact Hpop | destruct lc3; try exact Hpop].
+      destruct ll3 as [|lc4 restL]; [exact Hpop | destruct lc4; try exact Hpop].
+      destruct (scanRightQ1 128 restR2 (wL b :: consRL0100 1 restL)) as [|outL restR'] eqn:Hsc; [exact Hpop |].
+      destruct (scanRightQ1_spec w c 128 restR2 _ outL restR' Hsc) as [u [HR HL]].
+      subst r. unfold decode; rewrite decodeList_consRL0100; cbn [decodeList repBits decBits].
+      rewrite shift_encWR_1, HR, HL; cbn [decodeList]; rewrite decodeList_consRL0100; cbn [repBits decBits].
+      pose proof (rightPassQ1_reaches (rev (if b then flipW w else w) ++ u)
+                    (decodeList w c restL blank) (decodeList w c restR' blank)) as Hmain.
+      rewrite encWR_q1_append, rev_app_distr, rev_involutive, encWL_append in Hmain.
+      exact Hmain.
+    + unfold decode; rewrite (peelRunInWindow_eq w c 4 l l' blank Hp); apply evstep_refl.
+Qed.
+
+Lemma rsB_rR1101_drop2 (w : list bool) (c m : nat) (l r' : list Chunk) :
+  decode w c (RState_mk false l (rR1101 (S (S m)) :: r')) -[ tm ]->*
+    decode w c (RState_mk false (consRL0010 m l) (rR1101 1 :: r')).
+Proof.
+  unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList].
+  replace (S (S (S m))) with (S m + 2) by lia.
+  rewrite repBits_add.
+  apply (loop_rsB_1101 (S m)).
+Qed.
+
+Definition stepFalse_fallback (l r : list Chunk) : RState :=
+  match r with
+  | rR1101 (S (S m)) :: r' => RState_mk false (consRL0010 m l) (rR1101 1 :: r')
+  | rR1101 _ :: _ =>
+    match peelHead r with OptList_some r' => RState_mk false l r' | OptList_none => pop1B l r end
+  | swR inv f b :: r' =>
+    if Nat.leb 4 (boundedLen2 4 f b) && matchL0010_10Bool l then
+      RState_mk false l (peelBackSwRGo inv 3 f b r')
+    else
+      match peelHead r with OptList_some r'' => RState_mk false l r'' | OptList_none => pop1B l r end
+  | bzR f b :: r' =>
+    if Nat.leb 4 (boundedLen2 4 f b) && matchL0010_10Bool l then
+      RState_mk false l (peelBackBzRGo 3 f b r')
+    else
+      match peelHead r with OptList_some r'' => RState_mk false l r'' | OptList_none => pop1B l r end
+  | rR0001 _ :: _ =>
+    match peelHead r with OptList_some r' => RState_mk false l r' | OptList_none => pop1B l r end
+  | b0 :: b0 :: b1 :: b0 :: restR => br3Loop (push1001M 0 l) restR
+  | _ => pop1B l r
+  end.
+
+Lemma stepFalse_fallback_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (stepFalse_fallback l r).
+Proof.
+  pose proof (pop1B_sound w c l r) as Hpop.
+  destruct r as [|ch1 r1]; [exact Hpop | destruct ch1; try exact Hpop].
+  - (* b0 *)
+    destruct r1 as [|ch2 r2]; [exact Hpop | destruct ch2; try exact Hpop].
+    destruct r2 as [|ch3 r3]; [exact Hpop | destruct ch3; try exact Hpop].
+    destruct r3 as [|ch4 restR]; [exact Hpop | destruct ch4; try exact Hpop].
+    cbn [stepFalse_fallback]. exact (br3_enter w c l restR).
+  - (* rR0001 *)
+    cbn [stepFalse_fallback].
+    destruct (peelHead (rR0001 n :: r1)) as [|r'] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c (rR0001 n :: r1) r' blank Hp); apply evstep_refl.
+  - (* rR1101 *)
+    destruct n as [|[|m]].
+    + cbn [stepFalse_fallback].
+      destruct (peelHead (rR1101 0 :: r1)) as [|r'] eqn:Hp; [exact Hpop |].
+      unfold decode; rewrite (peelHead_eq w c (rR1101 0 :: r1) r' blank Hp); apply evstep_refl.
+    + cbn [stepFalse_fallback].
+      destruct (peelHead (rR1101 1 :: r1)) as [|r'] eqn:Hp; [exact Hpop |].
+      unfold decode; rewrite (peelHead_eq w c (rR1101 1 :: r1) r' blank Hp); apply evstep_refl.
+    + cbn [stepFalse_fallback]. exact (rsB_rR1101_drop2 w c m l r1).
+  - (* swR *)
+    cbn [stepFalse_fallback].
+    destruct (Nat.leb 4 (boundedLen2 4 l0 l1) && matchL0010_10Bool l).
+    + unfold decode; rewrite peelBackSwRGo_eq; apply evstep_refl.
+    + destruct (peelHead (swR b l0 l1 :: r1)) as [|r''] eqn:Hp; [exact Hpop |].
+      unfold decode; rewrite (peelHead_eq w c (swR b l0 l1 :: r1) r'' blank Hp); apply evstep_refl.
+  - (* bzR *)
+    cbn [stepFalse_fallback].
+    destruct (Nat.leb 4 (boundedLen2 4 l0 l1) && matchL0010_10Bool l).
+    + unfold decode; rewrite peelBackBzRGo_eq; apply evstep_refl.
+    + destruct (peelHead (bzR l0 l1 :: r1)) as [|r''] eqn:Hp; [exact Hpop |].
+      unfold decode; rewrite (peelHead_eq w c (bzR l0 l1 :: r1) r'' blank Hp); apply evstep_refl.
+Qed.
+
+Definition stepFalse (l r : list Chunk) : RState :=
+  match r with
+  | b1 :: b1 :: b1 :: b1 :: b0 :: b1 :: b0 :: restR => stepB_1111010 l r restR
+  | _ =>
+    match advancePureInit 12 r with
+    | OptPureState_some rem ahead =>
+      match callRightSweepBGo l r rem ahead with
+      | OptRState_some st => st
+      | OptRState_none => stepFalse_fallback l r
+      end
+    | OptPureState_none => stepFalse_fallback l r
+    end
+  end.
+
+Lemma stepFalse_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk false l r) -[ tm ]->* decode w c (stepFalse l r).
+Proof.
+  assert (Hfb :
+    decode w c (RState_mk false l r) -[ tm ]->*
+    decode w c (match advancePureInit 12 r with
+                | OptPureState_some rem ahead =>
+                  match callRightSweepBGo l r rem ahead with
+                  | OptRState_some st => st
+                  | OptRState_none => stepFalse_fallback l r
+                  end
+                | OptPureState_none => stepFalse_fallback l r
+                end)).
+  { destruct (advancePureInit 12 r) as [|rem ahead]; [exact (stepFalse_fallback_sound w c l r) |].
+    destruct (callRightSweepBGo l r rem ahead) as [|st] eqn:Hgo;
+      [exact (stepFalse_fallback_sound w c l r) | exact (callRightSweepBGo_sound w c l r rem ahead st Hgo)]. }
+  destruct r as [|rc1 r1]; [exact Hfb | destruct rc1; try exact Hfb].
+  destruct r1 as [|rc2 r2]; [exact Hfb | destruct rc2; try exact Hfb].
+  destruct r2 as [|rc3 r3]; [exact Hfb | destruct rc3; try exact Hfb].
+  destruct r3 as [|rc4 r4]; [exact Hfb | destruct rc4; try exact Hfb].
+  destruct r4 as [|rc5 r5]; [exact Hfb | destruct rc5; try exact Hfb].
+  destruct r5 as [|rc6 r6]; [exact Hfb | destruct rc6; try exact Hfb].
+  destruct r6 as [|rc7 restR]; [exact Hfb | destruct rc7; try exact Hfb].
+  cbn [stepFalse]. exact (stepB_1111010_sound w c l _ restR eq_refl).
+Qed.
+
+Definition stepE_000_rest_fallback_body (l r restR : list Chunk) : RState :=
+  match l with
+  | swL inv f b :: l' =>
+    match trySwL inv f b r with
+    | OptList_some rOut =>
+      if negb (hasPLWithin 70 l') then RState_mk true l' rOut
+      else if Nat.leb 19 (boundedLen2 19 f b) then RState_mk true (peelBackSwLGo inv 18 f b l') r
+      else match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => RState_mk true l r end
+    | OptList_none =>
+      match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => RState_mk true l r end
+    end
+  | bzL f b :: l' =>
+    match tryBzL f b r with
+    | OptList_some rOut =>
+      if negb (hasPLWithin 70 l') then RState_mk true l' rOut
+      else if Nat.leb 19 (boundedLen2 19 f b) then RState_mk true (peelBackBzLGo 18 f b l') r
+      else match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => RState_mk true l r end
+    | OptList_none =>
+      match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => RState_mk true l r end
+    end
+  | rL0100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL1100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | b0 :: l1 =>
+    match l1 with
+    | swL inv f b :: x :: rest =>
+      if negb (hasPLWithin 70 (x :: rest)) then
+        match trySwL0Fallback inv f b (x :: rest) r with
+        | OptPair_some lOut rOut => RState_mk true lOut rOut
+        | OptPair_none => pop10E l r
+        end
+      else pop10E l r
+    | b0 :: b1 :: b0 :: _ =>
+      match restR with
+      | b1 :: b1 :: b1 :: b1 :: b1 :: restR8 =>
+        match concSafeLeftBGo false l (b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: restR8) OptPair_none with
+        | OptPair_some l' outR => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b1 :: b1 :: outR)
+        | OptPair_none => pop10E l r
+        end
+      | _ => pop10E l r
+      end
+    | b1 :: b0 :: l3 =>
+      match l3 with
+      | rL0010 n :: l' => RState_mk true (b0 :: b1 :: b0 :: l') (consRR0001 n r)
+      | b0 :: _ =>
+        match concSafeLeftA l restR with
+        | OptPair_some l' r' => RState_mk true l' (b0 :: b0 :: b0 :: r')
+        | OptPair_none => pop10E l r
+        end
+      | b1 :: b1 :: b0 :: b0 :: b1 :: restL =>
+        match restR with
+        | b1 :: b0 :: b0 :: b0 :: b1 :: restR8 => br7Loop restL (consRR1101 0 restR8)
+        | _ => pop10E l r
+        end
+      | _ => pop10E l r
+      end
+    | _ => pop10E l r
+    end
+  | b1 :: l1 =>
+    match l1 with
+    | b0 :: b0 :: b0 :: _ =>
+      match concSafeLeftA l restR with
+      | OptPair_some l' r' => RState_mk true l' (b0 :: b0 :: b0 :: r')
+      | OptPair_none => pop10E l r
+      end
+    | b1 :: b0 :: b0 :: restL => br1Loop restL (consRR0001 0 r)
+    | _ => pop10E l r
+    end
+  | _ => pop10E l r
+  end.
+
+Lemma stepE_000_rest_fallback_body_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_rest_fallback_body l r restR).
+Proof.
+  pose proof (pop10E_sound w c l r) as Hpop.
+  destruct l as [|ch1 l1]; [exact Hpop | destruct ch1; try exact Hpop; cbn [stepE_000_rest_fallback_body]].
+  - (* b0 *)
+    destruct l1 as [|ch2 l2]; [exact Hpop | destruct ch2; try exact Hpop].
+    + (* b0 :: b0 *)
+      destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+      destruct l3 as [|ch4 l4]; [exact Hpop | destruct ch4; try exact Hpop].
+      destruct restR as [|rc1 rr1]; [exact Hpop | destruct rc1; try exact Hpop].
+      destruct rr1 as [|rc2 rr2]; [exact Hpop | destruct rc2; try exact Hpop].
+      destruct rr2 as [|rc3 rr3]; [exact Hpop | destruct rc3; try exact Hpop].
+      destruct rr3 as [|rc4 rr4]; [exact Hpop | destruct rc4; try exact Hpop].
+      destruct rr4 as [|rc5 restR8]; [exact Hpop | destruct rc5; try exact Hpop].
+      destruct (concSafeLeftBGo false (b0 :: b0 :: b1 :: b0 :: l4)
+                  (b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: restR8) OptPair_none)
+        as [|l' outR] eqn:Hgo; [exact Hpop |].
+      destruct (concSafeLeftBGo_spec w c false _ _ OptPair_none l' outR Hgo)
+        as [Hnone | [u [HL HR]]]; [discriminate Hnone |].
+      subst r. unfold decode; rewrite HL; cbn [decodeList]; rewrite HR; cbn [decodeList].
+      exact (leftPassB_p0_reaches u (decodeList w c l' blank) (decodeList w c restR8 blank)).
+    + (* b0 :: b1 *)
+      destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+      destruct l3 as [|ch4 l4]; [exact Hpop | destruct ch4; try exact Hpop].
+      * (* b0 :: b1 :: b0 :: b0 *)
+        destruct (concSafeLeftA (b0 :: b1 :: b0 :: b0 :: l4) restR) as [|l' r'] eqn:Hgo;
+          [exact Hpop | subst r; exact (concSafeLeftA_sound w c _ restR l' r' Hgo)].
+      * (* b0 :: b1 :: b0 :: b1 *)
+        destruct l4 as [|ch5 l5]; [exact Hpop | destruct ch5; try exact Hpop].
+        destruct l5 as [|ch6 l6]; [exact Hpop | destruct ch6; try exact Hpop].
+        destruct l6 as [|ch7 l7]; [exact Hpop | destruct ch7; try exact Hpop].
+        destruct l7 as [|ch8 restL]; [exact Hpop | destruct ch8; try exact Hpop].
+        destruct restR as [|rc1 rr1]; [exact Hpop | destruct rc1; try exact Hpop].
+        destruct rr1 as [|rc2 rr2]; [exact Hpop | destruct rc2; try exact Hpop].
+        destruct rr2 as [|rc3 rr3]; [exact Hpop | destruct rc3; try exact Hpop].
+        destruct rr3 as [|rc4 rr4]; [exact Hpop | destruct rc4; try exact Hpop].
+        destruct rr4 as [|rc5 restR8]; [exact Hpop | destruct rc5; try exact Hpop].
+        subst r. exact (br7_enter w c restL restR8).
+      * (* b0 :: b1 :: b0 :: rL0010 n *)
+        unfold decode; rewrite decodeList_consRR0001; cbn [decodeList].
+        apply (lsE_010_rL0010 (S n)).
+    + (* b0 :: swL *)
+      destruct l2 as [|x rest]; [exact Hpop |].
+      destruct (negb (hasPLWithin 70 (x :: rest))); [| exact Hpop].
+      destruct (trySwL0Fallback b l l0 (x :: rest) r) as [|lOut rOut] eqn:Htr;
+        [exact Hpop | exact (trySwL0Fallback_sound w c b l l0 (x :: rest) r lOut rOut Htr)].
+  - (* b1 *)
+    destruct l1 as [|ch2 l2]; [exact Hpop | destruct ch2; try exact Hpop].
+    + (* b1 :: b0 *)
+      destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+      destruct l3 as [|ch4 l4]; [exact Hpop | destruct ch4; try exact Hpop].
+      destruct (concSafeLeftA (b1 :: b0 :: b0 :: b0 :: l4) restR) as [|l' r'] eqn:Hgo;
+        [exact Hpop | subst r; exact (concSafeLeftA_sound w c _ restR l' r' Hgo)].
+    + (* b1 :: b1 *)
+      destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+      destruct l3 as [|ch4 restL]; [exact Hpop | destruct ch4; try exact Hpop].
+      exact (br1_enter w c restL r).
+  - (* rL0100 n *)
+    unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]. apply (loop_br2 (S n)).
+  - (* rL1100 n *)
+    unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]. apply (loop_br1 (S n)).
+  - (* swL *)
+    destruct (trySwL b l l0 r) as [|rOut] eqn:Htr.
+    + destruct (peelHead (swL b l l0 :: l1)) as [|l''] eqn:Hp; [apply evstep_refl |].
+      unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+    + destruct (negb (hasPLWithin 70 l1)); [exact (trySwL_sound w c b l l0 l1 r rOut Htr) |].
+      destruct (Nat.leb 19 (boundedLen2 19 l l0)).
+      * unfold decode; rewrite peelBackSwLGo_eq; apply evstep_refl.
+      * destruct (peelHead (swL b l l0 :: l1)) as [|l''] eqn:Hp; [apply evstep_refl |].
+        unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+  - (* bzL *)
+    destruct (tryBzL l l0 r) as [|rOut] eqn:Htr.
+    + destruct (peelHead (bzL l l0 :: l1)) as [|l''] eqn:Hp; [apply evstep_refl |].
+      unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+    + destruct (negb (hasPLWithin 70 l1)); [exact (tryBzL_sound w c l l0 l1 r rOut Htr) |].
+      destruct (Nat.leb 19 (boundedLen2 19 l l0)).
+      * unfold decode; rewrite peelBackBzLGo_eq; apply evstep_refl.
+      * destruct (peelHead (bzL l l0 :: l1)) as [|l''] eqn:Hp; [apply evstep_refl |].
+        unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+Qed.
+
+Definition isSweepHead000 (l : list Chunk) : bool :=
+  match l with
+  | swL _ _ _ :: _ | bzL _ _ :: _ | rL0100 _ :: _ | rL1100 _ :: _ => true
+  | b0 :: swL _ _ _ :: _ | b0 :: bzL _ _ :: _ => true
+  | _ => false
+  end.
+
+Definition stepE_000_rest_fallback (l r restR : list Chunk) : RState :=
+  if negb (hasPLWithin 70 l) && isSweepHead000 l then
+    match advancePureInit 8 l with
+    | OptPureState_some rem ah6 =>
+      match callLeftSweepEGo l rem ah6 r with
+      | OptRState_some st => st
+      | OptRState_none => stepE_000_rest_fallback_body l r restR
+      end
+    | OptPureState_none => stepE_000_rest_fallback_body l r restR
+    end
+  else stepE_000_rest_fallback_body l r restR.
+
+Lemma stepE_000_rest_fallback_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_rest_fallback l r restR).
+Proof.
+  unfold stepE_000_rest_fallback.
+  destruct (negb (hasPLWithin 70 l) && isSweepHead000 l);
+    [| exact (stepE_000_rest_fallback_body_sound w c l r restR Hr)].
+  destruct (advancePureInit 8 l) as [|rem ah6];
+    [exact (stepE_000_rest_fallback_body_sound w c l r restR Hr) |].
+  destruct (callLeftSweepEGo l rem ah6 r) as [|st] eqn:Hgo;
+    [exact (stepE_000_rest_fallback_body_sound w c l r restR Hr) |
+     exact (callLeftSweepEGo_sound w c l rem ah6 r st Hgo)].
+Qed.
+
+Definition stepE_000_rest (l r restR : list Chunk) : RState :=
+  match advancePureInit 70 l with
+  | OptPureState_some rem ahead =>
+    match callLeftSweepEGo l rem ahead r with
+    | OptRState_some st => st
+    | OptRState_none => stepE_000_rest_fallback l r restR
+    end
+  | OptPureState_none => stepE_000_rest_fallback l r restR
+  end.
+
+Lemma stepE_000_rest_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_rest l r restR).
+Proof.
+  unfold stepE_000_rest.
+  destruct (advancePureInit 70 l) as [|rem ahead];
+    [exact (stepE_000_rest_fallback_sound w c l r restR Hr) |].
+  destruct (callLeftSweepEGo l rem ahead r) as [|st] eqn:Hgo;
+    [exact (stepE_000_rest_fallback_sound w c l r restR Hr) |
+     exact (callLeftSweepEGo_sound w c l rem ahead r st Hgo)].
+Qed.
+
+Definition stepE_000_p66_0 (l r restR : list Chunk) : RState :=
+  match scanPL 132 66 16 l with
+  | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: pR 64 :: restR)
+  | OptList_none => stepE_000_rest l r restR
+  end.
+
+Lemma stepE_000_p66_0_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_p66_0 l r restR).
+Proof.
+  unfold stepE_000_p66_0.
+  destruct (scanPL 132 66 16 l) as [|l'] eqn:Hsc;
+    [exact (stepE_000_rest_sound w c l r restR Hr) |].
+  subst r. unfold decode; rewrite (scanPL_spec 132 66 16 ltac:(lia) l l' Hsc w c blank); cbn [decodeList].
+  apply p66_L16_rep.
+Qed.
+
+Definition stepE_000_p66_1 (l r restR : list Chunk) : RState :=
+  match scanPL 132 66 9 l with
+  | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: pR 36 :: restR)
+  | OptList_none =>
+    match restR with
+    | b1 :: b1 :: restR5 =>
+      match scanPL 132 66 29 l with
+      | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: pR 14 :: restR5)
+      | OptList_none => stepE_000_rest l r restR
+      end
+    | rR1101 n :: restR4 =>
+      match scanPL 132 66 29 l with
+      | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: pR 14 :: b0 :: b1 :: consRR1101Opt n restR4)
+      | OptList_none => stepE_000_rest l r restR
+      end
+    | _ => stepE_000_rest l r restR
+    end
+  end.
+
+Lemma stepE_000_p66_1_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_p66_1 l r restR).
+Proof.
+  unfold stepE_000_p66_1.
+  pose proof (stepE_000_rest_sound w c l r restR Hr) as Hfb.
+  destruct (scanPL 132 66 9 l) as [|l'] eqn:Hsc9.
+  - destruct restR as [|rc1 rr1]; [exact Hfb | destruct rc1; try exact Hfb].
+    + destruct rr1 as [|rc2 restR5]; [exact Hfb | destruct rc2; try exact Hfb].
+      destruct (scanPL 132 66 29 l) as [|l29] eqn:Hsc29; [exact Hfb |].
+      subst r. unfold decode; rewrite (scanPL_spec 132 66 29 ltac:(lia) l l29 Hsc29 w c blank); cbn [decodeList].
+      apply p66_L29_rep.
+    + destruct (scanPL 132 66 29 l) as [|l29] eqn:Hsc29; [exact Hfb |].
+      subst r. unfold decode; rewrite (scanPL_spec 132 66 29 ltac:(lia) l l29 Hsc29 w c blank);
+        cbn [decodeList]; rewrite decodeList_consRR1101Opt; cbn [repBits decBits].
+      apply p66_L29_rep.
+  - subst r. unfold decode; rewrite (scanPL_spec 132 66 9 ltac:(lia) l l' Hsc9 w c blank); cbn [decodeList].
+    apply p66_L9_rep.
+Qed.
+
+Definition stepE_000_p66_w0 (l r restR : list Chunk) : RState :=
+  match scanPL 132 66 9 l with
+  | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: pR 36 :: restR)
+  | OptList_none =>
+    match restR with
+    | b1 :: b1 :: restR5 =>
+      match scanPL 132 66 29 l with
+      | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: pR 14 :: restR5)
+      | OptList_none => stepE_000_rest l r restR
+      end
+    | _ => stepE_000_rest l r restR
+    end
+  end.
+
+Lemma stepE_000_p66_w0_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_p66_w0 l r restR).
+Proof.
+  unfold stepE_000_p66_w0.
+  pose proof (stepE_000_rest_sound w c l r restR Hr) as Hfb.
+  destruct (scanPL 132 66 9 l) as [|l'] eqn:Hsc9.
+  - destruct restR as [|rc1 rr1]; [exact Hfb | destruct rc1; try exact Hfb].
+    destruct rr1 as [|rc2 restR5]; [exact Hfb | destruct rc2; try exact Hfb].
+    destruct (scanPL 132 66 29 l) as [|l29] eqn:Hsc29; [exact Hfb |].
+    subst r. unfold decode; rewrite (scanPL_spec 132 66 29 ltac:(lia) l l29 Hsc29 w c blank); cbn [decodeList].
+    apply p66_L29_rep.
+  - subst r. unfold decode; rewrite (scanPL_spec 132 66 9 ltac:(lia) l l' Hsc9 w c blank); cbn [decodeList].
+    apply p66_L9_rep.
+Qed.
+
+Definition stepE_000_p66 (l r restR : list Chunk) : RState :=
+  match l with
+  | pL n :: l' =>
+    if Nat.eqb n 16 then RState_mk true l' (b0 :: b0 :: b0 :: pR 64 :: restR)
+    else if Nat.eqb n 9 then RState_mk true l' (b0 :: b0 :: b0 :: pR 36 :: restR)
+    else if Nat.eqb n 29 then
+      match restR with
+      | b1 :: b1 :: restR5 => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: pR 14 :: restR5)
+      | rR1101 m :: restR4 => RState_mk true l (b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b1 :: consRR1101Opt m restR4)
+      | _ => pop10E l r
+      end
+    else stepE_000_rest l r restR
+  | b0 :: l1 =>
+    match l1 with
+    | b1 :: b1 :: b0 :: _ =>
+      match scanPL 132 66 16 l with
+      | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: pR 64 :: restR)
+      | OptList_none =>
+        match stripP16 l with
+        | OptList_some la =>
+          match loopP16 64 la (preR64 restR) with
+          | OptPair_some l' r' => RState_mk true l' (b0 :: b0 :: b0 :: r')
+          | OptPair_none => pop10E l r
+          end
+        | OptList_none => pop10E l r
+        end
+      end
+    | _ => stepE_000_p66_0 l r restR
+    end
+  | b1 :: l1 =>
+    match l1 with
+    | b0 :: b0 :: b0 :: _ =>
+      match scanPL 132 66 9 l with
+      | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: pR 36 :: restR)
+      | OptList_none =>
+        match stripP9 l with
+        | OptList_some la =>
+          match loopP9 64 la (preR36 restR) with
+          | OptPair_some l' r' => RState_mk true l' (b0 :: b0 :: b0 :: r')
+          | OptPair_none => stepE_000_rest l r restR
+          end
+        | OptList_none => stepE_000_rest l r restR
+        end
+      end
+    | b1 :: b0 :: b0 :: _ =>
+      match restR with
+      | b1 :: b1 :: restR5 =>
+        match scanPL 132 66 29 l with
+        | OptList_some l' => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: pR 14 :: restR5)
+        | OptList_none =>
+          match stripP29 l with
+          | OptList_some la =>
+            match loopP29 64 la (preR14 restR5) with
+            | OptPair_some l' r' => RState_mk true l' (b0 :: b0 :: b0 :: b1 :: b1 :: r')
+            | OptPair_none => stepE_000_rest l r restR
+            end
+          | OptList_none => stepE_000_rest l r restR
+          end
+        end
+      | _ => stepE_000_p66_1 l r restR
+      end
+    | _ => stepE_000_p66_1 l r restR
+    end
+  | swL inv f b :: _ =>
+    match swHead inv f b with
+    | OptBool_some true => stepE_000_p66_0 l r restR
+    | OptBool_some false => stepE_000_p66_w0 l r restR
+    | OptBool_none => stepE_000_rest l r restR
+    end
+  | bzL f b :: _ =>
+    match bzHead f b with
+    | OptSwSym_some SwSym_w1 | OptSwSym_some SwSym_d => stepE_000_p66_0 l r restR
+    | OptSwSym_some SwSym_w0 => stepE_000_p66_w0 l r restR
+    | OptSwSym_none => stepE_000_rest l r restR
+    end
+  | rL0100 _ :: _ | rL0010 _ :: _ => stepE_000_p66_0 l r restR
+  | rL1100 _ :: _ => stepE_000_p66_1 l r restR
+  | _ => stepE_000_rest l r restR
+  end.
+
+Lemma stepE_000_p66_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000_p66 l r restR).
+Proof.
+  pose proof (stepE_000_rest_sound w c l r restR Hr) as Hrest.
+  destruct l as [|ch1 l1]; [exact Hrest | destruct ch1; try exact Hrest; cbn [stepE_000_p66]].
+  - (* b0 *)
+    pose proof (stepE_000_p66_0_sound w c (b0 :: l1) r restR Hr) as H0.
+    destruct l1 as [|ch2 l2]; [exact H0 | destruct ch2; try exact H0].
+    destruct l2 as [|ch3 l3]; [exact H0 | destruct ch3; try exact H0].
+    destruct l3 as [|ch4 l4]; [exact H0 | destruct ch4; try exact H0].
+    destruct (scanPL 132 66 16 (b0 :: b1 :: b1 :: b0 :: l4)) as [|l'] eqn:Hsc.
+    + destruct (stripP16 (b0 :: b1 :: b1 :: b0 :: l4)) as [|la] eqn:Hst;
+        [exact (pop10E_sound w c _ r) |].
+      destruct (loopP16 64 la (preR64 restR)) as [|l' r'] eqn:Hlp;
+        [exact (pop10E_sound w c _ r) |].
+      subst r. eapply evstep_trans; [| exact (loopP16_sound w c 64 la (preR64 restR) l' r' Hlp)].
+      unfold decode; rewrite (stripP16_spec w c _ la blank Hst); cbn [decodeList]; rewrite preR64_spec.
+      apply p66_L16.
+    + subst r. unfold decode; rewrite (scanPL_spec 132 66 16 ltac:(lia) _ l' Hsc w c blank); cbn [decodeList].
+      apply p66_L16_rep.
+  - (* b1 *)
+    pose proof (stepE_000_p66_1_sound w c (b1 :: l1) r restR Hr) as H1.
+    destruct l1 as [|ch2 l2]; [exact H1 | destruct ch2; try exact H1].
+    + (* b1 :: b0 *)
+      destruct l2 as [|ch3 l3]; [exact H1 | destruct ch3; try exact H1].
+      destruct l3 as [|ch4 l4]; [exact H1 | destruct ch4; try exact H1].
+      destruct (scanPL 132 66 9 (b1 :: b0 :: b0 :: b0 :: l4)) as [|l'] eqn:Hsc.
+      * destruct (stripP9 (b1 :: b0 :: b0 :: b0 :: l4)) as [|la] eqn:Hst; [exact Hrest |].
+        destruct (loopP9 64 la (preR36 restR)) as [|l' r'] eqn:Hlp; [exact Hrest |].
+        subst r. eapply evstep_trans; [| exact (loopP9_sound w c 64 la (preR36 restR) l' r' Hlp)].
+        unfold decode; rewrite (stripP9_spec w c _ la blank Hst); cbn [decodeList]; rewrite preR36_spec.
+        apply p66_L9.
+      * subst r. unfold decode; rewrite (scanPL_spec 132 66 9 ltac:(lia) _ l' Hsc w c blank); cbn [decodeList].
+        apply p66_L9_rep.
+    + (* b1 :: b1 *)
+      destruct l2 as [|ch3 l3]; [exact H1 | destruct ch3; try exact H1].
+      destruct l3 as [|ch4 l4]; [exact H1 | destruct ch4; try exact H1].
+      destruct restR as [|rc1 rr1]; [exact H1 | destruct rc1; try exact H1].
+      destruct rr1 as [|rc2 restR5]; [exact H1 | destruct rc2; try exact H1].
+      destruct (scanPL 132 66 29 (b1 :: b1 :: b0 :: b0 :: l4)) as [|l'] eqn:Hsc.
+      * destruct (stripP29 (b1 :: b1 :: b0 :: b0 :: l4)) as [|la] eqn:Hst; [exact Hrest |].
+        destruct (loopP29 64 la (preR14 restR5)) as [|l' r'] eqn:Hlp; [exact Hrest |].
+        subst r. eapply evstep_trans; [| exact (loopP29_sound w c 64 la (preR14 restR5) l' r' Hlp)].
+        unfold decode; rewrite (stripP29_spec w c _ la blank Hst); cbn [decodeList]; rewrite preR14_spec.
+        apply p66_L29.
+      * subst r. unfold decode; rewrite (scanPL_spec 132 66 29 ltac:(lia) _ l' Hsc w c blank); cbn [decodeList].
+        apply p66_L29_rep.
+  - (* pL n *)
+    destruct (Nat.eqb n 16) eqn:Hn16; [apply Nat.eqb_eq in Hn16; subst; apply p66_L16_rep |].
+    destruct (Nat.eqb n 9) eqn:Hn9; [apply Nat.eqb_eq in Hn9; subst; apply p66_L9_rep |].
+    destruct (Nat.eqb n 29) eqn:Hn29; [| exact Hrest].
+    apply Nat.eqb_eq in Hn29; subst n.
+    pose proof (pop10E_sound w c (pL 29 :: l1) r) as Hpop.
+    destruct restR as [|rc1 rr1]; [exact Hpop | destruct rc1; try exact Hpop].
+    + destruct rr1 as [|rc2 restR5]; [exact Hpop | destruct rc2; try exact Hpop].
+      subst r. apply p66_L29_rep.
+    + subst r. unfold decode; cbn [decodeList]; rewrite decodeList_consRR1101Opt; cbn [repBits decBits].
+      apply evstep_refl.
+  - (* rL0100 *) exact (stepE_000_p66_0_sound w c _ r restR Hr).
+  - (* rL0010 *) exact (stepE_000_p66_0_sound w c _ r restR Hr).
+  - (* rL1100 *) exact (stepE_000_p66_1_sound w c _ r restR Hr).
+  - (* swL *)
+    destruct (swHead b l l0) as [|[|]];
+      [exact Hrest | exact (stepE_000_p66_0_sound w c _ r restR Hr) | exact (stepE_000_p66_w0_sound w c _ r restR Hr)].
+  - (* bzL *)
+    destruct (bzHead l l0) as [|[| |]];
+      [exact Hrest | exact (stepE_000_p66_w0_sound w c _ r restR Hr) |
+       exact (stepE_000_p66_0_sound w c _ r restR Hr) | exact (stepE_000_p66_0_sound w c _ r restR Hr)].
+Qed.
+
+Definition stepE_000 (l r restR : list Chunk) : RState :=
+  match l with
+  | wL f :: restL => RState_mk true restL (b0 :: b0 :: b0 :: wR f :: restR)
+  | b1 :: b0 :: b0 :: wL f :: restL =>
+    match scanLeftB_p1 128 restL (wR (negb f) :: b1 :: b1 :: b1 :: b0 :: restR) with
+    | OptPair_some restL' outR => RState_mk true restL' (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b1 :: b1 :: b0 :: outR)
+    | OptPair_none => pop10E l r
+    end
+  | b0 :: wL f :: restL =>
+    match restR with
+    | b1 :: b1 :: b1 :: b1 :: b1 :: restR8 =>
+      match scanLeftB_p0 128 restL (b0 :: wR (negb f) :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: restR8) with
+      | OptPair_some restL' outR => RState_mk true restL' (b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: b1 :: b1 :: outR)
+      | OptPair_none => pop10E l r
+      end
+    | _ => pop10E l r
+    end
+  | _ => stepE_000_p66 l r restR
+  end.
+
+Lemma stepE_000_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: b0 :: b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_000 l r restR).
+Proof.
+  pose proof (stepE_000_p66_sound w c l r restR Hr) as Hp66.
+  destruct l as [|ch1 l1]; [exact Hp66 | destruct ch1; try exact Hp66].
+  - (* b0 *)
+    destruct l1 as [|ch2 restL]; [exact Hp66 | destruct ch2; try exact Hp66].
+    cbn [stepE_000].
+    pose proof (pop10E_sound w c (b0 :: wL b :: restL) r) as Hpop.
+    destruct restR as [|rc1 rr1]; [exact Hpop | destruct rc1; try exact Hpop].
+    destruct rr1 as [|rc2 rr2]; [exact Hpop | destruct rc2; try exact Hpop].
+    destruct rr2 as [|rc3 rr3]; [exact Hpop | destruct rc3; try exact Hpop].
+    destruct rr3 as [|rc4 rr4]; [exact Hpop | destruct rc4; try exact Hpop].
+    destruct rr4 as [|rc5 restR8]; [exact Hpop | destruct rc5; try exact Hpop].
+    destruct (scanLeftB_p0 128 restL (b0 :: wR (negb b) :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: restR8))
+      as [|restL' outR] eqn:Hsc; [exact Hpop |].
+    destruct (scanLeftB_p0_spec w c 128 restL _ restL' outR Hsc) as [u [HL HR]].
+    subst r. unfold decode; cbn [decodeList]; rewrite HL, HR; cbn [decodeList].
+    rewrite !shift_0_encWL, shift_0_encWR.
+    pose proof (leftPassB_p0_reaches ((if b then flipW w else w) ++ u)
+                  (decodeList w c restL' blank) (decodeList w c restR8 blank)) as Hmain.
+    rewrite encWL_b0_append, flipW_append, rev_app_distr, encWR0_append, <- flip_cond in Hmain.
+    exact Hmain.
+  - (* b1 *)
+    destruct l1 as [|ch2 l2]; [exact Hp66 | destruct ch2; try exact Hp66].
+    destruct l2 as [|ch3 l3]; [exact Hp66 | destruct ch3; try exact Hp66].
+    destruct l3 as [|ch4 restL]; [exact Hp66 | destruct ch4; try exact Hp66].
+    cbn [stepE_000].
+    destruct (scanLeftB_p1 128 restL (wR (negb b) :: b1 :: b1 :: b1 :: b0 :: restR))
+      as [|restL' outR] eqn:Hsc; [exact (pop10E_sound w c _ r) |].
+    destruct (scanLeftB_p1_spec w c 128 restL _ restL' outR Hsc) as [u [HL HR]].
+    subst r. unfold decode; cbn [decodeList]; rewrite HL, HR; cbn [decodeList].
+    pose proof (leftPassB_p1_reaches ((if b then flipW w else w) ++ u)
+                  (decodeList w c restL' blank) (decodeList w c restR blank)) as Hmain.
+    rewrite encWL_append, flipW_append, rev_app_distr, encWR_append, <- flip_cond in Hmain.
+    exact Hmain.
+  - (* wL *)
+    cbn [stepE_000]. subst r. apply leftPassA_reaches.
+Qed.
+
+Definition isGuard63L (l : list Chunk) : bool :=
+  match l with
+  | b1 :: rL0010 _ :: _ => true
+  | b1 :: b0 :: rL0100 _ :: _ => true
+  | b1 :: b0 :: b0 :: b1 :: rL0100 _ :: _ => true
+  | b1 :: b0 :: b0 :: b1 :: rL0010 _ :: _ => true
+  | _ => false
+  end.
+
+Definition maybeP4L (l : list Chunk) : bool :=
+  match l with
+  | b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: _ => true
+  | rL0100 0 :: b1 :: b0 :: b1 :: _ => true
+  | rL0100 0 :: b1 :: rL0100 _ :: _ => true
+  | b0 :: b1 :: rL0010 _ :: _ => true
+  | b0 :: b1 :: b0 :: b0 :: b1 :: rL0100 _ :: _ => true
+  | b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: rL0100 _ :: _ => true
+  | b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: rL0010 _ :: _ => true
+  | _ => false
+  end.
+
+Definition stepE_1_rest_none (l r restR : list Chunk) : RState :=
+  match l with
+  | swL _ _ _ :: _ | bzL _ _ :: _ =>
+    match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => pop10E l r end
+  | rL0100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL1100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL0010 m :: l' =>
+    match tryLsE0010 m r with
+    | OptList_some r' => RState_mk true l' r'
+    | OptList_none =>
+      match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => pop10E l r end
+    end
+  | b0 :: l1 =>
+    match l1 with
+    | rL1100 n :: l' =>
+      match restR with
+      | b1 :: rR0001 (S k) :: r' =>
+        RState_mk true (b0 :: l') (b1 :: b1 :: consRR0001 1 (consRR1101 n (consRR0001Opt k r')))
+      | _ => pop10E l r
+      end
+    | b1 :: b0 :: rL0010 n :: l' => RState_mk true (b0 :: b1 :: b0 :: l') (consRR0001 n r)
+    | b1 :: b0 :: b0 :: restL => br2Loop restL (consRR0001 0 r)
+    | _ => pop10E l r
+    end
+  | b1 :: b1 :: b0 :: b0 :: restL => br1Loop restL (consRR0001 0 r)
+  | _ => pop10E l r
+  end.
+
+Lemma stepE_1_rest_none_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b1 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_1_rest_none l r restR).
+Proof.
+  pose proof (pop10E_sound w c l r) as Hpop.
+  destruct l as [|ch1 l1]; [exact Hpop | destruct ch1; try exact Hpop; cbn [stepE_1_rest_none]].
+  - (* b0 *)
+    destruct l1 as [|ch2 l2]; [exact Hpop | destruct ch2; try exact Hpop].
+    + (* b0 :: b1 *)
+      destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+      destruct l3 as [|ch4 l4]; [exact Hpop | destruct ch4; try exact Hpop].
+      * exact (br2_enter w c l4 r).
+      * unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]. apply (lsE_010_rL0010 (S n)).
+    + (* b0 :: rL1100 n *)
+      destruct restR as [|rc1 rr1]; [exact Hpop | destruct rc1; try exact Hpop].
+      destruct rr1 as [|rc2 r']; [exact Hpop | destruct rc2; try exact Hpop].
+      destruct n0 as [|k]; [exact Hpop |].
+      subst r. unfold decode; cbn [decodeList];
+        try rewrite decodeList_consRR0001; cbn [decodeList]; try rewrite decodeList_consRR1101; cbn [decodeList]; rewrite decodeList_consRR0001Opt; cbn [repBits decBits].
+      apply (lsE_0_rL1100 (S n)).
+  - (* b1 *)
+    destruct l1 as [|ch2 l2]; [exact Hpop | destruct ch2; try exact Hpop].
+    destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+    destruct l3 as [|ch4 restL]; [exact Hpop | destruct ch4; try exact Hpop].
+    exact (br1_enter w c restL r).
+  - (* rL0100 *)
+    unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]; apply (loop_br2 (S n)).
+  - (* rL0010 *)
+    destruct (tryLsE0010 n r) as [|r'] eqn:Htr; [| exact (tryLsE0010_sound w c n l1 r r' Htr)].
+    destruct (peelHead (rL0010 n :: l1)) as [|l''] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+  - (* rL1100 *)
+    unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]; apply (loop_br1 (S n)).
+  - (* swL *)
+    destruct (peelHead (swL b l l0 :: l1)) as [|l''] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+  - (* bzL *)
+    destruct (peelHead (bzL l l0 :: l1)) as [|l''] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+Qed.
+
+Definition stepE_1_rest (l r restR : list Chunk) : RState :=
+  match l with
+  | b1 :: b0 :: b0 :: l3 =>
+    match l3 with
+    | b1 :: b0 :: restL =>
+      match scanPR 132 66 63 restR with
+      | OptList_some r' => RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: pL 14 :: restL) (b1 :: r')
+      | OptList_none =>
+        match stripR63 restR with
+        | OptList_some ra =>
+          match loopR63 64 ra (preP14 restL) with
+          | OptPair_some r' l' => RState_mk true (b1 :: b0 :: b0 :: b1 :: b0 :: l') (b1 :: r')
+          | OptPair_none => pop10E l r
+          end
+        | OptList_none =>
+          match restL with
+          | b0 :: b0 :: restL7 =>
+            match advancePureInit 12 r with
+            | OptPureState_some _ _ =>
+              rightSweepB (consRL0010 0 (b1 :: b0 :: b0 :: b0 :: restL7)) restR
+            | OptPureState_none => pop10E l r
+            end
+          | _ => pop10E l r
+          end
+        end
+      end
+    | b0 :: restL =>
+      match restR with
+      | b1 :: b1 :: b0 :: rc4 :: rr4 =>
+        match rc4, rr4 with
+        | wR f, b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b1 :: restR12 =>
+          match restL with
+          | b0 :: b1 :: b0 :: b1 :: b0 :: restL9 =>
+            RState_mk true
+              (b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: wL f ::
+               b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: restL9)
+              (b1 :: b1 :: b1 :: restR12)
+          | _ => pop10E l r
+          end
+        | b1, restR5 => br4Loop (consRL0100 0 restL) restR5
+        | _, _ => pop10E l r
+        end
+      | b0 :: b0 :: b0 :: restR4 =>
+        match scanSuperBounce restL with
+        | OptList_some l' => RState_mk true (b1 :: b0 :: b0 :: b0 :: l') (b1 :: b0 :: restR4)
+        | OptList_none => pop10E l r
+        end
+      | b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: restR8 =>
+        br6Loop (consRL0010 0 restL) restR8
+      | rR1101 m :: restR2 =>
+        br4Loop (consRL0100 m restL) restR2
+      | _ => pop10E l r
+      end
+    | _ =>
+      match advancePureInit 70 l with
+      | OptPureState_some rem ahead =>
+        match callLeftSweepEGo l rem ahead r with
+        | OptRState_some st => st
+        | OptRState_none => stepE_1_rest_none l r restR
+        end
+      | OptPureState_none => stepE_1_rest_none l r restR
+      end
+    end
+  | _ =>
+    match advancePureInit 70 l with
+    | OptPureState_some rem ahead =>
+      match callLeftSweepEGo l rem ahead r with
+      | OptRState_some st => st
+      | OptRState_none => stepE_1_rest_none l r restR
+      end
+    | OptPureState_none => stepE_1_rest_none l r restR
+    end
+  end.
+
+Lemma stepE_1_rest_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b1 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_1_rest l r restR).
+Proof.
+  assert (Hsw :
+    decode w c (RState_mk true l r) -[ tm ]->*
+    decode w c (match advancePureInit 70 l with
+                | OptPureState_some rem ahead =>
+                  match callLeftSweepEGo l rem ahead r with
+                  | OptRState_some st => st
+                  | OptRState_none => stepE_1_rest_none l r restR
+                  end
+                | OptPureState_none => stepE_1_rest_none l r restR
+                end)).
+  { destruct (advancePureInit 70 l) as [|rem ahead];
+      [exact (stepE_1_rest_none_sound w c l r restR Hr) |].
+    destruct (callLeftSweepEGo l rem ahead r) as [|st] eqn:Hgo;
+      [exact (stepE_1_rest_none_sound w c l r restR Hr) |
+       exact (callLeftSweepEGo_sound w c l rem ahead r st Hgo)]. }
+  pose proof (pop10E_sound w c l r) as Hpop.
+  destruct l as [|lc1 l1]; [exact Hsw | destruct lc1; try exact Hsw].
+  destruct l1 as [|lc2 l2]; [exact Hsw | destruct lc2; try exact Hsw].
+  destruct l2 as [|lc3 l3]; [exact Hsw | destruct lc3; try exact Hsw].
+  destruct l3 as [|lc4 l4]; [exact Hsw | destruct lc4; try exact Hsw].
+  - (* b1 :: b0 :: b0 :: b0 :: l4 *)
+    cbn [stepE_1_rest].
+    destruct restR as [|rc1 rr1]; [exact Hpop | destruct rc1; try exact Hpop].
+    + (* restR = b0 :: rr1 *)
+      destruct rr1 as [|rc2 rr2]; [exact Hpop | destruct rc2; try exact Hpop].
+      * (* b0 :: b0 *)
+        destruct rr2 as [|rc3 restR4]; [exact Hpop | destruct rc3; try exact Hpop].
+        destruct (scanSuperBounce l4) as [|l'] eqn:Hsc; [exact Hpop |].
+        destruct (scanSuperBounce_spec w c l4 l' Hsc) as [k [tail [H1 H2]]].
+        subst r. unfold decode; cbn [decodeList]; rewrite H1, H2.
+        apply superBounce_reaches.
+      * (* b0 :: b1 *)
+        destruct rr2 as [|rc3 rr3]; [exact Hpop | destruct rc3; try exact Hpop].
+        destruct rr3 as [|rc4 rr4]; [exact Hpop | destruct rc4; try exact Hpop].
+        destruct rr4 as [|rc5 rr5]; [exact Hpop | destruct rc5; try exact Hpop].
+        destruct rr5 as [|rc6 rr6]; [exact Hpop | destruct rc6; try exact Hpop].
+        destruct rr6 as [|rc7 restR8]; [exact Hpop | destruct rc7; try exact Hpop].
+        subst r. exact (br6_enter w c l4 restR8).
+    + (* restR = b1 :: rr1 *)
+      destruct rr1 as [|rc2 rr2]; [exact Hpop | destruct rc2; try exact Hpop].
+      destruct rr2 as [|rc3 rr3]; [exact Hpop | destruct rc3; try exact Hpop].
+      destruct rr3 as [|rc4 rr4]; [exact Hpop | destruct rc4; try exact Hpop].
+      * (* b1 :: b1 :: b0 :: b1 :: rr4 *)
+        subst r. exact (br4_enter w c l4 rr4).
+      * (* b1 :: b1 :: b0 :: wR b :: rr4 *)
+        destruct rr4 as [|rc5 rr5]; [exact Hpop | destruct rc5; try exact Hpop].
+        destruct rr5 as [|rc6 rr6]; [exact Hpop | destruct rc6; try exact Hpop].
+        destruct rr6 as [|rc7 rr7]; [exact Hpop | destruct rc7; try exact Hpop].
+        destruct rr7 as [|rc8 rr8]; [exact Hpop | destruct rc8; try exact Hpop].
+        destruct rr8 as [|rc9 rr9]; [exact Hpop | destruct rc9; try exact Hpop].
+        destruct rr9 as [|rc10 rr10]; [exact Hpop | destruct rc10; try exact Hpop].
+        destruct rr10 as [|rc11 restR12]; [exact Hpop | destruct rc11; try exact Hpop].
+        destruct l4 as [|ll5 l5]; [exact Hpop | destruct ll5; try exact Hpop].
+        destruct l5 as [|ll6 l6]; [exact Hpop | destruct ll6; try exact Hpop].
+        destruct l6 as [|ll7 l7]; [exact Hpop | destruct ll7; try exact Hpop].
+        destruct l7 as [|ll8 l8]; [exact Hpop | destruct ll8; try exact Hpop].
+        destruct l8 as [|ll9 restL9]; [exact Hpop | destruct ll9; try exact Hpop].
+        subst r. unfold decode; cbn [decodeList].
+        pose proof (pass4_111_reaches (rev (if b then flipW w else w))
+                      (decodeList w c restL9 blank) (decodeList w c restR12 blank)) as Hmain.
+        rewrite rev_involutive in Hmain. exact Hmain.
+    + (* restR = rR1101 n :: rr1 *)
+      subst r. exact (br4_enter_r w c n l4 rr1).
+  - (* b1 :: b0 :: b0 :: b1 :: l4 *)
+    destruct l4 as [|lc5 restL]; [exact Hsw | destruct lc5; try exact Hsw].
+    cbn [stepE_1_rest].
+    destruct (scanPR 132 66 63 restR) as [|r'] eqn:Hsc.
+    + destruct (stripR63 restR) as [|ra] eqn:Hst.
+      * destruct restL as [|ll6 l6]; [exact Hpop | destruct ll6; try exact Hpop].
+        destruct l6 as [|ll7 restL7]; [exact Hpop | destruct ll7; try exact Hpop].
+        destruct (advancePureInit 12 r) as [|rem ahead]; [exact Hpop |].
+        subst r. eapply evstep_trans; [| exact (rightSweepB_sound w c _ restR)].
+        unfold decode; try rewrite decodeList_consRL0010; cbn [decodeList repBits decBits].
+        apply rsB_enter_E.
+      * destruct (loopR63 64 ra (preP14 restL)) as [|r' l'] eqn:Hlp; [exact Hpop |].
+        subst r. eapply evstep_trans; [| exact (loopR63_sound w c 64 ra (preP14 restL) r' l' Hlp)].
+        unfold decode; cbn [decodeList]; rewrite (stripR63_spec w c restR ra blank Hst), preP14_spec.
+        apply p66_R63.
+    + subst r. unfold decode; cbn [decodeList];
+        rewrite (scanPR_spec 132 66 63 ltac:(lia) restR r' Hsc w c blank).
+      apply p66_R63_rep.
+Qed.
+
+Definition stepE_1 (l r restR : list Chunk) : RState :=
+  match restR with
+  | b1 :: b1 :: b0 :: wR f :: tailR =>
+    match peelRunInWindow 7 tailR with
+    | OptList_some tailR' => RState_mk true l (b1 :: b1 :: b1 :: b0 :: wR f :: tailR')
+    | OptList_none =>
+      match peelRunInWindow 9 l with
+      | OptList_some l' => RState_mk true l' r
+      | OptList_none => stepE_1_rest l r restR
+      end
+    end
+  | _ =>
+    if isGuard63L l && hasPRWithin 70 restR then
+      match peelRunInWindow 5 l with
+      | OptList_some l' => RState_mk true l' r
+      | OptList_none => stepE_1_rest l r restR
+      end
+    else stepE_1_rest l r restR
+  end.
+
+Lemma stepE_1_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b1 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_1 l r restR).
+Proof.
+  assert (Hfb :
+    decode w c (RState_mk true l r) -[ tm ]->*
+    decode w c (if isGuard63L l && hasPRWithin 70 restR then
+                  match peelRunInWindow 5 l with
+                  | OptList_some l' => RState_mk true l' r
+                  | OptList_none => stepE_1_rest l r restR
+                  end
+                else stepE_1_rest l r restR)).
+  { destruct (isGuard63L l && hasPRWithin 70 restR);
+      [| exact (stepE_1_rest_sound w c l r restR Hr)].
+    destruct (peelRunInWindow 5 l) as [|l'] eqn:Hp;
+      [exact (stepE_1_rest_sound w c l r restR Hr) |].
+    unfold decode; rewrite (peelRunInWindow_eq w c 5 l l' blank Hp); apply evstep_refl. }
+  destruct restR as [|rc1 rr1]; [exact Hfb | destruct rc1; try exact Hfb].
+  destruct rr1 as [|rc2 rr2]; [exact Hfb | destruct rc2; try exact Hfb].
+  destruct rr2 as [|rc3 rr3]; [exact Hfb | destruct rc3; try exact Hfb].
+  destruct rr3 as [|rc4 tailR]; [exact Hfb | destruct rc4; try exact Hfb].
+  cbn [stepE_1].
+  destruct (peelRunInWindow 7 tailR) as [|tailR'] eqn:HpR.
+  - destruct (peelRunInWindow 9 l) as [|l'] eqn:HpL;
+      [exact (stepE_1_rest_sound w c l r _ Hr) |].
+    unfold decode; rewrite (peelRunInWindow_eq w c 9 l l' blank HpL); apply evstep_refl.
+  - subst r. unfold decode; cbn [decodeList];
+      rewrite (peelRunInWindow_eq w c 7 tailR tailR' blank HpR); apply evstep_refl.
+Qed.
+
+Definition stepE_0_rest_none (l r : list Chunk) : RState :=
+  match l with
+  | swL _ _ _ :: _ | bzL _ _ :: _ =>
+    match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => pop10E l r end
+  | rL0100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL1100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL0010 m :: l' =>
+    match tryLsE0010 m r with
+    | OptList_some r' => RState_mk true l' r'
+    | OptList_none =>
+      match peelHead l with OptList_some l'' => RState_mk true l'' r | OptList_none => pop10E l r end
+    end
+  | b0 :: b1 :: b0 :: l3 =>
+    match l3 with
+    | b1 :: rL0010 n :: l' => RState_mk true (b0 :: b1 :: b0 :: b1 :: l') (push0111M n r)
+    | rL0010 n :: l' => RState_mk true (b0 :: b1 :: b0 :: l') (consRR0001 n r)
+    | b0 :: restL => br2Loop restL (consRR0001 0 r)
+    | _ => pop10E l r
+    end
+  | b1 :: b1 :: b0 :: b0 :: restL => br1Loop restL (consRR0001 0 r)
+  | _ => pop10E l r
+  end.
+
+Lemma stepE_0_rest_none_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_0_rest_none l r).
+Proof.
+  pose proof (pop10E_sound w c l r) as Hpop.
+  destruct l as [|ch1 l1]; [exact Hpop | destruct ch1; try exact Hpop; cbn [stepE_0_rest_none]].
+  - (* b0 *)
+    destruct l1 as [|ch2 l2]; [exact Hpop | destruct ch2; try exact Hpop].
+    destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+    destruct l3 as [|ch4 l4]; [exact Hpop | destruct ch4; try exact Hpop].
+    + exact (br2_enter w c l4 r).
+    + destruct l4 as [|ch5 l5]; [exact Hpop | destruct ch5; try exact Hpop].
+      unfold decode; rewrite decodeList_push0111M; cbn [decodeList].
+      apply (lsE_0101_rL0010 (S n)).
+    + unfold decode; rewrite decodeList_consRR0001; cbn [decodeList].
+      apply (lsE_010_rL0010 (S n)).
+  - (* b1 *)
+    destruct l1 as [|ch2 l2]; [exact Hpop | destruct ch2; try exact Hpop].
+    destruct l2 as [|ch3 l3]; [exact Hpop | destruct ch3; try exact Hpop].
+    destruct l3 as [|ch4 restL]; [exact Hpop | destruct ch4; try exact Hpop].
+    exact (br1_enter w c restL r).
+  - (* rL0100 *)
+    unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]; apply (loop_br2 (S n)).
+  - (* rL0010 *)
+    destruct (tryLsE0010 n r) as [|r'] eqn:Htr; [| exact (tryLsE0010_sound w c n l1 r r' Htr)].
+    destruct (peelHead (rL0010 n :: l1)) as [|l''] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+  - (* rL1100 *)
+    unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]; apply (loop_br1 (S n)).
+  - (* swL *)
+    destruct (peelHead (swL b l l0 :: l1)) as [|l''] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+  - (* bzL *)
+    destruct (peelHead (bzL l l0 :: l1)) as [|l''] eqn:Hp; [exact Hpop |].
+    unfold decode; rewrite (peelHead_eq w c _ l'' blank Hp); apply evstep_refl.
+Qed.
+
+Definition stepE_0_rest (l r : list Chunk) : RState :=
+  match advancePureInit 70 l with
+  | OptPureState_some rem ahead =>
+    match callLeftSweepEGo l rem ahead r with
+    | OptRState_some st => st
+    | OptRState_none => stepE_0_rest_none l r
+    end
+  | OptPureState_none => stepE_0_rest_none l r
+  end.
+
+Lemma stepE_0_rest_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_0_rest l r).
+Proof.
+  unfold stepE_0_rest.
+  destruct (advancePureInit 70 l) as [|rem ahead]; [exact (stepE_0_rest_none_sound w c l r) |].
+  destruct (callLeftSweepEGo l rem ahead r) as [|st] eqn:Hgo;
+    [exact (stepE_0_rest_none_sound w c l r) | exact (callLeftSweepEGo_sound w c l rem ahead r st Hgo)].
+Qed.
+
+Definition stepE_0 (l r restR : list Chunk) : RState :=
+  match l with
+  | b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: restL =>
+    match scanPR 132 66 4 restR with
+    | OptList_some r' => RState_mk true (b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: pL 4 :: restL) (b0 :: r')
+    | OptList_none => stepE_0_rest l r
+    end
+  | _ =>
+    if maybeP4L l && hasPRWithin 70 restR then
+      match peelRunInWindow 9 l with
+      | OptList_some l' => RState_mk true l' r
+      | OptList_none => stepE_0_rest l r
+      end
+    else stepE_0_rest l r
+  end.
+
+Lemma stepE_0_sound (w : list bool) (c : nat) (l r restR : list Chunk)
+  (Hr : r = b0 :: restR) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepE_0 l r restR).
+Proof.
+  assert (Hfb :
+    decode w c (RState_mk true l r) -[ tm ]->*
+    decode w c (if maybeP4L l && hasPRWithin 70 restR then
+                  match peelRunInWindow 9 l with
+                  | OptList_some l' => RState_mk true l' r
+                  | OptList_none => stepE_0_rest l r
+                  end
+                else stepE_0_rest l r)).
+  { destruct (maybeP4L l && hasPRWithin 70 restR); [| exact (stepE_0_rest_sound w c l r)].
+    destruct (peelRunInWindow 9 l) as [|l'] eqn:Hp; [exact (stepE_0_rest_sound w c l r) |].
+    unfold decode; rewrite (peelRunInWindow_eq w c 9 l l' blank Hp); apply evstep_refl. }
+  destruct l as [|lc1 l1]; [exact Hfb | destruct lc1; try exact Hfb].
+  destruct l1 as [|lc2 l2]; [exact Hfb | destruct lc2; try exact Hfb].
+  destruct l2 as [|lc3 l3]; [exact Hfb | destruct lc3; try exact Hfb].
+  destruct l3 as [|lc4 l4]; [exact Hfb | destruct lc4; try exact Hfb].
+  destruct l4 as [|lc5 l5]; [exact Hfb | destruct lc5; try exact Hfb].
+  destruct l5 as [|lc6 l6]; [exact Hfb | destruct lc6; try exact Hfb].
+  destruct l6 as [|lc7 l7]; [exact Hfb | destruct lc7; try exact Hfb].
+  destruct l7 as [|lc8 restL]; [exact Hfb | destruct lc8; try exact Hfb].
+  cbn [stepE_0].
+  destruct (scanPR 132 66 4 restR) as [|r'] eqn:Hsc;
+    [exact (stepE_0_rest_sound w c _ r) |].
+  subst r. unfold decode; cbn [decodeList];
+    rewrite (scanPR_spec 132 66 4 ltac:(lia) restR r' Hsc w c blank).
+  apply p66_R4_rep.
+Qed.
+
+Definition stepTrue_rR0001_fb (l r : list Chunk) (n : nat) (r' : list Chunk) : RState :=
+  match l, n with
+  | b0 :: b0 :: l2, S m => RState_mk false (push1001M m (b1 :: b0 :: b0 :: l2)) (b0 :: b0 :: b1 :: r')
+  | _, _ =>
+    match peelHead r with
+    | OptList_some r'' => RState_mk true l r''
+    | OptList_none => stepE_0_rest l r
+    end
+  end.
+
+Lemma stepTrue_rR0001_fb_sound (w : list bool) (c : nat) (l r : list Chunk) (n : nat) (r' : list Chunk)
+  (Hr : r = rR0001 n :: r') :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepTrue_rR0001_fb l r n r').
+Proof.
+  assert (Hfb :
+    decode w c (RState_mk true l r) -[ tm ]->*
+    decode w c (match peelHead r with
+                | OptList_some r'' => RState_mk true l r''
+                | OptList_none => stepE_0_rest l r
+                end)).
+  { destruct (peelHead r) as [|r''] eqn:Hp; [exact (stepE_0_rest_sound w c l r) |].
+    unfold decode; rewrite (peelHead_eq w c r r'' blank Hp); apply evstep_refl. }
+  destruct l as [|lc1 l1]; [exact Hfb | destruct lc1; try exact Hfb].
+  destruct l1 as [|lc2 l2]; [exact Hfb | destruct lc2; try exact Hfb].
+  destruct n as [|m]; [exact Hfb |].
+  cbn [stepTrue_rR0001_fb]. subst r.
+  unfold decode; rewrite decodeList_push1001M; cbn [decodeList].
+  apply lsE_00_rR0001_enter.
+Qed.
+
+Definition stepTrue_rR0001_body (l r : list Chunk) (n : nat) (r' : list Chunk) : RState :=
+  match advancePureInit 70 l with
+  | OptPureState_some rem ahead =>
+    match callLeftSweepEGo l rem ahead r with
+    | OptRState_some st => st
+    | OptRState_none => stepTrue_rR0001_fb l r n r'
+    end
+  | OptPureState_none => stepTrue_rR0001_fb l r n r'
+  end.
+
+Lemma stepTrue_rR0001_body_sound (w : list bool) (c : nat) (l r : list Chunk) (n : nat) (r' : list Chunk)
+  (Hr : r = rR0001 n :: r') :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepTrue_rR0001_body l r n r').
+Proof.
+  unfold stepTrue_rR0001_body.
+  destruct (advancePureInit 70 l) as [|rem ahead];
+    [exact (stepTrue_rR0001_fb_sound w c l r n r' Hr) |].
+  destruct (callLeftSweepEGo l rem ahead r) as [|st] eqn:Hgo;
+    [exact (stepTrue_rR0001_fb_sound w c l r n r' Hr) |
+     exact (callLeftSweepEGo_sound w c l rem ahead r st Hgo)].
+Qed.
+
+Definition stepTrue_rR1101_tail (l r : list Chunk) : RState :=
+  match l with
+  | rL0100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL1100 n :: l' => RState_mk true l' (consRR0001 n r)
+  | rL0010 m :: l' =>
+    match tryLsE0010 m r with
+    | OptList_some r' => RState_mk true l' r'
+    | OptList_none =>
+      match peelHead r with OptList_some r' => RState_mk true l r' | OptList_none => pop10E l r end
+    end
+  | _ =>
+    match peelHead r with OptList_some r' => RState_mk true l r' | OptList_none => pop10E l r end
+  end.
+
+Lemma stepTrue_rR1101_tail_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepTrue_rR1101_tail l r).
+Proof.
+  assert (Hfb :
+    decode w c (RState_mk true l r) -[ tm ]->*
+    decode w c (match peelHead r with OptList_some r' => RState_mk true l r' | OptList_none => pop10E l r end)).
+  { destruct (peelHead r) as [|r'] eqn:Hp; [exact (pop10E_sound w c l r) |].
+    unfold decode; rewrite (peelHead_eq w c r r' blank Hp); apply evstep_refl. }
+  destruct l as [|ch1 l1]; [exact Hfb | destruct ch1; try exact Hfb; cbn [stepTrue_rR1101_tail]].
+  - unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]; apply (loop_br2 (S n)).
+  - destruct (tryLsE0010 n r) as [|r'] eqn:Htr; [exact Hfb | exact (tryLsE0010_sound w c n l1 r r' Htr)].
+  - unfold decode; rewrite decodeList_consRR0001; cbn [decodeList]; apply (loop_br1 (S n)).
+Qed.
+
+Definition isPrefix10010 (l : list Chunk) : bool :=
+  match l with
+  | b1 :: b0 :: b0 :: b1 :: b0 :: _ => true
+  | _ => false
+  end.
+
+Definition stepTrue (l r : list Chunk) : RState :=
+  match r with
+  | b0 :: b0 :: b0 :: restR => stepE_000 l r restR
+  | b0 :: restR => stepE_0 l r restR
+  | b1 :: restR => stepE_1 l r restR
+  | rR0001 n :: r' =>
+    if maybeP4L l && hasPRWithin 70 r then
+      match peelHead r with
+      | OptList_some r'' => RState_mk true l r''
+      | OptList_none => stepTrue_rR0001_body l r n r'
+      end
+    else stepTrue_rR0001_body l r n r'
+  | rR1101 _ :: _ =>
+    if isPrefix10010 l then
+      match peelHead r with OptList_some r' => RState_mk true l r' | OptList_none => pop10E l r end
+    else if isGuard63L l then
+      if hasPRWithin 70 r then
+        match peelHead r with OptList_some r' => RState_mk true l r' | OptList_none => pop10E l r end
+      else stepE_0_rest l r
+    else
+      match advancePureInit 70 l with
+      | OptPureState_some rem ahead =>
+        match callLeftSweepEGo l rem ahead r with
+        | OptRState_some st => st
+        | OptRState_none => stepTrue_rR1101_tail l r
+        end
+      | OptPureState_none => stepTrue_rR1101_tail l r
+      end
+  | [] => stepE_0_rest l []
+  | _ => pop10E l r
+  end.
+
+Lemma stepTrue_sound (w : list bool) (c : nat) (l r : list Chunk) :
+  decode w c (RState_mk true l r) -[ tm ]->* decode w c (stepTrue l r).
+Proof.
+  pose proof (pop10E_sound w c l r) as Hpop.
+  destruct r as [|rc1 r1]; [cbn [stepTrue]; exact (stepE_0_rest_sound w c l []) |].
+  destruct rc1; try exact Hpop.
+  - (* b0 :: r1 *)
+    assert (Hb0 : decode w c (RState_mk true l (b0 :: r1)) -[ tm ]->* decode w c (stepE_0 l (b0 :: r1) r1)).
+    { exact (stepE_0_sound w c l (b0 :: r1) r1 eq_refl). }
+    destruct r1 as [|rc2 r2]; [exact Hb0 | destruct rc2; try exact Hb0].
+    destruct r2 as [|rc3 restR]; [exact Hb0 | destruct rc3; try exact Hb0].
+    cbn [stepTrue]. exact (stepE_000_sound w c l _ restR eq_refl).
+  - (* b1 :: r1 *)
+    cbn [stepTrue]. exact (stepE_1_sound w c l _ r1 eq_refl).
+  - (* rR0001 n :: r1 *)
+    cbn [stepTrue].
+    destruct (maybeP4L l && hasPRWithin 70 (rR0001 n :: r1));
+      [| exact (stepTrue_rR0001_body_sound w c l _ n r1 eq_refl)].
+    destruct (peelHead (rR0001 n :: r1)) as [|r''] eqn:Hp;
+      [exact (stepTrue_rR0001_body_sound w c l _ n r1 eq_refl) |].
+    unfold decode; rewrite (peelHead_eq w c _ r'' blank Hp); apply evstep_refl.
+  - (* rR1101 n :: r1 *)
+    cbn [stepTrue].
+    assert (Hpeel :
+      decode w c (RState_mk true l (rR1101 n :: r1)) -[ tm ]->*
+      decode w c (match peelHead (rR1101 n :: r1) with
+                  | OptList_some r' => RState_mk true l r'
+                  | OptList_none => pop10E l (rR1101 n :: r1)
+                  end)).
+    { destruct (peelHead (rR1101 n :: r1)) as [|r'] eqn:Hp; [exact Hpop |].
+      unfold decode; rewrite (peelHead_eq w c _ r' blank Hp); apply evstep_refl. }
+    destruct (isPrefix10010 l); [exact Hpeel |].
+    destruct (isGuard63L l).
+    + destruct (hasPRWithin 70 (rR1101 n :: r1)); [exact Hpeel | exact (stepE_0_rest_sound w c l _)].
+    + destruct (advancePureInit 70 l) as [|rem ahead];
+        [exact (stepTrue_rR1101_tail_sound w c l _) |].
+      destruct (callLeftSweepEGo l rem ahead (rR1101 n :: r1)) as [|st] eqn:Hgo;
+        [exact (stepTrue_rR1101_tail_sound w c l _) |
+         exact (callLeftSweepEGo_sound w c l rem ahead _ st Hgo)].
+Qed.
+
+Definition stepFast (s : RState) : RState :=
+  match s with
+  | RState_mk false l r => stepFalse l r
+  | RState_mk true  l r => stepTrue l r
+  end.
+
+Lemma stepFast_sound (w : list bool) (c : nat) (s : RState) :
+  decode w c s -[ tm ]->* decode w c (stepFast s).
+Proof.
+  destruct s as [[|] l r]; [apply stepTrue_sound | apply stepFalse_sound].
+Qed.
+
+Definition runPos (p : positive) (s : RState) : RState := Pos.iter stepFast s p.
+
+Lemma runPos_sound (w : list bool) (c : nat) (p : positive) (s : RState) :
+  decode w c s -[ tm ]->* decode w c (runPos p s).
+Proof.
+  unfold runPos.
+  exact (Pos.iter_invariant p RState stepFast
+           (fun s' => decode w c s -[ tm ]->* decode w c s')
+           (fun x Hx => evstep_trans _ _ _ _ Hx (stepFast_sound w c x))
+           s (evstep_refl _ _)).
+Qed.
+
+
+(** ** 8. Structural Equality, Algebraic Handoffs, and Global Closure *)
+
+Fixpoint prepRL0100 (k : nat) (acc : list Chunk) : list Chunk :=
+  match k with
+  | 0 => acc
+  | S k' => prepRL0100 k' (b0 :: b1 :: b0 :: b0 :: acc)
+  end.
+
+Fixpoint prepRL0010 (k : nat) (acc : list Chunk) : list Chunk :=
+  match k with
+  | 0 => acc
+  | S k' => prepRL0010 k' (b0 :: b0 :: b1 :: b0 :: acc)
+  end.
+
+Fixpoint prepRL1100 (k : nat) (acc : list Chunk) : list Chunk :=
+  match k with
+  | 0 => acc
+  | S k' => prepRL1100 k' (b1 :: b1 :: b0 :: b0 :: acc)
+  end.
+
+Fixpoint prepRR0001 (k : nat) (acc : list Chunk) : list Chunk :=
+  match k with
+  | 0 => acc
+  | S k' => prepRR0001 k' (b0 :: b0 :: b0 :: b1 :: acc)
+  end.
+
+Fixpoint prepRR1101 (k : nat) (acc : list Chunk) : list Chunk :=
+  match k with
+  | 0 => acc
+  | S k' => prepRR1101 k' (b1 :: b1 :: b0 :: b1 :: acc)
+  end.
+
+Lemma decodeList_prepRL0100 (w : list bool) (c k : nat) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepRL0100 k acc) lb = repBits [false; true; false; false] k (decodeList w c acc lb).
+Proof.
+  revert acc. induction k as [|k IH]; intros acc; [reflexivity |].
+  cbn [prepRL0100]; rewrite IH; cbn [decodeList].
+  symmetry; exact (repBits_succ_right [false; true; false; false] k (decodeList w c acc lb)).
+Qed.
+
+Lemma decodeList_prepRL0010 (w : list bool) (c k : nat) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepRL0010 k acc) lb = repBits [false; false; true; false] k (decodeList w c acc lb).
+Proof.
+  revert acc. induction k as [|k IH]; intros acc; [reflexivity |].
+  cbn [prepRL0010]; rewrite IH; cbn [decodeList].
+  symmetry; exact (repBits_succ_right [false; false; true; false] k (decodeList w c acc lb)).
+Qed.
+
+Lemma decodeList_prepRL1100 (w : list bool) (c k : nat) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepRL1100 k acc) lb = repBits [true; true; false; false] k (decodeList w c acc lb).
+Proof.
+  revert acc. induction k as [|k IH]; intros acc; [reflexivity |].
+  cbn [prepRL1100]; rewrite IH; cbn [decodeList].
+  symmetry; exact (repBits_succ_right [true; true; false; false] k (decodeList w c acc lb)).
+Qed.
+
+Lemma decodeList_prepRR0001 (w : list bool) (c k : nat) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepRR0001 k acc) lb = repBits [false; false; false; true] k (decodeList w c acc lb).
+Proof.
+  revert acc. induction k as [|k IH]; intros acc; [reflexivity |].
+  cbn [prepRR0001]; rewrite IH; cbn [decodeList].
+  symmetry; exact (repBits_succ_right [false; false; false; true] k (decodeList w c acc lb)).
+Qed.
+
+Lemma decodeList_prepRR1101 (w : list bool) (c k : nat) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepRR1101 k acc) lb = repBits [true; true; false; true] k (decodeList w c acc lb).
+Proof.
+  revert acc. induction k as [|k IH]; intros acc; [reflexivity |].
+  cbn [prepRR1101]; rewrite IH; cbn [decodeList].
+  symmetry; exact (repBits_succ_right [true; true; false; true] k (decodeList w c acc lb)).
+Qed.
+
+Fixpoint prepSwLRev (inv : bool) (xs : list bool) (acc : list Chunk) : list Chunk :=
+  match xs with
+  | [] => acc
+  | x :: xs' =>
+    if xorB inv x then prepSwLRev inv xs' (b0 :: b1 :: b0 :: b0 :: acc)
+    else prepSwLRev inv xs' (b1 :: b0 :: b0 :: b0 :: acc)
+  end.
+
+Fixpoint prepSwRRev (inv : bool) (xs : list bool) (acc : list Chunk) : list Chunk :=
+  match xs with
+  | [] => acc
+  | x :: xs' =>
+    if xorB inv x then prepSwRRev inv xs' (b0 :: b0 :: b0 :: b1 :: acc)
+    else prepSwRRev inv xs' (b1 :: b1 :: b0 :: b1 :: acc)
+  end.
+
+Fixpoint prepBzLRev (xs : list SwSym) (acc : list Chunk) : list Chunk :=
+  match xs with
+  | [] => acc
+  | SwSym_w0 :: xs' => prepBzLRev xs' (b1 :: b0 :: b0 :: b0 :: acc)
+  | SwSym_w1 :: xs' => prepBzLRev xs' (b0 :: b1 :: b0 :: b0 :: acc)
+  | SwSym_d  :: xs' => prepBzLRev xs' (b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: acc)
+  end.
+
+Fixpoint prepBzRRev (xs : list SwSym) (acc : list Chunk) : list Chunk :=
+  match xs with
+  | [] => acc
+  | SwSym_w0 :: xs' => prepBzRRev xs' (b1 :: b1 :: b0 :: b1 :: acc)
+  | SwSym_w1 :: xs' => prepBzRRev xs' (b0 :: b0 :: b0 :: b1 :: acc)
+  | SwSym_d  :: xs' => prepBzRRev xs' (b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: acc)
+  end.
+
+Lemma decodeList_prepSwLRev (w : list bool) (c : nat) (inv : bool) (xs : list bool) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepSwLRev inv xs acc) lb = encWL (flipBits inv (rev xs)) (decodeList w c acc lb).
+Proof.
+  revert acc. induction xs as [|x xs' IH]; intros acc.
+  - destruct inv; reflexivity.
+  - cbn [prepSwLRev rev]; rewrite flipBits_append, encWL_append.
+    replace (flipBits inv [x]) with [xorB inv x] by (destruct inv, x; reflexivity).
+    destruct (xorB inv x); rewrite IH; reflexivity.
+Qed.
+
+Lemma decodeList_prepSwRRev (w : list bool) (c : nat) (inv : bool) (xs : list bool) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepSwRRev inv xs acc) lb = encWR_q1 (flipBits inv (rev xs)) (decodeList w c acc lb).
+Proof.
+  revert acc. induction xs as [|x xs' IH]; intros acc.
+  - destruct inv; reflexivity.
+  - cbn [prepSwRRev rev]; rewrite flipBits_append, encWR_q1_append.
+    replace (flipBits inv [x]) with [xorB inv x] by (destruct inv, x; reflexivity).
+    destruct (xorB inv x); rewrite IH; reflexivity.
+Qed.
+
+Lemma decodeList_prepBzLRev (w : list bool) (c : nat) (xs : list SwSym) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepBzLRev xs acc) lb = encWL3 (rev xs) (decodeList w c acc lb).
+Proof.
+  revert acc. induction xs as [|[| |] xs' IH]; intros acc; [reflexivity | | |];
+    cbn [prepBzLRev rev]; rewrite encWL3_append, IH; reflexivity.
+Qed.
+
+Lemma decodeList_prepBzRRev (w : list bool) (c : nat) (xs : list SwSym) (acc : list Chunk) (lb : side) :
+  decodeList w c (prepBzRRev xs acc) lb = encWR3 (rev xs) (decodeList w c acc lb).
+Proof.
+  revert acc. induction xs as [|[| |] xs' IH]; intros acc; [reflexivity | | |];
+    cbn [prepBzRRev rev]; rewrite encWR3_append, IH; reflexivity.
+Qed.
+
+Fixpoint expandFlatRev (xs acc : list Chunk) : list Chunk :=
+  match xs with
+  | [] => acc
+  | ch :: xs' =>
+    let acc' :=
+      match ch with
+      | b0 | b1 | wL _ | wR _ | pL _ | pR _ => ch :: acc
+      | rL0100 n => prepRL0100 (S n) acc
+      | rL0010 n => prepRL0010 (S n) acc
+      | rL1100 n => prepRL1100 (S n) acc
+      | rR0001 n => prepRR0001 (S n) acc
+      | rR1101 n => prepRR1101 (S n) acc
+      | swL ia fa ba => prepSwLRev ia (List.rev_append fa []) (prepSwLRev ia ba acc)
+      | swR ia fa ba => prepSwRRev ia (List.rev_append fa []) (prepSwRRev ia ba acc)
+      | bzL fa ba => prepBzLRev (List.rev_append fa []) (prepBzLRev ba acc)
+      | bzR fa ba => prepBzRRev (List.rev_append fa []) (prepBzRRev ba acc)
+      end
+    in expandFlatRev xs' acc'
+  end.
+
+Definition expandFlat (xs : list Chunk) : list Chunk :=
+  expandFlatRev (List.rev_append xs []) [].
+
+Lemma decodeList_expandFlatRev (w : list bool) (c : nat) (xs acc : list Chunk) (lb : side) :
+  decodeList w c (expandFlatRev xs acc) lb = decodeList w c (rev xs) (decodeList w c acc lb).
+Proof.
+  revert acc. induction xs as [|ch xs' IH]; intros acc; [reflexivity |].
+  cbn [rev]; rewrite decodeList_append.
+  destruct ch as [| | fa | fa | r | r | n | n | n | n | n | ia fa ba | ia fa ba | fa ba | fa ba];
+    cbn [expandFlatRev decodeList]; rewrite IH;
+    try reflexivity; f_equal.
+  - apply decodeList_prepRL0100.
+  - apply decodeList_prepRL0010.
+  - apply decodeList_prepRL1100.
+  - apply decodeList_prepRR0001.
+  - apply decodeList_prepRR1101.
+  - rewrite <- rev_alt, !decodeList_prepSwLRev, rev_involutive, <- encWL_append, <- flipBits_append.
+    reflexivity.
+  - rewrite <- rev_alt, !decodeList_prepSwRRev, rev_involutive, <- encWR_q1_append, <- flipBits_append.
+    reflexivity.
+  - rewrite <- rev_alt, !decodeList_prepBzLRev, rev_involutive, <- encWL3_append.
+    reflexivity.
+  - rewrite <- rev_alt, !decodeList_prepBzRRev, rev_involutive, <- encWR3_append.
+    reflexivity.
+Qed.
+
+Lemma decodeList_expandFlat (w : list bool) (c : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (expandFlat xs) lb = decodeList w c xs lb.
+Proof.
+  unfold expandFlat. rewrite <- rev_alt, decodeList_expandFlatRev, rev_involutive. reflexivity.
+Qed.
+
+Lemma decode_expandFlat (w : list bool) (c : nat) (l_comp : list Chunk) :
+  decode w c (RState_mk false l_comp []) = decode w c (RState_mk false (expandFlat l_comp) []).
+Proof.
+  unfold decode. rewrite decodeList_expandFlat. reflexivity.
+Qed.
+
+Definition flushBzRev (rev_syms : list SwSym) (rev_out : list Chunk) : list Chunk :=
+  match rev_syms with
+  | [] => rev_out
+  | _ :: _ => bzL (List.rev_append rev_syms []) [] :: rev_out
+  end.
+
+Lemma decodeList_rev_flushBzRev (w : list bool) (c : nat) (rev_syms : list SwSym) (rev_out : list Chunk) (lb : side) :
+  decodeList w c (rev (flushBzRev rev_syms rev_out)) lb =
+    decodeList w c (rev rev_out) (encWL3 (rev rev_syms) lb).
+Proof.
+  destruct rev_syms as [|s ss]; [reflexivity |].
+  cbn [flushBzRev rev]; rewrite <- rev_alt, decodeList_append; cbn [decodeList].
+  unfold decBZ; cbn [rev]; rewrite app_nil_r; reflexivity.
+Qed.
+
+Fixpoint packFlatGo (xs : list Chunk) (rev_syms : list SwSym) (rev_out : list Chunk) : list Chunk :=
+  match xs with
+  | [] => List.rev_append (flushBzRev rev_syms rev_out) []
+  | b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: xs' => packFlatGo xs' (SwSym_d :: rev_syms) rev_out
+  | b1 :: b0 :: b0 :: b0 :: xs' => packFlatGo xs' (SwSym_w0 :: rev_syms) rev_out
+  | b0 :: b1 :: b0 :: b0 :: xs' => packFlatGo xs' (SwSym_w1 :: rev_syms) rev_out
+  | x :: xs' => packFlatGo xs' [] (x :: flushBzRev rev_syms rev_out)
+  end.
+
+Definition packFlat (xs : list Chunk) : list Chunk := packFlatGo xs [] [].
+
+Lemma decodeList_packFlatGo (w : list bool) (c : nat) (xs : list Chunk)
+  (rev_syms : list SwSym) (rev_out : list Chunk) (lb : side) :
+  decodeList w c (packFlatGo xs rev_syms rev_out) lb =
+    decodeList w c (rev rev_out) (encWL3 (rev rev_syms) (decodeList w c xs lb)).
+Proof.
+  revert rev_syms rev_out.
+  induction xs as [xs IH] using list_strong_ind; intros rev_syms rev_out.
+  destruct xs as [|x xs1].
+  - cbn [packFlatGo decodeList]; rewrite <- rev_alt. apply decodeList_rev_flushBzRev.
+  - assert (Hfall : decodeList w c (packFlatGo xs1 [] (x :: flushBzRev rev_syms rev_out)) lb =
+                    decodeList w c (rev rev_out) (encWL3 (rev rev_syms) (decodeList w c (x :: xs1) lb))).
+    { rewrite (IH xs1 ltac:(cbn [length]; lia) [] (x :: flushBzRev rev_syms rev_out)).
+      cbn [rev encWL3]; rewrite decodeList_append, decodeList_rev_flushBzRev.
+      cbn [decodeList app].
+      replace (decodeList w c [x] (decodeList w c xs1 lb)) with (decodeList w c (x :: xs1) lb)
+        by (destruct x; reflexivity).
+      reflexivity. }
+    destruct x; try exact Hfall.
+    + (* b0 *)
+      destruct xs1 as [|x2 xs2]; [exact Hfall | destruct x2; try exact Hfall].
+      destruct xs2 as [|x3 xs3]; [exact Hfall | destruct x3; try exact Hfall].
+      * (* b0 :: b1 :: b0 *)
+        destruct xs3 as [|x4 xs4]; [exact Hfall | destruct x4; try exact Hfall].
+        cbn [packFlatGo]; rewrite (IH xs4 ltac:(cbn [length]; lia)).
+        cbn [rev]; rewrite encWL3_append; reflexivity.
+      * (* b0 :: b1 :: b1 *)
+        destruct xs3 as [|x4 xs4]; [exact Hfall | destruct x4; try exact Hfall].
+        destruct xs4 as [|x5 xs5]; [exact Hfall | destruct x5; try exact Hfall].
+        destruct xs5 as [|x6 xs6]; [exact Hfall | destruct x6; try exact Hfall].
+        cbn [packFlatGo]; rewrite (IH xs6 ltac:(cbn [length]; lia)).
+        cbn [rev]; rewrite encWL3_append; reflexivity.
+    + (* b1 *)
+      destruct xs1 as [|x2 xs2]; [exact Hfall | destruct x2; try exact Hfall].
+      destruct xs2 as [|x3 xs3]; [exact Hfall | destruct x3; try exact Hfall].
+      destruct xs3 as [|x4 xs4]; [exact Hfall | destruct x4; try exact Hfall].
+      cbn [packFlatGo]; rewrite (IH xs4 ltac:(cbn [length]; lia)).
+      cbn [rev]; rewrite encWL3_append; reflexivity.
+Qed.
+
+Lemma decodeList_packFlat (w : list bool) (c : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (packFlat xs) lb = decodeList w c xs lb.
+Proof.
+  unfold packFlat. apply decodeList_packFlatGo.
+Qed.
+
+Definition flushRLE1100Rev (run : nat) (rev_out : list Chunk) : list Chunk :=
+  match run with
+  | 0 => rev_out
+  | S m => rL1100 m :: rev_out
+  end.
+
+Lemma decodeList_rev_flushRLE1100Rev (w : list bool) (c run : nat) (rev_out : list Chunk) (lb : side) :
+  decodeList w c (rev (flushRLE1100Rev run rev_out)) lb =
+    decodeList w c (rev rev_out) (repBits [true; true; false; false] run lb).
+Proof.
+  destruct run as [|m]; [reflexivity |].
+  cbn [flushRLE1100Rev rev]; rewrite decodeList_append; cbn [decodeList]. reflexivity.
+Qed.
+
+Fixpoint packRLE1100Go (xs : list Chunk) (run : nat) (rev_out : list Chunk) : list Chunk :=
+  match xs with
+  | [] => List.rev_append (flushRLE1100Rev run rev_out) []
+  | b1 :: b1 :: b0 :: b0 :: xs' => packRLE1100Go xs' (S run) rev_out
+  | x :: xs' => packRLE1100Go xs' 0 (x :: flushRLE1100Rev run rev_out)
+  end.
+
+Lemma decodeList_packRLE1100Go (w : list bool) (c : nat) (xs : list Chunk)
+  (run : nat) (rev_out : list Chunk) (lb : side) :
+  decodeList w c (packRLE1100Go xs run rev_out) lb =
+    decodeList w c (rev rev_out) (repBits [true; true; false; false] run (decodeList w c xs lb)).
+Proof.
+  revert run rev_out.
+  induction xs as [xs IH] using list_strong_ind; intros run rev_out.
+  destruct xs as [|x xs1].
+  - cbn [packRLE1100Go decodeList]; rewrite <- rev_alt. apply decodeList_rev_flushRLE1100Rev.
+  - assert (Hfall : decodeList w c (packRLE1100Go xs1 0 (x :: flushRLE1100Rev run rev_out)) lb =
+                    decodeList w c (rev rev_out) (repBits [true; true; false; false] run (decodeList w c (x :: xs1) lb))).
+    { rewrite (IH xs1 ltac:(cbn [length]; lia) 0 (x :: flushRLE1100Rev run rev_out)).
+      cbn [rev repBits]; rewrite decodeList_append, decodeList_rev_flushRLE1100Rev.
+      replace (decodeList w c [x] (decodeList w c xs1 lb)) with (decodeList w c (x :: xs1) lb)
+        by (destruct x; reflexivity).
+      reflexivity. }
+    destruct x; try exact Hfall.
+    destruct xs1 as [|x2 xs2]; [exact Hfall | destruct x2; try exact Hfall].
+    destruct xs2 as [|x3 xs3]; [exact Hfall | destruct x3; try exact Hfall].
+    destruct xs3 as [|x4 xs4]; [exact Hfall | destruct x4; try exact Hfall].
+    cbn [packRLE1100Go]; rewrite (IH xs4 ltac:(cbn [length]; lia)).
+    rewrite (repBits_succ_right [true; true; false; false] run). reflexivity.
+Qed.
+
+Lemma decodeList_packRLE1100 (w : list bool) (c : nat) (xs : list Chunk) (lb : side) :
+  decodeList w c (packRLE1100Go xs 0 []) lb = decodeList w c xs lb.
+Proof.
+  apply decodeList_packRLE1100Go.
+Qed.
+
+Fixpoint wLChunks (w : list bool) : list Chunk :=
+  match w with
+  | [] => []
+  | false :: ws => b1 :: b0 :: b0 :: b0 :: wLChunks ws
+  | true  :: ws => b0 :: b1 :: b0 :: b0 :: wLChunks ws
+  end.
+
+Lemma wLChunks_append (u v : list bool) :
+  wLChunks (u ++ v) = wLChunks u ++ wLChunks v.
+Proof.
+  induction u as [|[|] us IH]; [reflexivity | |]; cbn [app wLChunks]; rewrite IH; reflexivity.
+Qed.
+
+Fixpoint prev66N (k r : nat) : nat :=
+  match k with
+  | 0 => r
+  | S k' => prev66N k' (prev66 r)
+  end.
+
+Fixpoint isPureBits (xs : list Chunk) : bool :=
+  match xs with
+  | [] => true
+  | b0 :: xs' => isPureBits xs'
+  | b1 :: xs' => isPureBits xs'
+  | _ => false
+  end.
+
+Fixpoint repPL0Chunks (k : nat) (tl : list Chunk) : list Chunk :=
+  match k with
+  | 0 => tl
+  | S k' => prePL0 (repPL0Chunks k' tl)
+  end.
+
+Fixpoint shiftPL (k r : nat) (xs : list Chunk) : OptPair :=
+  match k with
+  | 0 => OptPair_some [] xs
+  | S k' =>
+    match xs with
+    | [] => OptPair_none
+    | b :: xs' =>
+      if Nat.leb r 65 then
+        if matchBit (plTopIs1 r) b then
+          match shiftPL k' (prev66 r) xs' with
+          | OptPair_none => OptPair_none
+          | OptPair_some pref rest => OptPair_some (b :: pref) rest
+          end
+        else OptPair_none
+      else OptPair_none
+    end
+  end.
+
+Fixpoint splitAtGo (n : nat) (rev_pre xs : list Chunk) : OptPair :=
+  match n with
+  | 0 => OptPair_some (List.rev_append rev_pre []) xs
+  | S n' =>
+    match xs with
+    | [] => OptPair_none
+    | x :: xs' => splitAtGo n' (x :: rev_pre) xs'
+    end
+  end.
+
+Definition splitAt (n : nat) (xs : list Chunk) : OptPair := splitAtGo n [] xs.
+
+Fixpoint stripRepPL0 (k : nat) (xs : list Chunk) : OptList :=
+  match k with
+  | 0 => OptList_some xs
+  | S k' =>
+    match stripBits pL0_66 xs with
+    | OptList_none => OptList_none
+    | OptList_some xs1 => stripRepPL0 k' xs1
+    end
+  end.
+
+Fixpoint parseWLChunksGo (n : nat) (rev_u : list bool) (xs : list Chunk) : option (list bool * list Chunk) :=
+  match n with
+  | 0 => Some (List.rev_append rev_u [], xs)
+  | S n' =>
+    match xs with
+    | b1 :: b0 :: b0 :: b0 :: xs' => parseWLChunksGo n' (false :: rev_u) xs'
+    | b0 :: b1 :: b0 :: b0 :: xs' => parseWLChunksGo n' (true :: rev_u) xs'
+    | _ => None
+    end
+  end.
+
+Definition parseWLChunks (n : nat) (xs : list Chunk) : option (list bool * list Chunk) :=
+  parseWLChunksGo n [] xs.
+
+Definition initAt (lenA c0_cnt lenB lenW0 : nat) (s : RState) : option RState :=
+  match s with
+  | RState_mk false l_comp [] =>
+    let l := expandFlat l_comp in
+    match splitAt lenA l with
+    | OptPair_some chA l1 =>
+      match stripRepPL0 c0_cnt l1 with
+      | OptList_some l2 =>
+        match splitAt lenB l2 with
+        | OptPair_some chB l3 =>
+          match parseWLChunks lenW0 l3 with
+          | Some (_, chC) =>
+            if isPureBits chA && isPureBits chB && isPureBits chC then
+              Some (RState_mk false (chA ++ [pL 0] ++ packFlat chB ++ [wL false] ++ packRLE1100Go chC 0 []) [])
+            else None
+          | None => None
+          end
+        | OptPair_none => None
+        end
+      | OptList_none => None
+      end
+    | OptPair_none => None
+    end
+  | _ => None
+  end.
+
+Definition repackAt (lenPre lenA k1 k2 m1 m2 dc lenB lenUTop lenUBot : nat) (s : RState) : option RState :=
+  match s with
+  | RState_mk false l_comp [] =>
+    let l := expandFlat l_comp in
+    match splitAt lenPre l with
+    | OptPair_some pre (pL 4 :: post) =>
+      match shiftPL 4 4 post with
+      | OptPair_some pref rest =>
+        let l_sh := pre ++ pref ++ pL 0 :: rest in
+        match splitAt lenA l_sh with
+        | OptPair_some chA l1 =>
+          match stripRepPL0 k1 l1 with
+          | OptList_some (pL 0 :: l3) =>
+            match stripRepPL0 k2 l3 with
+            | OptList_some l4 =>
+              match splitAt lenB l4 with
+              | OptPair_some chB l5 =>
+                match parseWLChunks lenUTop l5 with
+                | Some (_, wL _ :: l7) =>
+                  match parseWLChunks lenUBot l7 with
+                  | Some (_, chC) =>
+                    if Nat.eqb (k1 + k2) (m1 + m2 + dc) &&
+                       isPureBits chA && isPureBits chB && isPureBits chC then
+                      Some (RState_mk false
+                        (chA ++ repPL0Chunks m1 (pL 0 :: repPL0Chunks m2 (packFlat chB ++ [wL false] ++ packRLE1100Go chC 0 []))) [])
+                    else None
+                  | None => None
+                  end
+                | _ => None
+                end
+              | OptPair_none => None
+              end
+            | OptList_none => None
+            end
+          | _ => None
+          end
+        | OptPair_none => None
+        end
+      | OptPair_none => None
+      end
+    | _ => None
+    end
+  | _ => None
+  end.
+
+Inductive Action : Type :=
+  | ActRun : positive -> Action
+  | ActInit : N -> N -> N -> N -> Action
+  | ActRepack : N -> N -> N -> N -> N -> N -> N -> N -> N -> N -> Action.
+
+Fixpoint execActions (acts : list Action) (s : RState) : option RState :=
+  match acts with
+  | [] => Some s
+  | ActRun p :: acts' => execActions acts' (runPos p s)
+  | ActInit la c0_cnt lb lw :: acts' =>
+    match initAt (N.to_nat la) (N.to_nat c0_cnt) (N.to_nat lb) (N.to_nat lw) s with
+    | Some s1 => execActions acts' s1
+    | None => None
+    end
+  | ActRepack lp la k1 k2 m1 m2 dc lb ut ub :: acts' =>
+    match repackAt (N.to_nat lp) (N.to_nat la) (N.to_nat k1) (N.to_nat k2)
+                   (N.to_nat m1) (N.to_nat m2) (N.to_nat dc) (N.to_nat lb)
+                   (N.to_nat ut) (N.to_nat ub) s with
+    | Some s1 => execActions acts' s1
+    | None => None
+    end
+  end.
+
+Fixpoint beqSwSymList (xs ys : list SwSym) : bool :=
+  match xs, ys with
+  | [], [] => true
+  | x :: xs', y :: ys' => beqSwSym x y && beqSwSymList xs' ys'
+  | _, _ => false
+  end.
+
+Lemma beqSwSymList_eq {xs ys : list SwSym} (H : beqSwSymList xs ys = true) : xs = ys.
+Proof.
+  revert ys H. induction xs as [|x xs' IH]; intros [|y ys'] H; try discriminate H; [reflexivity |].
+  cbn [beqSwSymList] in H. apply Bool.andb_true_iff in H as [Hxy Hrest].
+  rewrite (beqSwSym_eq Hxy), (IH ys' Hrest). reflexivity.
+Qed.
+
+Definition beqChunk (x y : Chunk) : bool :=
+  match x, y with
+  | b0, b0 => true
+  | b1, b1 => true
+  | wL a, wL b => Bool.eqb a b
+  | wR a, wR b => Bool.eqb a b
+  | pL a, pL b => Nat.eqb a b
+  | pR a, pR b => Nat.eqb a b
+  | rL0100 a, rL0100 b => Nat.eqb a b
+  | rL0010 a, rL0010 b => Nat.eqb a b
+  | rL1100 a, rL1100 b => Nat.eqb a b
+  | rR0001 a, rR0001 b => Nat.eqb a b
+  | rR1101 a, rR1101 b => Nat.eqb a b
+  | swL ia fa ba, swL ib fb bb => Bool.eqb ia ib && beqBoolList fa fb && beqBoolList ba bb
+  | swR ia fa ba, swR ib fb bb => Bool.eqb ia ib && beqBoolList fa fb && beqBoolList ba bb
+  | bzL fa ba, bzL fb bb => beqSwSymList fa fb && beqSwSymList ba bb
+  | bzR fa ba, bzR fb bb => beqSwSymList fa fb && beqSwSymList ba bb
+  | _, _ => false
+  end.
+
+Fixpoint beqList (xs ys : list Chunk) : bool :=
+  match xs, ys with
+  | [], [] => true
+  | x :: xs', y :: ys' => beqChunk x y && beqList xs' ys'
+  | _, _ => false
+  end.
+
+Definition beqState (s1 s2 : RState) : bool :=
+  match s1, s2 with
+  | RState_mk d1 l1 r1, RState_mk d2 l2 r2 =>
+    Bool.eqb d1 d2 && beqList l1 l2 && beqList r1 r2
+  end.
+
+Definition beqOptState (os : option RState) (s2 : RState) : bool :=
+  match os with
+  | Some s1 => beqState s1 s2
+  | None => false
+  end.
+
+Lemma beqChunk_eq {x y : Chunk} (H : beqChunk x y = true) : x = y.
+Proof.
+  destruct x, y; try discriminate H; try reflexivity; cbn [beqChunk] in H.
+  - apply Bool.eqb_prop in H; subst; reflexivity.
+  - apply Bool.eqb_prop in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Nat.eqb_eq in H; subst; reflexivity.
+  - apply Bool.andb_true_iff in H as [Hif Hb].
+    apply Bool.andb_true_iff in Hif as [Hi Hf].
+    apply Bool.eqb_prop in Hi.
+    rewrite Hi, (beqBoolList_eq _ _ Hf), (beqBoolList_eq _ _ Hb); reflexivity.
+  - apply Bool.andb_true_iff in H as [Hif Hb].
+    apply Bool.andb_true_iff in Hif as [Hi Hf].
+    apply Bool.eqb_prop in Hi.
+    rewrite Hi, (beqBoolList_eq _ _ Hf), (beqBoolList_eq _ _ Hb); reflexivity.
+  - apply Bool.andb_true_iff in H as [Hf Hb].
+    rewrite (beqSwSymList_eq Hf), (beqSwSymList_eq Hb); reflexivity.
+  - apply Bool.andb_true_iff in H as [Hf Hb].
+    rewrite (beqSwSymList_eq Hf), (beqSwSymList_eq Hb); reflexivity.
+Qed.
+
+Lemma beqList_eq {xs ys : list Chunk} (H : beqList xs ys = true) : xs = ys.
+Proof.
+  revert ys H. induction xs as [|x xs' IH]; intros [|y ys'] H; try discriminate H; [reflexivity |].
+  cbn [beqList] in H. apply Bool.andb_true_iff in H as [Hxy Hrest].
+  rewrite (beqChunk_eq Hxy), (IH ys' Hrest). reflexivity.
+Qed.
+
+Lemma beqState_eq {s1 s2 : RState} (H : beqState s1 s2 = true) : s1 = s2.
+Proof.
+  destruct s1 as [d1 l1 r1], s2 as [d2 l2 r2].
+  cbn [beqState] in H.
+  apply Bool.andb_true_iff in H as [Hdl Hr].
+  apply Bool.andb_true_iff in Hdl as [Hd Hl].
+  apply Bool.eqb_prop in Hd.
+  rewrite Hd, (beqList_eq Hl), (beqList_eq Hr). reflexivity.
+Qed.
+
+Lemma beqOptState_eq {os : option RState} {s2 : RState} (H : beqOptState os s2 = true) :
+  os = Some s2.
+Proof.
+  destruct os as [s1|]; [| discriminate H].
+  cbn [beqOptState] in H. rewrite (beqState_eq H). reflexivity.
+Qed.
+
+Lemma hub_first_step_plus (w : list bool) (c : nat) (l : list Chunk) :
+  decode w c (RState_mk false l []) -[ tm ]->+
+    decode w c (RState_mk true (b0 :: b1 :: l) [b0]).
+Proof.
+  cbn [decode decodeList].
+  pose proof (stepB_000 (decodeList w c l blank) blank) as H.
+  repeat rewrite z00 in H. repeat rewrite z00. exact H.
+Qed.
+
+Lemma decodeList_pure (xs : list Chunk) (Hp : isPureBits xs = true)
+  (w1 w2 : list bool) (c1 c2 : nat) (lb : side) :
+  decodeList w1 c1 xs lb = decodeList w2 c2 xs lb.
+Proof.
+  induction xs as [|ch rest IH]; [reflexivity |].
+  destruct ch; try discriminate Hp; cbn [isPureBits] in Hp;
+    cbn [decodeList]; rewrite (IH Hp); reflexivity.
+Qed.
+
+Lemma decodeList_wLChunks (w : list bool) (c : nat) (u : list bool) (lb : side) :
+  decodeList w c (wLChunks u) lb = encWL u lb.
+Proof.
+  induction u as [|[|] ws IH]; [reflexivity | |];
+    cbn [wLChunks decodeList encWL]; rewrite IH; reflexivity.
+Qed.
+
+Lemma decodeList_repPL0Chunks (w : list bool) (c k : nat) (tl : list Chunk) (lb : side) :
+  decodeList w c (repPL0Chunks k tl) lb = repPL 0 k (decodeList w c tl lb).
+Proof.
+  induction k as [|k IH]; [reflexivity |].
+  cbn [repPL0Chunks repPL]. rewrite prePL0_spec, IH. reflexivity.
+Qed.
+
+Lemma decode_false_nil_eq (w1 w2 : list bool) (c1 c2 : nat) (l1 l2 : list Chunk) :
+  decodeList w1 c1 l1 blank = decodeList w2 c2 l2 blank ->
+  decode w1 c1 (RState_mk false l1 []) = decode w2 c2 (RState_mk false l2 []).
+Proof.
+  intros H. unfold decode. rewrite H. reflexivity.
+Qed.
+
+Lemma repack_wp_gen (chA chB chC : list Chunk)
+  (HA : isPureBits chA = true) (HB : isPureBits chB = true) (HC : isPureBits chC = true)
+  (k1 k2 m1 m2 dc : nat) (Hsum : k1 + k2 = m1 + m2 + dc)
+  (uTop uBot : list bool) (f : bool) (w : list bool) (c : nat) :
+  decode w c (RState_mk false
+    (chA ++ repPL0Chunks k1 (pL 0 :: repPL0Chunks k2 (chB ++ wLChunks uTop ++ [wL f] ++ wLChunks uBot ++ chC))) []) =
+  decode (uTop ++ (if f then flipW w else w) ++ uBot) (c + dc)
+    (RState_mk false
+      (chA ++ repPL0Chunks m1 (pL 0 :: repPL0Chunks m2 (packFlat chB ++ [wL false] ++ packRLE1100Go chC 0 []))) []).
+Proof.
+  set (w' := uTop ++ (if f then flipW w else w) ++ uBot).
+  apply decode_false_nil_eq.
+  rewrite !decodeList_append, !decodeList_repPL0Chunks; cbn [decodeList].
+  rewrite !decodeList_repPL0Chunks, !decodeList_append, !decodeList_wLChunks; cbn [decodeList].
+  rewrite decodeList_packFlat, decodeList_packRLE1100.
+  subst w'. rewrite !encWL_append.
+  rewrite <- !repPL_add.
+  replace (k1 + c + k2) with (m1 + (c + dc) + m2) by lia.
+  set (w' := uTop ++ (if f then flipW w else w) ++ uBot).
+  rewrite (decodeList_pure chA HA w w' c (c + dc)).
+  rewrite (decodeList_pure chB HB w w' c (c + dc)).
+  rewrite (decodeList_pure chC HC w w' c (c + dc)).
+  reflexivity.
+Qed.
+
+Lemma init_wp (chA chB chC : list Chunk)
+  (HA : isPureBits chA = true) (HB : isPureBits chB = true) (HC : isPureBits chC = true)
+  (c0_cnt : nat) (w0 : list bool) (w : list bool) (c : nat) :
+  decode w c (RState_mk false (chA ++ repPL0Chunks c0_cnt (chB ++ wLChunks w0 ++ chC)) []) =
+  decode w0 c0_cnt (RState_mk false (chA ++ [pL 0] ++ packFlat chB ++ [wL false] ++ packRLE1100Go chC 0 []) []).
+Proof.
+  apply decode_false_nil_eq.
+  rewrite !decodeList_append, !decodeList_repPL0Chunks, !decodeList_append, !decodeList_wLChunks; cbn [decodeList].
+  rewrite decodeList_packFlat, decodeList_packRLE1100.
+  rewrite (decodeList_pure chA HA w w0 c c0_cnt).
+  rewrite (decodeList_pure chB HB w w0 c c0_cnt).
+  rewrite (decodeList_pure chC HC w w0 c c0_cnt).
+  reflexivity.
+Qed.
+
+Lemma shiftPL_eq (w : list bool) (c k r : nat) (xs pref rest : list Chunk) (lb : side)
+  (H : shiftPL k r xs = OptPair_some pref rest) :
+  repPL r c (decodeList w c xs lb) =
+    decodeList w c pref (repPL (prev66N k r) c (decodeList w c rest lb)).
+Proof.
+  revert r xs pref rest H.
+  induction k as [|k IH]; intros r xs pref rest H.
+  - cbn [shiftPL prev66N] in H |- *. inversion H; subst. reflexivity.
+  - destruct xs as [|b xs']; [discriminate H |].
+    cbn [shiftPL] in H.
+    destruct (Nat.leb r 65) eqn:Hle; [| discriminate H].
+    apply Nat.leb_le in Hle. assert (Hr : r < 66) by lia.
+    pose proof (repPL_comm r Hr c (decodeList w c xs' lb)) as Hc.
+    destruct (plTopIs1 r), b; cbn [matchBit] in H; try discriminate H;
+      destruct (shiftPL k (prev66 r) xs') as [|pref0 rest0] eqn:Hsh; try discriminate H;
+      inversion H; subst; cbn [decodeList prev66N];
+      cbn [finOfBool] in Hc;
+      (etransitivity; [symmetry; exact Hc | f_equal; exact (IH (prev66 r) xs' _ _ Hsh)]).
+Qed.
+
+Lemma decode_shiftPL_mid (w : list bool) (c k r : nat)
+  (pre post pref rest : list Chunk)
+  (H : shiftPL k r post = OptPair_some pref rest) :
+  decode w c (RState_mk false (pre ++ pL r :: post) []) =
+  decode w c (RState_mk false (pre ++ pref ++ pL (prev66N k r) :: rest) []).
+Proof.
+  apply decode_false_nil_eq.
+  rewrite !decodeList_append; cbn [decodeList].
+  rewrite (shiftPL_eq w c k r post pref rest blank H).
+  reflexivity.
+Qed.
+
+Lemma splitAtGo_spec (n : nat) (rev_pre xs pre post : list Chunk) :
+  splitAtGo n rev_pre xs = OptPair_some pre post -> rev rev_pre ++ xs = pre ++ post.
+Proof.
+  revert rev_pre xs pre post.
+  induction n as [|n IH]; intros rev_pre xs pre post H.
+  - cbn [splitAtGo] in H. rewrite <- rev_alt in H. inversion H; subst. reflexivity.
+  - destruct xs as [|x xs']; [discriminate H |].
+    cbn [splitAtGo] in H. apply IH in H.
+    cbn [rev] in H. rewrite <- app_assoc in H; cbn [app] in H. exact H.
+Qed.
+
+Lemma splitAt_spec (n : nat) (xs pre post : list Chunk) :
+  splitAt n xs = OptPair_some pre post -> xs = pre ++ post.
+Proof.
+  intros H. exact (splitAtGo_spec n [] xs pre post H).
+Qed.
+
+Lemma stripRepPL0_spec (k : nat) (xs rest : list Chunk) :
+  stripRepPL0 k xs = OptList_some rest -> xs = repPL0Chunks k rest.
+Proof.
+  revert xs. induction k as [|k IH]; intros xs H.
+  - cbn [stripRepPL0] in H. inversion H; subst. reflexivity.
+  - cbn [stripRepPL0] in H.
+    destruct (stripBits pL0_66 xs) as [|xs1] eqn:Hst; [discriminate H |].
+    cbn [repPL0Chunks]. unfold prePL0.
+    rewrite (stripBits_eq_preBits pL0_66 xs xs1 Hst), (IH xs1 H). reflexivity.
+Qed.
+
+Lemma parseWLChunksGo_spec (n : nat) (rev_u : list bool) (xs rest : list Chunk) (u : list bool) :
+  parseWLChunksGo n rev_u xs = Some (u, rest) -> wLChunks (rev rev_u) ++ xs = wLChunks u ++ rest.
+Proof.
+  revert rev_u xs u.
+  induction n as [|n IH]; intros rev_u xs u H.
+  - cbn [parseWLChunksGo] in H. rewrite <- rev_alt in H. inversion H; subst. reflexivity.
+  - destruct xs as [|ch1 xs1]; try discriminate H.
+    destruct ch1; try discriminate H.
+    + (* b0 *)
+      destruct xs1 as [|ch2 xs2]; try discriminate H; destruct ch2; try discriminate H.
+      destruct xs2 as [|ch3 xs3]; try discriminate H; destruct ch3; try discriminate H.
+      destruct xs3 as [|ch4 xs4]; try discriminate H; destruct ch4; try discriminate H.
+      cbn [parseWLChunksGo] in H. apply IH in H.
+      cbn [rev] in H. rewrite wLChunks_append, <- app_assoc in H; cbn [wLChunks app] in H. exact H.
+    + (* b1 *)
+      destruct xs1 as [|ch2 xs2]; try discriminate H; destruct ch2; try discriminate H.
+      destruct xs2 as [|ch3 xs3]; try discriminate H; destruct ch3; try discriminate H.
+      destruct xs3 as [|ch4 xs4]; try discriminate H; destruct ch4; try discriminate H.
+      cbn [parseWLChunksGo] in H. apply IH in H.
+      cbn [rev] in H. rewrite wLChunks_append, <- app_assoc in H; cbn [wLChunks app] in H. exact H.
+Qed.
+
+Lemma parseWLChunks_spec (n : nat) (xs rest : list Chunk) (u : list bool) :
+  parseWLChunks n xs = Some (u, rest) -> xs = wLChunks u ++ rest.
+Proof.
+  intros H. exact (parseWLChunksGo_spec n [] xs rest u H).
+Qed.
+
+Lemma initAt_sound (lenA c0_cnt lenB lenW0 : nat) (s s' : RState)
+  (H : initAt lenA c0_cnt lenB lenW0 s = Some s') (w : list bool) (c : nat) :
+  exists (w' : list bool) (c' : nat), decode w c s = decode w' c' s'.
+Proof.
+  destruct s as [[|] l_comp [|? ?]]; try discriminate H.
+  unfold initAt in H.
+  set (l := expandFlat l_comp) in H.
+  destruct (splitAt lenA l) as [|chA l1] eqn:Hs1; [discriminate H |].
+  destruct (stripRepPL0 c0_cnt l1) as [|l2] eqn:Hst; [discriminate H |].
+  destruct (splitAt lenB l2) as [|chB l3] eqn:Hs2; [discriminate H |].
+  destruct (parseWLChunks lenW0 l3) as [[w0 chC]|] eqn:Hp; [| discriminate H].
+  destruct (isPureBits chA && isPureBits chB && isPureBits chC) eqn:Hpure; [| discriminate H].
+  inversion H; subst s'.
+  apply Bool.andb_true_iff in Hpure as [HpureAB HC].
+  apply Bool.andb_true_iff in HpureAB as [HA HB].
+  rewrite decode_expandFlat; fold l.
+  rewrite (splitAt_spec _ _ _ _ Hs1), (stripRepPL0_spec _ _ _ Hst),
+          (splitAt_spec _ _ _ _ Hs2), (parseWLChunks_spec _ _ _ _ Hp).
+  exists w0, c0_cnt.
+  exact (init_wp chA chB chC HA HB HC c0_cnt w0 w c).
+Qed.
+
+Lemma repackAt_sound (lenPre lenA k1 k2 m1 m2 dc lenB lenUTop lenUBot : nat) (s s' : RState)
+  (H : repackAt lenPre lenA k1 k2 m1 m2 dc lenB lenUTop lenUBot s = Some s')
+  (w : list bool) (c : nat) :
+  exists (w' : list bool) (c' : nat), decode w c s = decode w' c' s'.
+Proof.
+  destruct s as [[|] l_comp [|? ?]]; try discriminate H.
+  unfold repackAt in H.
+  set (l := expandFlat l_comp) in H.
+  destruct (splitAt lenPre l) as [|pre post0] eqn:Hsp0; [discriminate H |].
+  destruct post0 as [|ch0 post]; [discriminate H |].
+  destruct ch0 as [ | | | | r0 | | | | | | | | | | ]; try discriminate H.
+  do 4 (destruct r0 as [|r0]; [discriminate H | ]).
+  destruct r0 as [|r0]; [| discriminate H].
+  destruct (shiftPL 4 4 post) as [|pref rest] eqn:Hsh; [discriminate H |].
+  set (l_sh := pre ++ pref ++ pL 0 :: rest) in H.
+  destruct (splitAt lenA l_sh) as [|chA l1] eqn:HspA; [discriminate H |].
+  destruct (stripRepPL0 k1 l1) as [|l2] eqn:Hst1; [discriminate H |].
+  destruct l2 as [|ch2 l3]; [discriminate H |].
+  destruct ch2 as [ | | | | r2 | | | | | | | | | | ]; try discriminate H.
+  destruct r2 as [|r2]; [| discriminate H].
+  destruct (stripRepPL0 k2 l3) as [|l4] eqn:Hst2; [discriminate H |].
+  destruct (splitAt lenB l4) as [|chB l5] eqn:HspB; [discriminate H |].
+  destruct (parseWLChunks lenUTop l5) as [[uTop l6]|] eqn:HpTop; [| discriminate H].
+  destruct l6 as [|ch6 l7]; [discriminate H |].
+  destruct ch6 as [ | | f | | | | | | | | | | | | ]; try discriminate H.
+  destruct (parseWLChunks lenUBot l7) as [[uBot chC]|] eqn:HpBot; [| discriminate H].
+  destruct (Nat.eqb (k1 + k2) (m1 + m2 + dc) && isPureBits chA && isPureBits chB && isPureBits chC)
+    eqn:Hcond; [| discriminate H].
+  inversion H; subst s'.
+  apply Bool.andb_true_iff in Hcond as [Hcond1 HC].
+  apply Bool.andb_true_iff in Hcond1 as [Hcond2 HB].
+  apply Bool.andb_true_iff in Hcond2 as [Hsum HA].
+  apply Nat.eqb_eq in Hsum.
+  rewrite decode_expandFlat; fold l.
+  rewrite (splitAt_spec _ _ _ _ Hsp0).
+  rewrite (decode_shiftPL_mid w c 4 4 pre post pref rest Hsh).
+  change (prev66N 4 4) with 0.
+  fold l_sh.
+  assert (Hlsh : l_sh = chA ++ repPL0Chunks k1 (pL 0 :: repPL0Chunks k2 (chB ++ wLChunks uTop ++ [wL f] ++ wLChunks uBot ++ chC))).
+  { rewrite (splitAt_spec _ _ _ _ HspA), (stripRepPL0_spec _ _ _ Hst1),
+            (stripRepPL0_spec _ _ _ Hst2), (splitAt_spec _ _ _ _ HspB),
+            (parseWLChunks_spec _ _ _ _ HpTop), (parseWLChunks_spec _ _ _ _ HpBot).
+    cbn [app]. reflexivity. }
+  rewrite Hlsh.
+  exists (uTop ++ (if f then flipW w else w) ++ uBot), (c + dc).
+  exact (repack_wp_gen chA chB chC HA HB HC k1 k2 m1 m2 dc Hsum uTop uBot f w c).
+Qed.
+
+Lemma execActions_sound (acts : list Action) (s s' : RState) :
+  execActions acts s = Some s' ->
+  forall (w : list bool) (c : nat),
+    exists (w' : list bool) (c' : nat),
+      decode w c s -[ tm ]->* decode w' c' s'.
+Proof.
+  revert s s'. induction acts as [|act acts' IH]; intros s s' H w c.
+  - cbn [execActions] in H. inversion H; subst. exists w, c. apply evstep_refl.
+  - destruct act as [p | la c0_cnt lb lw | lp la k1 k2 m1 m2 dc lb ut ub]; cbn [execActions] in H.
+    + destruct (IH (runPos p s) s' H w c) as [w' [c' Hrest]].
+      exists w', c'. eapply evstep_trans; [apply runPos_sound | exact Hrest].
+    + destruct (initAt (N.to_nat la) (N.to_nat c0_cnt) (N.to_nat lb) (N.to_nat lw) s) as [s1|] eqn:Hi;
+        [| discriminate H].
+      destruct (initAt_sound _ _ _ _ s s1 Hi w c) as [w1 [c1 Heq]].
+      destruct (IH s1 s' H w1 c1) as [w' [c' Hrest]].
+      exists w', c'. rewrite Heq. exact Hrest.
+    + destruct (repackAt (N.to_nat lp) (N.to_nat la) (N.to_nat k1) (N.to_nat k2)
+                         (N.to_nat m1) (N.to_nat m2) (N.to_nat dc) (N.to_nat lb)
+                         (N.to_nat ut) (N.to_nat ub) s) as [s1|] eqn:Hr;
+        [| discriminate H].
+      destruct (repackAt_sound _ _ _ _ _ _ _ _ _ _ s s1 Hr w c) as [w1 [c1 Heq]].
+      destruct (IH s1 s' H w1 c1) as [w' [c' Hrest]].
+      exists w', c'. rewrite Heq. exact Hrest.
+Qed.
+
+Definition hub_bz_0_0 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_1 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_2 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_0_3 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_4 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_5 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: tl.
+Definition hub_bz_0_6 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: tl.
+Definition hub_bz_0_7 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_8 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_9 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_0_10 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_11 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_12 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: tl.
+Definition hub_bz_0_13 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: tl.
+Definition hub_bz_0_14 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_15 (tl : list SwSym) : list SwSym :=
+  SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_d ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_16 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_0_17 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_18 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_19 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: tl.
+Definition hub_bz_0_20 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: tl.
+Definition hub_bz_0_21 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_22 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_23 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_0_24 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_25 (tl : list SwSym) : list SwSym :=
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_26 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: tl.
+Definition hub_bz_0_27 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: tl.
+Definition hub_bz_0_28 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_29 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_30 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_0_31 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_32 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_33 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: tl.
+Definition hub_bz_0_34 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: tl.
+Definition hub_bz_0_35 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_36 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_37 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_0_38 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_39 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_40 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: tl.
+Definition hub_bz_0_41 (tl : list SwSym) : list SwSym :=
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: tl.
+Definition hub_bz_0_42 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: tl.
+Definition hub_bz_0_43 (tl : list SwSym) : list SwSym :=
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_d :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 ::
+  SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 ::
+  SwSym_w0 :: SwSym_w1 :: SwSym_w0 :: SwSym_w0 :: SwSym_w1 :: SwSym_w1 :: SwSym_w0 :: tl.
+Definition hub_bz_list_0 : list SwSym :=
+  hub_bz_0_0 (hub_bz_0_1 (hub_bz_0_2 (hub_bz_0_3 (hub_bz_0_4 (hub_bz_0_5 (hub_bz_0_6 (hub_bz_0_7 (hub_bz_0_8 (hub_bz_0_9 (hub_bz_0_10 (hub_bz_0_11 (hub_bz_0_12 (hub_bz_0_13 (hub_bz_0_14 (hub_bz_0_15 (hub_bz_0_16 (hub_bz_0_17 (hub_bz_0_18 (hub_bz_0_19 (hub_bz_0_20 (hub_bz_0_21 (hub_bz_0_22 (hub_bz_0_23 (hub_bz_0_24 (hub_bz_0_25 (hub_bz_0_26 (hub_bz_0_27 (hub_bz_0_28 (hub_bz_0_29 (hub_bz_0_30 (hub_bz_0_31 (hub_bz_0_32 (hub_bz_0_33 (hub_bz_0_34 (hub_bz_0_35 (hub_bz_0_36 (hub_bz_0_37 (hub_bz_0_38 (hub_bz_0_39 (hub_bz_0_40 (hub_bz_0_41 (hub_bz_0_42 (hub_bz_0_43 ([])))))))))))))))))))))))))))))))))))))))))))).
+Definition hub_L_0 (tl : list Chunk) : list Chunk :=
+  b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 ::
+  b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 ::
+  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
+  b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: tl.
+Definition hub_L_1 (tl : list Chunk) : list Chunk :=
+  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: pL 0 :: bzL hub_bz_list_0 [] :: wL false ::
+  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
+  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
+  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: tl.
+Definition hub_L_2 (tl : list Chunk) : list Chunk :=
+  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: tl.
+Definition hub_L_3 (tl : list Chunk) : list Chunk :=
+  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
+  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
+  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
+  b0 :: b1 :: b0 :: b0 :: b0 :: rL1100 0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 ::
+  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: tl.
+Definition hub_L_4 (tl : list Chunk) : list Chunk :=
+  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 ::
+  b0 :: rL1100 15 :: tl.
+Definition hub_start_L : list Chunk := hub_L_0 (hub_L_1 (hub_L_2 (hub_L_3 (hub_L_4 ([]))))).
+Definition hub_start : RState := RState_mk false hub_start_L [].
+Definition p1_start : RState := RState_mk false [b1] [].
+
+Lemma c0_to_p1_start : c0 -[ tm ]->* decode [] 0 p1_start.
+Proof.
+  unfold c0, p1_start, decode; cbn [decodeList].
+  execute.
+Qed.
+
+Definition stageAB_acts : list Action :=
+  [ ActRun 1482142%positive; ActInit 137 46 82182 2663
+  ; ActRun 89213%positive; ActRepack 133 137 0 6 0 0 6 79282 851 810
+  ; ActRun 87852%positive; ActRepack 133 137 0 6 0 0 6 75982 951 810
+  ; ActRun 87351%positive; ActRepack 133 137 0 6 0 0 6 72694 948 810
+  ; ActRun 87480%positive; ActRepack 133 137 0 6 0 0 6 68130 1267 810
+  ; ActRun 89091%positive; ActRepack 133 137 0 6 0 0 6 63258 1344 810
+  ; ActRun 86362%positive; ActRepack 133 137 0 6 0 0 6 60590 793 810
+  ; ActRun 88571%positive; ActRepack 133 137 0 6 0 0 6 60178 229 810
+  ; ActRun 87332%positive; ActRepack 133 137 0 6 0 0 6 58218 616 810
+  ; ActRun 86109%positive; ActRepack 133 137 0 6 0 0 6 55150 893 810
+  ; ActRun 87414%positive; ActRepack 133 137 0 6 0 0 6 52818 709 810
+  ; ActRun 88803%positive; ActRepack 133 137 0 6 0 0 6 49414 977 810
+  ; ActRun 95182%positive; ActRepack 133 137 0 6 0 0 6 47462 614 810
+  ; ActRun 87675%positive; ActRepack 133 137 0 6 0 0 6 43418 1137 810
+  ; ActRun 86550%positive; ActRepack 133 137 0 6 0 0 6 42258 416 810
+  ; ActRun 89281%positive; ActRepack 133 137 0 6 0 0 6 40194 642 810
+  ; ActRun 91496%positive; ActRepack 133 137 0 6 0 0 6 36578 1030 810
+  ; ActRun 87385%positive; ActRepack 133 137 0 6 0 0 6 35246 459 810
+  ; ActRun 87038%positive; ActRepack 133 137 0 6 0 0 6 35174 144 810
+  ; ActRun 88418%positive; ActRepack 133 137 0 6 0 0 6 33410 567 810
+  ; ActRun 88360%positive; ActRepack 133 137 0 6 0 0 6 29246 1167 810
+  ; ActRun 86566%positive; ActRepack 133 137 0 6 0 0 6 27018 683 810
+  ; ActRun 88373%positive; ActRepack 133 137 0 6 0 0 6 24766 689 810
+  ; ActRun 89155%positive; ActRepack 133 137 0 6 0 0 6 23198 518 810
+  ; ActRun 86829%positive; ActRepack 133 137 0 6 0 0 6 22710 248 810
+  ; ActRun 87181%positive; ActRepack 133 137 0 6 0 0 6 21738 369 810
+  ; ActRun 87721%positive; ActRepack 133 137 0 6 0 0 6 18362 970 810
+  ; ActRun 88000%positive; ActRepack 133 137 0 6 0 0 6 17902 241 810 ]%N.
+
+Definition stageC_acts : list Action :=
+  [ ActRun 29113%positive; ActRepack 133 137 0 2 0 0 2 17902 42 270 ]%N.
+
+Lemma cert_stageC :
+  beqOptState (execActions stageC_acts (RState_mk true (b0 :: b1 :: hub_start_L) [b0])) hub_start = true.
+Proof. vm_cast_no_check (eq_refl true). Qed.
+
+Lemma attractor_step (wc : list bool * nat) :
+  exists wc' : list bool * nat,
+    decode (fst wc) (snd wc) hub_start -[ tm ]->+ decode (fst wc') (snd wc') hub_start.
+Proof.
+  destruct wc as [w c]; cbn [fst snd].
+  pose proof (hub_first_step_plus w c hub_start_L) as H1.
+  pose proof (beqOptState_eq cert_stageC) as Hrun.
+  destruct (execActions_sound stageC_acts (RState_mk true (b0 :: b1 :: hub_start_L) [b0]) hub_start Hrun w c)
+    as [w' [c' H2]].
+  exists (w', c'); cbn [fst snd].
+  exact (progress_evstep_trans _ _ _ _ H1 H2).
+Qed.
+
+Lemma cert_stageAB : beqOptState (execActions stageAB_acts p1_start) hub_start = true.
+Proof. vm_cast_no_check (eq_refl true). Qed.
+
+Lemma reach_hub_start :
+  exists (w0 : list bool) (c0_idx : nat), c0 -[ tm ]->* decode w0 c0_idx hub_start.
+Proof.
+  pose proof (beqOptState_eq cert_stageAB) as Hrun.
+  destruct (execActions_sound stageAB_acts p1_start hub_start Hrun [] 0) as [w0 [c0_idx Hreach]].
+  exists w0, c0_idx.
+  eapply evstep_trans; [exact c0_to_p1_start | exact Hreach].
+Qed.
+
+
+End M44.
+
+Theorem nonhalt : ~ halts tm c0.
+Proof.
+  destruct M44.reach_hub_start as [w0 [c0_idx Hreach]].
+  eapply multistep_nonhalt; [exact Hreach |].
+  exact (progress_nonhalt_simple tm (list bool * nat)
+           (fun wc => M44.decode (fst wc) (snd wc) M44.hub_start)
+           (w0, c0_idx)
+           M44.attractor_step).
+Qed.
