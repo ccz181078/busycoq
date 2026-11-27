@@ -51,15 +51,11 @@ Module BBinf <: Ctx.
 
   Definition sym_hash(a:Sym) := hash a.
 
-  Definition all_qs : list Q := [].
-
-  Lemma all_qs_spec : forall a, In a all_qs.
-  Admitted.
-
-  Definition all_syms : list Sym := [].
-
-  Lemma all_syms_spec : forall a, In a all_syms.
-  Admitted.
+  (* [Q] and [Sym] are [N]: infinite, so not enumerable. This context
+     implements the base [Ctx] only. Upstream set [all_qs := []] and
+     [Admitted] [all_qs_spec : forall a, In a []], which over an inhabited [Q]
+     is a proof of [False] -- in the [core] hint database, and underneath the
+     extracted decider via [Inductive_inf.v]. *)
 End BBinf.
 
 
