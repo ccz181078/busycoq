@@ -1,4 +1,4 @@
-Require Import List Bool Lia String.
+Require Import List Bool String.
 From BusyCoq Require Import Individual62.
 Open Scope string.
 Import ListNotations.
@@ -23,9 +23,9 @@ Import ListNotations.
     tm' with W8 placed after q.  One model step [f] is one step of both
     machines, or the far-end crossing ([far0], [far1]).  The invariant [P] says
     that the abstraction of the model configuration (the last four cells, and
-    the state and head position when the head is among them) is one of the 28
-    entries of [S0].  None of them moves right from q except in state B on a 1,
-    and [S0] is closed under the abstract step [anext] ([check_S0]).
+    the state and head position when the head is among them) belongs to the
+    computed set [S0].  The checker [check_S0] establishes closure and rules
+    out any move right from q except in state B on a 1.
 
     [eqv] is the whole result: tm halts from blank tape iff tm' does.  It does
     not decide either machine. *)
@@ -62,14 +62,15 @@ Inductive Cfg :=
 | Inn (q:Q) (X:side) (wl:list Sym) (a:Sym) (u:list Sym)
 | Out (q:Q) (l:side) (a:Sym) (v w:list Sym).
 
+Definition orient (b:bool) (q:Q) (l:side) (a:Sym) (r:side) : Q * tape :=
+  if b then (g q, (r, a, l)) else (q, (l, a, r)).
+
+Definition tail (b:bool) := if b then W8 *> 0inf else 0inf.
+
 Definition to_config (b:bool) (c:Cfg) : Q * tape :=
   match c with
-  | Inn q X wl a u =>
-    if b then (g q, (u *> W8 *> 0inf, a, wl *> X))
-         else (q, (wl *> X, a, u *> 0inf))
-  | Out q l a v w =>
-    if b then (g q, ((v ++ w) *> W8 *> 0inf, a, l))
-         else (q, (l, a, (v ++ w) *> 0inf))
+  | Inn q X wl a u => orient b q (wl *> X) a (u *> tail b)
+  | Out q l a v w => orient b q l a ((v ++ w) *> tail b)
   end.
 
 (** One step of the model. *)
@@ -129,36 +130,50 @@ Proof.
   decide equality; solve [apply Hl | apply eqb_sym | apply eqb_q].
 Defined.
 
-(** The states a move to the right can lead to. *)
-Definition rTargets := [B;D;E;F].
+(** [f] reads only the symbol at the head of [X] while in the window.
+    Outside, the only observable event is crossing back into the window;
+    this depends on the state, read symbol, and whether [v] is empty.
+    Use a representative for each of these cases and run [f] itself. *)
+Definition symbols : list Sym := [0;1].
+Definition states : list Q := [A;B;C;D;E;F].
 
-Definition anext (s:Ab) : list Ab :=
+Definition representatives (s:Ab) : list Cfg :=
   match s with
-  | inn q wl a u =>
-    match tm (q, a) with
-    | None => []
-    | Some (a', L, q') =>
-      match wl with
-      | x :: wl' => [inn q' wl' x (a' :: u)]
-      | [] => [out (a' :: u)]
-      end
-    | Some (a', R, q') =>
-      match u with
-      | b :: u' => [inn q' (a' :: wl) b u']
-      | [] =>
-        match wl with
-        | x :: _ => [inn D [] x [1;0;1]]
-        | [] => [inn D [] 0 [1;0;1]; inn D [] 1 [1;0;1]]
-        end
-      end
-    end
+  | inn q wl a u => List.map (fun x => Inn q (const x) wl a u) symbols
   | out w =>
-    out w ::
-    match w with
-    | b :: w' => List.map (fun q' => inn q' [] b w') rTargets
-    | [] => []
-    end
+    flat_map (fun q => flat_map (fun a => [Out q 0inf a [] w; Out q 0inf a [0] w])
+                                symbols) states
   end.
+
+Definition abstract_step c := option_map abs (f c).
+Definition anext s :=
+  flat_map (fun c => match abstract_step c with
+                    | Some t => [t] | None => [] end) (representatives s).
+
+Lemma representatives_cover c :
+  exists rep, In rep (representatives (abs c)) /\ abstract_step rep = abstract_step c.
+Proof.
+  destruct c as [q X wl a u | q l a [|x v] w].
+  - exists (Inn q (const (Streams.hd X)) wl a u).
+    split; [simpl; destruct (Streams.hd X); auto |].
+    unfold abstract_step; cbn [f].
+    destruct (tm (q, a)) as [[[a' []] q']|]; [destruct wl|destruct u, wl|];
+      reflexivity.
+  - exists (Out q 0inf a [] w).
+    split.
+    + cbn [abs representatives]. apply in_flat_map. exists q.
+      split; [destruct q; simpl; tauto |].
+      apply in_flat_map. exists a. destruct a; simpl; auto.
+    + unfold abstract_step; cbn [f].
+      destruct (tm (q, a)) as [[[a' []] q']|]; [|destruct w|]; reflexivity.
+  - exists (Out q 0inf a [0] w).
+    split.
+    + cbn [abs representatives]. apply in_flat_map. exists q.
+      split; [destruct q; simpl; tauto |].
+      apply in_flat_map. exists a. destruct a; simpl; auto.
+    + unfold abstract_step; cbn [f].
+      destruct (tm (q, a)) as [[[a' []] q']|]; reflexivity.
+Qed.
 
 (** No move right from q except in state B on a 1; the window is never empty. *)
 Definition okb (s:Ab) : bool :=
@@ -176,39 +191,18 @@ Definition okb (s:Ab) : bool :=
 
 Definition mem s xs := if in_dec Ab_eq_dec s xs then true else false.
 
-(** The 28 abstract configurations reached from [cfg0]: 26 with the head in
-    the window, 2 with the head further left.  [check_S0] verifies that the
-    list is closed under [anext] and passes [okb]; it does not have to be
-    complete. *)
-Definition S0 : list Ab := [
-  inn A [] 0 [1;0;1];
-  inn B [] 0 [1;0;1];
-  inn B [] 1 [1;0;1];
-  inn B [1] 0 [0;1];
-  inn B [1] 1 [0;1];
-  inn B [1;0;0] 0 [];
-  inn B [1;0;1] 1 [];
-  inn C [] 1 [1;0;1];
-  inn C [0] 0 [0;1];
-  inn C [0;0] 1 [1];
-  inn D [] 0 [1;0;1];
-  inn D [] 1 [1;0;1];
-  inn D [0] 0 [0;1];
-  inn D [0] 1 [0;1];
-  inn D [0;0;0] 1 [];
-  inn E [] 0 [0;0;1];
-  inn E [] 0 [1;0;1];
-  inn E [] 1 [1;0;1];
-  inn E [0] 1 [0;1];
-  inn E [0;0] 0 [1];
-  inn F [] 0 [0;0;1];
-  inn F [] 0 [1;0;1];
-  inn F [] 1 [1;0;1];
-  inn F [0] 1 [0;1];
-  inn F [0;0] 0 [0];
-  inn F [0;1] 0 [1];
-  out [0;1;0;1];
-  out [1;1;0;1]].
+(** Discover a candidate set by bounded worklist search.  The fuel is only
+    a computation budget: closure and initial membership are checked below,
+    independently of how the candidate was generated. *)
+Fixpoint discover (fuel:nat) (todo seen:list Ab) : list Ab :=
+  match fuel, todo with
+  | S n, s :: rest =>
+    if mem s seen then discover n rest seen
+    else discover n (anext s ++ rest) (s :: seen)
+  | _, _ => seen
+  end.
+
+Definition S0 := Eval vm_compute in discover 128 [abs cfg0] [].
 
 Definition check (xs:list Ab) :=
   forallb (fun s => andb (okb s) (forallb (fun t => mem t xs) (anext s))) xs.
@@ -233,19 +227,9 @@ Definition P c := In (abs c) S0.
 
 Lemma anext_spec c c': f c = Some c' -> In (abs c') (anext (abs c)).
 Proof.
-  destruct c as [q X wl a u|q l a v w]; cbn [f abs anext];
-  destruct (tm (q, a)) as [[[a' []] q']|] eqn:Ht; try discriminate.
-  - destruct wl; intros H; inversion H; subst; cbn; auto.
-  - destruct u as [|b u'].
-    + destruct wl; intros H; inversion H; subst; cbn [abs]; [| left; reflexivity].
-      destruct (Streams.hd X); cbn; auto.
-    + intros H; inversion H; subst; cbn; auto.
-  - intros H; inversion H; subst; cbn; auto.
-  - destruct v as [|b v'].
-    + destruct w as [|b w']; intros H; inversion H; subst.
-      right. cbn [abs]. apply (List.in_map (fun t => inn t [] b w')).
-      destruct q, a; cbn in Ht; inversion Ht; subst; cbn; tauto.
-    + intros H; inversion H; subst; cbn; auto.
+  intros H. destruct (representatives_cover c) as [rep [Hin Hrep]].
+  unfold anext. apply in_flat_map. exists rep. split; [exact Hin|].
+  rewrite Hrep. unfold abstract_step. rewrite H. simpl; auto.
 Qed.
 
 Lemma P_step c c': P c -> f c = Some c' -> P c'.
@@ -267,18 +251,24 @@ Lemma far1 x Y:
   E;; W8 *> 0inf {{1}} x >> Y -[tm']->+ B;; [1;0;1] *> W8 *> 0inf {{x}} Y.
 Proof. destruct x; unfold W8; execute. Qed.
 
-Lemma halted_halts' tm0 c: halted tm0 c -> halts tm0 c.
-Proof. intros H. exists 0%nat. exists c. split; [constructor | exact H]. Qed.
+Lemma orient_halt b q l a r :
+  tm (q, a) = None -> halts (machine b) (orient b q l a r).
+Proof.
+  intros H. apply halted_halts. destruct b; [apply tm'_none|]; exact H.
+Qed.
 
-Lemma step_left' (tm0:TM) q q' l s s' r c':
-  tm0 (q, s) = Some (s', L, q') -> c' = (q', move_left (l, s', r)) ->
-  (q, (l, s, r)) -[ tm0 ]->+ c'.
-Proof. intros H ->. apply progress_base, step_left, H. Qed.
-
-Lemma step_right' (tm0:TM) q q' l s s' r c':
-  tm0 (q, s) = Some (s', R, q') -> c' = (q', move_right (l, s', r)) ->
-  (q, (l, s, r)) -[ tm0 ]->+ c'.
-Proof. intros H ->. apply progress_base, step_right, H. Qed.
+Lemma orient_step b q l a r a' d q' c' :
+  tm (q, a) = Some (a', d, q') ->
+  c' = (match d with
+        | L => orient b q' (Streams.tl l) (Streams.hd l) (a' >> r)
+        | R => orient b q' (a' >> l) (Streams.hd r) (Streams.tl r)
+        end) ->
+  orient b q l a r -[machine b]->+ c'.
+Proof.
+  intros H ->. destruct b, d; apply progress_base;
+    first [apply step_left | apply step_right];
+    first [exact H | exact (tm'_some _ _ _ _ _ H)].
+Qed.
 
 Lemma f_spec b c: P c ->
   match f c with
@@ -294,52 +284,29 @@ Proof.
     destruct (tm (q, a)) as [[[a' []] q']|] eqn:Ht.
     all: try (destruct wl; discriminate E).
     all: try (destruct u; [destruct wl|]; discriminate E).
-    all: try (apply halted_halts'; destruct b; cbn [halted to_config machine];
-              [exact (tm'_none _ _ Ht) | exact Ht]).
+    all: try (cbn [to_config]; apply orient_halt; exact Ht).
     (* an empty window, excluded by [okb] *)
-    all: try (apply halted_halts'; destruct b; cbn [halted to_config machine]; [exact (tm'_none _ _ Ht) | exact Ht]).
     all: destruct v; [destruct w; [discriminate Hok | discriminate E] | discriminate E].
   }
   split; [| exact (P_step _ _ HP E)].
   destruct c as [q X wl a u|q l a v w]; cbn [f] in E;
   destruct (tm (q, a)) as [[[a' []] q']|] eqn:Ht; try discriminate.
-  - (* left *)
-    destruct wl as [|x wl']; inversion E; subst; clear E;
-    destruct b; cbn [to_config machine];
-    [ eapply step_right'; [exact (tm'_some _ _ _ _ _ Ht) | reflexivity]
-    | eapply step_left'; [exact Ht | reflexivity]
-    | eapply step_right'; [exact (tm'_some _ _ _ _ _ Ht) | reflexivity]
-    | eapply step_left'; [exact Ht | reflexivity] ].
-  - (* right *)
-    destruct u as [|b' u'].
-    + (* from q: only B on a 1 *)
-      assert (q = B /\ a = 1) as [-> ->].
-      { destruct q, a; cbn in Ht; inversion Ht; subst; cbn in Hok;
-        solve [split; reflexivity | discriminate Hok]. }
-      cbn in Ht. inversion Ht; subst; clear Ht.
-      destruct wl as [|x wl']; inversion E; subst; clear E.
-      * rewrite (stream_eta X) at 1 2.
-        destruct b; cbn [to_config machine Str_app g]; [apply far1 | apply far0].
-      * destruct b; cbn [to_config machine Str_app g]; [apply far1 | apply far0].
-    + inversion E; subst; clear E.
-      destruct b; cbn [to_config machine];
-      [ eapply step_left'; [exact (tm'_some _ _ _ _ _ Ht) | reflexivity]
-      | eapply step_right'; [exact Ht | reflexivity] ].
-  - (* left *)
-    inversion E; subst; clear E.
-    destruct b; cbn [to_config machine];
-    [ eapply step_right'; [exact (tm'_some _ _ _ _ _ Ht) | reflexivity]
-    | eapply step_left'; [exact Ht | reflexivity] ].
-  - (* right *)
-    destruct v as [|b' v'].
-    + destruct w as [|b' w']; inversion E; subst; clear E.
-      destruct b; cbn [to_config machine];
-      [ eapply step_left'; [exact (tm'_some _ _ _ _ _ Ht) | reflexivity]
-      | eapply step_right'; [exact Ht | reflexivity] ].
-    + inversion E; subst; clear E.
-      destruct b; cbn [to_config machine];
-      [ eapply step_left'; [exact (tm'_some _ _ _ _ _ Ht) | reflexivity]
-      | eapply step_right'; [exact Ht | reflexivity] ].
+  - destruct wl; inversion E; subst; cbn [to_config];
+      (eapply orient_step; [exact Ht | reflexivity]).
+  - destruct u as [|x u'].
+    2: { inversion E; subst; cbn [to_config].
+         eapply orient_step; [exact Ht | reflexivity]. }
+    (* The exceptional right move is possible only in B on 1. *)
+    assert (q = B /\ a = 1) as [-> ->].
+    { destruct q, a; cbn in Ht; inversion Ht; subst; cbn in Hok;
+      solve [split; reflexivity | discriminate Hok]. }
+    destruct wl as [|x wl']; inversion E; subst; clear E.
+    + rewrite (stream_eta X) at 1 2. destruct b; [apply far1 | apply far0].
+    + destruct b; [apply far1 | apply far0].
+  - inversion E; subst; cbn [to_config].
+    eapply orient_step; [exact Ht | reflexivity].
+  - destruct v as [|x v']; [destruct w|]; inversion E; subst; cbn [to_config];
+      (eapply orient_step; [exact Ht | reflexivity]).
 Qed.
 
 (** ** The runs from blank tape *)
