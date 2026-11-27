@@ -1,12 +1,25 @@
-(** * BB(6) Holdout 608:#238 / 797:#321: 1RB1LC_1LA1RF_0RD1RD_0RA0LE_1LA0LE_0RC--- *)
+(** Shared two-counter proof for PRs #104 and #96.
+    Adapted from the two PR proofs. Their abstract machine and 32
+    affine return rules are identical; only the realization of the
+    bounded tape windows and the path from the blank tape differ. *)
 
 From Coq Require Import Bool Lists.List NArith.BinNat PArith.BinPos Lia String.
 From BusyCoq Require Import Individual62.
 Import ListNotations.
 
-Definition tm : TM := TM_from_str "1RB1LC_1LA1RF_0RD1RD_0RA0LE_1LA0LE_0RC---".
+Module TM104.
+Definition tm := Eval compute in (TM_from_str "1RB1LC_1LA1RF_0RD1RD_0RA0LE_1LA0LE_0RC---").
 
-Module M238.
+Module Shared.
+
+(** Coordinates of #104. For #96, first change the two exceptional
+    transitions, then mirror and rename the states at the interface. *)
+Definition variant_tm (v : bool) '(q,s) : option (Sym * dir * Q) :=
+  match q,s with
+  | B,S0 => if v then Some (S1,L,D) else TM104.tm (q,s)
+  | E,S1 => if v then Some (S1,L,C) else TM104.tm (q,s)
+  | _,_ => TM104.tm (q,s)
+  end.
 
 Local Close Scope sym_scope.
 Local Open Scope bool_scope.
@@ -613,6 +626,10 @@ Proof.
   destruct xs as [| b xs']; [cbn; symmetry; exact (const_unfold Sym S0) | reflexivity].
 Qed.
 
+Section TapeSteps.
+Variable tab : TM.
+Local Notation tm := tab.
+
 Lemma step_mEncL_step {q q' : Q} {b : Sym} {ls rs : list Sym} :
   tm (q, fst (popBit ls)) = Some (b, L, q') ->
   mEncL q ls rs -[ tm ]-> mEncL q' (snd (popBit ls)) (b :: rs).
@@ -682,6 +699,18 @@ Lemma step_mEncR_cons_rev {q q' : Q} {a b : Sym} {ls rs : list Sym} :
   tm (q, a) = Some (b, L, q') ->
   mEncR q ls (a :: rs) -[ tm ]-> mEncL q' ls (b :: rs).
 Proof. exact (@step_mEncR_rev q q' b ls (a :: rs)). Qed.
+
+End TapeSteps.
+Arguments step_mEncL_step {tab q q' b ls rs} _.
+Arguments step_mEncL_rev {tab q q' b ls rs} _.
+Arguments step_mEncR_step {tab q q' b ls rs} _.
+Arguments step_mEncR_rev {tab q q' b ls rs} _.
+Arguments step_mEncL_cons_step {tab q q' a b ls rs} _.
+Arguments step_mEncL_cons_rev {tab q q' a b ls rs} _.
+Arguments step_mEncL_nil_step {tab q q' b rs} _.
+Arguments step_mEncL_nil_rev {tab q q' b rs} _.
+Arguments step_mEncR_cons_step {tab q q' a b ls rs} _.
+Arguments step_mEncR_cons_rev {tab q q' a b ls rs} _.
 
 (** *** Coalescing Stack Soundness Lemmas *)
 
@@ -955,162 +984,138 @@ Proof.
       rewrite !(repAB_succ (k - 1 + 1)); cbn [splitOnesBits fst snd]. split; reflexivity.
 Qed.
 
-(** ** Section 3: Bounded Prefix Simulators ([simOpen] / [simClosed]), Sweeps & [stepBaseK_sound] *)
+(** ** Section 3: Bounded Tape Windows, Sweeps & [stepBaseK_sound] *)
+
+(** Bounded checks inspect only the stated finite prefixes. In the closed
+    right boundary case the omitted right tail is known to be blank. Stop
+    at the first matching target rather than prescribing a raw step count. *)
+
+Definition Window := (bool * Q * list Sym * list Sym)%type.
 
 Definition mEncDir (d : bool) (q : Q) (ls rs : list Sym) : Q * tape :=
   if d then mEncR q ls rs else mEncL q ls rs.
 
-Fixpoint simOpen (n : nat) (d : bool) (q : Q) (lp rp : list Sym)
-  : option (bool * Q * list Sym * list Sym) :=
-  match n with
-  | O => Some (d, q, lp, rp)
-  | S n' =>
-    if d then
-      match rp with
-      | [] => None
-      | b :: rp' =>
-        match tm (q, b) with
-        | Some (wb, R, q') => simOpen n' true q' (wb :: lp) rp'
-        | Some (wb, L, q') => simOpen n' false q' lp (wb :: rp')
-        | None => None
-        end
-      end
-    else
-      match lp with
-      | [] => None
-      | b :: lp' =>
-        match tm (q, b) with
-        | Some (wb, L, q') => simOpen n' false q' lp' (wb :: rp)
-        | Some (wb, R, q') => simOpen n' true q' (wb :: lp') rp
-        | None => None
-        end
-      end
+Definition windowCfg (blank : bool) (lt rt : list Sym) (x : Window) :=
+  let '(d,q,lp,rp) := x in
+  mEncDir d q (lp ++ lt) (if blank then rp else rp ++ rt).
+
+Section BoundedWindows.
+Variable tab : TM.
+Local Notation tm := tab.
+
+Definition windowStep (blank : bool) (x : Window) : option Window :=
+  let '(d,q,lp,rp) := x in
+  let p := if d then rp else lp in
+  let bit : option Sym := match p with
+    | b :: _ => Some b
+    | [] => if d && blank then Some S0 else None
+    end in
+  match bit with
+  | None => None
+  | Some b =>
+    match tm (q,b) with
+    | Some (w,L,q') =>
+      Some (false,q',if d then lp else List.tl lp,w :: if d then List.tl rp else rp)
+    | Some (w,R,q') =>
+      Some (true,q',w :: if d then lp else List.tl lp,if d then List.tl rp else rp)
+    | None => None
+    end
   end.
 
-Lemma simOpen_evstep :
-  forall (n : nat) (d : bool) (q : Q) (lp rp lt rt : list Sym)
-    (d' : bool) (q' : Q) (lp' rp' : list Sym),
-    simOpen n d q lp rp = Some (d', q', lp', rp') ->
-    mEncDir d q (lp ++ lt) (rp ++ rt) -[ tm ]->* mEncDir d' q' (lp' ++ lt) (rp' ++ rt).
+Lemma windowStep_sound blank lt rt x y :
+  windowStep blank x = Some y ->
+  windowCfg blank lt rt x -[ tm ]-> windowCfg blank lt rt y.
 Proof.
-  induction n as [| n IH]; intros d q lp rp lt rt d' q' lp' rp' H.
-  - cbn [simOpen] in H. inversion H; subst. apply evstep_refl.
-  - cbn [simOpen] in H. destruct d.
-    + destruct rp as [| b rp0]; [discriminate |].
-      destruct (tm (q, b)) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-      destruct dr.
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt rt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (step_mEncR_cons_rev Htm).
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt rt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (step_mEncR_cons_step Htm).
-    + destruct lp as [| b lp0]; [discriminate |].
-      destruct (tm (q, b)) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-      destruct dr.
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt rt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (step_mEncL_cons_step Htm).
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt rt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (step_mEncL_cons_rev Htm).
+  destruct x as [[[d q] lp] rp]; destruct d, blank; intro H.
+  - destruct rp as [|b rest]; cbn [windowStep andb List.tl] in H.
+    + destruct (tab (@pair Q Sym q S0)) as [[[w []] q']|] eqn:Htm; inversion H; subst.
+      * exact (@step_mEncR_rev tab q q' w (lp ++ lt) [] Htm).
+      * exact (@step_mEncR_step tab q q' w (lp ++ lt) [] Htm).
+    + destruct (tab (q,b)) as [[[w []] q']|] eqn:Htm; inversion H; subst.
+      * exact (step_mEncR_cons_rev Htm).
+      * exact (step_mEncR_cons_step Htm).
+  - destruct rp as [|b rest]; cbn [windowStep andb List.tl] in H; [discriminate|].
+    destruct (tab (q,b)) as [[[w []] q']|] eqn:Htm; inversion H; subst.
+    + exact (step_mEncR_cons_rev Htm).
+    + exact (step_mEncR_cons_step Htm).
+  - destruct lp as [|b rest]; cbn [windowStep andb List.tl] in H; [discriminate|].
+    destruct (tab (q,b)) as [[[w []] q']|] eqn:Htm; inversion H; subst.
+    + exact (step_mEncL_cons_step Htm).
+    + exact (step_mEncL_cons_rev Htm).
+  - destruct lp as [|b rest]; cbn [windowStep andb List.tl] in H; [discriminate|].
+    destruct (tab (q,b)) as [[[w []] q']|] eqn:Htm; inversion H; subst.
+    + exact (step_mEncL_cons_step Htm).
+    + exact (step_mEncL_cons_rev Htm).
 Qed.
 
-Lemma simOpen_progress :
-  forall (n : nat) (d : bool) (q : Q) (lp rp lt rt : list Sym)
-    (d' : bool) (q' : Q) (lp' rp' : list Sym),
-    simOpen (S n) d q lp rp = Some (d', q', lp', rp') ->
-    mEncDir d q (lp ++ lt) (rp ++ rt) -[ tm ]->+ mEncDir d' q' (lp' ++ lt) (rp' ++ rt).
-Proof.
-  intros n d q lp rp lt rt d' q' lp' rp' H.
-  cbn [simOpen] in H. destruct d.
-  - destruct rp as [| b rp0]; [discriminate |].
-    destruct (tm (q, b)) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-    destruct dr.
-    + eapply progress_intro; [cbn [mEncDir app]; exact (step_mEncR_cons_rev Htm) |].
-      exact (simOpen_evstep n false q1 lp (wb :: rp0) lt rt d' q' lp' rp' H).
-    + eapply progress_intro; [cbn [mEncDir app]; exact (step_mEncR_cons_step Htm) |].
-      exact (simOpen_evstep n true q1 (wb :: lp) rp0 lt rt d' q' lp' rp' H).
-  - destruct lp as [| b lp0]; [discriminate |].
-    destruct (tm (q, b)) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-    destruct dr.
-    + eapply progress_intro; [cbn [mEncDir app]; exact (step_mEncL_cons_step Htm) |].
-      exact (simOpen_evstep n false q1 lp0 (wb :: rp) lt rt d' q' lp' rp' H).
-    + eapply progress_intro; [cbn [mEncDir app]; exact (step_mEncL_cons_rev Htm) |].
-      exact (simOpen_evstep n true q1 (wb :: lp0) rp lt rt d' q' lp' rp' H).
-Qed.
+Definition windowEqDec (x y : Window) : {x = y} + {x <> y}.
+Proof. repeat decide equality. Defined.
 
-Fixpoint simClosed (n : nat) (d : bool) (q : Q) (lp rs : list Sym)
-  : option (bool * Q * list Sym * list Sym) :=
-  match n with
-  | O => Some (d, q, lp, rs)
-  | S n' =>
-    if d then
-      let pr := popBit rs in
-      match tm (q, fst pr) with
-      | Some (wb, R, q') => simClosed n' true q' (wb :: lp) (snd pr)
-      | Some (wb, L, q') => simClosed n' false q' lp (wb :: snd pr)
-      | None => None
-      end
-    else
-      match lp with
-      | [] => None
-      | b :: lp' =>
-        match tm (q, b) with
-        | Some (wb, L, q') => simClosed n' false q' lp' (wb :: rs)
-        | Some (wb, R, q') => simClosed n' true q' (wb :: lp') rs
-        | None => None
-        end
-      end
+Fixpoint checkWindow blank fuel x target :=
+  match fuel with
+  | O => false
+  | S fuel' =>
+    match windowStep blank x with
+    | None => false
+    | Some y => if windowEqDec y target then true else checkWindow blank fuel' y target
+    end
   end.
 
-Lemma simClosed_evstep :
-  forall (n : nat) (d : bool) (q : Q) (lp rs lt : list Sym)
-    (d' : bool) (q' : Q) (lp' rs' : list Sym),
-    simClosed n d q lp rs = Some (d', q', lp', rs') ->
-    mEncDir d q (lp ++ lt) rs -[ tm ]->* mEncDir d' q' (lp' ++ lt) rs'.
+Lemma checkWindow_sound blank fuel lt rt x target :
+  checkWindow blank fuel x target = true ->
+  windowCfg blank lt rt x -[ tm ]->+ windowCfg blank lt rt target.
 Proof.
-  induction n as [| n IH]; intros d q lp rs lt d' q' lp' rs' H.
-  - cbn [simClosed] in H. inversion H; subst. apply evstep_refl.
-  - cbn [simClosed] in H. destruct d.
-    + destruct (tm (q, fst (popBit rs))) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-      destruct dr.
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (@step_mEncR_rev q q1 wb (lp ++ lt) rs Htm).
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (@step_mEncR_step q q1 wb (lp ++ lt) rs Htm).
-    + destruct lp as [| b lp0]; [discriminate |].
-      destruct (tm (q, b)) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-      destruct dr.
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (step_mEncL_cons_step Htm).
-      * eapply evstep_step; [| exact (IH _ _ _ _ lt _ _ _ _ H)].
-        cbn [mEncDir app]. exact (step_mEncL_cons_rev Htm).
+  revert x; induction fuel as [|fuel IH]; intros x; cbn [checkWindow]; [discriminate|].
+  destruct (windowStep blank x) as [y|] eqn:Hy; [|discriminate].
+  pose proof (windowStep_sound blank lt rt x y Hy) as Hstep.
+  destruct (windowEqDec y target) as [->|_]; [now constructor|].
+  eauto using progress_step.
 Qed.
 
-Lemma simClosed_progress :
-  forall (n : nat) (d : bool) (q : Q) (lp rs lt : list Sym)
-    (d' : bool) (q' : Q) (lp' rs' : list Sym),
-    simClosed (S n) d q lp rs = Some (d', q', lp', rs') ->
-    mEncDir d q (lp ++ lt) rs -[ tm ]->+ mEncDir d' q' (lp' ++ lt) rs'.
-Proof.
-  intros n d q lp rs lt d' q' lp' rs' H.
-  cbn [simClosed] in H. destruct d.
-  - destruct (tm (q, fst (popBit rs))) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-    destruct dr.
-    + eapply progress_intro; [cbn [mEncDir app]; exact (@step_mEncR_rev q q1 wb (lp ++ lt) rs Htm) |].
-      exact (simClosed_evstep n false q1 lp (wb :: snd (popBit rs)) lt d' q' lp' rs' H).
-    + eapply progress_intro; [cbn [mEncDir app]; exact (@step_mEncR_step q q1 wb (lp ++ lt) rs Htm) |].
-      exact (simClosed_evstep n true q1 (wb :: lp) (snd (popBit rs)) lt d' q' lp' rs' H).
-  - destruct lp as [| b lp0]; [discriminate |].
-    destruct (tm (q, b)) as [[[wb dr] q1] |] eqn:Htm; [| discriminate].
-    destruct dr.
-    + eapply progress_intro; [cbn [mEncDir app]; exact (step_mEncL_cons_step Htm) |].
-      exact (simClosed_evstep n false q1 lp0 (wb :: rs) lt d' q' lp' rs' H).
-    + eapply progress_intro; [cbn [mEncDir app]; exact (step_mEncL_cons_rev Htm) |].
-      exact (simClosed_evstep n true q1 (wb :: lp0) rs lt d' q' lp' rs' H).
-Qed.
+Lemma reachOpen d q lp rp lt rt d' q' lp' rp' :
+  checkWindow false 64%nat (d,q,lp,rp) (d',q',lp',rp') = true ->
+  mEncDir d q (lp ++ lt) (rp ++ rt) -[ tm ]->+ mEncDir d' q' (lp' ++ lt) (rp' ++ rt).
+Proof. exact (checkWindow_sound false 64%nat lt rt _ _). Qed.
+
+Lemma reachClosed d q lp rs lt d' q' lp' rs' :
+  checkWindow true 400%nat (d,q,lp,rs) (d',q',lp',rs') = true ->
+  mEncDir d q (lp ++ lt) rs -[ tm ]->+ mEncDir d' q' (lp' ++ lt) rs'.
+Proof. exact (checkWindow_sound true 400%nat lt [] _ _). Qed.
+
+End BoundedWindows.
+
+Section Family.
+Variable variant : bool.
+Local Notation tm := (variant_tm variant).
+
+Local Ltac check_window := destruct variant; vm_compute; reflexivity.
+
+Lemma encTape_of_pop xs b rest :
+  popBit xs = (b,rest) -> encTape (b :: rest) = encTape xs.
+Proof. intro H; pose proof (encTape_popBit_recons xs) as Ht; now rewrite H in Ht. Qed.
+
+Local Tactic Notation "cut_bit" constr(xs) ident(b) ident(rest) ident(Hp) ident(Ht) :=
+  destruct (popBit xs) as [b rest] eqn:Hp;
+  pose proof (encTape_of_pop xs b rest Hp) as Ht;
+  cbn [fst snd].
+
+Local Ltac expose_tapes :=
+  unfold mEncL, mEncR;
+  repeat match goal with
+  | H : encTape (_ :: _) = encTape ?xs |- context [encTape ?xs] =>
+    rewrite <- H; cbn [encTape hd tl]
+  end.
 
 Lemma reach_E_one (xs rs : list Sym) :
   mEncL E (S1 :: xs) rs -[ tm ]->+ mEncL E xs (S0 :: rs).
 Proof.
-  apply progress_base; eapply step_mEncL_cons_step; reflexivity.
+  destruct (popBit xs) as [b rest] eqn:Hx.
+  pose proof (encTape_of_pop xs b rest Hx) as H.
+  enough (Hrun : mEncL E (S1 :: b :: rest) rs -[ tm ]->+ mEncL E (b :: rest) (S0 :: rs)).
+  { unfold mEncL in *; cbn [encTape] in H, Hrun; now rewrite H in Hrun. }
+  destruct b.
+  - apply (reachOpen tm false E [S1;S0] [] rest rs false E [S0] [S0]); check_window.
+  - apply (reachOpen tm false E [S1;S1] [] rest rs false E [S1] [S0]); check_window.
 Qed.
 
 Lemma reach_E_splitBits (ls rs : list Sym) :
@@ -1134,7 +1139,7 @@ Qed.
 Lemma reach_AL_pair10 (ls rs : list Sym) :
   mEncL A (S1 :: S0 :: ls) rs -[ tm ]->+ mEncL A ls (S1 :: S0 :: rs).
 Proof.
-  exact (simOpen_progress 3 false A [S1; S0] [] ls rs false A [] [S1; S0] eq_refl).
+  apply (reachOpen tm false A [S1; S0] [] ls rs false A [] [S1; S0]); check_window.
 Qed.
 
 Lemma reach_AL_single1 (rs : list Sym) :
@@ -1218,7 +1223,7 @@ Lemma reach_AL_crossP_step (lt rs : list Sym) :
   mEncL A (S1 :: S1 :: S0 :: S1 :: S1 :: lt) rs -[ tm ]->+
   mEncL A (S1 :: S1 :: lt) (S1 :: S0 :: S0 :: rs).
 Proof.
-  exact (simOpen_progress 4 false A [S1; S1; S0; S1; S1] [] lt rs false A [S1; S1] [S1; S0; S0] eq_refl).
+  apply (reachOpen tm false A [S1; S1; S0; S1; S1] [] lt rs false A [S1; S1] [S1; S0; S0]); check_window.
 Qed.
 
 Lemma reach_AL_crossP_star (n : N) :
@@ -1247,14 +1252,14 @@ Lemma reach_AL01_step (b : Sym) (lt rs : list Sym) :
   mEncL A (S0 :: lt) (S1 :: S0 :: b :: rs) -[ tm ]->+ mEncR D (b :: S0 :: S1 :: S1 :: lt) rs.
 Proof.
   destruct b.
-  - exact (simOpen_progress 3 false A [S0] [S1; S0; S0] lt rs true D [S0; S0; S1; S1] [] eq_refl).
-  - exact (simOpen_progress 3 false A [S0] [S1; S0; S1] lt rs true D [S1; S0; S1; S1] [] eq_refl).
+  - apply (reachOpen tm false A [S0] [S1; S0; S0] lt rs true D [S0; S0; S1; S1] []); check_window.
+  - apply (reachOpen tm false A [S0] [S1; S0; S1] lt rs true D [S1; S0; S1; S1] []); check_window.
 Qed.
 
 Lemma reach_DR01_step (ls rs : list Sym) :
   mEncR D ls (S0 :: S1 :: rs) -[ tm ]->+ mEncL A ls (S1 :: S0 :: rs).
 Proof.
-  exact (simOpen_progress 4 true D [] [S0; S1] ls rs false A [] [S1; S0] eq_refl).
+  apply (reachOpen tm true D [] [S0; S1] ls rs false A [] [S1; S0]); check_window.
 Qed.
 
 Lemma reach_AL_shuttleQ_one (lt rs : list Sym) :
@@ -1293,7 +1298,7 @@ Lemma reach_AL_shuttleBA_one (lt rs : list Sym) :
   mEncL A (S0 :: lt) (S1 :: S0 :: S0 :: S1 :: rs) -[ tm ]->+
   mEncL A (S0 :: S1 :: S1 :: lt) (S1 :: S0 :: rs).
 Proof.
-  exact (simOpen_progress 5 false A [S0] [S1; S0; S0; S1] lt rs false A [S0; S1; S1] [S1; S0] eq_refl).
+  apply (reachOpen tm false A [S0] [S1; S0; S0; S1] lt rs false A [S0; S1; S1] [S1; S0]); check_window.
 Qed.
 
 Lemma reach_AL_shuttleBA_star (n : N) :
@@ -1324,8 +1329,8 @@ Lemma reach_DR_crossQ_zero (lt rs : list Sym) :
   mEncR D (S0 :: lt) (repQ 2 rs) -[ tm ]->+
   mEncL A (S0 :: S1 :: S1 :: S0 :: S0 :: lt) (S1 :: S0 :: rs).
 Proof.
-  exact (simOpen_progress 6 true D [S0] [S0; S0; S1; S0; S0; S1] lt rs
-           false A [S0; S1; S1; S0; S0] [S1; S0] eq_refl).
+  apply (reachOpen tm true D [S0] [S0; S0; S1; S0; S0; S1] lt rs
+           false A [S0; S1; S1; S0; S0] [S1; S0]); check_window.
 Qed.
 
 Lemma reach_DR_crossQ (u : N) (lt rs : list Sym) :
@@ -1352,8 +1357,8 @@ Proof.
   eapply evstep_progress_trans;
     [exact (reach_AL_crossP_star qp (S1 :: S1 :: S0 :: S0 :: lt) (S1 :: rs')) |].
   rewrite rep100_one, repQ_succ.
-  exact (simOpen_progress 10 false A [S1; S1; S1; S1; S0; S0] [S1] lt (repQ qp rs')
-           true D [S0; S0; S1; S1] [S0; S0; S1] eq_refl).
+  apply (reachOpen tm false A [S1; S1; S1; S1; S0; S0] [S1] lt (repQ qp rs')
+           true D [S0; S0; S1; S1] [S0; S0; S1]); check_window.
 Qed.
 
 Lemma reach_top_pass {p qp : N} {lt rs rs' : list Sym}
@@ -1372,8 +1377,8 @@ Lemma reach_Z2_leaf (p : N) (lt rs : list Sym) :
   outCfg (p + 1) lt (S0 :: S0 :: rs).
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  exact (simOpen_progress 17 false A [S0] [S1; S0; S0; S0; S0; S0; S1] (repP p lt) rs
-           false A [S1; S1; S0; S1; S1] [S1; S0; S0] eq_refl).
+  apply (reachOpen tm false A [S0] [S1; S0; S0; S0; S0; S0; S1] (repP p lt) rs
+           false A [S1; S1; S0; S1; S1] [S1; S0; S0]); check_window.
 Qed.
 
 Lemma reach_DR_oneShuttleZ2 (u : N) (lt rs : list Sym) :
@@ -1426,62 +1431,24 @@ Lemma reach_AL_zero_branch (ls rs : list Sym) (Hl0 : fst (popBit ls) = S0) :
   end.
 Proof.
   cbn zeta.
-  assert (HA0 : mEncL A ls rs -[ tm ]-> mEncR B (S1 :: snd (popBit ls)) rs).
-  { apply step_mEncL_rev. rewrite Hl0. reflexivity. }
-  destruct (fst (popBit rs)) eqn:Hr0p.
-  - assert (HB0 : mEncR B (S1 :: snd (popBit ls)) rs -[ tm ]->
-                  mEncL A (S1 :: snd (popBit ls)) (S1 :: snd (popBit rs))).
-    { apply step_mEncR_rev. rewrite Hr0p. reflexivity. }
-    assert (HA1 : mEncL A (S1 :: snd (popBit ls)) (S1 :: snd (popBit rs)) -[ tm ]->
-                  mEncL C (snd (popBit ls)) (S1 :: S1 :: snd (popBit rs)))
-      by (eapply step_mEncL_cons_step; reflexivity).
-    destruct (fst (popBit (snd (popBit ls)))) eqn:Hl1p.
-    + assert (HC0 : mEncL C (snd (popBit ls)) (S1 :: S1 :: snd (popBit rs)) -[ tm ]->
-                    mEncR D (S0 :: snd (popBit (snd (popBit ls)))) (S1 :: S1 :: snd (popBit rs))).
-      { apply step_mEncL_rev. rewrite Hl1p. reflexivity. }
-      eapply progress_step; [exact HA0 |].
-      eapply progress_step; [exact HB0 |].
-      eapply progress_step; [exact HA1 |].
-      eapply progress_step; [exact HC0 |].
-      eapply progress_step; [eapply step_mEncR_cons_rev; reflexivity |].
-      apply progress_base; eapply step_mEncL_cons_step; reflexivity.
-    + assert (HC1 : mEncL C (snd (popBit ls)) (S1 :: S1 :: snd (popBit rs)) -[ tm ]->
-                    mEncR D (S1 :: snd (popBit (snd (popBit ls)))) (S1 :: S1 :: snd (popBit rs))).
-      { apply step_mEncL_rev. rewrite Hl1p. reflexivity. }
-      eapply progress_step; [exact HA0 |].
-      eapply progress_step; [exact HB0 |].
-      eapply progress_step; [exact HA1 |].
-      eapply progress_step; [exact HC1 |].
-      eapply progress_step; [eapply step_mEncR_cons_rev; reflexivity |].
-      eapply progress_trans; [exact (reach_E_one (snd (popBit (snd (popBit ls)))) (S0 :: S1 :: snd (popBit rs))) |].
-      pose proof (reach_E_splitBits (snd (popBit (snd (popBit ls)))) (S0 :: S0 :: S1 :: snd (popBit rs))) as Hsp.
-      rewrite !repZero_snoc in Hsp.
-      replace (fst (splitOnesBits (snd (popBit (snd (popBit ls))))) + 1 + 1)
-        with (fst (splitOnesBits (snd (popBit (snd (popBit ls))))) + 2) in Hsp by lia.
-      exact Hsp.
-  - assert (HB1 : mEncR B (S1 :: snd (popBit ls)) rs -[ tm ]->
-                  mEncR F (S1 :: S1 :: snd (popBit ls)) (snd (popBit rs))).
-    { apply step_mEncR_step. rewrite Hr0p. reflexivity. }
-    destruct (fst (popBit (snd (popBit rs)))) eqn:Hr1p; [| exact I].
-    assert (HF0 : mEncR F (S1 :: S1 :: snd (popBit ls)) (snd (popBit rs)) -[ tm ]->
-                  mEncR C (S0 :: S1 :: S1 :: snd (popBit ls)) (snd (popBit (snd (popBit rs))))).
-    { apply step_mEncR_step. rewrite Hr1p. reflexivity. }
-    set (r2 := popBit (snd (popBit (snd (popBit rs))))).
-    destruct (fst r2) eqn:Hr2v.
-    + assert (HC : mEncR C (S0 :: S1 :: S1 :: snd (popBit ls)) (snd (popBit (snd (popBit rs)))) -[ tm ]->
-                   mEncR D (S0 :: S0 :: S1 :: S1 :: snd (popBit ls)) (snd r2)).
-      { apply step_mEncR_step. fold r2. rewrite Hr2v. reflexivity. }
-      eapply progress_step; [exact HA0 |].
-      eapply progress_step; [exact HB1 |].
-      eapply progress_step; [exact HF0 |].
-      exact (progress_base HC).
-    + assert (HC : mEncR C (S0 :: S1 :: S1 :: snd (popBit ls)) (snd (popBit (snd (popBit rs)))) -[ tm ]->
-                   mEncR D (S1 :: S0 :: S1 :: S1 :: snd (popBit ls)) (snd r2)).
-      { apply step_mEncR_step. fold r2. rewrite Hr2v. reflexivity. }
-      eapply progress_step; [exact HA0 |].
-      eapply progress_step; [exact HB1 |].
-      eapply progress_step; [exact HF0 |].
-      exact (progress_base HC).
+  cut_bit ls a lt Hl El. cbn [fst] in Hl0; subst a.
+  cut_bit rs b rt Hr Er. destruct b.
+  - cut_bit lt b ll Hl' El'. destruct b.
+    + expose_tapes.
+      apply (reachOpen tm false A [S0;S0] [S0] ll rt false A [] [S1;S0;S1]); check_window.
+    + assert (H : mEncL A ls rs -[ tm ]->+ mEncL E ll (S0 :: S0 :: S1 :: rt)).
+      { cut_bit ll b lll Hl'' El''. destruct b; expose_tapes.
+        - apply (reachOpen tm false A [S0;S1;S0] [S0] lll rt false E [S0] [S0;S0;S1]); check_window.
+        - apply (reachOpen tm false A [S0;S1;S1] [S0] lll rt false E [S1] [S0;S0;S1]); check_window. }
+      eapply progress_trans; [exact H|].
+      pose proof (reach_E_splitBits ll (S0 :: S0 :: S1 :: rt)) as Hs.
+      rewrite !repZero_snoc in Hs.
+      replace (fst (splitOnesBits ll) + 1 + 1) with (fst (splitOnesBits ll) + 2) in Hs by lia.
+      exact Hs.
+  - cut_bit rt b rr Hr' Er'. destruct b; [|exact I].
+    cut_bit rr b rrr Hr'' Er''. destruct b; expose_tapes.
+    + apply (reachOpen tm false A [S0] [S1;S0;S0] lt rrr true D [S0;S0;S1;S1] []); check_window.
+    + apply (reachOpen tm false A [S0] [S1;S0;S1] lt rrr true D [S1;S0;S1;S1] []); check_window.
 Qed.
 
 Lemma stepALZeroCore_sound (ls : list LTok) (rs : list RTok)
@@ -1563,64 +1530,21 @@ Lemma reach_DR_fallback (ls rs : list Sym) :
   end.
 Proof.
   cbn zeta.
-  destruct (fst (popBit rs)) eqn:Hr0p.
-  - assert (HD0 : mEncR D ls rs -[ tm ]-> mEncR A (S0 :: ls) (snd (popBit rs))).
-    { apply step_mEncR_step. rewrite Hr0p. reflexivity. }
-    destruct (fst (popBit (snd (popBit rs)))) eqn:Hr1p.
-    + assert (HA0 : mEncR A (S0 :: ls) (snd (popBit rs)) -[ tm ]->
-                    mEncR B (S1 :: S0 :: ls) (snd (popBit (snd (popBit rs))))).
-      { apply step_mEncR_step. rewrite Hr1p. reflexivity. }
-      destruct (fst (popBit (snd (popBit (snd (popBit rs)))))) eqn:Hr2p.
-      * assert (HB0 : mEncR B (S1 :: S0 :: ls) (snd (popBit (snd (popBit rs)))) -[ tm ]->
-                      mEncL A (S1 :: S0 :: ls) (S1 :: snd (popBit (snd (popBit (snd (popBit rs))))))).
-        { apply step_mEncR_rev. rewrite Hr2p. reflexivity. }
-        eapply progress_step; [exact HD0 |].
-        eapply progress_step; [exact HA0 |].
-        eapply progress_step; [exact HB0 |].
-        eapply progress_step; [eapply step_mEncL_cons_step; reflexivity |].
-        eapply progress_step; [eapply step_mEncL_cons_rev; reflexivity |].
-        eapply progress_step; [eapply step_mEncR_cons_rev; reflexivity |].
-        apply progress_base; eapply step_mEncL_cons_step; reflexivity.
-      * assert (HB1 : mEncR B (S1 :: S0 :: ls) (snd (popBit (snd (popBit rs)))) -[ tm ]->
-                      mEncR F (S1 :: S1 :: S0 :: ls) (snd (popBit (snd (popBit (snd (popBit rs))))))).
-        { apply step_mEncR_step. rewrite Hr2p. reflexivity. }
-        set (rem3 := snd (popBit (snd (popBit (snd (popBit rs)))))).
-        destruct (fst (popBit rem3)) eqn:Hr3p; [| exact I].
-        assert (HF0 : mEncR F (S1 :: S1 :: S0 :: ls) rem3 -[ tm ]->
-                      mEncR C (S0 :: S1 :: S1 :: S0 :: ls) (snd (popBit rem3))).
-        { apply step_mEncR_step. rewrite Hr3p. reflexivity. }
-        set (r4 := popBit (snd (popBit rem3))).
-        destruct (fst r4) eqn:Hr4v.
-        -- assert (HC : mEncR C (S0 :: S1 :: S1 :: S0 :: ls) (snd (popBit rem3)) -[ tm ]->
-                        mEncR D (S0 :: S0 :: S1 :: S1 :: S0 :: ls) (snd r4)).
-           { apply step_mEncR_step. fold r4. rewrite Hr4v. reflexivity. }
-           eapply progress_step; [exact HD0 |].
-           eapply progress_step; [exact HA0 |].
-           eapply progress_step; [exact HB1 |].
-           eapply progress_step; [exact HF0 |].
-           exact (progress_base HC).
-        -- assert (HC : mEncR C (S0 :: S1 :: S1 :: S0 :: ls) (snd (popBit rem3)) -[ tm ]->
-                        mEncR D (S1 :: S0 :: S1 :: S1 :: S0 :: ls) (snd r4)).
-           { apply step_mEncR_step. fold r4. rewrite Hr4v. reflexivity. }
-           eapply progress_step; [exact HD0 |].
-           eapply progress_step; [exact HA0 |].
-           eapply progress_step; [exact HB1 |].
-           eapply progress_step; [exact HF0 |].
-           exact (progress_base HC).
-    + assert (HA1 : mEncR A (S0 :: ls) (snd (popBit rs)) -[ tm ]->
-                    mEncL C (S0 :: ls) (S1 :: snd (popBit (snd (popBit rs))))).
-      { apply step_mEncR_rev. rewrite Hr1p. reflexivity. }
-      eapply progress_step; [exact HD0 |].
-      eapply progress_step; [exact HA1 |].
-      eapply progress_step; [eapply step_mEncL_cons_rev; reflexivity |].
-      eapply progress_step; [eapply step_mEncR_cons_rev; reflexivity |].
-      apply progress_base; eapply step_mEncL_cons_step; reflexivity.
-  - assert (HD1 : mEncR D ls rs -[ tm ]-> mEncL E ls (S0 :: snd (popBit rs))).
-    { apply step_mEncR_rev. rewrite Hr0p. reflexivity. }
-    eapply progress_step; [exact HD1 |].
-    pose proof (reach_E_splitBits ls (S0 :: snd (popBit rs))) as Hsp.
-    rewrite repZero_snoc in Hsp.
-    exact Hsp.
+  cut_bit rs b rt Hr Er. destruct b.
+  - cut_bit rt b r2 Hr2 Er2. destruct b.
+    + cut_bit r2 b r3 Hr3 Er3. destruct b.
+      * expose_tapes.
+        apply (reachOpen tm true D [] [S0;S0;S0] ls r3 false A [] [S1;S0;S1]); check_window.
+      * cut_bit r3 b r4 Hr4 Er4. destruct b; [|exact I].
+        cut_bit r4 b r5 Hr5 Er5. destruct b; expose_tapes.
+        -- apply (reachOpen tm true D [] [S0;S0;S1;S0;S0] ls r5 true D [S0;S0;S1;S1;S0] []); check_window.
+        -- apply (reachOpen tm true D [] [S0;S0;S1;S0;S1] ls r5 true D [S1;S0;S1;S1;S0] []); check_window.
+    + expose_tapes.
+      apply (reachOpen tm true D [] [S0;S1] ls r2 false A [] [S1;S0]); check_window.
+  - eapply (@progress_step _ _ (mEncL E ls (S0 :: rt)) _).
+    + expose_tapes. eapply step_mEncR_cons_rev; reflexivity.
+    + pose proof (reach_E_splitBits ls (S0 :: rt)) as Hs.
+      rewrite repZero_snoc in Hs. exact Hs.
 Qed.
 
 Lemma stepDRFallback_sound (ls : list LTok) (rs : list RTok) (b' : BaseState) :
@@ -2063,8 +1987,8 @@ Lemma reach_Z5_absorb (p q : N) (lt rs : list Sym) :
   outCfg (p + 1) lt (repBA 3 (repQ q rs)).
 Proof.
   unfold inCfg, outCfg. rewrite repQ_succ, repP_succ.
-  exact (simOpen_progress 25 false A [S0] [S1; S0; S0; S0; S0; S0; S0; S0; S0; S0; S1]
-           (repP p lt) (repQ q rs) false A [S1; S1; S0; S1; S1] [S1; S0; S1; S0; S1; S0; S1] eq_refl).
+  apply (reachOpen tm false A [S0] [S1; S0; S0; S0; S0; S0; S0; S0; S0; S0; S1]
+           (repP p lt) (repQ q rs) false A [S1; S1; S0; S1; S1] [S1; S0; S1; S0; S1; S0; S1]); check_window.
 Qed.
 
 Lemma reach_BA2_down (p q : N) (lt rs : list Sym) :
@@ -2085,8 +2009,8 @@ Proof.
   eapply evstep_progress_trans.
   - exact (reach_AL_crossP_star qp (S1 :: S1 :: S1 :: S1 :: S1 :: S1 :: repP (p' + 1) lt) (S1 :: rs')).
   - rewrite rep100_one, repP_succ, repQ_succ.
-    exact (simOpen_progress 10 false A [S1; S1; S1; S1; S1; S1; S1; S1; S0; S1; S1] [S1]
-             (repP p' lt) (repQ qp rs') false A [S1; S1] [S1; S0; S0; S0; S0; S0; S0; S0; S0; S1] eq_refl).
+    apply (reachOpen tm false A [S1; S1; S1; S1; S1; S1; S1; S1; S0; S1; S1] [S1]
+             (repP p' lt) (repQ qp rs') false A [S1; S1] [S1; S0; S0; S0; S0; S0; S0; S0; S0; S1]); check_window.
 Qed.
 
 Lemma reach_Z3_down (p q : N) (lt rs : list Sym) :
@@ -2099,9 +2023,9 @@ Proof.
   replace (p + 2) with ((p + 1) + 1) by lia.
   rewrite !repP_succ.
   eapply progress_evstep_trans.
-  - exact (simOpen_progress 21 false A [S0] [S1; S0; S0; S0; S0; S0; S0; S0; S1; S0; S0; S1]
+  - apply (reachOpen tm false A [S0] [S1; S0; S0; S0; S0; S0; S0; S0; S1; S0; S0; S1]
              (repP p lt) (repQ q rs)
-             false A [S0; S1; S1; S0; S1; S0; S1; S1; S0; S1; S1] [S1; S0] eq_refl).
+             false A [S0; S1; S1; S0; S1; S0; S1; S1; S0; S1; S1] [S1; S0]); check_window.
   - exact (reach_AL_shuttleQ_star q (S1 :: S1 :: S0 :: S1 :: S0 :: S1 :: S1 :: S0 :: S1 :: S1 :: repP p lt) rs).
 Qed.
 
@@ -2115,9 +2039,9 @@ Proof.
   - rewrite rep100_one.
     replace (p + 2) with ((p + 1) + 1) by lia.
     rewrite (repP_succ (p + 1)), repQ_succ.
-    exact (simOpen_progress 10 false A [S1; S1; S1; S1; S0; S1; S0; S1; S1] [S1]
+    apply (reachOpen tm false A [S1; S1; S1; S1; S0; S1; S0; S1; S1] [S1]
              (repP (p + 1) lt) (repQ qp rs')
-             false A [S1; S1] [S1; S0; S1; S0; S0; S0; S0; S1] eq_refl).
+             false A [S1; S1] [S1; S0; S1; S0; S0; S0; S0; S1]); check_window.
 Qed.
 
 Lemma reach_BA0Z1_absorb (p : N) (lt rs : list Sym) :
@@ -2125,8 +2049,8 @@ Lemma reach_BA0Z1_absorb (p : N) (lt rs : list Sym) :
   outCfg p lt (S0 :: S0 :: repQ 2 (S0 :: S0 :: rs)).
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  exact (simOpen_progress 35 false A [S0; S0; S1; S1] [S1; S0; S0; S1; S0; S0; S0; S0; S1]
-           (repP p lt) rs false A [S1; S1] [S1; S0; S0; S0; S0; S1; S0; S0; S1; S0; S0] eq_refl).
+  apply (reachOpen tm false A [S0; S0; S1; S1] [S1; S0; S0; S1; S0; S0; S0; S0; S1]
+           (repP p lt) rs false A [S1; S1] [S1; S0; S0; S0; S0; S1; S0; S0; S1; S0; S0]); check_window.
 Qed.
 
 Definition capA0 : list Sym := decR cap1Toks.
@@ -2155,90 +2079,80 @@ Lemma reach_capA_0 (p' : N) (lt : list Sym) :
   inCfg (p' + 1) lt capA0 -[ tm ]->+ outCfg p' lt capA1.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 123 false A [S0; S0; S1; S1] (S1 :: S0 :: capA0) (repP p' lt)
-           false A [S1; S1] (S1 :: capA1)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0; S0; S1; S1] (S1 :: S0 :: capA0) (repP p' lt)
+           false A [S1; S1] (S1 :: capA1)); check_window.
 Qed.
 
 Lemma reach_capA_1 (p : N) (lt : list Sym) :
   inCfg p lt capA1 -[ tm ]->+ outCfg (p + 1) lt capA2.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 17 false A [S0] (S1 :: S0 :: capA1) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capA2)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capA1) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capA2)); check_window.
 Qed.
 
 Lemma reach_capA_2 (p : N) (lt : list Sym) :
   inCfg p lt capA2 -[ tm ]->+ outCfg (p + 1) lt capA3.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 17 false A [S0] (S1 :: S0 :: capA2) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capA3)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capA2) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capA3)); check_window.
 Qed.
 
 Lemma reach_capA_3 (p : N) (lt : list Sym) :
   inCfg p lt capA3 -[ tm ]->+ outCfg (p + 1) lt capA0.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 53 false A [S0] (S1 :: S0 :: capA3) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capA0)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capA3) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capA0)); check_window.
 Qed.
 
 Lemma reach_capB_0 (p' : N) (lt : list Sym) :
   inCfg (p' + 1) lt capB0 -[ tm ]->+ outCfg p' lt capB1.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 271 false A [S0; S0; S1; S1] (S1 :: S0 :: capB0) (repP p' lt)
-           false A [S1; S1] (S1 :: capB1)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0; S0; S1; S1] (S1 :: S0 :: capB0) (repP p' lt)
+           false A [S1; S1] (S1 :: capB1)); check_window.
 Qed.
 
 Lemma reach_capB_1 (p : N) (lt : list Sym) :
   inCfg p lt capB1 -[ tm ]->+ outCfg (p + 1) lt capB2.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 17 false A [S0] (S1 :: S0 :: capB1) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capB2)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capB1) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capB2)); check_window.
 Qed.
 
 Lemma reach_capB_2 (p : N) (lt : list Sym) :
   inCfg p lt capB2 -[ tm ]->+ outCfg (p + 1) lt capB3.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 17 false A [S0] (S1 :: S0 :: capB2) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capB3)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capB2) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capB3)); check_window.
 Qed.
 
 Lemma reach_capB_3 (p : N) (lt : list Sym) :
   inCfg p lt capB3 -[ tm ]->+ outCfg (p + 1) lt capB4.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 17 false A [S0] (S1 :: S0 :: capB3) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capB4)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capB3) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capB4)); check_window.
 Qed.
 
 Lemma reach_capB_4 (p : N) (lt : list Sym) :
   inCfg p lt capB4 -[ tm ]->+ outCfg (p + 1) lt capB5.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 17 false A [S0] (S1 :: S0 :: capB4) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capB5)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capB4) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capB5)); check_window.
 Qed.
 
 Lemma reach_capB_5 (p : N) (lt : list Sym) :
   inCfg p lt capB5 -[ tm ]->+ outCfg (p + 1) lt capB0.
 Proof.
   unfold inCfg, outCfg. rewrite repP_succ.
-  apply (simClosed_progress 277 false A [S0] (S1 :: S0 :: capB5) (repP p lt)
-           false A [S1; S1; S0; S1; S1] (S1 :: capB0)).
-  vm_compute; reflexivity.
+  apply (reachClosed tm false A [S0] (S1 :: S0 :: capB5) (repP p lt)
+           false A [S1; S1; S0; S1; S1] (S1 :: capB0)); check_window.
 Qed.
 
 (** *** [SafeProg] Combinators *)
@@ -5440,59 +5354,112 @@ Proof.
     + exists  3, (3 * m + 5); split; [lia | exact (checkSymRuleK_sound sym_rule_31 m)].
 Qed.
 
-(** *** Initial Blank-Tape Steps & Transient Verification *)
+End Family.
 
-Definition cp_0 : BaseState := mkBase mAL [] [].
-
-Lemma init_to_cp0 : c0 -[ tm ]->* encodeBase cp_0.
-Proof.
-  unfold c0, tape0, encodeBase, cp_0, mEncL; cbn [mode l r decL decR encTape hd tl].
-  eapply evstep_refl'; solve_const0_eq.
-Qed.
-
-Definition checkTransientHub4 (steps : positive) : bool :=
-  match runStepsPos steps cp_0 with
+Definition checkEntry start idx steps :=
+  match runStepsPos steps start with
   | Some out =>
     match r out with
     | _ :: _ :: _ :: R_q bMinus1 :: _ =>
-      let n := N.div bMinus1 12 - 4 in
-      stateBeqK out (hubState 4 n)
+      stateBeqK out (hubState idx (N.div bMinus1 12 - 4))
     | _ => false
     end
   | None => false
   end.
 
-Lemma checkTransientHub4_sound (steps : positive) :
-  checkTransientHub4 steps = true ->
-  exists n0 : N, c0 -[ tm ]->* encodeBase (hubState 4 n0).
+Lemma checkEntry_sound v start idx steps :
+  checkEntry start idx steps = true ->
+  exists n, encodeBase start -[ variant_tm v ]->* encodeBase (hubState idx n).
 Proof.
-  unfold checkTransientHub4.
-  destruct (runStepsPos steps cp_0) as [out |] eqn:Hrun; [| discriminate].
-  destruct (r out) as [| t0 [| t1 [| t2 [| [k3 | k3 | bMinus1 | k3] rest]]]] eqn:Hrout;
-    try discriminate.
-  intro Hbeq.
-  set (n0 := N.div bMinus1 12 - 4) in *.
-  exists n0.
-  rewrite <- (stateBeqK_eq _ _ Hbeq).
-  exact (evstep_trans _ _ _ _ init_to_cp0 (runStepsPos_sound steps cp_0 out Hrun)).
+  unfold checkEntry.
+  destruct (runStepsPos steps start) as [out|] eqn:Hrun; [|discriminate].
+  destruct (r out) as [| t0 [| t1 [| t2 [| [k|k|bMinus1|k] rest]]]]; try discriminate.
+  intro H. exists (N.div bMinus1 12 - 4).
+  rewrite <- (stateBeqK_eq _ _ H).
+  exact (runStepsPos_sound v steps start out Hrun).
 Qed.
 
-Lemma transient_cert : checkTransientHub4 2122236%positive = true.
+Lemma nonhalt_from_entry v target (f : Q * tape -> Q * tape)
+    (Hstep : forall c c', c -[ variant_tm v ]-> c' -> f c -[ target ]-> f c')
+    start idx fuel :
+  c0 -[ target ]->* f (encodeBase start) ->
+  idx < 16 -> checkEntry start idx fuel = true ->
+  ~ halts target c0.
+Proof.
+  intros Hinit Hidx Hcheck.
+  destruct (checkEntry_sound v start idx fuel Hcheck) as [n Hn].
+  eapply multistep_nonhalt; [exact Hinit|].
+  assert (He : forall c c', c -[ variant_tm v ]->* c' -> f c -[ target ]->* f c')
+    by (intros c c' H; induction H; eauto using evstep).
+  assert (Hp : forall c c', c -[ variant_tm v ]->+ c' -> f c -[ target ]->+ f c')
+    by (intros c c' H; induction H; eauto using progress).
+  eapply multistep_nonhalt; [exact (He _ _ Hn)|].
+  eapply progress_nonhalt_cond with (i0 := (idx,n))
+    (C := fun '(j,k) => f (encodeBase (hubState j k)))
+    (P := fun '(j,_) => j < 16); [|exact Hidx].
+  intros [j k] Hj.
+  destruct (attractor_step_plus v j k Hj) as [j' [k' [Hj' Hrun]]].
+  exists (j',k'); eauto.
+Qed.
+
+End Shared.
+
+Lemma same_step c c' :
+  c -[ Shared.variant_tm false ]-> c' -> c -[ tm ]-> c'.
+Proof.
+  destruct 1 as [q q' s s' l r H|q q' s s' l r H];
+    constructor; destruct q,s; exact H.
+Qed.
+
+Definition start := Shared.mkBase Shared.mAL [] [].
+
+Lemma init : c0 -[ tm ]->* Shared.encodeBase start.
+Proof. eapply evstep_refl'; solve_const0_eq. Qed.
+
+Lemma entry : Shared.checkEntry start 4%N 2122236%positive = true.
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
-End M238.
-
-Theorem nonhalt : ~ halts tm c0.
+Theorem nonhalt : ~halts tm c0.
 Proof.
-  destruct (M238.checkTransientHub4_sound 2122236%positive M238.transient_cert) as [n0 Hreach].
-  eapply multistep_nonhalt; [exact Hreach |].
-  eapply progress_nonhalt_cond with
-    (A := (N * N)%type)
-    (i0 := (4%N, n0))
-    (C := fun '(idx, n) => M238.encodeBase (M238.hubState idx n))
-    (P := fun '(idx, _) => (idx < 16)%N).
-  - intros [idx n] Hidx.
-    destruct (M238.attractor_step_plus idx n Hidx) as [idx' [n' [Hidx' Hplus]]].
-    exists (idx', n'). exact (conj Hplus Hidx').
-  - reflexivity.
+  exact (Shared.nonhalt_from_entry false tm (fun x => x) same_step
+    start 4%N 2122236%positive init ltac:(lia) entry).
 Qed.
+End TM104.
+
+Module TM96.
+Definition tm := Eval compute in (TM_from_str "1RB1LF_0LC0RE_1LA1RD_0LB1LB_1RC1RD_0LD---").
+Import TM104.Shared.
+
+Definition ren (q : Q) : Q :=
+  match q with A => C | B => A | C => D | D => B | E => E | F => F end.
+Definition relocate '(q,t) : Q * tape := (ren q, flip_tape t).
+
+Lemma mirror_step c c' :
+  c -[ variant_tm true ]-> c' -> relocate c -[ tm ]-> relocate c'.
+Proof.
+  destruct 1 as [q q' s s' l r H|q q' s s' l r H]; cbn;
+    [apply step_right|apply step_left];
+    destruct q,s; cbn in H; inversion H; reflexivity.
+Qed.
+
+Definition start := mkBase mAL [L_o 0%N] [].
+
+Lemma init : c0 -[ tm ]->* relocate (encodeBase start).
+Proof.
+  unfold c0, tape0, relocate, encodeBase, start, mEncL; cbn [mode l r decL decR].
+  rewrite repOne_succ, repOne_0; cbn [encTape hd tl].
+  eapply evstep_step; [exact (step_right (q := A) (q' := B) (s := S0) (s' := S1) eq_refl) |].
+  cbn.
+  eapply evstep_step; [exact (step_left (q := B) (q' := C) (s := S0) (s' := S0) eq_refl) |].
+  eapply evstep_refl'; solve_const0_eq.
+Qed.
+
+Lemma entry : checkEntry start 2%N 3149825%positive = true.
+Proof. vm_cast_no_check (eq_refl true). Qed.
+
+Theorem nonhalt : ~halts tm c0.
+Proof.
+  exact (nonhalt_from_entry true tm relocate mirror_step
+    start 2%N 3149825%positive init ltac:(lia) entry).
+Qed.
+End TM96.
