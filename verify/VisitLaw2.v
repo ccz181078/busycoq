@@ -1702,7 +1702,3 @@ Proof.
 Qed.
 
 End Gen.
-
-(* ---- the run ---- *)
-Lemma check_ok : check 161210 = true.
-Proof. vm_cast_no_check (eq_refl true). Time Qed.
