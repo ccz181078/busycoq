@@ -1,4 +1,7 @@
-(** * 1RB0LD_0RC---_0LD0RF_1LE1LD_0LA0RD_0RB1RA — Non-Halting Proof *)
+(** Shared proof for the four BEC collar machines of PR #54.
+    The word machine, entry computation and wave checker are from
+    the PR. Only the realization of the word alphabet uses the
+    original machine. *)
 
 From Coq Require Import Bool List Lists.Streams Lia ZifyNat ZifyN NArith ZArith PArith PeanoNat String.
 From BusyCoq Require Import Individual62.
@@ -13,23 +16,106 @@ Open Scope list_scope.
 Open Scope sym_scope.
 Open Scope bool_scope.
 
-Definition tm : TM := TM_from_str "1RB0LD_0RC---_0LD0RF_1LE1LD_0LA0RD_0RB1RA".
-Arguments tm _ : simpl never.
+Module Collar.
 
+Inductive BecMode := hR | hR1 | hR11 | hL.
+Inductive BecTokL := T1 | T000 | T100.
+Inductive BecTokR := U100 | U1001 | U10011 | U10001.
+
+(** The four realizations of the same word machine differ in the number
+    of zeros following a left digit and in the right delimiter. *)
+Record Layout := mkLayout {
+  pad : nat;
+  bridge : list Sym;
+  right1 : Q;
+  left0 : Q
+}.
+
+Fixpoint zeros (n : nat) (s : side) : side :=
+  match n with O => s | S n' => 0 >> zeros n' s end.
+
+Lemma zeros_blank n : zeros n (const 0) = const 0.
+Proof.
+  induction n as [|n IH]; cbn [zeros]; [reflexivity|].
+  now rewrite IH, <- const_unfold.
+Qed.
+
+Fixpoint readLeft (shape : Layout) (tl : list BecTokL) : side :=
+  match tl with
+  | [] => const 0
+  | T1 :: rest => 1 >> readLeft shape rest
+  | T000 :: rest => 0 >> zeros (pad shape) (readLeft shape rest)
+  | T100 :: rest => 1 >> zeros (pad shape) (readLeft shape rest)
+  end.
+
+Definition stem shape (t : side) : side := 0 >> (bridge shape *> t).
+
+Fixpoint readRight (shape : Layout) (tr : list BecTokR) : side :=
+  match tr with
+  | [] => 1 >> const 0
+  | U100 :: rest => stem shape (readRight shape rest)
+  | U1001 :: rest => 1 >> stem shape (readRight shape rest)
+  | U10011 :: rest => 1 >> 1 >> stem shape (readRight shape rest)
+  | U10001 :: rest => 1 >> 0 >> stem shape (readRight shape rest)
+  end.
+
+Definition readCfg shape m tl tr : Q * tape :=
+  let l := readLeft shape tl in
+  let r := readRight shape tr in
+  match m with
+  | hR => l <{{A}} (bridge shape *> r)
+  | hR1 => l <{{right1 shape}} (stem shape r)
+  | hR11 => l <{{right1 shape}} (1 >> stem shape r)
+  | hL => (zeros (pad shape) l) {{left0 shape}}> r
+  end.
+
+Section MacroRules.
+Context (tm : TM) (shape : Layout).
 Local Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
 Local Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+Local Notation becLeft := (readLeft shape).
+Local Notation evalBecCfg := (readCfg shape).
 
-Local Lemma ptrans {c1 c2 c3 : Q * tape} : c1 -->+ c2 -> c2 -->+ c3 -> c1 -->+ c3.
-Proof. apply progress_trans. Qed.
-
-Local Lemma etrans {c1 c2 c3 : Q * tape} : c1 -->* c2 -> c2 -->* c3 -> c1 -->* c3.
-Proof. apply evstep_trans. Qed.
-
-Local Lemma petrans {c1 c2 c3 : Q * tape} : c1 -->+ c2 -> c2 -->* c3 -> c1 -->+ c3.
-Proof. apply progress_evstep_trans. Qed.
-
-Local Lemma p_to_e {c1 c2 : Q * tape} : c1 -->+ c2 -> c1 -->* c2.
-Proof. apply progress_evstep. Qed.
+Record Rules : Prop := {
+  r_init_to_bec : c0 -->+ evalBecCfg hL [T100] [];
+  r_step_hR_nil : forall (tr : list BecTokR),
+    evalBecCfg hR [] tr -->+ evalBecCfg hL [T100] tr;
+  r_step_hR_T1 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR (T1 :: tl) tr -->+ evalBecCfg hR1 tl tr;
+  r_step_hR_T000 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR (T000 :: tl) tr -->+ evalBecCfg hL (T100 :: tl) tr;
+  r_step_hR_T100 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR (T100 :: tl) tr -->+ evalBecCfg hR tl (U100 :: tr);
+  r_step_hR1_nil : forall (tr : list BecTokR),
+    evalBecCfg hR1 [] tr -->+ evalBecCfg hL [T000; T1] tr;
+  r_step_hR1_T1 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR1 (T1 :: tl) tr -->+ evalBecCfg hR11 tl tr;
+  r_step_hR1_T000 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR1 (T000 :: tl) tr -->+ evalBecCfg hL (T000 :: T1 :: tl) tr;
+  r_step_hR1_T100 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR1 (T100 :: tl) tr -->+ evalBecCfg hR tl (U1001 :: tr);
+  r_step_hR11_nil : forall (tr : list BecTokR),
+    evalBecCfg hR11 [] tr -->+ evalBecCfg hL [T1; T100; T1] tr;
+  r_step_hR11_T1_nil : forall (tr : list BecTokR),
+    evalBecCfg hR11 [T1] tr -->+ evalBecCfg hR [] (U10011 :: tr);
+  r_step_hR11_T1_T000 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR11 (T1 :: T000 :: tl) tr -->+ evalBecCfg hR1 tl (U10001 :: tr);
+  r_step_hR11_T000 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR11 (T000 :: tl) tr -->+ evalBecCfg hL (T1 :: T100 :: T1 :: tl) tr;
+  r_step_hR11_T100 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hR11 (T100 :: tl) tr -->+ evalBecCfg hR tl (U10011 :: tr);
+  r_step_hL_nil : forall (tl : list BecTokL),
+    evalBecCfg hL tl [] -->+ evalBecCfg hR1 tl [];
+  r_step_hL_U100 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hL tl (U100 :: tr) -->+ evalBecCfg hL (T000 :: tl) tr;
+  r_step_hL_U1001 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hL tl (U1001 :: tr) -->+ evalBecCfg hL (T1 :: T100 :: tl) tr;
+  r_step_hL_U10011 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hL tl (U10011 :: tr) -->+ evalBecCfg hR tl (U10001 :: tr);
+  r_step_hL_U10001 : forall (tl : list BecTokL) (tr : list BecTokR),
+    evalBecCfg hL tl (U10001 :: tr) -->+ evalBecCfg hR1 tl (U1001 :: tr)
+}.
+End MacroRules.
 
 Ltac fast_simpl_tape :=
   try rewrite move_left_const;
@@ -48,114 +134,50 @@ Ltac fast_steps :=
   [prove_step | fast_simpl_tape];
   repeat (try solve [fast_finish]; fast_step).
 
-(* ========================================================================== *)
-(* Layer 1: 2-Sided BEC Macro Alphabet & Exact TM Transitions                 *)
-(* ========================================================================== *)
+Ltac check_rules :=
+  constructor; intros;
+  cbn [c0 tape0 q0 s0 BB62.q0 BB62.s0 readCfg readLeft readRight zeros
+       stem pad bridge right1 left0 Str_app];
+  fast_steps.
 
-Inductive BecMode := hR | hR1 | hR11 | hL.
-Inductive BecTokL := T1 | T000 | T100.
-Inductive BecTokR := U100 | U1001 | U10011 | U10001.
+Section Common.
+Context (tm : TM) (shape : Layout) (rules : Rules tm shape).
+Local Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
+Local Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
+Local Notation becLeft := (readLeft shape).
+Local Notation evalBecCfg := (readCfg shape).
 
+Local Notation init_to_bec := (@r_init_to_bec tm shape rules).
+Local Notation step_hR_nil := (@r_step_hR_nil tm shape rules).
+Local Notation step_hR_T1 := (@r_step_hR_T1 tm shape rules).
+Local Notation step_hR_T000 := (@r_step_hR_T000 tm shape rules).
+Local Notation step_hR_T100 := (@r_step_hR_T100 tm shape rules).
+Local Notation step_hR1_nil := (@r_step_hR1_nil tm shape rules).
+Local Notation step_hR1_T1 := (@r_step_hR1_T1 tm shape rules).
+Local Notation step_hR1_T000 := (@r_step_hR1_T000 tm shape rules).
+Local Notation step_hR1_T100 := (@r_step_hR1_T100 tm shape rules).
+Local Notation step_hR11_nil := (@r_step_hR11_nil tm shape rules).
+Local Notation step_hR11_T1_nil := (@r_step_hR11_T1_nil tm shape rules).
+Local Notation step_hR11_T1_T000 := (@r_step_hR11_T1_T000 tm shape rules).
+Local Notation step_hR11_T000 := (@r_step_hR11_T000 tm shape rules).
+Local Notation step_hR11_T100 := (@r_step_hR11_T100 tm shape rules).
+Local Notation step_hL_nil := (@r_step_hL_nil tm shape rules).
+Local Notation step_hL_U100 := (@r_step_hL_U100 tm shape rules).
+Local Notation step_hL_U1001 := (@r_step_hL_U1001 tm shape rules).
+Local Notation step_hL_U10011 := (@r_step_hL_U10011 tm shape rules).
+Local Notation step_hL_U10001 := (@r_step_hL_U10001 tm shape rules).
 
-Fixpoint becLeft (tl : list BecTokL) : side :=
-  match tl with
-  | [] => const 0
-  | T1 :: rest => 1 >> becLeft rest
-  | T000 :: rest => 0 >> 0 >> 0 >> becLeft rest
-  | T100 :: rest => 1 >> 0 >> 0 >> becLeft rest
-  end.
+Local Lemma ptrans {c1 c2 c3 : Q * tape} : c1 -->+ c2 -> c2 -->+ c3 -> c1 -->+ c3.
+Proof. apply progress_trans. Qed.
 
-Fixpoint becRight (tr : list BecTokR) : side :=
-  match tr with
-  | [] => 1 >> const 0
-  | U100 :: rest => 0 >> 0 >> 1 >> becRight rest
-  | U1001 :: rest => 1 >> 0 >> 0 >> 1 >> becRight rest
-  | U10011 :: rest => 1 >> 1 >> 0 >> 0 >> 1 >> becRight rest
-  | U10001 :: rest => 1 >> 0 >> 0 >> 0 >> 1 >> becRight rest
-  end.
+Local Lemma etrans {c1 c2 c3 : Q * tape} : c1 -->* c2 -> c2 -->* c3 -> c1 -->* c3.
+Proof. apply evstep_trans. Qed.
 
-Definition evalBecCfg (m : BecMode) (tl : list BecTokL) (tr : list BecTokR) : Q * tape :=
-  match m with
-  | hR => becLeft tl <{{A}} (0 >> 1 >> becRight tr)
-  | hR1 => becLeft tl <{{D}} (0 >> 0 >> 1 >> becRight tr)
-  | hR11 => becLeft tl <{{D}} (1 >> 0 >> 0 >> 1 >> becRight tr)
-  | hL => (0 >> 0 >> becLeft tl) {{F}}> becRight tr
-  end.
+Local Lemma petrans {c1 c2 c3 : Q * tape} : c1 -->+ c2 -> c2 -->* c3 -> c1 -->+ c3.
+Proof. apply progress_evstep_trans. Qed.
 
-Local Lemma init_to_bec : c0 -->+ evalBecCfg hL [T100] [].
-Proof. unfold c0, tape0, q0, s0, evalBecCfg, becLeft, becRight; cbn [BB62.q0 BB62.s0]; fast_steps. Qed.
-
-Local Lemma step_hR_nil (tr : list BecTokR) :
-  evalBecCfg hR [] tr -->+ evalBecCfg hL [T100] tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR_T1 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR (T1 :: tl) tr -->+ evalBecCfg hR1 tl tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR_T000 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR (T000 :: tl) tr -->+ evalBecCfg hL (T100 :: tl) tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR_T100 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR (T100 :: tl) tr -->+ evalBecCfg hR tl (U100 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hR1_nil (tr : list BecTokR) :
-  evalBecCfg hR1 [] tr -->+ evalBecCfg hL [T000; T1] tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR1_T1 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR1 (T1 :: tl) tr -->+ evalBecCfg hR11 tl tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR1_T000 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR1 (T000 :: tl) tr -->+ evalBecCfg hL (T000 :: T1 :: tl) tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR1_T100 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR1 (T100 :: tl) tr -->+ evalBecCfg hR tl (U1001 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hR11_nil (tr : list BecTokR) :
-  evalBecCfg hR11 [] tr -->+ evalBecCfg hL [T1; T100; T1] tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR11_T1_nil (tr : list BecTokR) :
-  evalBecCfg hR11 [T1] tr -->+ evalBecCfg hR [] (U10011 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hR11_T1_T000 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR11 (T1 :: T000 :: tl) tr -->+ evalBecCfg hR1 tl (U10001 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hR11_T000 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR11 (T000 :: tl) tr -->+ evalBecCfg hL (T1 :: T100 :: T1 :: tl) tr.
-Proof. unfold evalBecCfg, becLeft; fast_steps. Qed.
-
-Local Lemma step_hR11_T100 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hR11 (T100 :: tl) tr -->+ evalBecCfg hR tl (U10011 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hL_nil (tl : list BecTokL) :
-  evalBecCfg hL tl [] -->+ evalBecCfg hR1 tl [].
-Proof. unfold evalBecCfg, becRight; fast_steps. Qed.
-
-Local Lemma step_hL_U100 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hL tl (U100 :: tr) -->+ evalBecCfg hL (T000 :: tl) tr.
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hL_U1001 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hL tl (U1001 :: tr) -->+ evalBecCfg hL (T1 :: T100 :: tl) tr.
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hL_U10011 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hL tl (U10011 :: tr) -->+ evalBecCfg hR tl (U10001 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
-
-Local Lemma step_hL_U10001 (tl : list BecTokL) (tr : list BecTokR) :
-  evalBecCfg hL tl (U10001 :: tr) -->+ evalBecCfg hR1 tl (U1001 :: tr).
-Proof. unfold evalBecCfg, becLeft, becRight; fast_steps. Qed.
+Local Lemma p_to_e {c1 c2 : Q * tape} : c1 -->+ c2 -> c1 -->* c2.
+Proof. apply progress_evstep. Qed.
 
 (* ========================================================================== *)
 (* Layer 2a: 1-Sided Left-Bounce Dictionary, RelT, and Universal Collar       *)
@@ -258,8 +280,8 @@ Local Lemma becLeft_decode1_consTrim (t : BecTok1) (xs : list BecTok1) :
 Proof.
   destruct t; try reflexivity.
   destruct xs as [| u ys]; [| reflexivity].
-  cbn [consTrim decode1 becLeft].
-  repeat rewrite <- const_unfold. reflexivity.
+  cbn [consTrim decode1 readLeft].
+  rewrite zeros_blank, <- const_unfold. reflexivity.
 Qed.
 
 Local Lemma becLeft_decode1_trimZero (w : list BecTok1) :
@@ -267,7 +289,7 @@ Local Lemma becLeft_decode1_trimZero (w : list BecTok1) :
 Proof.
   induction w as [| t xs IH]; [reflexivity |].
   cbn [trimZero]. rewrite becLeft_decode1_consTrim.
-  destruct t; cbn [decode1 becLeft]; rewrite IH; reflexivity.
+  destruct t; cbn [decode1 readLeft]; rewrite IH; reflexivity.
 Qed.
 
 Local Lemma becLeft_append_eq {xs ys zs : list BecTokL}
@@ -275,7 +297,7 @@ Local Lemma becLeft_append_eq {xs ys zs : list BecTokL}
   becLeft (xs ++ ys) = becLeft (xs ++ zs).
 Proof.
   induction xs as [| t xs IH]; [exact h |].
-  destruct t; cbn [app becLeft]; rewrite IH; reflexivity.
+  destruct t; cbn [app readLeft]; rewrite IH; reflexivity.
 Qed.
 
 Local Lemma becLeft_decode1_norm1 (w : list BecTok1) :
@@ -287,7 +309,7 @@ Qed.
 Local Lemma evalBecCfg_norm1 (m : BecMode) (w : list BecTok1) (tr : list BecTokR) :
   evalBecCfg m (decode1 (norm1 w)) tr = evalBecCfg m (decode1 w) tr.
 Proof.
-  destruct m; unfold evalBecCfg; rewrite becLeft_decode1_norm1; reflexivity.
+  destruct m; unfold readCfg; rewrite becLeft_decode1_norm1; reflexivity.
 Qed.
 
 Inductive TMode := M0 | M1 | M2.
@@ -522,7 +544,7 @@ Proof.
     by exact (ptrans h1 (RelT_sound hfull [])).
   assert (heq : evalBecCfg hL (decode1 (pfx ++ v')) [] =
                 cfgCollar (k_col + leadB (norm1 v')) (dropB (norm1 v'))).
-  { unfold cfgCollar, pfx, evalBecCfg.
+  { unfold cfgCollar, pfx, readCfg.
     replace ([TokB; TokB; Tok0; Tok1] ++ repB (k_col + leadB (norm1 v')) ++ dropB (norm1 v'))
       with (([TokB; TokB; Tok0; Tok1] ++ repB k_col) ++ norm1 v')
       by (rewrite repB_add, <- !app_assoc, rep_leadB_dropB; reflexivity).
@@ -1726,7 +1748,7 @@ Qed.
 Local Lemma cfgCollar_norm1 (k_col : N) (w : list BecTok1) :
   cfgCollar (k_col + leadB (norm1 w)) (dropB (norm1 w)) = cfgCollar k_col w.
 Proof.
-  unfold cfgCollar, evalBecCfg.
+  unfold cfgCollar, readCfg.
   replace ([TokB; TokB; Tok0; Tok1] ++ repB (k_col + leadB (norm1 w)) ++ dropB (norm1 w))
     with (([TokB; TokB; Tok0; Tok1] ++ repB k_col) ++ norm1 w)
     by (rewrite repB_add, <- !app_assoc, rep_leadB_dropB; reflexivity).
@@ -1740,7 +1762,7 @@ Qed.
 Local Lemma cfgCollar_eq_norm1 (k_col : N) (w : list BecTok1) :
   cfgCollar k_col (norm1 w) = cfgCollar k_col w.
 Proof.
-  unfold cfgCollar, evalBecCfg.
+  unfold cfgCollar, readCfg.
   replace ([TokB; TokB; Tok0; Tok1] ++ repB k_col ++ norm1 w)
     with (([TokB; TokB; Tok0; Tok1] ++ repB k_col) ++ norm1 w)
     by (rewrite <- !app_assoc; reflexivity).
@@ -2615,27 +2637,33 @@ Definition withJB (nd : SymWaveNode) (jb' : JBounds) : SymWaveNode :=
     (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
     jb' (nd_Y nd) (nd_wRQ nd) (nd_pRQ nd).
 
+(* One stop policy for all of the affine suffix families.  The candidate
+   for the stronger bound, and the slope of that bound, are local to a
+   family; the interval decisions are not. *)
+Definition stopByAnchor (tpl : SymWaveNode) (rise : N -> Z) (jc : Z)
+    (candidate : unit -> N) (q0 wy py qmax : N) : option N :=
+  let checked := fun q => checkAbstract tpl true true (wy + (q - q0)) (py + (q - q0)) in
+  if checked qmax then Some q0
+  else let qr := candidate tt in
+    if qr <=? qmax then
+    if checkAbstract (withJB tpl (addJBound (nd_jb tpl) (rise qr) jc))
+         true true (wy + (qr - q0)) (py + (qr - q0)) then
+      if qr <=? q0 then Some q0
+      else if checked (qr - 1) then Some q0 else Some qr
+    else None
+  else None.
+
 Definition findChildQStop (nxTpl : SymWaveNode)
     (ms k_hi_u : N) (k_hi_c : Z) (w_hi_u : N) (w_hi_c : Z) (extra_B_parent : N)
     (q_anc wy0 py0 q_max : N) : option N :=
   if q_max <? q_anc then Some q_anc
-  else if checkAbstract nxTpl true true (wy0 + (q_max - q_anc)) (py0 + (q_max - q_anc)) then
-    Some q_anc
   else
-    let jc0 := (- (2 * k_hi_c + w_hi_c + Z.of_N (2 * extra_B_parent)))%Z in
-    let min_ju := dominantJuMin (nd_jb nxTpl) jc0 in
-    let need := 2 * k_hi_u + w_hi_u + min_ju in
-    let q_right := N.max q_anc ((need + ms - 1) / ms) in
-    if q_right <=? q_max then
-      let ju_r := (Z.of_N (q_right * ms) - Z.of_N (2 * k_hi_u + w_hi_u))%Z in
-      let nx_r := withJB nxTpl (addJBound (nd_jb nxTpl) ju_r jc0) in
-      if checkAbstract nx_r true true (wy0 + (q_right - q_anc)) (py0 + (q_right - q_anc)) then
-        if q_right <=? q_anc then Some q_anc
-        else if checkAbstract nxTpl true true (wy0 + (q_right - 1 - q_anc)) (py0 + (q_right - 1 - q_anc)) then
-          Some q_anc
-        else Some q_right
-      else None
-    else None.
+    let jc := (- (2 * k_hi_c + w_hi_c + Z.of_N (2 * extra_B_parent)))%Z in
+    stopByAnchor nxTpl (fun q => (Z.of_N (q * ms) - Z.of_N (2 * k_hi_u + w_hi_u))%Z)
+      jc (fun _ =>
+        let need := 2 * k_hi_u + w_hi_u + dominantJuMin (nd_jb nxTpl) jc in
+        N.max q_anc ((need + ms - 1) / ms)) q_anc wy0 py0 q_max.
+
 
 Definition runBeforeStop (q : N) (st : option N) : bool :=
   match st with
@@ -2672,6 +2700,103 @@ Fixpoint runRange (d : nat) (body : N -> MemoTree -> bool * MemoTree)
     else runRange d' body (cur + h) (rem - h) m1
   end.
 
+Definition childJB (nd : SymWaveNode) (ms q : N) : JBounds :=
+  addJBound (nd_jb nd)
+    (Z.of_N (q * ms) - Z.of_N (2 * nd_k_hi_u nd + nd_w_hi_u nd))%Z
+    (- (2 * nd_k_hi_c nd + nd_w_hi_c nd + Z.of_N (2 * nd_extra_B nd)))%Z.
+
+Definition mkChild1 (nd : SymWaveNode) (ms ms_next q : N) (y : list BecTok1) : SymWaveNode :=
+  mkWaveNode
+    (nd_s nd + 1) (nd_db_shift nd + 1) false
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z ms_next (-1)%Z
+    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
+    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
+    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
+
+Definition mkChild2 (nd : SymWaveNode) (ms q : N) (y : list BecTok1) : SymWaveNode :=
+  mkWaveNode
+    (nd_s nd + 1) (nd_db_shift nd + 1) false
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z 0 1%Z
+    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
+    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
+    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
+
+Definition mkChild3 (nd : SymWaveNode) (ms ms_next q : N) (y : list BecTok1) : SymWaveNode :=
+  mkWaveNode
+    (nd_s nd + 1) (nd_db_shift nd + 1) false
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z ms_next (-1)%Z
+    (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd + pow2N (nd_db_shift nd + 2))
+    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
+    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
+
+Definition mkChild4 (nd : SymWaveNode) (ms ms_next q : N) (y : list BecTok1) : SymWaveNode :=
+  let sh1 := pow2N (nd_s nd + 1) in
+  mkWaveNode
+    (nd_s nd + 1) (nd_db_shift nd + 1) true
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z ms_next (-1)%Z
+    (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
+    ((q + 1) * ms) (- Z.of_N (2 * nd_extra_B nd + 2))%Z
+    sh1 (64 * (q + 1)) (- Z.of_N (sh1 * (nd_extra_B nd + 1)))%Z
+    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
+
+Definition mkChildQA (nd : SymWaveNode) (ms_next : N) (ya : list BecTok1) : SymWaveNode :=
+  mkWaveNode
+    (nd_s nd + 1) (nd_db_shift nd) false
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z ms_next (-1)%Z
+    (nd_extra_B nd + 1) (nd_scaled_db_u nd + pow2N (nd_db_shift nd) * ms_next) (nd_scaled_db_c nd)
+    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
+    (nd_jb nd) ya (nd_wRQ nd) (nd_pRQ nd).
+
+Definition mkChildQS (nd : SymWaveNode) (ms qs : N) (next_jb : JBounds) (yq : list BecTok1) : SymWaveNode :=
+  let ju := (Z.of_N (2 * (qs + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z in
+  let jc := (- (2 * (nd_k_hi_c nd + Z.of_N (nd_extra_B nd + 3))))%Z in
+  mkWaveNode
+    (nd_s nd) (nd_db_shift nd) false
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z ms (-1)%Z
+    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
+    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
+    (addJBound next_jb ju jc) yq (nd_wRQ nd) (nd_pRQ nd).
+
+(** Each child uses the current suffix or a further [qDelta] iterations.
+    At or after [qStop], an independently verified bound covers it. *)
+Record QChild := mkQChild {
+  qDelta : N;
+  qStop : option N;
+  qNode : N -> list BecTok1 -> SymWaveNode
+}.
+
+Definition qChildren nd ms ms_next st1 st2 st3 st4 :=
+  [mkQChild 0 st1 (mkChild1 nd ms ms_next);
+   mkQChild 1 st2 (mkChild2 nd ms);
+   mkQChild 0 st3 (mkChild3 nd ms ms_next);
+   mkQChild 0 st4 (mkChild4 nd ms ms_next)].
+
+Definition childSuffix d yp :=
+  match d with 0 => Some yp | _ => t0PowNorm wordFuel d yp end.
+
+Definition runQChild (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
+    q yp ch memo :=
+  if runBeforeStop q (qStop ch) then
+    match childSuffix (qDelta ch) yp with
+    | Some y => stepFn (qNode ch q y) memo
+    | None => (false, memo)
+    end
+  else (true, memo).
+
+Fixpoint runQChildren stepFn q yp chs memo : bool * MemoTree :=
+  match chs with
+  | [] => (true, memo)
+  | ch :: rest =>
+    let '(ok, m) := runQChild stepFn q yp ch memo in
+    if ok then runQChildren stepFn q yp rest m else (false, m)
+  end.
+
 Definition stepQBody (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
     (nd : SymWaveNode) (ms ms_next : N) (st1 st2 st3 st4 : option N)
     (q : N) (memo : MemoTree) : bool * MemoTree :=
@@ -2687,80 +2812,14 @@ Definition stepQBody (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
   else
     match t0PowNorm wordFuel q (nd_Y nd) with
     | None => (false, memo)
-    | Some yp =>
-      let ju := (Z.of_N (q * ms) - Z.of_N (2 * nd_k_hi_u nd + nd_w_hi_u nd))%Z in
-      let jc := (- (2 * nd_k_hi_c nd + nd_w_hi_c nd + Z.of_N (2 * nd_extra_B nd)))%Z in
-      let jb' := addJBound (nd_jb nd) ju jc in
-      let '(ok1, m1) :=
-        if b1 then
-          let nx1 := mkWaveNode
-            (nd_s nd + 1) (nd_db_shift nd + 1) false
-            (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-            0 0%Z ms_next (-1)%Z
-            (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-            (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-            jb' yp (nd_wRQ nd) (nd_pRQ nd) in
-          stepFn nx1 memo
-        else (true, memo) in
-      if negb ok1 then (false, m1)
-      else
-        let '(ok2, m2) :=
-          if b2 then
-            match t0PowNorm wordFuel 1 yp with
-            | None => (false, m1)
-            | Some yp1 =>
-              let nx2 := mkWaveNode
-                (nd_s nd + 1) (nd_db_shift nd + 1) false
-                (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-                0 0%Z 0 1%Z
-                (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-                (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-                jb' yp1 (nd_wRQ nd) (nd_pRQ nd) in
-              stepFn nx2 m1
-            end
-          else (true, m1) in
-        if negb ok2 then (false, m2)
-        else
-          let '(ok3, m3) :=
-            if b3 then
-              let nx3 := mkWaveNode
-                (nd_s nd + 1) (nd_db_shift nd + 1) false
-                (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-                0 0%Z ms_next (-1)%Z
-                (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd + pow2N (nd_db_shift nd + 2))
-                (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-                jb' yp (nd_wRQ nd) (nd_pRQ nd) in
-              stepFn nx3 m2
-            else (true, m2) in
-          if negb ok3 then (false, m3)
-          else
-            if b4 then
-              let sh1 := pow2N (nd_s nd + 1) in
-              let nx4 := mkWaveNode
-                (nd_s nd + 1) (nd_db_shift nd + 1) true
-                (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-                0 0%Z ms_next (-1)%Z
-                (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-                ((q + 1) * ms) (- Z.of_N (2 * nd_extra_B nd + 2))%Z
-                sh1 (64 * (q + 1)) (- Z.of_N (sh1 * (nd_extra_B nd + 1)))%Z
-                jb' yp (nd_wRQ nd) (nd_pRQ nd) in
-              stepFn nx4 m3
-            else (true, m3)
+    | Some yp => runQChildren stepFn q yp (qChildren nd ms ms_next st1 st2 st3 st4) memo
     end.
 
 Definition stepQABody (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
     (nd : SymWaveNode) (ms_next : N) (qa : N) (memo : MemoTree) : bool * MemoTree :=
   match t0PowNorm wordFuel qa (nd_Y nd) with
   | None => (false, memo)
-  | Some ya =>
-    let nx := mkWaveNode
-      (nd_s nd + 1) (nd_db_shift nd) false
-      (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-      0 0%Z ms_next (-1)%Z
-      (nd_extra_B nd + 1) (nd_scaled_db_u nd + pow2N (nd_db_shift nd) * ms_next) (nd_scaled_db_c nd)
-      (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-      (nd_jb nd) ya (nd_wRQ nd) (nd_pRQ nd) in
-    stepFn nx memo
+  | Some ya => stepFn (mkChildQA nd ms_next ya) memo
   end.
 
 Definition stepQSBody (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
@@ -2779,51 +2838,33 @@ Definition stepQSBody (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
   else
     match t0PowNorm wordFuel qs tyc with
     | None => (false, memo)
-    | Some yq =>
-      let ju := (Z.of_N (2 * (qs + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z in
-      let jc := (- (2 * (nd_k_hi_c nd + Z.of_N (nd_extra_B nd + 3))))%Z in
-      let jb' := addJBound next_jb ju jc in
-      let nx := mkWaveNode
-        (nd_s nd) (nd_db_shift nd) false
-        (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-        0 0%Z ms (-1)%Z
-        (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-        (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-        jb' yq (nd_wRQ nd) (nd_pRQ nd) in
-      stepFn nx memo
+    | Some yq => stepFn (mkChildQS nd ms qs next_jb yq) memo
     end.
+
+Definition qsTemplate (nd : SymWaveNode) (ms : N) (next_jb : JBounds) : SymWaveNode :=
+  mkWaveNode
+    (nd_s nd) (nd_db_shift nd) false
+    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
+    0 0%Z ms (-1)%Z
+    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
+    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
+    next_jb (nd_Y nd) (nd_wRQ nd) (nd_pRQ nd).
+
+Definition qsConstant nd := (- (2 * (nd_k_hi_c nd + Z.of_N (nd_extra_B nd + 3))))%Z.
+Definition qsRise nd ms q := (Z.of_N (2 * (q + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z.
+Definition qsRight nd ms q0 next_jb :=
+  let need := nd_k_hi_u nd + (dominantJuMin next_jb (qsConstant nd) + 1) / 2 in
+  N.max q0 ((need + ms - 1) / ms - 2).
 
 Definition qsStopOpt (nd : SymWaveNode) (ms qs_lo qs_hi : N)
     (tyc : list BecTok1) (next_jb : JBounds) : option N :=
   match findL0Anchor 7%nat tyc qs_lo qs_hi with
   | None => None
   | Some (qs0, wys0, pys0) =>
-    let nxTpl := mkWaveNode
-      (nd_s nd) (nd_db_shift nd) false
-      (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-      0 0%Z ms (-1)%Z
-      (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-      (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-      next_jb (nd_Y nd) (nd_wRQ nd) (nd_pRQ nd) in
-    if checkAbstract nxTpl true true (wys0 + (qs_hi - qs0)) (pys0 + (qs_hi - qs0)) then
-      Some qs0
-    else
-      let jc_qs := (- (2 * (nd_k_hi_c nd + Z.of_N (nd_extra_B nd + 3))))%Z in
-      let min_ju := dominantJuMin next_jb jc_qs in
-      let need_qs := nd_k_hi_u nd + (min_ju + 1) / 2 in
-      let req_qsr2 := (need_qs + ms - 1) / ms in
-      let qs_r := N.max qs0 (req_qsr2 - 2) in
-      if qs_r <=? qs_hi then
-        let ju_r := (Z.of_N (2 * (qs_r + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z in
-        let nx_r := withJB nxTpl (addJBound next_jb ju_r jc_qs) in
-        if checkAbstract nx_r true true (wys0 + (qs_r - qs0)) (pys0 + (qs_r - qs0)) then
-          if qs_r <=? qs0 then Some qs0
-          else if checkAbstract nxTpl true true (wys0 + (qs_r - 1 - qs0)) (pys0 + (qs_r - 1 - qs0)) then
-            Some qs0
-          else Some qs_r
-        else None
-      else None
+    stopByAnchor (qsTemplate nd ms next_jb) (qsRise nd ms) (qsConstant nd)
+      (fun _ => qsRight nd ms qs0 next_jb) qs0 wys0 pys0 qs_hi
   end.
+
 
 Definition stepCTInner (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
     (nd : SymWaveNode) (ms qs_hi sh2 sh4 ct : N) (tyc : list BecTok1)
@@ -2940,13 +2981,7 @@ Definition computeCntA (nd : SymWaveNode) (ms_next qa_lo qa_hi : N) : N :=
   else match findL0Anchor 7%nat (nd_Y nd) qa_lo qa_hi with
   | None => qa_hi - qa_lo + 1
   | Some (qa0, wya0, pya0) =>
-    let nx_hi := mkWaveNode
-      (nd_s nd + 1) (nd_db_shift nd) false
-      (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-      0 0%Z ms_next (-1)%Z
-      (nd_extra_B nd + 1) (nd_scaled_db_u nd + pow2N (nd_db_shift nd) * ms_next) (nd_scaled_db_c nd)
-      (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-      (nd_jb nd) (nd_Y nd) (nd_wRQ nd) (nd_pRQ nd) in
+    let nx_hi := mkChildQA nd ms_next (nd_Y nd) in
     if checkAbstract nx_hi true true (wya0 + (qa_hi - qa0)) (pya0 + (qa_hi - qa0)) then
       qa0 - qa_lo
     else qa_hi - qa_lo + 1
@@ -3936,7 +3971,7 @@ Qed.
 Local Lemma cfgCollar_append_norm1 (k_col : N) (P v : list BecTok1) :
   cfgCollar k_col (P ++ norm1 v) = cfgCollar k_col (P ++ v).
 Proof.
-  unfold cfgCollar, evalBecCfg.
+  unfold cfgCollar, readCfg.
   replace ([TokB; TokB; Tok0; Tok1] ++ repB k_col ++ P ++ norm1 v)
     with (([TokB; TokB; Tok0; Tok1] ++ repB k_col ++ P) ++ norm1 v)
     by (rewrite <- !app_assoc; reflexivity).
@@ -4253,6 +4288,69 @@ Proof.
       unfold K_cur in *; lia.
 Qed.
 
+Local Lemma checkAbstract_withY nd y wy py :
+  checkAbstract (withY nd y) true true wy py = checkAbstract nd true true wy py.
+Proof. reflexivity. Qed.
+
+Local Lemma checkAbstract_smaller nd wy py w p :
+  w <= wy -> p <= py -> checkAbstract nd true true wy py = true ->
+  checkAbstract nd true true w p = true.
+Proof.
+  intros hw hp hc.
+  exact (checkAbstract_mono nd nd true true wy w py p
+    eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
+    (fun h => h) hw hp (JBoundsLe_refl _) hc).
+Qed.
+
+Local Lemma stopByAnchor_sound tpl rise jc slope qr a wy py qmax st q y :
+  a <= qr ->
+  2 * msOf (nd_s tpl) <= slope ->
+  (Z.of_N (dominantJuMin (nd_jb tpl) jc) <= rise qr)%Z ->
+  (qr <= q -> rise q = (rise qr + Z.of_N ((q - qr) * slope))%Z) ->
+  stopByAnchor tpl rise jc (fun _ => qr) a wy py qmax = Some st ->
+  st <= q -> q <= qmax -> evalPhi 22 y <= py + (q - a) ->
+  a <= q /\
+  (checkAbstract (withY tpl y) true true (wy + (q - a)) (evalPhi 22 y) = true \/
+   checkAbstract (withJB (withY tpl y) (addJBound (nd_jb tpl) (rise q) jc))
+     true true (wy + (q - a)) (evalPhi 22 y) = true).
+Proof.
+  intros ha hs hdom hdelta Hst hlo hhi hpy.
+  assert (base : forall b, q <= b ->
+    checkAbstract tpl true true (wy + (b - a)) (py + (b - a)) = true ->
+    checkAbstract (withY tpl y) true true (wy + (q - a)) (evalPhi 22 y) = true).
+  { intros b hq H. rewrite checkAbstract_withY.
+    apply (checkAbstract_smaller tpl (wy + (b - a)) (py + (b - a)));
+      [lia | lia | exact H]. }
+  unfold stopByAnchor in Hst; cbn beta zeta in Hst.
+  destruct (checkAbstract tpl true true (wy + (qmax - a)) (py + (qmax - a))) eqn:Hmax.
+  { injection Hst as <-. exact (conj hlo (or_introl (base _ hhi Hmax))). }
+  destruct (qr <=? qmax); [| discriminate Hst].
+  destruct (checkAbstract (withJB tpl (addJBound (nd_jb tpl) (rise qr) jc))
+    true true (wy + (qr - a)) (py + (qr - a))) eqn:Hr; [| discriminate Hst].
+  assert (extend : qr <= q ->
+    checkAbstract (withJB (withY tpl y) (addJBound (nd_jb tpl) (rise q) jc))
+      true true (wy + (q - a)) (evalPhi 22 y) = true).
+  { intros hq.
+    apply (checkAbstract_shift (withY tpl y) (nd_jb tpl) jc (rise qr)
+      (rise q) jc (q - qr) slope (wy + (qr - a)) (wy + (q - a))
+      (py + (qr - a)) (evalPhi 22 y) hdom (hdelta hq) eq_refl hs).
+    - lia.
+    - lia.
+    - change (checkAbstract (withY (withJB tpl (addJBound (nd_jb tpl) (rise qr) jc)) y)
+                true true (wy + (qr - a)) (py + (qr - a)) = true).
+      now rewrite checkAbstract_withY. }
+  destruct (qr <=? a) eqn:Hra.
+  { apply N.leb_le in Hra. injection Hst as <-.
+    exact (conj hlo (or_intror (extend ltac:(lia)))). }
+  destruct (checkAbstract tpl true true (wy + (qr - 1 - a)) (py + (qr - 1 - a))) eqn:Hmid;
+    injection Hst as <-.
+  - split; [exact hlo|].
+    destruct (N.lt_ge_cases q qr) as [Hq|Hq].
+    + left; exact (base (qr - 1) ltac:(lia) Hmid).
+    + right; exact (extend Hq).
+  - exact (conj (N.le_trans _ _ _ ha hlo) (or_intror (extend hlo))).
+Qed.
+
 Local Lemma findChildQStop_sound (nxTpl : SymWaveNode)
     (ms k_hi_u : N) (k_hi_c : Z) (w_hi_u : N) (w_hi_c : Z) (extra_B_parent : N)
     (q0 wy_b py_b q_max q_stop q : N) (y_q : list BecTok1) (jc : Z)
@@ -4270,69 +4368,24 @@ Local Lemma findChildQStop_sound (nxTpl : SymWaveNode)
      true true (wy_b + (q - q0)) (evalPhi 22 y_q) = true).
 Proof.
   unfold findChildQStop in hstop.
-  destruct (q_max <? q0) eqn:Hb0.
-  - apply N.ltb_lt in Hb0; injection hstop as <-; lia.
-  - apply N.ltb_ge in Hb0.
-    destruct (checkAbstract nxTpl true true (wy_b + (q_max - q0)) (py_b + (q_max - q0))) eqn:Ha_max.
-    + injection hstop as <-.
-      split; [exact hge_stop | left].
-      refine (checkAbstract_mono nxTpl (withY nxTpl y_q) true true _ _ _ _
-        eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
-        (fun h => h) _ _ (JBoundsLe_refl _) Ha_max); lia.
-    + cbn zeta in hstop.
-      set (jc0 := (- (2 * k_hi_c + w_hi_c + Z.of_N (2 * extra_B_parent)))%Z) in *.
-      set (min_ju := dominantJuMin (nd_jb nxTpl) jc0) in *.
-      set (need := 2 * k_hi_u + w_hi_u + min_ju) in *.
-      set (q_right := N.max q0 ((need + ms - 1) / ms)) in *.
-      assert (hq0_le_qr : q0 <= q_right) by exact (N.le_max_l _ _).
-      assert (hqr_ge : (need + ms - 1) / ms <= q_right) by exact (N.le_max_r _ _).
-      pose proof (ceil_div_mul_ge need ms hms_pos) as hceil.
-      assert (hdom_r : (Z.of_N min_ju <= Z.of_N (q_right * ms) - Z.of_N (2 * k_hi_u + w_hi_u))%Z).
-      { assert (hmul : need <= q_right * ms) by (clear - hqr_ge hceil; clearbody q_right need min_ju jc0; nia).
-        unfold need in hmul; clear - hmul; clearbody q_right min_ju jc0; lia. }
-      destruct (q_right <=? q_max) eqn:Hbr; [| discriminate hstop].
-      set (ju_r := (Z.of_N (q_right * ms) - Z.of_N (2 * k_hi_u + w_hi_u))%Z) in *.
-      set (nx_r := withJB nxTpl (addJBound (nd_jb nxTpl) ju_r jc0)) in *.
-      destruct (checkAbstract nx_r true true (wy_b + (q_right - q0)) (py_b + (q_right - q0))) eqn:Ha_r;
-        [| discriminate hstop].
-      assert (shift_from_qr : q_right <= q ->
-        checkAbstract (withJB (withY nxTpl y_q)
-          (addJBound (nd_jb nxTpl) (Z.of_N (q * ms) - Z.of_N (2 * k_hi_u + w_hi_u))%Z jc))
-          true true (wy_b + (q - q0)) (evalPhi 22 y_q) = true).
-      { intros hqr_q.
-        assert (ha_r_Y : checkAbstract (withJB (withY nxTpl y_q) (addJBound (nd_jb nxTpl) ju_r jc0))
-                           true true (wy_b + (q_right - q0)) (py_b + (q_right - q0)) = true).
-        { exact (checkAbstract_mono nx_r _ true true _ _ _ _
-            eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
-            (fun h => h) (N.le_refl _) (N.le_refl _) (JBoundsLe_refl _) Ha_r). }
-        refine (checkAbstract_shift (withY nxTpl y_q) (nd_jb nxTpl) jc0 ju_r
-          (Z.of_N (q * ms) - Z.of_N (2 * k_hi_u + w_hi_u))%Z jc (q - q_right) ms
-          (wy_b + (q_right - q0)) (wy_b + (q - q0))
-          (py_b + (q_right - q0)) (evalPhi 22 y_q)
-          hdom_r _ hjc hms_le _ _ ha_r_Y).
-        - unfold ju_r; assert (hsub : (q - q_right) * ms + q_right * ms = q * ms)
-            by (clear - hqr_q; clearbody q_right need min_ju jc0; nia);
-          clear - hsub; clearbody q_right need min_ju jc0; lia.
-        - clear - hq0_le_qr hqr_q; clearbody q_right need min_ju jc0; lia.
-        - clear - hq0_le_qr hqr_q hpy_q; clearbody q_right need min_ju jc0; lia. }
-      destruct (q_right <=? q0) eqn:Hbr0.
-      * apply N.leb_le in Hbr0; injection hstop as <-.
-        assert (hqr_le : q_right <= q) by (clear - Hbr0 hge_stop; clearbody q_right need min_ju jc0; lia).
-        exact (conj hge_stop (or_intror (shift_from_qr hqr_le))).
-      * apply N.leb_gt in Hbr0.
-        destruct (checkAbstract nxTpl true true (wy_b + (q_right - 1 - q0)) (py_b + (q_right - 1 - q0))) eqn:Ha_mid;
-          injection hstop as <-.
-        -- split; [exact hge_stop |].
-           destruct (q <? q_right) eqn:Hlt_qr.
-           ++ apply N.ltb_lt in Hlt_qr; left.
-              refine (checkAbstract_mono nxTpl (withY nxTpl y_q) true true _ _ _ _
-                eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
-                (fun h => h) _ _ (JBoundsLe_refl _) Ha_mid).
-              ** clear - hge_stop Hlt_qr; clearbody q_right need min_ju jc0; lia.
-              ** clear - hge_stop Hlt_qr hpy_q; clearbody q_right need min_ju jc0; lia.
-           ++ apply N.ltb_ge in Hlt_qr; exact (or_intror (shift_from_qr Hlt_qr)).
-        -- exact (conj (N.le_trans _ _ _ hq0_le_qr hge_stop) (or_intror (shift_from_qr hge_stop))).
+  destruct (q_max <? q0) eqn:Hi; [apply N.ltb_lt in Hi; injection hstop as <-; lia |].
+  rewrite <- hjc in hstop; cbn zeta in hstop.
+  set (need := 2 * k_hi_u + w_hi_u + dominantJuMin (nd_jb nxTpl) jc) in hstop.
+  set (qr := N.max q0 ((need + ms - 1) / ms)) in hstop.
+  refine (stopByAnchor_sound nxTpl _ jc ms qr q0 wy_b py_b q_max q_stop q y_q
+    (N.le_max_l _ _) hms_le _ _ hstop hge_stop hle_max hpy_q).
+  - pose proof (ceil_div_mul_ge need ms hms_pos) as H.
+    pose proof (N.le_max_r q0 ((need + ms - 1) / ms)) as Hmax.
+    fold qr in Hmax.
+    pose proof (N.mul_le_mono_l _ _ ms Hmax) as Hm.
+    assert (Hfit : need <= qr * ms)
+      by (rewrite N.mul_comm; exact (N.le_trans _ _ _ H Hm)).
+    cbn beta. unfold need in Hfit. clear - Hfit; lia.
+  - intros Hq.
+    assert (E : (q - qr) * ms + qr * ms = q * ms) by nia.
+    cbn beta. rewrite <- E at 1. rewrite N2Z.inj_add; ring.
 Qed.
+
 
 #[local] Arguments checkAbstract : simpl never.
 #[local] Arguments findChildQStop : simpl never.
@@ -4400,6 +4453,22 @@ Proof.
   rewrite (evalPhi_t0Pow 0 n hno).
   pose proof (evalPhi_zero_pos_of_hasI hI); lia.
 Qed.
+
+(* All ways of using a search anchor see this same extension: the letter
+   and trail invariants are preserved, and both weights rise by d. *)
+Local Lemma l0_extend Y y0 a d wy py :
+  RelT0Pow a Y y0 -> noK1 y0 = true -> noTrailZero y0 = true ->
+  hasI y0 = true -> wy = evalPhi 0 y0 -> py = evalPhi 22 y0 ->
+  let y := t0Pow d y0 in
+  RelT0Pow (a + d) Y y /\ noK1 y = true /\ noTrailZero y = true /\
+  hasI y = true /\ evalPhi 0 y = wy + d /\ evalPhi 22 y = py + d.
+Proof.
+  intros ha hn hz hi -> ->.
+  refine (conj (RelT0Pow_trans ha (RelT0Pow_t0Pow _ hn))
+    (conj (noK1_t0Pow d hn) (conj (noTrailZero_t0Pow d hn hz) (conj (hasI_t0Pow d hn hi) _)))).
+  now rewrite (evalPhi_t0Pow 0 _ hn), (evalPhi_t0Pow 22 _ hn).
+Qed.
+
 
 Fixpoint prefixMod (n : N) (w : list BecTok1) : list BecTok1 :=
   match w with
@@ -4902,49 +4971,6 @@ Proof.
     assumption.
 Qed.
 
-Definition childJB (nd : SymWaveNode) (ms q : N) : JBounds :=
-  addJBound (nd_jb nd)
-    (Z.of_N (q * ms) - Z.of_N (2 * nd_k_hi_u nd + nd_w_hi_u nd))%Z
-    (- (2 * nd_k_hi_c nd + nd_w_hi_c nd + Z.of_N (2 * nd_extra_B nd)))%Z.
-
-Definition mkChild1 (nd : SymWaveNode) (ms ms_next q : N) (y : list BecTok1) : SymWaveNode :=
-  mkWaveNode
-    (nd_s nd + 1) (nd_db_shift nd + 1) false
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z ms_next (-1)%Z
-    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
-
-Definition mkChild2 (nd : SymWaveNode) (ms q : N) (y : list BecTok1) : SymWaveNode :=
-  mkWaveNode
-    (nd_s nd + 1) (nd_db_shift nd + 1) false
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z 0 1%Z
-    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
-
-Definition mkChild3 (nd : SymWaveNode) (ms ms_next q : N) (y : list BecTok1) : SymWaveNode :=
-  mkWaveNode
-    (nd_s nd + 1) (nd_db_shift nd + 1) false
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z ms_next (-1)%Z
-    (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd + pow2N (nd_db_shift nd + 2))
-    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
-
-Definition mkChild4 (nd : SymWaveNode) (ms ms_next q : N) (y : list BecTok1) : SymWaveNode :=
-  let sh1 := pow2N (nd_s nd + 1) in
-  mkWaveNode
-    (nd_s nd + 1) (nd_db_shift nd + 1) true
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z ms_next (-1)%Z
-    (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-    ((q + 1) * ms) (- Z.of_N (2 * nd_extra_B nd + 2))%Z
-    sh1 (64 * (q + 1)) (- Z.of_N (sh1 * (nd_extra_B nd + 1)))%Z
-    (childJB nd ms q) y (nd_wRQ nd) (nd_pRQ nd).
-
 Definition ChildClosedAt (nd nx : SymWaveNode) : Prop :=
   forall u_val k0 d0 j_c P_c,
     JBoundsValid (nd_jb nd) u_val j_c ->
@@ -5001,20 +5027,15 @@ Proof.
   cbn [StopInv]; intros q hge_stop hle_max.
   set (y_out := t0Pow ((q - q0) + delta) y0).
   set (jc := (- (2 * nd_k_hi_c nd + nd_w_hi_c nd + Z.of_N (2 * nd_extra_B nd)))%Z).
-  assert (hpy_out : evalPhi 22 y_out <= (py0 + delta) + (q - q0))
-    by (unfold y_out; rewrite (evalPhi_t0Pow 22 _ hy0_no), hpy0; lia).
+  destruct (l0_extend _ _ q0 ((q - q0) + delta) wy0 py0 hy0_rel hy0_no hy0_tz hy0_I hwy0 hpy0)
+    as [hrel_out [hno_out [htz_out [hI_out [hwy_eq hpy_eq]]]]].
+  fold y_out in hrel_out, hno_out, htz_out, hI_out, hwy_eq, hpy_eq.
   destruct (findChildQStop_sound nxTpl ms (nd_k_hi_u nd) (nd_k_hi_c nd) (nd_w_hi_u nd) (nd_w_hi_c nd)
               (nd_extra_B nd) q0 (wy0 + delta) (py0 + delta) q_max q_stop q y_out jc
-              hms_pos hms_le eq_refl Hst hge_stop hle_max hpy_out)
+              hms_pos hms_le eq_refl Hst hge_stop hle_max ltac:(rewrite hpy_eq; lia))
     as [hq0_le hchk_or].
-  assert (hrel_out : RelT0Pow (q + delta) (nd_Y nd) y_out).
-  { replace (q + delta) with (q0 + ((q - q0) + delta)) by lia.
-    exact (RelT0Pow_trans hy0_rel (RelT0Pow_t0Pow _ hy0_no)). }
-  pose proof (noK1_t0Pow ((q - q0) + delta) hy0_no) as hno_out; fold y_out in hno_out.
-  pose proof (noTrailZero_t0Pow ((q - q0) + delta) hy0_no hy0_tz) as htz_out; fold y_out in htz_out.
-  pose proof (hasI_t0Pow ((q - q0) + delta) hy0_no hy0_I) as hI_out; fold y_out in hI_out.
-  assert (hwy_out : evalPhi 0 y_out <= (wy0 + delta) + (q - q0))
-    by (unfold y_out; rewrite (evalPhi_t0Pow 0 _ hy0_no), hwy0; lia).
+  replace (q0 + (q - q0 + delta)) with (q + delta) in hrel_out by lia.
+  assert (hwy_out : evalPhi 0 y_out <= (wy0 + delta) + (q - q0)) by (rewrite hwy_eq; lia).
   destruct (hfields q y_out)
     as [fs [fd [ffr [fklu [fklc [fkhu [fkhc [fwhu [fwhc [feb [fsdu [fsdc [fprq [fY fjb]]]]]]]]]]]]]].
   exists y_out; split; [exact hrel_out | split; [exact htz_out |]].
@@ -5207,7 +5228,7 @@ Proof.
       set (P_c := TokI :: TokB :: R_tail).
       assert (hcfg_eq : cfgCollar K_col (TokI :: Tok1 :: TokI :: R_tail ++ y3) =
                         nodeCfg (mkChild3 nd ms ms_next q y3) k0 j_val P_c).
-      { unfold nodeCfg, mkChild3, P_c, cfgCollar, evalBecCfg, K_col.
+      { unfold nodeCfg, mkChild3, P_c, cfgCollar, readCfg, K_col.
         cbn [nd_extra_B nd_has_i1_front nd_Y app decode1].
         rewrite !decode1_append; cbn [decode1 app]; reflexivity. }
       rewrite hcfg_eq in hstep1.
@@ -5352,6 +5373,67 @@ Proof.
   destruct (h q hge hqm) as [y_out [hr rest]]; rewrite N.add_0_r in hr; exists y_out; exact (conj hr rest).
 Qed.
 
+Definition childCovered (nd : SymWaveNode) (q : N) (ch : QChild) : Prop :=
+  exists y, RelT0Pow (q + qDelta ch) (nd_Y nd) y /\ noTrailZero y = true /\
+    ChildClosedAt nd (qNode ch q y).
+
+#[local] Opaque t0PowNorm.
+Local Lemma childSuffix_sound d yp y :
+  noTrailZero yp = true -> childSuffix d yp = Some y ->
+  RelT0Pow d yp y /\ noTrailZero y = true.
+Proof.
+  intros Ht H; destruct d; cbn [childSuffix] in H.
+  - injection H as <-. split; [apply rt0_zero|exact Ht].
+  - split; [exact (t0PowNorm_sound H)|exact (t0PowNorm_noTrailZero Ht H)].
+Qed.
+#[local] Transparent t0PowNorm.
+
+#[local] Opaque childSuffix.
+
+Local Lemma runQChild_sound stepFn
+    (Hstep : forall x m, fst (stepFn x m) = true -> MemoValid NodeClosed m ->
+      NodeClosed x /\ MemoValid NodeClosed (snd (stepFn x m)))
+    nd q qmax yp ch memo :
+  RelT0Pow q (nd_Y nd) yp -> noTrailZero yp = true ->
+  StopInv (qNode ch) nd qmax (qDelta ch) (qStop ch) ->
+  fst (runQChild stepFn q yp ch memo) = true -> MemoValid NodeClosed memo ->
+  MemoValid NodeClosed (snd (runQChild stepFn q yp ch memo)) /\
+  (q <= qmax -> childCovered nd q ch).
+Proof.
+  intros Hy Ht Hstop H Hm. unfold runQChild in H |- *.
+  destruct (runBeforeStop q (qStop ch)) eqn:Hs.
+  - destruct (childSuffix (qDelta ch) yp) as [y|] eqn:Ey; [|discriminate].
+    destruct (Hstep _ _ H Hm) as [Hclosed Hmemo].
+    destruct (childSuffix_sound _ _ _ Ht Ey) as [Hrel Htz].
+    split; [exact Hmemo|intros _; exists y].
+    exact (conj (RelT0Pow_trans Hy Hrel) (conj Htz (childClosedAt_of_nodeClosed nd Hclosed))).
+  - destruct (proj1 runBeforeStop_false_iff Hs) as [qs [E Hle]].
+    rewrite E in Hstop. split; [exact Hm|exact (Hstop q Hle)].
+Qed.
+
+#[local] Transparent childSuffix.
+
+Local Lemma runQChildren_sound stepFn
+    (Hstep : forall x m, fst (stepFn x m) = true -> MemoValid NodeClosed m ->
+      NodeClosed x /\ MemoValid NodeClosed (snd (stepFn x m)))
+    nd q qmax yp chs memo :
+  RelT0Pow q (nd_Y nd) yp -> noTrailZero yp = true ->
+  Forall (fun ch => StopInv (qNode ch) nd qmax (qDelta ch) (qStop ch)) chs ->
+  fst (runQChildren stepFn q yp chs memo) = true -> MemoValid NodeClosed memo ->
+  MemoValid NodeClosed (snd (runQChildren stepFn q yp chs memo)) /\
+  (q <= qmax -> Forall (childCovered nd q) chs).
+Proof.
+  intros Hy Ht Hstop. revert memo.
+  induction Hstop as [|ch chs Hch Hchs IH]; intros memo H Hm; cbn [runQChildren] in H |- *.
+  - split; [exact Hm|intros _; constructor].
+  - destruct (runQChild stepFn q yp ch memo) as [[|] m] eqn:Er; [|discriminate].
+    destruct (runQChild_sound stepFn Hstep nd q qmax yp ch memo Hy Ht Hch
+      ltac:(rewrite Er; reflexivity) Hm) as [Hm' Hc].
+    rewrite Er in Hm'.
+    destruct (IH m H Hm') as [Hrest Hr]; split; [exact Hrest|intros Hq].
+    exact (Forall_cons ch (Hc Hq) (Hr Hq)).
+Qed.
+
 Local Lemma stepQBody_sound (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
     (hstep : forall x m, fst (stepFn x m) = true -> MemoValid NodeClosed m ->
                NodeClosed x /\ MemoValid NodeClosed (snd (stepFn x m)))
@@ -5417,99 +5499,23 @@ Proof.
       exfalso; clear - hp hwlo hlt_q hring_pr; lia.
     + destruct (t0PowNorm wordFuel q (nd_Y nd)) as [yp |] eqn:Hyp; [| discriminate hok].
       cbn zeta in hok |- *.
-      pose proof (t0PowNorm_sound Hyp) as hyp_rel.
-      pose proof (t0PowNorm_noTrailZero htz Hyp) as hyp_tz.
-      (* Child 1 *)
-      fold (childJB nd ms q) in hok |- *.
-      fold (mkChild1 nd ms ms_next q yp) in hok |- *.
-      set (p1 := if b1 then stepFn (mkChild1 nd ms ms_next q yp) memo else (true, memo)) in *.
-      assert (hp1_spec : fst p1 = true ->
-        MemoValid NodeClosed (snd p1) /\
-        (q <= q_max -> exists y1, RelT0Pow q (nd_Y nd) y1 /\ noTrailZero y1 = true /\
-          ChildClosedAt nd (mkChild1 nd ms ms_next q y1))).
-      { intros hp1_ok; unfold p1 in hp1_ok |- *.
-        destruct b1 eqn:Hb1.
-        - destruct (hstep _ memo hp1_ok hm) as [hcl1 hm1].
-          exact (conj hm1 (fun _ => ex_intro _ yp (conj hyp_rel (conj hyp_tz (childClosedAt_of_nodeClosed nd hcl1))))).
-        - destruct (proj1 runBeforeStop_false_iff Hb1) as [qs1 [heq1 hge1]]; rewrite heq1 in hst1.
-          exact (conj hm (fun hqm => stopInv_zero_at hst1 hge1 hqm)). }
-      destruct p1 as [ok1 m1]; destruct ok1; [cbn [negb] in hok |- * | discriminate hok].
-      destruct (hp1_spec eq_refl) as [hm1 hc1]; cbn [snd] in hm1.
-      (* Child 2 *)
-      change (match t0PowNorm wordFuel 1 yp with
-              | Some yp1 =>
-                stepFn (mkWaveNode
-                  (nd_s nd + 1) (nd_db_shift nd + 1) false
-                  (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-                  0 0%Z 0 1%Z
-                  (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-                  (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-                  (childJB nd ms q) yp1 (nd_wRQ nd) (nd_pRQ nd)) m1
-              | None => (false, m1)
-              end)
-        with (match t0PowNorm wordFuel 1 yp with
-              | Some yp1 => stepFn (mkChild2 nd ms q yp1) m1
-              | None => (false, m1)
-              end) in hok |- *.
-      set (p2 := if b2 then
-                   match t0PowNorm wordFuel 1 yp with
-                   | None => (false, m1)
-                   | Some yp1 => stepFn (mkChild2 nd ms q yp1) m1
-                   end
-                 else (true, m1)) in *.
-      assert (hp2_spec : fst p2 = true ->
-        MemoValid NodeClosed (snd p2) /\
-        (q <= q_max -> exists y2, RelT0Pow (q + 1) (nd_Y nd) y2 /\ noTrailZero y2 = true /\
-          ChildClosedAt nd (mkChild2 nd ms q y2))).
-      { intros hp2_ok; unfold p2 in hp2_ok |- *.
-        destruct b2 eqn:Hb2.
-        - destruct (t0PowNorm wordFuel 1 yp) as [yp1 |] eqn:Hyp1; [| discriminate hp2_ok].
-          destruct (hstep _ m1 hp2_ok hm1) as [hcl2 hm2].
-          exact (conj hm2 (fun _ => ex_intro _ yp1
-            (conj (RelT0Pow_trans hyp_rel (t0PowNorm_sound Hyp1))
-              (conj (t0PowNorm_noTrailZero hyp_tz Hyp1) (childClosedAt_of_nodeClosed nd hcl2))))).
-        - destruct (proj1 runBeforeStop_false_iff Hb2) as [qs2 [heq2 hge2]]; rewrite heq2 in hst2.
-          exact (conj hm1 (fun hqm => hst2 q hge2 hqm)). }
-      destruct p2 as [ok2 m2]; destruct ok2; [cbn [negb] in hok |- * | discriminate hok].
-      destruct (hp2_spec eq_refl) as [hm2 hc2]; cbn [snd] in hm2.
-      (* Child 3 *)
-      fold (mkChild3 nd ms ms_next q yp) in hok |- *.
-      set (p3 := if b3 then stepFn (mkChild3 nd ms ms_next q yp) m2 else (true, m2)) in *.
-      assert (hp3_spec : fst p3 = true ->
-        MemoValid NodeClosed (snd p3) /\
-        (q <= q_max -> exists y3, RelT0Pow q (nd_Y nd) y3 /\ noTrailZero y3 = true /\
-          ChildClosedAt nd (mkChild3 nd ms ms_next q y3))).
-      { intros hp3_ok; unfold p3 in hp3_ok |- *.
-        destruct b3 eqn:Hb3.
-        - destruct (hstep _ m2 hp3_ok hm2) as [hcl3 hm3].
-          exact (conj hm3 (fun _ => ex_intro _ yp (conj hyp_rel (conj hyp_tz (childClosedAt_of_nodeClosed nd hcl3))))).
-        - destruct (proj1 runBeforeStop_false_iff Hb3) as [qs3 [heq3 hge3]]; rewrite heq3 in hst3.
-          exact (conj hm2 (fun hqm => stopInv_zero_at hst3 hge3 hqm)). }
-      destruct p3 as [ok3 m3]; destruct ok3; [cbn [negb] in hok |- * | discriminate hok].
-      destruct (hp3_spec eq_refl) as [hm3 hc3]; cbn [snd] in hm3.
-      (* Child 4 *)
-      change (mkWaveNode
-                (nd_s nd + 1) (nd_db_shift nd + 1) true
-                (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-                0 0%Z ms_next (-1)%Z
-                (nd_extra_B nd) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-                ((q + 1) * ms) (- Z.of_N (2 * nd_extra_B nd + 2))%Z
-                (pow2N (nd_s nd + 1)) (64 * (q + 1)) (- Z.of_N (pow2N (nd_s nd + 1) * (nd_extra_B nd + 1)))%Z
-                (childJB nd ms q) yp (nd_wRQ nd) (nd_pRQ nd))
-        with (mkChild4 nd ms ms_next q yp) in hok |- *.
-      assert (hp4_spec :
-        MemoValid NodeClosed (snd (if b4 then stepFn (mkChild4 nd ms ms_next q yp) m3 else (true, m3))) /\
-        (q <= q_max -> exists y4, RelT0Pow q (nd_Y nd) y4 /\ noTrailZero y4 = true /\
-          ChildClosedAt nd (mkChild4 nd ms ms_next q y4))).
-      { destruct b4 eqn:Hb4.
-        - destruct (hstep _ m3 hok hm3) as [hcl4 hm4].
-          exact (conj hm4 (fun _ => ex_intro _ yp (conj hyp_rel (conj hyp_tz (childClosedAt_of_nodeClosed nd hcl4))))).
-        - destruct (proj1 runBeforeStop_false_iff Hb4) as [qs4 [heq4 hge4]]; rewrite heq4 in hst4.
-          exact (conj hm3 (fun hqm => stopInv_zero_at hst4 hge4 hqm)). }
-      destruct hp4_spec as [hm4 hc4].
-      split; [exact hm4 | intros hqm u_val k0 d0 j_val P hst hq_eq].
-      exact (loopQ_step_children nd ms ms_next q hs4 hfr hms hmsn
-        (hc1 hqm) (hc2 hqm) (hc3 hqm) (hc4 hqm) hst hq_eq).
+      assert (Hstops :
+        Forall (fun ch => StopInv (qNode ch) nd q_max (qDelta ch) (qStop ch))
+          (qChildren nd ms ms_next st1 st2 st3 st4)).
+      { repeat constructor; assumption. }
+      destruct (runQChildren_sound stepFn hstep nd q q_max yp _ memo
+        (t0PowNorm_sound Hyp) (t0PowNorm_noTrailZero htz Hyp) Hstops hok hm)
+        as [Hmemo Hcovered].
+      split; [exact Hmemo|intros hqm u_val k0 d0 j_val P hst hq_eq].
+      specialize (Hcovered hqm).
+      pose proof (Forall_inv Hcovered) as hc1; apply Forall_inv_tail in Hcovered.
+      pose proof (Forall_inv Hcovered) as hc2; apply Forall_inv_tail in Hcovered.
+      pose proof (Forall_inv Hcovered) as hc3; apply Forall_inv_tail in Hcovered.
+      pose proof (Forall_inv Hcovered) as hc4.
+      unfold childCovered in hc1, hc2, hc3, hc4.
+      cbn [qChildren qDelta qNode] in hc1, hc2, hc3, hc4.
+      rewrite N.add_0_r in hc1, hc3, hc4.
+      exact (loopQ_step_children nd ms ms_next q hs4 hfr hms hmsn hc1 hc2 hc3 hc4 hst hq_eq).
 Qed.
 
 #[local] Arguments stepQBody : simpl never.
@@ -5631,15 +5637,6 @@ Proof.
     exact (conj hcl_nd (memoInsert_sound hmemo' hcl_nd)).
 Qed.
 
-Definition mkChildQA (nd : SymWaveNode) (ms_next : N) (ya : list BecTok1) : SymWaveNode :=
-  mkWaveNode
-    (nd_s nd + 1) (nd_db_shift nd) false
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z ms_next (-1)%Z
-    (nd_extra_B nd + 1) (nd_scaled_db_u nd + pow2N (nd_db_shift nd) * ms_next) (nd_scaled_db_c nd)
-    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-    (nd_jb nd) ya (nd_wRQ nd) (nd_pRQ nd).
-
 Local Lemma stepQABody_sound (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
     (hstep : forall x m, fst (stepFn x m) = true -> MemoValid NodeClosed m ->
                NodeClosed x /\ MemoValid NodeClosed (snd (stepFn x m)))
@@ -5661,17 +5658,6 @@ Proof.
 Qed.
 
 #[local] Arguments stepQABody : simpl never.
-
-Definition mkChildQS (nd : SymWaveNode) (ms qs : N) (next_jb : JBounds) (yq : list BecTok1) : SymWaveNode :=
-  let ju := (Z.of_N (2 * (qs + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z in
-  let jc := (- (2 * (nd_k_hi_c nd + Z.of_N (nd_extra_B nd + 3))))%Z in
-  mkWaveNode
-    (nd_s nd) (nd_db_shift nd) false
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z ms (-1)%Z
-    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-    (addJBound next_jb ju jc) yq (nd_wRQ nd) (nd_pRQ nd).
 
 Local Lemma stepQSBody_sound (stepFn : SymWaveNode -> MemoTree -> bool * MemoTree)
     (hstep : forall x m, fst (stepFn x m) = true -> MemoValid NodeClosed m ->
@@ -5717,6 +5703,32 @@ Qed.
 
 #[local] Arguments stepQSBody : simpl never.
 
+Local Lemma qsRight_dom nd ms a jb (hms : 0 < ms) :
+  (Z.of_N (dominantJuMin jb (qsConstant nd)) <= qsRise nd ms (qsRight nd ms a jb))%Z.
+Proof.
+  unfold qsRight, qsRise; cbn zeta.
+  set (m := dominantJuMin jb (qsConstant nd)).
+  set (need := nd_k_hi_u nd + (m + 1) / 2).
+  set (r := (need + ms - 1) / ms).
+  pose proof (ceil_div_mul_ge m 2 ltac:(lia)) as Hd.
+  replace (m + 2 - 1) with (m + 1) in Hd by lia.
+  assert (Hneed : m + 2 * nd_k_hi_u nd <= 2 * need) by (unfold need; lia).
+  pose proof (ceil_div_mul_ge need ms hms) as Hceil. fold r in Hceil.
+  assert (Hqr : r <= N.max a (r - 2) + 2) by (pose proof (N.le_max_r a (r - 2)); lia).
+  pose proof (N.mul_le_mono_l _ _ ms Hqr) as Hm.
+  replace (2 * (N.max a (r - 2) + 2) * ms) with (2 * (ms * (N.max a (r - 2) + 2))) by ring.
+  clear - Hneed Hceil Hm; lia.
+Qed.
+
+Local Lemma qsRise_delta nd ms r q :
+  r <= q -> qsRise nd ms q = (qsRise nd ms r + Z.of_N ((q - r) * (2 * ms)))%Z.
+Proof.
+  intro H. unfold qsRise.
+  assert (E : 2 * (q + 2) * ms = 2 * (r + 2) * ms + (q - r) * (2 * ms)).
+  { replace (q + 2) with ((r + 2) + (q - r)) by lia; ring. }
+  rewrite E, N2Z.inj_add; ring.
+Qed.
+
 Local Lemma qsStopOpt_sound (nd : SymWaveNode) (ms qs_lo qs_hi : N)
     (tyc : list BecTok1) (next_jb : JBounds)
     (hms_pos : 0 < ms) (hms : ms = msOf (nd_s nd)) (htz_tyc : noTrailZero tyc = true) :
@@ -5730,128 +5742,33 @@ Local Lemma qsStopOpt_sound (nd : SymWaveNode) (ms qs_lo qs_hi : N)
   end.
 Proof.
   unfold qsStopOpt.
-  destruct (findL0Anchor 7%nat tyc qs_lo qs_hi) as [[[qs0 wys0] pys0] |] eqn:Hanc; [| exact I].
-  destruct (findL0Anchor_sound 7%nat tyc qs_lo qs_hi qs0 wys0 pys0 htz_tyc Hanc)
-    as [_ [_ [y0 [hy0_rel [hy0_no [hy0_tz [hy0_I [hwy0 hpy0]]]]]]]].
-  set (nxTpl := mkWaveNode
-    (nd_s nd) (nd_db_shift nd) false
-    (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-    0 0%Z ms (-1)%Z
-    (nd_extra_B nd + 1) (nd_scaled_db_u nd) (nd_scaled_db_c nd)
-    (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-    next_jb (nd_Y nd) (nd_wRQ nd) (nd_pRQ nd)).
-  assert (close_tpl : forall (qs bnd : N), qs0 <= qs -> qs <= bnd ->
-      checkAbstract nxTpl true true (wys0 + (bnd - qs0)) (pys0 + (bnd - qs0)) = true ->
-      exists yq : list BecTok1,
-        RelT0Pow qs tyc yq /\ noTrailZero yq = true /\
-        ChildClosedAt (withJB nd next_jb) (mkChildQS nd ms qs next_jb yq)).
-  { intros qs bnd hq0 hqB hchk.
-    set (yq := t0Pow (qs - qs0) y0).
-    assert (hrel : RelT0Pow qs tyc yq)
-      by (replace qs with (qs0 + (qs - qs0)) by lia;
-          exact (RelT0Pow_trans hy0_rel (RelT0Pow_t0Pow _ hy0_no))).
-    pose proof (noK1_t0Pow (qs - qs0) hy0_no) as hno; fold yq in hno.
-    pose proof (noTrailZero_t0Pow (qs - qs0) hy0_no hy0_tz) as htz; fold yq in htz.
-    pose proof (hasI_t0Pow (qs - qs0) hy0_no hy0_I) as hI; fold yq in hI.
-    assert (hwy : evalPhi 0 yq <= wys0 + (bnd - qs0))
-      by (unfold yq; rewrite (evalPhi_t0Pow 0 _ hy0_no), hwy0; lia).
-    assert (hpy : evalPhi 22 yq <= pys0 + (bnd - qs0))
-      by (unfold yq; rewrite (evalPhi_t0Pow 22 _ hy0_no), hpy0; lia).
-    exists yq; split; [exact hrel | split; [exact htz |]].
-    intros u_val k0 d0 j_c P_c hjb_base hns.
-    cbn [withJB nd_jb] in hjb_base.
-    set (nx0 := withJB (mkChildQS nd ms qs next_jb yq) next_jb).
-    assert (hchk0 : checkAbstract nx0 true true (wys0 + (bnd - qs0)) (pys0 + (bnd - qs0)) = true).
-    { exact (checkAbstract_mono nxTpl nx0 true true _ _ _ _
-        eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
-        (fun h => h) (N.le_refl _) (N.le_refl _) (JBoundsLe_refl _) hchk). }
-    pose proof (NodeState_withJB hns hjb_base) as hns0; fold nx0 in hns0.
-    assert (hcfg0 : nodeCfg nx0 k0 j_c P_c = nodeCfg (mkChildQS nd ms qs next_jb yq) k0 j_c P_c)
-      by reflexivity.
-    rewrite <- hcfg0.
-    exact (checkAbstract_sound hns0 hno (fun _ => hI) hwy hpy hchk0). }
-  destruct (checkAbstract nxTpl true true (wys0 + (qs_hi - qs0)) (pys0 + (qs_hi - qs0))) eqn:Ha_hi.
-  - intros qs hge hle; exact (close_tpl qs qs_hi hge hle Ha_hi).
-  - set (jc_qs := (- (2 * (nd_k_hi_c nd + Z.of_N (nd_extra_B nd + 3))))%Z).
-    remember (dominantJuMin next_jb jc_qs) as min_ju eqn:Hmin_ju.
-    set (need_qs := nd_k_hi_u nd + (min_ju + 1) / 2).
-    set (req_qsr2 := (need_qs + ms - 1) / ms).
-    set (qs_r := N.max qs0 (req_qsr2 - 2)).
-    assert (hq0_le_qr : qs0 <= qs_r) by exact (N.le_max_l _ _).
-    assert (hqr_ge : req_qsr2 - 2 <= qs_r) by exact (N.le_max_r _ _).
-    destruct (qs_r <=? qs_hi) eqn:Hbr; [| exact I].
-    set (ju_r := (Z.of_N (2 * (qs_r + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z).
-    set (nx_r := withJB nxTpl (addJBound next_jb ju_r jc_qs)).
-    destruct (checkAbstract nx_r true true (wys0 + (qs_r - qs0)) (pys0 + (qs_r - qs0))) eqn:Ha_r;
-      [| exact I].
-    assert (hdom_r : (Z.of_N (dominantJuMin next_jb jc_qs) <= ju_r)%Z).
-    { rewrite <- Hmin_ju.
-      pose proof (ceil_div_mul_ge min_ju 2 ltac:(lia)) as hd2.
-      replace (min_ju + 2 - 1) with (min_ju + 1) in hd2 by lia.
-      assert (h2need : min_ju + 2 * nd_k_hi_u nd <= 2 * need_qs)
-        by (unfold need_qs; clear - hd2; lia).
-      pose proof (ceil_div_mul_ge need_qs ms hms_pos) as hceil; fold req_qsr2 in hceil.
-      assert (hmul_le : ms * req_qsr2 <= ms * (qs_r + 2))
-        by (apply N.mul_le_mono_l; clear - hqr_ge; clearbody qs_r req_qsr2 need_qs; lia).
-      assert (h2mul : 2 * need_qs <= 2 * (qs_r + 2) * ms).
-      { replace (2 * (qs_r + 2) * ms) with (2 * (ms * (qs_r + 2))) by ring.
-        clear - hceil hmul_le; clearbody qs_r req_qsr2 need_qs; lia. }
-      unfold ju_r; clear - h2need h2mul; clearbody qs_r req_qsr2 need_qs; lia. }
-    assert (close_shift : forall qs : N, qs_r <= qs ->
-      exists yq : list BecTok1,
-        RelT0Pow qs tyc yq /\ noTrailZero yq = true /\
-        ChildClosedAt (withJB nd next_jb) (mkChildQS nd ms qs next_jb yq)).
-    { intros qs hqr_q.
-      assert (hq0_q : qs0 <= qs) by exact (N.le_trans _ _ _ hq0_le_qr hqr_q).
-      set (yq := t0Pow (qs - qs0) y0).
-      assert (hrel : RelT0Pow qs tyc yq)
-        by (replace qs with (qs0 + (qs - qs0)) by lia;
-            exact (RelT0Pow_trans hy0_rel (RelT0Pow_t0Pow _ hy0_no))).
-      pose proof (noK1_t0Pow (qs - qs0) hy0_no) as hno; fold yq in hno.
-      pose proof (noTrailZero_t0Pow (qs - qs0) hy0_no hy0_tz) as htz; fold yq in htz.
-      pose proof (hasI_t0Pow (qs - qs0) hy0_no hy0_I) as hI; fold yq in hI.
-      assert (hwy : evalPhi 0 yq <= wys0 + (qs - qs0))
-        by (unfold yq; rewrite (evalPhi_t0Pow 0 _ hy0_no), hwy0; lia).
-      assert (hpy : evalPhi 22 yq <= pys0 + (qs - qs0))
-        by (unfold yq; rewrite (evalPhi_t0Pow 22 _ hy0_no), hpy0; lia).
-      assert (ha_r_Y : checkAbstract (withJB (withY nxTpl yq) (addJBound next_jb ju_r jc_qs))
-                         true true (wys0 + (qs_r - qs0)) (pys0 + (qs_r - qs0)) = true).
-      { exact (checkAbstract_mono nx_r _ true true _ _ _ _
-          eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl eq_refl
-          (fun h => h) (N.le_refl _) (N.le_refl _) (JBoundsLe_refl _) Ha_r). }
-      assert (hsh : checkAbstract (mkChildQS nd ms qs next_jb yq) true true
-                      (wys0 + (qs - qs0)) (evalPhi 22 yq) = true).
-      { change (mkChildQS nd ms qs next_jb yq)
-          with (withJB (withY nxTpl yq)
-                 (addJBound next_jb (Z.of_N (2 * (qs + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z jc_qs)).
-        refine (checkAbstract_shift (withY nxTpl yq) next_jb jc_qs ju_r
-          (Z.of_N (2 * (qs + 2) * ms) - Z.of_N (2 * nd_k_hi_u nd))%Z jc_qs (qs - qs_r) (2 * ms)
-          (wys0 + (qs_r - qs0)) (wys0 + (qs - qs0))
-          (pys0 + (qs_r - qs0)) (evalPhi 22 yq)
-          hdom_r _ eq_refl _ _ _ ha_r_Y).
-        - unfold ju_r.
-          assert (hsub : 2 * (qs + 2) * ms = 2 * (qs_r + 2) * ms + (qs - qs_r) * (2 * ms)).
-          { replace (2 * (qs + 2)) with (2 * (qs_r + 2) + 2 * (qs - qs_r))
-              by (clear - hqr_q; clearbody qs_r req_qsr2 need_qs; lia).
-            ring. }
-          clear - hsub; clearbody qs_r req_qsr2 need_qs; lia.
-        - unfold nxTpl; cbn [withY nd_s]; rewrite hms; lia.
-        - clear - hq0_le_qr hqr_q; clearbody qs_r req_qsr2 need_qs; lia.
-        - clear - hq0_le_qr hqr_q hpy; clearbody qs_r req_qsr2 need_qs yq; lia. }
-      exists yq; split; [exact hrel | split; [exact htz |]].
-      intros u_val k0 d0 j_c P_c _ hns.
-      exact (checkAbstract_sound hns hno (fun _ => hI) hwy (N.le_refl _) hsh). }
-    destruct (qs_r <=? qs0) eqn:Hbr0.
-    + apply N.leb_le in Hbr0; intros qs hge _.
-      exact (close_shift qs ltac:(clear - Hbr0 hge; clearbody qs_r req_qsr2 need_qs; lia)).
-    + apply N.leb_gt in Hbr0.
-      destruct (checkAbstract nxTpl true true (wys0 + (qs_r - 1 - qs0)) (pys0 + (qs_r - 1 - qs0))) eqn:Ha_mid.
-      * intros qs hge _.
-        destruct (N.lt_ge_cases qs qs_r) as [hlt | hge_r];
-          [exact (close_tpl qs (qs_r - 1) hge ltac:(clear - hlt; clearbody qs_r req_qsr2 need_qs; lia) Ha_mid)
-          | exact (close_shift qs hge_r)].
-      * intros qs hge _; exact (close_shift qs hge).
+  destruct (findL0Anchor 7%nat tyc qs_lo qs_hi) as [[[a wy] py]|] eqn:Ha; [|exact I].
+  destruct (findL0Anchor_sound 7%nat tyc qs_lo qs_hi a wy py htz_tyc Ha)
+    as [_ [_ [y0 [hrel [hn [hz [hi [hw hp]]]]]]]].
+  set (tpl := qsTemplate nd ms next_jb).
+  set (r := qsRight nd ms a next_jb).
+  destruct (stopByAnchor tpl (qsRise nd ms) (qsConstant nd) (fun _ => r) a wy py qs_hi)
+    as [st|] eqn:E; [|exact I].
+  intros q hlo hhi.
+  set (y := t0Pow (q - a) y0).
+  destruct (l0_extend _ _ a (q - a) wy py hrel hn hz hi hw hp)
+    as [Hrel [Hn [Hz [HI [Hw Hp]]]]].
+  fold y in Hrel, Hn, Hz, HI, Hw, Hp.
+  destruct (stopByAnchor_sound tpl (qsRise nd ms) (qsConstant nd) (2 * ms)
+    r a wy py qs_hi st q y (N.le_max_l _ _) ltac:(unfold tpl; cbn [qsTemplate nd_s]; lia)
+    (qsRight_dom nd ms a next_jb hms_pos) (qsRise_delta nd ms r q)
+    E hlo hhi ltac:(rewrite Hp; lia)) as [Haq Hclose].
+  assert (Hwy : evalPhi 0 y <= wy + (q - a)) by (rewrite Hw; apply N.le_refl).
+  exists y. replace q with (a + (q - a)) at 1 by lia.
+  split; [exact Hrel | split; [exact Hz|]].
+  intros u k d j P hj hst.
+  destruct Hclose as [HC | HC].
+  - pose proof (NodeState_withJB hst hj) as H0.
+    change (NodeState (withY tpl y) u k d j P) in H0.
+    exact (checkAbstract_sound H0 Hn (fun _ => HI) Hwy (N.le_refl (evalPhi 22 y)) HC).
+  - exact (checkAbstract_sound hst Hn (fun _ => HI) Hwy (N.le_refl (evalPhi 22 y)) HC).
 Qed.
+
 
 (* ========================================================================== *)
 (* Layer 3b Soundness Part 3b: CT Sweep, Wave Node, Slab & Root Closure       *)
@@ -6373,29 +6290,19 @@ Proof.
     rewrite hqa_lt_f in HcntA_u.
     destruct (findL0Anchor 7%nat (nd_Y nd) qa_lo qa_hi) as [[[qa0 wya0] pya0] |] eqn:HancA.
     - cbn zeta in HcntA_u.
-      set (nx_hi := mkWaveNode
-        (nd_s nd + 1) (nd_db_shift nd) false
-        (nd_k_lo_u nd) (nd_k_lo_c nd) (nd_k_hi_u nd) (nd_k_hi_c nd)
-        0 0%Z ms_next (-1)%Z
-        (nd_extra_B nd + 1) (nd_scaled_db_u nd + pow2N (nd_db_shift nd) * ms_next) (nd_scaled_db_c nd)
-        (nd_kj_hi_u nd) (nd_kj_hi_c nd) (nd_wj_k nd) (nd_wj_hi_u nd) (nd_wj_hi_c nd)
-        (nd_jb nd) (nd_Y nd) (nd_wRQ nd) (nd_pRQ nd)) in HcntA_u.
+      set (nx_hi := mkChildQA nd ms_next (nd_Y nd)) in HcntA_u.
       destruct (checkAbstract nx_hi true true (wya0 + (qa_hi - qa0)) (pya0 + (qa_hi - qa0))) eqn:Ha_hi.
       + destruct (N.lt_ge_cases qa qa0) as [hlt | hge].
         * exact (hqa_loop qa hqlo ltac:(rewrite HcntA_u; clear - hqlo hlt; lia)).
         * destruct (findL0Anchor_sound 7%nat (nd_Y nd) qa_lo qa_hi qa0 wya0 pya0 htz HancA)
             as [_ [_ [y0 [hy0_rel [hy0_no [hy0_tz [hy0_I [hwy0 hpy0]]]]]]]].
           set (ya := t0Pow (qa - qa0) y0).
-          assert (hrel : RelT0Pow qa (nd_Y nd) ya)
-            by (replace qa with (qa0 + (qa - qa0)) by (clear - hge; lia);
-                exact (RelT0Pow_trans hy0_rel (RelT0Pow_t0Pow _ hy0_no))).
-          pose proof (noK1_t0Pow (qa - qa0) hy0_no) as hno; fold ya in hno.
-          pose proof (noTrailZero_t0Pow (qa - qa0) hy0_no hy0_tz) as htz_ya; fold ya in htz_ya.
-          pose proof (hasI_t0Pow (qa - qa0) hy0_no hy0_I) as hI_ya; fold ya in hI_ya.
-          assert (hwy : evalPhi 0 ya <= wya0 + (qa_hi - qa0))
-            by (unfold ya; rewrite (evalPhi_t0Pow 0 _ hy0_no), hwy0; clear - hqhi hge; lia).
-          assert (hpy : evalPhi 22 ya <= pya0 + (qa_hi - qa0))
-            by (unfold ya; rewrite (evalPhi_t0Pow 22 _ hy0_no), hpy0; clear - hqhi hge; lia).
+          destruct (l0_extend _ _ qa0 (qa - qa0) wya0 pya0 hy0_rel hy0_no hy0_tz hy0_I hwy0 hpy0)
+            as [hrel [hno [htz_ya [hI_ya [hwy_eq hpy_eq]]]]].
+          fold ya in hrel, hno, htz_ya, hI_ya, hwy_eq, hpy_eq.
+          replace (qa0 + (qa - qa0)) with qa in hrel by lia.
+          assert (hwy : evalPhi 0 ya <= wya0 + (qa_hi - qa0)) by (rewrite hwy_eq; lia).
+          assert (hpy : evalPhi 22 ya <= pya0 + (qa_hi - qa0)) by (rewrite hpy_eq; lia).
           assert (hchk_ya : checkAbstract (mkChildQA nd ms_next ya) true true
                               (wya0 + (qa_hi - qa0)) (pya0 + (qa_hi - qa0)) = true).
           { exact (checkAbstract_mono nx_hi (mkChildQA nd ms_next ya) true true _ _ _ _
@@ -7174,9 +7081,57 @@ Proof.
     exists (cfgCollar k' tail'); split; [exists k', tail'; exact (conj eq_refl hinv) | exact hstep].
 Qed.
 
-Lemma nonhalt : ~ halts tm c0.
+Lemma collar_nonhalt : ~ halts tm c0.
 Proof.
   destruct init_reaches_inv as [c_init [hinit hinv0]].
   exact (multistep_nonhalt tm c0 c_init (p_to_e hinit)
     (progress_nonhalt tm InvCfg c_init inv_step hinv0)).
 Qed.
+
+End Common.
+
+End Collar.
+
+Module TM1.
+Definition tm := Eval compute in (TM_from_str "1RB0LD_0RC---_0LD0RF_1LE1LD_0LA0RD_0RB1RA").
+Arguments tm _ : simpl never.
+Definition shape := Collar.mkLayout 2 [0;1] D F.
+Lemma rules : Collar.Rules tm shape.
+Proof. unfold shape; Collar.check_rules. Qed.
+
+Theorem nonhalt : ~halts tm c0.
+Proof. exact (Collar.collar_nonhalt tm shape rules). Qed.
+End TM1.
+
+Module TM2.
+Definition tm := Eval compute in (TM_from_str "1RB0LF_1LC0RD_1LA1LC_---0RE_0RB1RA_1LC1LF").
+Arguments tm _ : simpl never.
+Definition shape := Collar.mkLayout 2 [1;1] F E.
+Lemma rules : Collar.Rules tm shape.
+Proof. unfold shape; Collar.check_rules. Qed.
+
+Theorem nonhalt : ~halts tm c0.
+Proof. exact (Collar.collar_nonhalt tm shape rules). Qed.
+End TM2.
+
+Module TM3.
+Definition tm := Eval compute in (TM_from_str "1RB0LF_1LC0RE_0LD1LC_1LA---_0RB1RA_0LE1LF").
+Arguments tm _ : simpl never.
+Definition shape := Collar.mkLayout 3 [1;0;1] F E.
+Lemma rules : Collar.Rules tm shape.
+Proof. unfold shape; Collar.check_rules. Qed.
+
+Theorem nonhalt : ~halts tm c0.
+Proof. exact (Collar.collar_nonhalt tm shape rules). Qed.
+End TM3.
+
+Module TM4.
+Definition tm := Eval compute in (TM_from_str "1RB0LF_1LC0RE_0LD1LC_1LA---_0RB1RA_1LC1LF").
+Arguments tm _ : simpl never.
+Definition shape := Collar.mkLayout 3 [1;0;1] F E.
+Lemma rules : Collar.Rules tm shape.
+Proof. unfold shape; Collar.check_rules. Qed.
+
+Theorem nonhalt : ~halts tm c0.
+Proof. exact (Collar.collar_nonhalt tm shape rules). Qed.
+End TM4.
