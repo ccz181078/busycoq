@@ -308,7 +308,7 @@ Definition RW_subst_c(x0 x1:N):RW->RW :=
 
 Definition RW_set_loop_cnt(n:option N):RW->RW :=
 fun x =>
-let '(w,(a0,a1),b):=x in 
+let '(w,(a0,a1),b):=x in
 match n with
 | None => x
 | Some n0 =>
@@ -925,5 +925,3 @@ Qed.
 End bsz.
 
 End RWLAccT.
-
-
