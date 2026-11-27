@@ -1,4 +1,5 @@
-(* 1RB0LC_1LC0RE_1RF1LD_1LA0LB_1RD1RA_1LB--- halts. *)
+(* PR #47: the same token dynamics with two checked control layouts.
+   The accelerated runs are computed, not joined by literal checkpoints. *)
 
 From BusyCoq Require Import Individual62.
 From Coq Require Import Lia ZifyNat ZifyN NArith PeanoNat Bool String Lists.Streams List.
@@ -7,19 +8,54 @@ Import ListNotations.
 Open Scope list.
 Open Scope sym.
 
-Definition tm : TM := Eval compute in
-  (TM_from_str "1RB0LC_1LC0RE_1RF1LD_1LA0LB_1RD1RA_1LB---").
-
-Notation "c --> c'" := (c -[ tm ]-> c')   (at level 40).
-Notation "c -->* c'" := (c -[ tm ]->* c') (at level 40).
-Notation "c -->+ c'" := (c -[ tm ]->+ c') (at level 40).
-
 Open Scope N_scope.
 Ltac Zify.zify_convert_to_euclidean_division_equations_flag ::= constr:(true).
 
-(* ========================================================================== *)
-(* Section 0: Generic Helpers                                                 *)
-(* ========================================================================== *)
+(* The two differing edges can change local traces without changing the
+   resulting nonterminal token rule. *)
+Definition exitWrite (alternate : bool) : Sym := if alternate then 0%sym else 1%sym.
+
+Record TokenTable (tm : TM) (a b c d e f : Q) (alternate : bool) : Prop := {
+  tok_a0 : tm (a,0%sym) = Some (1%sym,R,b);
+  tok_a1 : tm (a,1%sym) = Some (0%sym,L,c);
+  tok_b0 : tm (b,0%sym) = Some (1%sym,L,c);
+  tok_b1 : tm (b,1%sym) = Some (0%sym,R,e);
+  tok_c0 : tm (c,0%sym) = Some (exitWrite alternate,R,f);
+  tok_c1 : tm (c,1%sym) = Some (1%sym,L,d);
+  tok_d0 : tm (d,0%sym) = Some (1%sym,L,a);
+  tok_d1 : tm (d,1%sym) = Some (0%sym,L,b);
+  tok_e0 : tm (e,0%sym) = Some (1%sym,R,d);
+  tok_e1 : tm (e,1%sym) = Some (1%sym,R,a);
+  tok_f0 : tm (f,0%sym) = Some (1%sym,if alternate then R else L,if alternate then a else b);
+  tok_f1 : tm (f,1%sym) = None
+}.
+
+Section Tokens.
+Context (tm : TM) (qA qB qC qD qE qF : Q) (alternate : bool).
+Hypothesis rules : TokenTable tm qA qB qC qD qE qF alternate.
+Context (splitFuel : nat).
+
+Local Notation "c -->* c'" := (c -[tm]->* c') (at level 40).
+Local Notation "c -->+ c'" := (c -[tm]->+ c') (at level 40).
+
+Ltac token_edge :=
+  first [ exact (tok_a0 _ _ _ _ _ _ _ _ rules) | exact (tok_a1 _ _ _ _ _ _ _ _ rules)
+        | exact (tok_b0 _ _ _ _ _ _ _ _ rules) | exact (tok_b1 _ _ _ _ _ _ _ _ rules)
+        | exact (tok_c0 _ _ _ _ _ _ _ _ rules) | exact (tok_c1 _ _ _ _ _ _ _ _ rules)
+        | exact (tok_d0 _ _ _ _ _ _ _ _ rules) | exact (tok_d1 _ _ _ _ _ _ _ _ rules)
+        | exact (tok_e0 _ _ _ _ _ _ _ _ rules) | exact (tok_e1 _ _ _ _ _ _ _ _ rules)
+        | exact (tok_f0 _ _ _ _ _ _ _ _ rules) ].
+
+Ltac token_step :=
+  first [ apply @step_left; token_edge | apply @step_right; token_edge ].
+
+Ltac token_progress_core :=
+  eapply progress_intro; [token_step | simpl_tape];
+  do 20 (try first [ solve [finish]
+                   | eapply evstep_step; [token_step | simpl_tape] ]).
+
+Ltac token_progress :=
+  destruct alternate; solve [token_progress_core].
 
 Lemma ptrans {c1 c2 c3 : Q * tape} : c1 -->+ c2 -> c2 -->+ c3 -> c1 -->+ c3.
 Proof. apply progress_trans. Qed.
@@ -239,30 +275,30 @@ Proof.
 Qed.
 
 Definition cfgBB (L R : list MItem) : Q * tape :=
-  D;; encM L {{0%sym}} encM R.
+  qD;; encM L {{0%sym}} encM R.
 
 Definition cfgCB (L R : list MItem) : Q * tape :=
-  A;; encM L {{0%sym}} encM R.
+  qA;; encM L {{0%sym}} encM R.
 
 Definition cfgDL (L R : list MItem) : Q * tape :=
-  encM L <{{C}} encM R.
+  encM L <{{qC}} encM R.
 
 Lemma step_BB_nil (R : list MItem) :
   cfgBB [] R -->+ cfgCB [] (bumpM R).
 Proof.
-  unfold cfgBB, cfgCB. rewrite <- encM_bumpM. simpl. start_progress.
+  unfold cfgBB, cfgCB. rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_BB_zero (L1 R : list MItem) :
   cfgBB (MZero :: L1) R -->+ cfgCB L1 (bumpM R).
 Proof.
-  unfold cfgBB, cfgCB. rewrite <- encM_bumpM. simpl. start_progress.
+  unfold cfgBB, cfgCB. rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_BB_run0 (L1 R : list MItem) :
   cfgBB (MRun 0 :: L1) R -->+ cfgBB L1 (MRun 0 :: R).
 Proof.
-  unfold cfgBB. simpl. start_progress.
+  unfold cfgBB. simpl. token_progress.
 Qed.
 
 Lemma step_BB_run1 (L1 R : list MItem) :
@@ -270,7 +306,7 @@ Lemma step_BB_run1 (L1 R : list MItem) :
 Proof.
   unfold cfgBB.
   change (encM (MRun 0 :: bumpM R)) with (1%sym >> 0%sym >> encM (bumpM R)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_BB_run2 (L1 R : list MItem) :
@@ -278,42 +314,42 @@ Lemma step_BB_run2 (L1 R : list MItem) :
 Proof.
   unfold cfgBB, cfgDL.
   change (encM (MRun 0 :: MRun 0 :: bumpM R)) with (1%sym >> 0%sym >> 1%sym >> 0%sym >> encM (bumpM R)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_BB_run3 (L1 R : list MItem) :
   cfgBB (MRun 3 :: L1) R -->+ cfgBB (MRun 0 :: MZero :: MZero :: L1) (bumpM R).
 Proof.
-  unfold cfgBB. rewrite <- encM_bumpM. simpl. start_progress.
+  unfold cfgBB. rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_BB_run_ge4 (d : N) (L1 R : list MItem) :
   cfgBB (MRun (d + 4) :: L1) R -->+ cfgBB (MRun 0 :: MZero :: MRun d :: L1) (bumpM R).
 Proof.
-  unfold cfgBB. rewrite encM_run_add4, <- encM_bumpM. simpl. start_progress.
+  unfold cfgBB. rewrite encM_run_add4, <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma cyc_R_A (k : nat) (V s : side) :
-  E;; (0%sym >> V) {{0%sym}} ([1%sym]^^k *> s) -->*
-  E;; (0%sym >> ([0%sym]^^k *> V)) {{0%sym}} s.
+  qE;; (0%sym >> V) {{0%sym}} ([1%sym]^^k *> s) -->*
+  qE;; (0%sym >> ([0%sym]^^k *> V)) {{0%sym}} s.
 Proof.
   revert V.
   induction k as [| k ih]; intro V.
   - finish.
   - assert (h1 :
-      E;; (0%sym >> V) {{0%sym}} ([1%sym]^^(S k) *> s) -->+
-      E;; (0%sym >> 0%sym >> V) {{0%sym}} ([1%sym]^^k *> s)).
-    { simpl. start_progress. }
+      qE;; (0%sym >> V) {{0%sym}} ([1%sym]^^(S k) *> s) -->+
+      qE;; (0%sym >> 0%sym >> V) {{0%sym}} ([1%sym]^^k *> s)).
+    { simpl. token_progress. }
     pose proof (ih (0%sym >> V)) as h2.
     change (0%sym >> V) with ([0%sym] *> V) in h2; rewrite lpow_shift' in h2.
     exact (pev (pe_trans h1 h2)).
 Qed.
 
 Lemma exit_R_A (W R1 : list MItem) :
-  E;; (0%sym >> 0%sym >> 0%sym >> encM W) {{0%sym}} (0%sym >> encM R1) -->+
+  qE;; (0%sym >> 0%sym >> 0%sym >> encM W) {{0%sym}} (0%sym >> encM R1) -->+
   cfgCB (MRun 0 :: MRun 0 :: W) R1.
 Proof.
-  unfold cfgCB. simpl. start_progress.
+  unfold cfgCB. simpl. token_progress.
 Qed.
 
 Lemma encM_replicate_zero (k : nat) (L : list MItem) :
@@ -331,7 +367,7 @@ Qed.
 Lemma step_DL_run0 (L1 R : list MItem) :
   cfgDL (MRun 0 :: L1) R -->+ cfgBB L1 (bumpM R).
 Proof.
-  unfold cfgDL, cfgBB. rewrite <- encM_bumpM. simpl. start_progress.
+  unfold cfgDL, cfgBB. rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_DL_run1 (L1 R : list MItem) :
@@ -339,7 +375,7 @@ Lemma step_DL_run1 (L1 R : list MItem) :
 Proof.
   unfold cfgDL.
   change (encM (MRun 0 :: bumpM R)) with (1%sym >> 0%sym >> encM (bumpM R)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_DL_run2 (d0 : N) (L1 R1 : list MItem) :
@@ -348,10 +384,10 @@ Lemma step_DL_run2 (d0 : N) (L1 R1 : list MItem) :
 Proof.
   unfold cfgDL.
   assert (h1 :
-    encM (MRun 2 :: L1) <{{C}} encM (MRun d0 :: R1) -->+
-    E;; (0%sym >> 0%sym >> 0%sym >> encM L1) {{0%sym}}
+    encM (MRun 2 :: L1) <{{qC}} encM (MRun d0 :: R1) -->+
+    qE;; (0%sym >> 0%sym >> 0%sym >> encM L1) {{0%sym}}
       ([1%sym]^^(S (N.to_nat d0)) *> (0%sym >> encM R1))).
-  { simpl. start_progress. }
+  { simpl. token_progress. }
   pose proof (cyc_R_A (S (N.to_nat d0)) (0%sym >> 0%sym >> encM L1) (0%sym >> encM R1)) as h2.
   pose proof (pe_trans h1 h2) as h12.
   change (0%sym >> 0%sym >> encM L1) with ([0%sym] *> (0%sym >> encM L1)) in h12;
@@ -366,13 +402,13 @@ Qed.
 Lemma step_CB_nil (L : list MItem) :
   cfgCB L [] -->+ cfgDL (bumpM L) [MRun 0].
 Proof.
-  unfold cfgCB, cfgDL. rewrite <- encM_bumpM. simpl. start_progress.
+  unfold cfgCB, cfgDL. rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_CB_zero (L R1 : list MItem) :
   cfgCB L (MZero :: R1) -->+ cfgDL (bumpM L) (bumpM R1).
 Proof.
-  unfold cfgCB, cfgDL. rewrite <- (encM_bumpM L), <- (encM_bumpM R1). simpl. start_progress.
+  unfold cfgCB, cfgDL. rewrite <- (encM_bumpM L), <- (encM_bumpM R1). simpl. token_progress.
 Qed.
 
 Lemma step_CB_run0_nil (L : list MItem) :
@@ -380,7 +416,7 @@ Lemma step_CB_run0_nil (L : list MItem) :
 Proof.
   unfold cfgCB, cfgBB.
   change (encM (MRun 0 :: bumpM L)) with (1%sym >> 0%sym >> encM (bumpM L)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_CB_run0_zero (L R2 : list MItem) :
@@ -388,7 +424,7 @@ Lemma step_CB_run0_zero (L R2 : list MItem) :
 Proof.
   unfold cfgCB, cfgBB.
   change (encM (MRun 0 :: bumpM L)) with (1%sym >> 0%sym >> encM (bumpM L)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_CB_run0_run0 (L R2 : list MItem) :
@@ -396,7 +432,7 @@ Lemma step_CB_run0_run0 (L R2 : list MItem) :
 Proof.
   unfold cfgCB, cfgBB.
   change (encM (MRun 0 :: MZero :: bumpM L)) with (1%sym >> 0%sym >> 0%sym >> encM (bumpM L)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_CB_run0_run_pos (d2 : N) (L R2 : list MItem) :
@@ -405,13 +441,13 @@ Lemma step_CB_run0_run_pos (d2 : N) (L R2 : list MItem) :
 Proof.
   unfold cfgCB.
   assert (h1 :
-    (A;; encM L {{0%sym}} encM (MRun 0 :: MRun (d2 + 1) :: R2)) -->+
-    (E;; (0%sym >> 0%sym >> encM (bumpM L)) {{0%sym}}
+    (qA;; encM L {{0%sym}} encM (MRun 0 :: MRun (d2 + 1) :: R2)) -->+
+    (qE;; (0%sym >> 0%sym >> encM (bumpM L)) {{0%sym}}
       ([1%sym]^^(S (N.to_nat d2)) *> (0%sym >> encM R2)))).
   { rewrite <- (encM_bumpM L).
     unfold encM at 2; fold encM.
     replace (N.to_nat (d2 + 1)) with (S (N.to_nat d2)) by lia.
-    simpl. start_progress. }
+    simpl. token_progress. }
   pose proof (cyc_R_A (S (N.to_nat d2)) (0%sym >> encM (bumpM L)) (0%sym >> encM R2)) as h2.
   pose proof (pe_trans h1 h2) as h12.
   change (0%sym >> encM (bumpM L)) with ([0%sym] *> encM (bumpM L)) in h12;
@@ -427,31 +463,26 @@ Lemma step_CB_run1 (L R1 : list MItem) :
 Proof.
   unfold cfgCB.
   change (encM (MRun 0 :: bumpM L)) with (1%sym >> 0%sym >> encM (bumpM L)).
-  rewrite <- encM_bumpM. simpl. start_progress.
+  rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_CB_run2 (L R1 : list MItem) :
   cfgCB L (MRun 2 :: R1) -->+ cfgBB (bumpM L) (MRun 0 :: MZero :: R1).
 Proof.
-  unfold cfgCB, cfgBB. rewrite <- encM_bumpM. simpl. start_progress.
+  unfold cfgCB, cfgBB. rewrite <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_CB_run_ge3 (d : N) (L R1 : list MItem) :
   cfgCB L (MRun (d + 3) :: R1) -->+ cfgBB (bumpM L) (MRun 0 :: MRun d :: R1).
 Proof.
-  unfold cfgCB, cfgBB. rewrite encM_run_add3, <- encM_bumpM. simpl. start_progress.
-Qed.
-
-Lemma init_to_CB : c0 -->+ cfgCB [] [MRun 1; MRun 0].
-Proof.
-  unfold c0, tape0, cfgCB. simpl. start_progress.
+  unfold cfgCB, cfgBB. rewrite encM_run_add3, <- encM_bumpM. simpl. token_progress.
 Qed.
 
 Lemma step_DL_zero_halt (L1 R1 : list MItem) :
   cfgDL (MZero :: L1) (MRun 0 :: R1) -->+
-  F;; (1%sym >> encM L1) {{1%sym}} (0%sym >> encM R1).
+  qF;; (exitWrite alternate >> encM L1) {{1%sym}} (0%sym >> encM R1).
 Proof.
-  unfold cfgDL. simpl. start_progress.
+  unfold cfgDL. simpl. token_progress.
 Qed.
 
 Lemma step_BB_r0_r1 (L R : list MItem) :
@@ -577,35 +608,6 @@ Proof.
         exact (pev (step_CB_run_ge3 (d - 3) ls R1)).
   - (* HALT *)
     apply evstep_refl.
-Qed.
-
-Definition stepElem16 := iter stepElemM 16%nat.
-Definition stepElem256 := iter stepElem16 16%nat.
-Definition stepElem4096 := iter stepElem256 16%nat.
-
-Definition runElemFast (s : SymMode * list MItem * list MItem) : SymMode * list MItem * list MItem :=
-  iter stepElemM 1%nat (iter stepElem16 1%nat (iter stepElem256 11%nat (iter stepElem4096 4%nat s))).
-
-Lemma stepElem16_sound (s : SymMode * list MItem * list MItem) :
-  evalM s -->* evalM (stepElem16 s).
-Proof. apply (iter_sound stepElemM evalM stepElemM_sound 16%nat). Qed.
-
-Lemma stepElem256_sound (s : SymMode * list MItem * list MItem) :
-  evalM s -->* evalM (stepElem256 s).
-Proof. apply (iter_sound stepElem16 evalM stepElem16_sound 16%nat). Qed.
-
-Lemma stepElem4096_sound (s : SymMode * list MItem * list MItem) :
-  evalM s -->* evalM (stepElem4096 s).
-Proof. apply (iter_sound stepElem256 evalM stepElem256_sound 16%nat). Qed.
-
-Lemma runElemFast_sound (s : SymMode * list MItem * list MItem) :
-  evalM s -->* evalM (runElemFast s).
-Proof.
-  unfold runElemFast.
-  eapply etrans; [exact (iter_sound stepElem4096 evalM stepElem4096_sound 4%nat s) |].
-  eapply etrans; [exact (iter_sound stepElem256 evalM stepElem256_sound 11%nat _) |].
-  eapply etrans; [exact (iter_sound stepElem16 evalM stepElem16_sound 1%nat _) |].
-  exact (iter_sound stepElemM evalM stepElemM_sound 1%nat _).
 Qed.
 
 (* ========================================================================== *)
@@ -2249,7 +2251,7 @@ Fixpoint splitB2Aux (fuel : nat) (p : N) (xs : list SymTok) : N * list SymTok :=
   end.
 
 Definition splitB2 (p : N) (xs : list SymTok) : N * list SymTok :=
-  splitB2Aux 32%nat p xs.
+  splitB2Aux splitFuel p xs.
 
 Lemma splitB2Aux_spec (fuel : nat) : forall (p : N) (xs : list SymTok),
   repBlock [MRun 0; MRun 1; MRun 1] p ++ encSymL xs =
@@ -2479,9 +2481,9 @@ Proof.
   apply andb_prop in hcond12; destruct hcond12 as [hc1 hc2].
   apply N.leb_le in hc1; apply N.leb_le in hc2; apply N.leb_le in hc3.
   pose proof (stripPrefixSym_some _ L restL hsL) as hL.
-  pose proof (splitB2Aux_spec 32%nat 0 restL) as hspec.
+  pose proof (splitB2Aux_spec splitFuel 0 restL) as hspec.
   rewrite repBlock_0 in hspec; cbn [app] in hspec.
-  change (splitB2Aux 32%nat 0 restL) with (splitB2 0 restL) in hspec.
+  change (splitB2Aux splitFuel 0 restL) with (splitB2 0 restL) in hspec.
   destruct (popSep3_some _ s_sep rest0 hsep1) as [h_s hs_or].
   pose proof (popRep12_some rest0 m12 rest1 h12) as h_m12.
   pose proof (stripPrefixSym_some _ rest1 rest2 hs1) as h_r1.
@@ -2609,145 +2611,22 @@ Proof.
   - apply evstep_refl.
 Qed.
 
-Definition stepSym16 := iter stepSym 16%nat.
-Definition stepSym256 := iter stepSym16 16%nat.
-Definition stepSym4096 := iter stepSym256 16%nat.
+Lemma iterN_sound {X : Type} (f : X -> X) (ev : X -> Q * tape)
+    (Hs : forall x, ev x -->* ev (f x)) (n : N) x :
+  ev x -->* ev (N.iter n f x).
+Proof.
+  induction n using N.peano_ind; [apply evstep_refl|].
+  rewrite N.iter_succ. eapply etrans; [exact IHn|apply Hs].
+Qed.
 
-Lemma stepSym16_sound (s : SymMode * list SymTok * list SymTok) :
-  evalSym s -->* evalSym (stepSym16 s).
-Proof. exact (iter_sound stepSym evalSym stepSym_sound 16%nat s). Qed.
+Definition expandSym (s : SymMode * list SymTok * list SymTok) :=
+  let '(m,l,r) := s in (m,encSymL l,encSymR r).
 
-Lemma stepSym256_sound (s : SymMode * list SymTok * list SymTok) :
-  evalSym s -->* evalSym (stepSym256 s).
-Proof. exact (iter_sound stepSym16 evalSym stepSym16_sound 16%nat s). Qed.
-
-Lemma stepSym4096_sound (s : SymMode * list SymTok * list SymTok) :
-  evalSym s -->* evalSym (stepSym4096 s).
-Proof. exact (iter_sound stepSym256 evalSym stepSym256_sound 16%nat s). Qed.
-
-(* ========================================================================== *)
-(* Section 6: Checkpointed Trajectory & Halting Theorem                       *)
-(* ========================================================================== *)
-
-Definition initSymCyc3 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 0); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 46; STItem (MRun 0)], [STItem (MRun 79); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk4096 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 0); STItem (MRun 0); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STRep12 69932; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 349284; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk8192 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 1); STRep12 293731192; STItem (MRun 2); STRepB1 1468655224; STItem (MRun 0)], [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 6); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 2); STItem (MRun 3); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk12288 : SymMode * list SymTok * list SymTok :=
-  (CB, [], [STItem (MRun 1); STRepB1 7401584263016; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STRep2 1; STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 7401584264101); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 2); STItem (MRun 3); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem MZero; STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 2); STItem (MRun 3); STItem (MRun 1)]).
-
-Definition symChk16384 : SymMode * list SymTok * list SymTok :=
-  (DL, [STItem (MRun 0); STItem (MRun 1); STRep2 5828399623694162; STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STRepB1 11656799247386921; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 11656799247388309); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 2); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 3); STItem (MRun 3); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 5); STItem (MRun 3); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk20480 : SymMode * list SymTok * list SymTok :=
-  (DL, [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STRep12 9179181364734787724; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 45895906823673936877; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk24576 : SymMode * list SymTok * list SymTok :=
-  (DL, [STRepB1 192751300452273201788429; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STRep12 38550260090454640358104; STItem (MRun 0); STItem (MRun 2); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem MZero; STItem (MRun 3); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1)]).
-
-Definition symChk28672 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STRep12 161901426063024309850221340; STItem (MRun 2); STRepB1 809507130315121549251104250; STItem (MRun 0)], [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 5); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk32768 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 0); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 3399726966787864888523559563277; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STRep12 679945393357572977704711913207; STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 4); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 2); STItem (MRun 3); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk36864 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STRepB1 8566800475893506045311193103085396; STItem (MRun 0)], [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STRep2 4283400237946753022655596551544268; STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 8566800475893506045311193103088524); STItem (MRun 1); STItem (MRun 2); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 2); STItem (MRun 3); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk40960 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 1); STRepB1 59964023182123780301115281865963814445; STItem (MRun 0)], [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STRep12 11992804636424756060223056373192763585; STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 3); STItem (MRun 1); STItem (MRun 7); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk45056 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 0); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRep12 28331309434081290173749125880312046958998; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 141656547170406450868745629401560234791159; STItem (MRun 0)], [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 3); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 7); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk49152 : SymMode * list SymTok * list SymTok :=
-  (BB, [STItem (MRun 0); STItem (MRun 1); STRep2 1; STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STRepB1 535429780494748407225024473657428158523986309; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 535429780494748407225024473657428158523990526); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk53248 : SymMode * list SymTok * list SymTok :=
-  (CB, [], [STItem (MRun 1); STRepB1 1873892351078590533629325742230370269117066257558; STItem (MRun 0); STItem (MRun 2); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STRep12 374778470215718106725865148446074053823413252433; STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 6); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 5); STItem (MRun 1); STItem (MRun 6); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk57344 : SymMode * list SymTok * list SymTok :=
-  (DL, [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STRep2 996031434861122243531684763682732439419162283857463; STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 1992062869722244487063369527365464878838324567709997; STItem (MRun 0)], [STItem (MRun 1992062869722244487063369527365464878838324567714920); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk61440 : SymMode * list SymTok * list SymTok :=
-  (DL, [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STRep12 661776688146251534887371767366373046443244305364132822; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 3308883440731257674436858836831865232216221526820658827; STItem (MRun 0)], [STItem (MRun 4); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 2); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk65536 : SymMode * list SymTok * list SymTok :=
-  (DL, [STRep12 659540004931999983852102031802319817808504446014405329671; STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 3297700024659999919260510159011599089042522230072026642750; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 4); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 3); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk69632 : SymMode * list SymTok * list SymTok :=
-  (CB, [STItem (MRun 0); STItem (MRun 0); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 2629243525178812812679392664523750958759518709707280000200843; STItem (MRun 0)], [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STRep2 1314621762589406406339696332261875479379759354853640000103353; STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 2629243525178812812679392664523750958759518709707280000206708); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STItem (MRun 3); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Definition symChk70511 : SymMode * list SymTok * list SymTok :=
-  (HALT, [STItem MZero; STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STRep12 2077426982857333580388655932463210634081595029892171852015193; STItem (MRun 2); STRepB1 10387134914286667901943279662316053170407975149460859260070043; STItem (MRun 0)], [STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 3); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
-
-Lemma test_elem_rfl :
-  runElemFast (CB, [], [MRun 1; MRun 0]) =
-  (fst (fst initSymCyc3), encSymL (snd (fst initSymCyc3)), encSymR (snd initSymCyc3)).
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk1 : stepSym4096 initSymCyc3 = symChk4096.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk2 : stepSym4096 symChk4096 = symChk8192.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk3 : stepSym4096 symChk8192 = symChk12288.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk4 : stepSym4096 symChk12288 = symChk16384.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk5 : stepSym4096 symChk16384 = symChk20480.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk6 : stepSym4096 symChk20480 = symChk24576.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk7 : stepSym4096 symChk24576 = symChk28672.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk8 : stepSym4096 symChk28672 = symChk32768.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk9 : stepSym4096 symChk32768 = symChk36864.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk10 : stepSym4096 symChk36864 = symChk40960.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk11 : stepSym4096 symChk40960 = symChk45056.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk12 : stepSym4096 symChk45056 = symChk49152.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk13 : stepSym4096 symChk49152 = symChk53248.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk14 : stepSym4096 symChk53248 = symChk57344.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk15 : stepSym4096 symChk57344 = symChk61440.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk16 : stepSym4096 symChk61440 = symChk65536.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk17 : stepSym4096 symChk65536 = symChk69632.
-Proof. vm_compute. reflexivity. Qed.
-
-Lemma sym_chk18 :
-  iter stepSym 15%nat (iter stepSym16 6%nat (iter stepSym256 3%nat symChk69632)) = symChk70511.
-Proof. vm_compute. reflexivity. Qed.
-
-Strategy 1000 [initSymCyc3 symChk4096 symChk8192 symChk12288 symChk16384 symChk20480 symChk24576 symChk28672 symChk32768 symChk36864 symChk40960 symChk45056 symChk49152 symChk53248 symChk57344 symChk61440 symChk65536 symChk69632 symChk70511
-  runElemFast stepSym4096 stepSym256 stepSym16 stepSym].
+Definition atHalt (s : SymMode * list SymTok * list SymTok) :=
+  match s with
+  | (HALT, STItem MZero :: _, STItem (MRun d) :: _) => d =? 0
+  | _ => false
+  end.
 
 Lemma halts_evstep {c c' : Q * tape} : halts tm c' -> c -->* c' -> halts tm c.
 Proof.
@@ -2755,60 +2634,71 @@ Proof.
   eapply halts_multistep; eauto.
 Qed.
 
-Lemma halt : halts tm c0.
+Lemma atHalt_sound s : atHalt s = true -> halts tm (evalSym s).
 Proof.
-  assert (h0 : c0 -->* evalM (CB, [], [MRun 1; MRun 0])).
-  { exact (pev init_to_CB). }
-  assert (h1 : evalM (CB, [], [MRun 1; MRun 0]) -->* evalSym initSymCyc3).
-  { pose proof (runElemFast_sound (CB, [], [MRun 1; MRun 0])) as h.
-    rewrite test_elem_rfl in h.
-    exact h. }
-  assert (hc1 : evalSym initSymCyc3 -->* evalSym symChk4096).
-  { rewrite <- sym_chk1. exact (stepSym4096_sound initSymCyc3). }
-  assert (hc2 : evalSym symChk4096 -->* evalSym symChk8192).
-  { rewrite <- sym_chk2. exact (stepSym4096_sound symChk4096). }
-  assert (hc3 : evalSym symChk8192 -->* evalSym symChk12288).
-  { rewrite <- sym_chk3. exact (stepSym4096_sound symChk8192). }
-  assert (hc4 : evalSym symChk12288 -->* evalSym symChk16384).
-  { rewrite <- sym_chk4. exact (stepSym4096_sound symChk12288). }
-  assert (hc5 : evalSym symChk16384 -->* evalSym symChk20480).
-  { rewrite <- sym_chk5. exact (stepSym4096_sound symChk16384). }
-  assert (hc6 : evalSym symChk20480 -->* evalSym symChk24576).
-  { rewrite <- sym_chk6. exact (stepSym4096_sound symChk20480). }
-  assert (hc7 : evalSym symChk24576 -->* evalSym symChk28672).
-  { rewrite <- sym_chk7. exact (stepSym4096_sound symChk24576). }
-  assert (hc8 : evalSym symChk28672 -->* evalSym symChk32768).
-  { rewrite <- sym_chk8. exact (stepSym4096_sound symChk28672). }
-  assert (hc9 : evalSym symChk32768 -->* evalSym symChk36864).
-  { rewrite <- sym_chk9. exact (stepSym4096_sound symChk32768). }
-  assert (hc10 : evalSym symChk36864 -->* evalSym symChk40960).
-  { rewrite <- sym_chk10. exact (stepSym4096_sound symChk36864). }
-  assert (hc11 : evalSym symChk40960 -->* evalSym symChk45056).
-  { rewrite <- sym_chk11. exact (stepSym4096_sound symChk40960). }
-  assert (hc12 : evalSym symChk45056 -->* evalSym symChk49152).
-  { rewrite <- sym_chk12. exact (stepSym4096_sound symChk45056). }
-  assert (hc13 : evalSym symChk49152 -->* evalSym symChk53248).
-  { rewrite <- sym_chk13. exact (stepSym4096_sound symChk49152). }
-  assert (hc14 : evalSym symChk53248 -->* evalSym symChk57344).
-  { rewrite <- sym_chk14. exact (stepSym4096_sound symChk53248). }
-  assert (hc15 : evalSym symChk57344 -->* evalSym symChk61440).
-  { rewrite <- sym_chk15. exact (stepSym4096_sound symChk57344). }
-  assert (hc16 : evalSym symChk61440 -->* evalSym symChk65536).
-  { rewrite <- sym_chk16. exact (stepSym4096_sound symChk61440). }
-  assert (hc17 : evalSym symChk65536 -->* evalSym symChk69632).
-  { rewrite <- sym_chk17. exact (stepSym4096_sound symChk65536). }
-  assert (hc18 : evalSym symChk69632 -->* evalSym symChk70511).
-  { rewrite <- sym_chk18.
-    eapply etrans; [exact (iter_sound stepSym256 evalSym stepSym256_sound 3%nat symChk69632) |].
-    eapply etrans; [exact (iter_sound stepSym16 evalSym stepSym16_sound 6%nat _) |].
-    exact (iter_sound stepSym evalSym stepSym_sound 15%nat _). }
-  assert (h_to_halt : c0 -->* evalSym symChk70511).
-  { exact (etrans h0 (etrans h1 (etrans hc1 (etrans hc2 (etrans hc3 (etrans hc4 (etrans hc5 (etrans hc6 (etrans hc7 (etrans hc8 (etrans hc9 (etrans hc10 (etrans hc11 (etrans hc12 (etrans hc13 (etrans hc14 (etrans hc15 (etrans hc16 (etrans hc17 hc18))))))))))))))))))). }
-  pose proof (step_DL_zero_halt
-    (encSymL [STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 2); STRep12 2077426982857333580388655932463210634081595029892171852015193; STItem (MRun 2); STRepB1 10387134914286667901943279662316053170407975149460859260070043; STItem (MRun 0)])
-    (encSymR [STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 3); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)])) as h_final.
-  eapply halts_evstep; [| exact h_to_halt].
-  unfold symChk70511, evalSym, evalM; cbn [encSymL encSymR].
-  eapply halts_evstep; [| exact (pev h_final)].
-  apply halted_halts; reflexivity.
+  destruct s as [[m ls] rs].
+  destruct m, ls as [|l ls], rs as [|r rs]; try discriminate.
+  all: repeat match goal with
+    | t : SymTok |- _ => destruct t; try discriminate
+    | t : MItem |- _ => destruct t; try discriminate
+    end.
+  cbn [atHalt]. intros Hd. apply N.eqb_eq in Hd. subst.
+  eapply halts_evstep; [|apply pev; exact (step_DL_zero_halt (encSymL ls) (encSymR rs))].
+  apply halted_halts. exact (tok_f1 _ _ _ _ _ _ _ _ rules).
 Qed.
+
+Lemma certified_halt (initialFuel symbolicFuel : N) boot seed :
+  c0 -->+ evalM boot ->
+  N.iter initialFuel stepElemM boot = expandSym seed ->
+  atHalt (N.iter symbolicFuel stepSym seed) = true ->
+  halts tm c0.
+Proof.
+  intros Hboot Hsplit Hcheck.
+  refine (halts_evstep _ (pev Hboot)).
+  pose proof (iterN_sound stepElemM evalM stepElemM_sound initialFuel boot) as Hrun.
+  rewrite Hsplit in Hrun. destruct seed as [[mode l] r].
+  refine (halts_evstep _ Hrun).
+  refine (halts_evstep _ (iterN_sound stepSym evalSym stepSym_sound symbolicFuel (mode,l,r))).
+  now apply atHalt_sound.
+Qed.
+
+End Tokens.
+
+Module TM1.
+Definition tm := Eval compute in (TM_from_str "1RB0LC_1LC0RE_1RF1LD_1LA0LB_1RD1RA_1LB---").
+Lemma layout : TokenTable tm A B C D E F false.
+Proof. constructor; reflexivity. Qed.
+Definition boot : SymMode * list MItem * list MItem := (CB, [], [MRun 1; MRun 0]).
+Definition symbolicBoot : SymMode * list SymTok * list SymTok :=
+  (CB, [STItem (MRun 0); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem MZero; STItem (MRun 1); STRepB1 46; STItem (MRun 0)], [STItem (MRun 79); STItem (MRun 0); STItem (MRun 1); STItem MZero; STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
+
+Lemma blank_entry : c0 -[tm]->+ evalM A C D boot.
+Proof. unfold c0, tape0, boot, evalM, cfgCB, cfgBB. simpl. start_progress. Qed.
+Theorem halt : halts tm c0.
+Proof.
+  eapply (@certified_halt tm A B C D E F false layout 32%nat 19217 70511 boot symbolicBoot);
+    [apply blank_entry | vm_check_eq | vm_check_eq].
+Qed.
+End TM1.
+
+Module TM2.
+Definition tm := Eval compute in (TM_from_str "1RB1RC_1LC0LF_1RF0LD_0RE1LB_1RC---_1LD0RA").
+Lemma layout : TokenTable tm C F D B A E true.
+Proof. constructor; reflexivity. Qed.
+Definition boot : SymMode * list MItem * list MItem := (BB, [MRun 0], []).
+Definition symbolicBoot : SymMode * list SymTok * list SymTok :=
+  (CB,
+   [STItem (MRun 0); STItem (MRun 0); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0);
+    STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 0); STItem MZero;
+    STItem (MRun 1); STRepB1 46; STItem (MRun 0)],
+   [STItem (MRun 79); STItem (MRun 0); STItem (MRun 1); STItem MZero;
+    STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1); STItem (MRun 1)]).
+
+Lemma blank_entry : c0 -[tm]->+ evalM C D B boot.
+Proof. unfold c0, tape0, boot, evalM, cfgCB, cfgBB. simpl. start_progress. Qed.
+Theorem halt : halts tm c0.
+Proof.
+  eapply (@certified_halt tm C F D B A E true layout 16%nat 19255 21383 boot symbolicBoot);
+    [apply blank_entry | vm_check_eq | vm_check_eq].
+Qed.
+End TM2.
