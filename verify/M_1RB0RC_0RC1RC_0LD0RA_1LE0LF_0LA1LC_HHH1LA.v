@@ -521,63 +521,66 @@ Qed.
 
 (** ** Shift rules *)
 
-(** Valid as a rule for crossing to the right. *)
-Definition OKR (r : SRule) : Prop := forall Lt Rt,
-  conf (ru r *> Lt) (rw r ^^ N.to_nat (rk r) *> Rt) (rq r) -->* conf (ru r *> rv r *> Lt) Rt (rq r).
+(* Both directions are the same check in the coordinates (near, far).
+   A left scan swaps physical left and right, including their frames. *)
+Definition orient {A : Type} (d : dir) (near far : A) : A * A :=
+  match d with R => (near, far) | L => (far, near) end.
 
-(** Valid as a rule for crossing to the left. *)
-Definition OKL (r : SRule) : Prop := forall Lt Rt,
-  conf (rw r ^^ N.to_nat (rk r) *> Lt) (ru r *> Rt) (rq r) -->* conf Lt (ru r *> rv r *> Rt) (rq r).
+Definition scross (d : dir) (near far : Stream sym) (q : Q) :=
+  let '(l, r) := orient d near far in conf l r q.
 
-(** The boolean checks of the two, by the window simulator. *)
-Definition chkR (r : SRule) : bool :=
-  match wrun (N.to_nat (rsteps r)) (ru r, rw r ^^ N.to_nat (rk r), rq r) with
-  | Some (l, [], q) => weqb l (ru r ++ rv r) && qeqb q (rq r)
-  | _ => false
-  end.
+Definition wcross (d : dir) (near far : list sym) (q : Q) :=
+  (orient d near far, q).
 
-Definition chkL (r : SRule) : bool :=
-  match wrun (N.to_nat (rsteps r)) (rw r ^^ N.to_nat (rk r), ru r, rq r) with
-  | Some ([], r', q) => weqb r' (ru r ++ rv r) && qeqb q (rq r)
-  | _ => false
-  end.
+Lemma wconf_cross : forall d Lt Rt near far q,
+  wconf (fst (orient d Lt Rt)) (snd (orient d Lt Rt)) (wcross d near far q) =
+  scross d (near *> Lt) (far *> Rt) q.
+Proof. intros [] Lt Rt near far q; reflexivity. Qed.
 
-Lemma chkR_ok : forall r, chkR r = true -> OKR r.
+Definition window_eqb (x y : list sym * list sym * state) : bool :=
+  let '(l, r, q) := x in let '(l', r', q') := y in
+  andb (weqb l l') (andb (weqb r r') (qeqb q q')).
+
+Lemma window_eqb_eq : forall x y, window_eqb x y = true -> x = y.
 Proof.
-  intros r H Lt Rt. unfold chkR in H.
-  destruct (wrun (N.to_nat (rsteps r)) (ru r, rw r ^^ N.to_nat (rk r), rq r)) as [[[l r'] q]|] eqn:Hr; [|discriminate].
-  destruct r' as [|x r']; [|discriminate]. apply andb_true_iff in H. destruct H as [H1 H2].
-  apply weqb_eq in H1. apply qeqb_eq in H2. subst l q.
-  pose proof (wrun_ok Lt Rt _ _ _ Hr) as E. simpl in E. rewrite Str_app_assoc in E. exact E.
+  intros [[l r] q] [[l' r'] q'] H; cbn [window_eqb] in H.
+  apply andb_true_iff in H as [Hl H]. apply andb_true_iff in H as [Hr Hq].
+  apply weqb_eq in Hl, Hr. apply qeqb_eq in Hq. now subst.
 Qed.
 
-Lemma chkL_ok : forall r, chkL r = true -> OKL r.
+Definition OKCross (d : dir) (r : SRule) : Prop := forall Lt Rt,
+  scross d (ru r *> Lt) (rw r ^^ N.to_nat (rk r) *> Rt) (rq r) -->*
+  scross d (ru r *> rv r *> Lt) Rt (rq r).
+
+Definition OKR := OKCross R.
+Definition OKL := OKCross L.
+
+Definition chkCross (d : dir) (r : SRule) : bool :=
+  match wrun (N.to_nat (rsteps r)) (wcross d (ru r) (rw r ^^ N.to_nat (rk r)) (rq r)) with
+  | Some c => window_eqb c (wcross d (ru r ++ rv r) [] (rq r))
+  | None => false
+  end.
+
+Definition chkR := chkCross R.
+Definition chkL := chkCross L.
+
+Lemma chkCross_ok : forall d r, chkCross d r = true -> OKCross d r.
 Proof.
-  intros r H Lt Rt. unfold chkL in H.
-  destruct (wrun (N.to_nat (rsteps r)) (rw r ^^ N.to_nat (rk r), ru r, rq r)) as [[[l r'] q]|] eqn:Hr; [|discriminate].
-  destruct l as [|x l]; [|discriminate]. apply andb_true_iff in H. destruct H as [H1 H2].
-  apply weqb_eq in H1. apply qeqb_eq in H2. subst r' q.
-  pose proof (wrun_ok Lt Rt _ _ _ Hr) as E. simpl in E. rewrite Str_app_assoc in E. exact E.
+  intros d r H Lt Rt. unfold chkCross in H.
+  destruct wrun as [c|] eqn:Hr; [|discriminate].
+  apply window_eqb_eq in H. subst c.
+  pose proof (wrun_ok (fst (orient d Lt Rt)) (snd (orient d Lt Rt)) _ _ _ Hr) as E.
+  rewrite !wconf_cross, Str_app_assoc in E. exact E.
 Qed.
 
-Lemma cross_r : forall r, OKR r -> forall m Lt Rt,
-  conf (ru r *> Lt) ((rw r ^^ N.to_nat (rk r)) ^^ m *> Rt) (rq r) -->* conf (ru r *> rv r ^^ m *> Lt) Rt (rq r).
+Lemma cross_repeat : forall d r, OKCross d r -> forall m Lt Rt,
+  scross d (ru r *> Lt) ((rw r ^^ N.to_nat (rk r)) ^^ m *> Rt) (rq r) -->*
+  scross d (ru r *> rv r ^^ m *> Lt) Rt (rq r).
 Proof.
-  intros r H. induction m as [|m IH]; intros Lt Rt.
+  intros d r H. induction m as [|m IH]; intros Lt Rt.
   - apply evstep_refl.
-  - simpl. rewrite Str_app_assoc. eapply evstep_trans; [apply H|].
+  - cbn [lpow]. rewrite Str_app_assoc. eapply evstep_trans; [apply H|].
     replace ((rv r ++ rv r ^^ m) *> Lt) with (rv r ^^ m *> rv r *> Lt).
-    + apply IH.
-    + rewrite lpow_shift', Str_app_assoc. reflexivity.
-Qed.
-
-Lemma cross_l : forall r, OKL r -> forall m Lt Rt,
-  conf ((rw r ^^ N.to_nat (rk r)) ^^ m *> Lt) (ru r *> Rt) (rq r) -->* conf Lt (ru r *> rv r ^^ m *> Rt) (rq r).
-Proof.
-  intros r H. induction m as [|m IH]; intros Lt Rt.
-  - apply evstep_refl.
-  - simpl. rewrite Str_app_assoc. eapply evstep_trans; [apply H|].
-    replace ((rv r ++ rv r ^^ m) *> Rt) with (rv r ^^ m *> rv r *> Rt).
     + apply IH.
     + rewrite lpow_shift', Str_app_assoc. reflexivity.
 Qed.
@@ -618,40 +621,24 @@ Proof.
   intros rho n k m rem w s H. rewrite (ev_div rho _ _ _ _ H), rep_add, <- rep_pow. reflexivity.
 Qed.
 
-Lemma crossWith_R : forall rho st w n near far near' far' rs,
-  (forall r, In r rs -> OKR r) -> crossWith st w n near far rs = Some (near', far') ->
-  conf (dn rho near) (rep (ev rho n) w (dn rho far)) st -->* conf (dn rho near') (dn rho far') st.
+Lemma crossWith_sound : forall d rho st w n near far near' far' rs,
+  (forall r, In r rs -> OKCross d r) -> crossWith st w n near far rs = Some (near', far') ->
+  scross d (dn rho near) (rep (ev rho n) w (dn rho far)) st -->*
+  scross d (dn rho near') (dn rho far') st.
 Proof.
-  intros rho st w n near far near' far'. induction rs as [|r rs IH]; intros Hrs H; [discriminate|].
+  intros d rho st w n near far near' far'. induction rs as [|r rs IH]; intros Hrs H; [discriminate|].
   assert (IH' : crossWith st w n near far rs = Some (near', far') ->
-    conf (dn rho near) (rep (ev rho n) w (dn rho far)) st -->* conf (dn rho near') (dn rho far') st).
+    scross d (dn rho near) (rep (ev rho n) w (dn rho far)) st -->*
+    scross d (dn rho near') (dn rho far') st).
   { apply IH. intros r' Hr'. apply Hrs. right. assumption. }
   simpl in H. destruct (andb (qeqb (rq r) st) (weqb (rw r) w)) eqn:Hq; [|auto].
   destruct (cdiv n (rk r)) as [[m rem]|] eqn:Hd; [|auto].
   destruct (1 <=? cc m); [|auto].
   destruct (takeW (ru r) near) as [nr|] eqn:Ht; [|auto].
-  injection H as <- <-. apply andb_true_iff in Hq. destruct Hq as [Hq Hw].
+  injection H as <- <-. apply andb_true_iff in Hq as [Hq Hw].
   apply qeqb_eq in Hq. apply weqb_eq in Hw. subst st w.
   rewrite (takeW_spec rho _ _ _ Ht), (split_rep rho _ _ _ _ _ _ Hd), far_spec, dn_cells, pushBlk_spec.
-  apply cross_r. apply Hrs. left. reflexivity.
-Qed.
-
-Lemma crossWith_L : forall rho st w n near far near' far' rs,
-  (forall r, In r rs -> OKL r) -> crossWith st w n near far rs = Some (near', far') ->
-  conf (rep (ev rho n) w (dn rho far)) (dn rho near) st -->* conf (dn rho far') (dn rho near') st.
-Proof.
-  intros rho st w n near far near' far'. induction rs as [|r rs IH]; intros Hrs H; [discriminate|].
-  assert (IH' : crossWith st w n near far rs = Some (near', far') ->
-    conf (rep (ev rho n) w (dn rho far)) (dn rho near) st -->* conf (dn rho far') (dn rho near') st).
-  { apply IH. intros r' Hr'. apply Hrs. right. assumption. }
-  simpl in H. destruct (andb (qeqb (rq r) st) (weqb (rw r) w)) eqn:Hq; [|auto].
-  destruct (cdiv n (rk r)) as [[m rem]|] eqn:Hd; [|auto].
-  destruct (1 <=? cc m); [|auto].
-  destruct (takeW (ru r) near) as [nr|] eqn:Ht; [|auto].
-  injection H as <- <-. apply andb_true_iff in Hq. destruct Hq as [Hq Hw].
-  apply qeqb_eq in Hq. apply weqb_eq in Hw. subst st w.
-  rewrite (takeW_spec rho _ _ _ Ht), (split_rep rho _ _ _ _ _ _ Hd), far_spec, dn_cells, pushBlk_spec.
-  apply cross_l. apply Hrs. left. reflexivity.
+  apply cross_repeat. apply Hrs. left. reflexivity.
 Qed.
 
 (** The smallest count a block must surely have to be crossed by a shift rule (a matter of strategy only). *)
@@ -694,11 +681,11 @@ Proof.
   - injection H as <-. destruct r as [|[c|w n] far]; try discriminate.
     destruct (minCross <=? cc n); [|discriminate].
     destruct (crossWith q w n l far shR) as [[l' r']|] eqn:Hc; [|discriminate].
-    injection Ha as <-. exact (crossWith_R rho _ _ _ _ _ _ _ _ HR Hc).
+    injection Ha as <-. exact (crossWith_sound R rho _ _ _ _ _ _ _ _ HR Hc).
   - clear Ha. destruct l as [|[c|w n] far]; try discriminate.
     destruct (minCross <=? cc n); [|discriminate].
     destruct (crossWith q w n r far shL) as [[r' l']|] eqn:Hc; [|discriminate].
-    injection H as <-. exact (crossWith_L rho _ _ _ _ _ _ _ _ HL Hc).
+    injection H as <-. exact (crossWith_sound L rho _ _ _ _ _ _ _ _ HL Hc).
 Qed.
 
 (** ** One machine step *)
@@ -1124,9 +1111,11 @@ Proof.
       pose proof (ev_sub rho _ _ _ Hsub) as hs. rewrite ev_mul in hs.
       pose proof (dot_map_div M (ca m1) rho Hev) as hd.
       pose proof (N.div_mod' (cc m1 - N.min b0 b1) M) as hq. rewrite Hmod in hq.
+      assert (Hcc : cc m1 = N.min b0 b1 + M * ((cc m1 - N.min b0 b1) / M)).
+      { clear -Hge hq. lia. }
       set (y := (cc m1 - N.min b0 b1) / M + dot (List.map (fun x => x / M) (ca m1)) rho).
       assert (hm1 : ev rho m1 = N.min b0 b1 + M * y).
-      { unfold ev, y. rewrite hd. lia. }
+      { unfold ev, y. rewrite hd. rewrite Hcc at 1. ring. }
       exists (fun i => match i with O => y | S i' => rt' i' end). cbn [dn instV uvec].
       rewrite h1, h2. split; f_equal.
       * rewrite hs, hm1. ring.
@@ -1342,8 +1331,8 @@ Lemma shifts_ok : forall shR shL, forallb chkR shR = true -> forallb chkL shL = 
   TblOK (mkT shR shL []).
 Proof.
   intros shR shL HR HL. split; [|split].
-  - intros r Hr. apply chkR_ok. exact (proj1 (forallb_forall _ _) HR r Hr).
-  - intros r Hr. apply chkL_ok. exact (proj1 (forallb_forall _ _) HL r Hr).
+  - intros r Hr. apply chkCross_ok. exact (proj1 (forallb_forall _ _) HR r Hr).
+  - intros r Hr. apply chkCross_ok. exact (proj1 (forallb_forall _ _) HL r Hr).
   - constructor.
 Qed.
 
@@ -1352,9 +1341,9 @@ Proof. intros shR shL rs [HR [HL _]] H. split; [|split]; assumption. Qed.
 
 End Exec.
 
-(** ** Two strategies for the number of applications of a cycle rule
+(** ** The strategy for the number of applications of a cycle rule
 
-    Neither is trusted: [appToks] checks whatever number comes out. *)
+    [appToks] validates the chosen count. *)
 
 (** The smallest of what the shrinking blocks allow, by the numeric part of their counts. *)
 Fixpoint ruleNmin (t : list TT) (s : list Tok) : option N :=
@@ -1372,33 +1361,9 @@ Fixpoint ruleNmin (t : list TT) (s : list Tok) : option N :=
 Definition stratMin (t : list TT) (s : list Tok) : option Cnt :=
   match ruleNmin t s with Some n => Some (mkC n []) | None => None end.
 
-(** The smallest over the shrinking blocks with a number, and the one of the first shrinking block with a
-    variable (then the number of applications is a count with a variable). *)
-Fixpoint ruleNlin (t : list TT) (s : list Tok) : option N * option Cnt :=
-  match t, s with
-  | tvar _ b0 b1 :: t', blk _ n :: s' =>
-    let r := ruleNlin t' s' in
-    if b1 <? b0 then
-      let k := if b0 <=? cc n then (cc n - b0) / (b0 - b1) + 1 else 0 in
-      if isConst n then (Some (match fst r with None => k | Some k' => N.min k k' end), snd r)
-      else (fst r, Some (mkC k (List.map (fun x => x / (b0 - b1)) (ca n))))
-    else r
-  | _ :: t', _ :: s' => ruleNlin t' s'
-  | _, _ => (None, None)
-  end.
-
-Definition pickN (p : option N * option Cnt) : option Cnt :=
-  match p with
-  | (None, None) => None
-  | (Some n, None) => Some (mkC n [])
-  | (None, Some s) => Some s
-  | (Some n, Some s) => if n <=? cc s then Some (mkC n []) else Some s
-  end.
-
-Definition stratLin (t : list TT) (s : list Tok) : option Cnt := pickN (ruleNlin t s).
-
 (** * Part 2: the machine *)
 
+Module TM1.
 Definition tm := Eval compute in (TM_from_str "1RB0RC_0RC1RC_0LD0RA_1LE0LF_0LA1LC_---1LA").
 
 (** The executor for this machine: events are state E at the left end of the tape; blocks of fewer than 3 copies
@@ -1613,4 +1578,6 @@ Proof.
   intros x. exists (x + 160521464). apply grow.
 Qed.
 
-Print Assumptions nonhalt.
+End TM1.
+
+Print Assumptions TM1.nonhalt.
