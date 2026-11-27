@@ -8,9 +8,9 @@
     holdouts/1RB1RD_1RC1RB_1LD0RA_1RA0LE_1LF0LC_---1LE/lean).  Between jumps a run-length simulator follows the
     machine ([gstep]: one transition, a run crossed one or two copies at a time, a copy unpacked), with two
     block rules for whole counter levels ([macL]: D walks left across 1 0 (011)^k 1; [macR]: C walks right
-    across (100)^m 1 0 1 1 0).  Every round is proved to follow the machine ([round_next], [round_halt]); the
-    simulator's strategy is not trusted.  [run_halts] evaluates 2^25 rounds from blank tape with the kernel's
-    virtual machine (about 3 minutes); the halting transition F0 is met after 19,026,768 rounds.
+    across (100)^m 1 0 1 1 0).  Every round is proved to follow the machine ([round_sound]); the
+    simulator's strategy is not trusted.  [run_halts] evaluates up to 2^25 rounds from blank tape using
+    Coq's native checker.
 
     The halt comes after 853177647932005270554892218084645935472995035642746848454477793277027802995098762076
     895667304703808111420498351739937140047615589683 steps (about 8.53e131, computed by separate simulators;
@@ -1029,34 +1029,26 @@ Proof.
     reflexivity.
 Qed.
 
-Fixpoint lv_eqb (u v : list (bool * N)) : bool :=
-  match u, v with
-  | [], [] => true
-  | (a, m) :: u', (b, n) :: v' => andb (andb (Bool.eqb a b) (N.eqb m n)) (lv_eqb u' v')
-  | _, _ => false
-  end.
-
-Lemma lv_eqb_eq : forall u v, lv_eqb u v = true -> u = v.
-Proof.
-  induction u as [|[a m] u IH]; intros [|[b n] v] H; simpl in H; try discriminate; [reflexivity|].
-  apply andb_true_iff in H. destruct H as [H H2]. apply andb_true_iff in H. destruct H as [H H1].
-  apply Bool.eqb_prop in H. apply N.eqb_eq in H1. apply IH in H2. subst. reflexivity.
-Qed.
-
-(** At a visit, the back stack in canonical phase, and the zone [V] visits later if [jump] applies. *)
+(** The caller canonicalizes the back stack once.  Reject small or overflowing
+    proposals before evaluating [after].  Check the reconstruction directly
+    from the arithmetic coordinates used by [jump]. *)
 Definition tryJump (b : list item) : option (list item) :=
-  let cb := canonL b in
-  match parseZone cb with
+  match parseZone b with
   | None => None
   | Some (n0, (lv, rest)) =>
     let p := toN n0 lv in
     let ps := fst p in
     let top := snd p in
     let V := chooseV ps in
-    let ps' := after V ps in
-    if andb (andb (andb (andb (andb (N.leb 8 V) (N.eqb (ovf V ps) 0)) (goodN ps' top)) (N.eqb (n0of ps) n0))
-       (lv_eqb (physP ps top) lv)) (items_eqb (encZone n0 lv rest) cb)
-    then Some (encZone (n0of ps') (physP ps' top) rest)
+    if N.leb 8 V then
+      if N.eqb (ovf V ps) 0 then
+        let ps' := after V ps in
+        if goodN ps' top then
+          if items_eqb (encZone (n0of ps) (physP ps top) rest) b
+          then Some (encZone (n0of ps') (physP ps' top) rest)
+          else None
+        else None
+      else None
     else None
   end.
 
@@ -1064,19 +1056,16 @@ Lemma tryJump_sound : forall b b', tryJump b = Some b' ->
   (den b 0inf) {{A}}> 0inf -->* (den b' 0inf) {{A}}> 0inf.
 Proof.
   intros b b' H. unfold tryJump in H.
-  destruct (parseZone (canonL b)) as [[n0 [lv rest]]|]; [|discriminate].
+  destruct (parseZone b) as [[n0 [lv rest]]|]; [|discriminate].
   set (ps := fst (toN n0 lv)) in *. set (top := snd (toN n0 lv)) in *.
   set (V := chooseV ps) in *. clearbody ps top V.
-  match type of H with (if ?c then _ else _) = _ => destruct c eqn:Ec end; [|discriminate].
+  destruct (N.leb 8 V); [|discriminate].
+  destruct (N.eqb (ovf V ps) 0) eqn:Hv; [|discriminate].
+  destruct (goodN (after V ps) top) eqn:Hg; [|discriminate].
+  destruct (items_eqb (encZone (n0of ps) (physP ps top) rest) b) eqn:He; [|discriminate].
   inversion H; subst b'. clear H.
-  apply andb_true_iff in Ec. destruct Ec as [Ec He].
-  apply andb_true_iff in Ec. destruct Ec as [Ec Hl].
-  apply andb_true_iff in Ec. destruct Ec as [Ec Hn].
-  apply andb_true_iff in Ec. destruct Ec as [Ec Hg].
-  apply andb_true_iff in Ec. destruct Ec as [_ Hv].
-  apply N.eqb_eq in Hv. apply N.eqb_eq in Hn. apply lv_eqb_eq in Hl. apply items_eqb_eq in He.
-  rewrite <- (den_canonL b). rewrite <- He.
-  rewrite !den_encZone. subst n0 lv.
+  apply N.eqb_eq in Hv. apply items_eqb_eq in He.
+  rewrite <- He at 1. rewrite !den_encZone.
   apply (jump ps top (den rest 0inf) V Hv Hg).
 Qed.
 
@@ -1146,9 +1135,10 @@ Definition isD (q : Q) : bool := match q with D => true | _ => false end.
 Definition atVisit (c : mc) : mc :=
   match c with
   | MC true [] b A =>
-    match tryJump b with
+    let cb := canonL b in
+    match tryJump cb with
     | Some b' => MC true [] b' A
-    | None => MC true [] (canonL b) A
+    | None => MC true [] cb A
     end
   | _ => c
   end.
@@ -1156,8 +1146,9 @@ Definition atVisit (c : mc) : mc :=
 Lemma atVisit_sound : forall c, semc c -->* semc (atVisit c).
 Proof.
   intros [[] [|x f] b []]; try apply evstep_refl.
-  unfold atVisit. destruct (tryJump b) as [b'|] eqn:E.
-  - unfold semc, sem, semR. simpl. apply (tryJump_sound _ _ E).
+  unfold atVisit. destruct (tryJump (canonL b)) as [b'|] eqn:E.
+  - unfold semc, sem, semR. simpl.
+    rewrite <- (den_canonL b 0inf) at 1. apply (tryJump_sound _ _ E).
   - unfold semc, sem, semR. simpl. rewrite den_canonL. apply evstep_refl.
 Qed.
 
@@ -1187,66 +1178,49 @@ Definition round (c : mc) : rr :=
     end
   end.
 
-Lemma round_next : forall c c', round c = RNext c' -> semc c -->* semc c'.
+Definition sound (c : mc) (r : rr) : Prop :=
+  match r with
+  | RHalt => halts tm (semc c)
+  | RNext c' => semc c -->* semc c'
+  end.
+
+Lemma round_sound : forall c, sound c (round c).
 Proof.
-  intros c c' H. unfold round in H.
-  eapply evstep_trans; [apply atVisit_sound|].
+  intros c. unfold round.
+  pose proof (atVisit_sound c) as Hv.
   destruct (macros (atVisit c)) as [c2|] eqn:Em.
-  - inversion H; subst. apply macros_sound. exact Em.
-  - destruct (atVisit c) as [d f b q] eqn:Ea. simpl in H.
-    destruct (gstep (tmd tm d) f b q) as [|f' b' q'|f' b' q'] eqn:Eg; inversion H; subst.
-    + apply (gstep_sound_same tm _ _ _ _ _ _ _ Eg).
-    + apply (gstep_sound_turn tm _ _ _ _ _ _ _ Eg).
+  - cbn [sound]. eapply evstep_trans; [exact Hv|exact (macros_sound _ _ Em)].
+  - destruct (atVisit c) as [d f b q]. cbn [dir fr bk stt].
+    destruct (gstep (tmd tm d) f b q) eqn:Eg; cbn [sound].
+    + eapply halts_evstep; [|exact Hv]. exact (gstep_sound_halt tm _ _ _ _ Eg).
+    + eapply evstep_trans; [exact Hv|exact (gstep_sound_same tm _ _ _ _ _ _ _ Eg)].
+    + eapply evstep_trans; [exact Hv|exact (gstep_sound_turn tm _ _ _ _ _ _ _ Eg)].
 Qed.
 
-Lemma round_halt : forall c, round c = RHalt -> halts tm (semc c).
+Definition rr_bind (r : rr) (g : mc -> rr) : rr :=
+  match r with RHalt => RHalt | RNext c => g c end.
+
+Lemma rr_bind_sound : forall c r g, sound c r ->
+  (forall c1, sound c1 (g c1)) -> sound c (rr_bind r g).
 Proof.
-  intros c H. unfold round in H.
-  destruct (macros (atVisit c)) as [c2|] eqn:Em; [discriminate|].
-  pose proof (atVisit_sound c) as Hv.
-  destruct (atVisit c) as [d f b q] eqn:Ea. simpl in H.
-  destruct (gstep (tmd tm d) f b q) eqn:Eg; try discriminate.
-  eapply halts_evstep; [|exact Hv].
-  apply (gstep_sound_halt tm _ _ _ _ Eg).
+  intros c [|c1] g H G; [exact H|].
+  cbn [rr_bind]. specialize (G c1). destruct (g c1) as [|c2]; cbn [sound] in *.
+  - eapply halts_evstep; [exact G|exact H].
+  - eapply evstep_trans; [exact H|exact G].
 Qed.
 
 (** [p] rounds. *)
 Fixpoint run (p : positive) (c : mc) : rr :=
   match p with
   | xH => round c
-  | xO p' => match run p' c with RHalt => RHalt | RNext c1 => run p' c1 end
-  | xI p' =>
-    match run p' c with
-    | RHalt => RHalt
-    | RNext c1 => match run p' c1 with RHalt => RHalt | RNext c2 => round c2 end
-    end
+  | xO p' => rr_bind (run p' c) (run p')
+  | xI p' => rr_bind (rr_bind (run p' c) (run p')) round
   end.
 
-Lemma round_sound : forall c,
-  match round c with RHalt => halts tm (semc c) | RNext c' => semc c -->* semc c' end.
+Lemma run_sound : forall p c, sound c (run p c).
 Proof.
-  intros c. destruct (round c) as [|c'] eqn:E; [apply round_halt; exact E|apply round_next; exact E].
-Qed.
-
-Lemma seq_sound : forall c r, (match r with RHalt => halts tm (semc c) | RNext c' => semc c -->* semc c' end) ->
-  forall (g : mc -> rr), (forall c1, match g c1 with RHalt => halts tm (semc c1) | RNext c' => semc c1 -->* semc c' end) ->
-  match (match r with RHalt => RHalt | RNext c1 => g c1 end) with
-  | RHalt => halts tm (semc c) | RNext c' => semc c -->* semc c' end.
-Proof.
-  intros c [|c1] H g G; [exact H|].
-  specialize (G c1). destruct (g c1) as [|c2].
-  - eapply halts_evstep; [exact G|exact H].
-  - eapply evstep_trans; [exact H|exact G].
-Qed.
-
-Lemma run_sound : forall p c,
-  match run p c with RHalt => halts tm (semc c) | RNext c' => semc c -->* semc c' end.
-Proof.
-  induction p as [p IH|p IH|]; intros c; simpl.
-  - apply (seq_sound c (run p c) (IH c) (fun c1 => match run p c1 with RHalt => RHalt | RNext c2 => round c2 end)).
-    intros c1. apply (seq_sound c1 (run p c1) (IH c1) round round_sound).
-  - apply (seq_sound c (run p c) (IH c) (run p) IH).
-  - apply round_sound.
+  induction p as [p IH|p IH|]; intros c; cbn [run].
+  all: repeat apply rr_bind_sound; auto using round_sound.
 Qed.
 
 Definition start : mc := MC true [] [] A.
@@ -1256,13 +1230,13 @@ Proof. reflexivity. Qed.
 
 (** * Halt *)
 (** The simulator, started on blank tape, meets the halting transition within 2^25 rounds (evaluated by the
-    kernel's virtual machine, [vm_compute]). *)
+    native checker). *)
 Lemma run_halts : run 33554432 start = RHalt.
-Proof. vm_cast_no_check (eq_refl RHalt). Time Qed.
+Proof. native_cast_no_check (eq_refl RHalt). Time Qed.
 
 Theorem halts_172044 : halts tm c0.
 Proof.
-  pose proof (run_sound 33554432 start) as H. rewrite run_halts in H.
+  pose proof (run_sound 33554432 start) as H. rewrite run_halts in H. cbn [sound] in H.
   rewrite semc_start in H. exact H.
 Qed.
 
