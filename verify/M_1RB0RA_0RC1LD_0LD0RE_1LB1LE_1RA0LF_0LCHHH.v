@@ -3442,117 +3442,6 @@ Proof.
       exists w', c'. rewrite Heq. exact Hrest.
 Qed.
 
-Definition p58_L_0 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_1 (tl : list Chunk) : list Chunk :=
-  b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: pL 0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: tl.
-Definition p58_L_2 (tl : list Chunk) : list Chunk :=
-  b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: tl.
-Definition p58_L_3 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: tl.
-Definition p58_L_4 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 ::
-  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_5 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: tl.
-Definition p58_L_6 (tl : list Chunk) : list Chunk :=
-  b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_7 (tl : list Chunk) : list Chunk :=
-  b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: tl.
-Definition p58_L_8 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: tl.
-Definition p58_L_9 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_10 (tl : list Chunk) : list Chunk :=
-  b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_11 (tl : list Chunk) : list Chunk :=
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_12 (tl : list Chunk) : list Chunk :=
-  b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: tl.
-Definition p58_L_13 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: tl.
-Definition p58_L_14 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: tl.
-Definition p58_L_15 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: tl.
-Definition p58_L_16 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: tl.
-Definition p58_L_17 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: tl.
-Definition p58_L_18 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: wL false :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: tl.
-Definition p58_L_19 (tl : list Chunk) : list Chunk :=
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: tl.
-Definition p58_L_20 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b0 ::
-  b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 ::
-  b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 ::
-  b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: tl.
-Definition p58_L_21 (tl : list Chunk) : list Chunk :=
-  b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: b1 :: b1 ::
-  b0 :: b0 :: b1 :: b1 :: b0 :: b0 :: tl.
-Definition p58_start_L : list Chunk := p58_L_0 (p58_L_1 (p58_L_2 (p58_L_3 (p58_L_4 (p58_L_5 (p58_L_6 (p58_L_7 (p58_L_8 (p58_L_9 (p58_L_10 (p58_L_11 (p58_L_12 (p58_L_13 (p58_L_14 (p58_L_15 (p58_L_16 (p58_L_17 (p58_L_18 (p58_L_19 (p58_L_20 (p58_L_21 ([])))))))))))))))))))))).
-Definition p58_start : RState := RState_mk false p58_start_L [].
-
 Definition p1_start : RState := RState_mk false [] [].
 
 Definition stageAB_acts : list Action :=
@@ -3569,45 +3458,69 @@ Definition stageAB_acts : list Action :=
 Definition stageC_acts : list Action :=
   [ ActRun 81201%positive; ActRepack 299 49 4 0 1 1 2 1680 42 270 ]%N.
 
-Lemma cert_stageC :
-  beqOptState (execActions stageC_acts (RState_mk true (b0 :: b1 :: p58_start_L) [b0])) p58_start = true.
-Proof. vm_cast_no_check (eq_refl true). Qed.
+Definition gen := execActions stageAB_acts p1_start.
+Definition seed_from (x : option RState) :=
+  match x with
+  | Some (RState_mk false l []) => l
+  | _ => []
+  end.
+Definition cycle_in l := RState_mk true (b0 :: b1 :: l) [b0].
+Definition cert_from (x : option RState) :=
+  match x with
+  | Some (RState_mk false l [] as s) =>
+      beqOptState (execActions stageC_acts (cycle_in l)) s
+  | _ => false
+  end.
+Definition seed := seed_from gen.
+Definition start := RState_mk false seed [].
 
-Lemma attractor_step (wc : list bool * nat) :
-  exists wc' : list bool * nat,
-    decode (fst wc) (snd wc) p58_start -[ tm ]->+ decode (fst wc') (snd wc') p58_start.
+Lemma cert_ok : cert_from gen = true.
+Proof. vm_compute. reflexivity. Qed.
+
+Opaque execActions beqOptState.
+
+Lemma cert_spec_from x : cert_from x = true ->
+  x = Some (RState_mk false (seed_from x) []) /\
+  beqOptState (execActions stageC_acts (cycle_in (seed_from x)))
+    (RState_mk false (seed_from x) []) = true.
 Proof.
-  destruct wc as [w c]; cbn [fst snd].
-  pose proof (hub_first_step_plus w c p58_start_L) as H1.
-  pose proof (beqOptState_eq cert_stageC) as Hrun.
-  destruct (execActions_sound stageC_acts (RState_mk true (b0 :: b1 :: p58_start_L) [b0]) p58_start Hrun w c)
-    as [w' [c' H2]].
-  exists (w', c'); cbn [fst snd].
-  exact (progress_evstep_trans _ _ _ _ H1 H2).
+  destruct x as [[[] l [|ch r]]|]; try discriminate.
+  intros H. split; [reflexivity|exact H].
 Qed.
 
-Lemma cert_stageAB : beqOptState (execActions stageAB_acts p1_start) p58_start = true.
-Proof. vm_cast_no_check (eq_refl true). Qed.
+Lemma cert_spec : gen = Some start /\
+  beqOptState (execActions stageC_acts (cycle_in seed)) start = true.
+Proof. exact (cert_spec_from gen cert_ok). Qed.
 
-Lemma reach_p58_start :
-  exists (w0 : list bool) (c0_idx : nat), c0 -[ tm ]->* decode w0 c0_idx p58_start.
+Lemma initial : exists w c, c0 -[ tm ]->* decode w c start.
 Proof.
-  pose proof (beqOptState_eq cert_stageAB) as Hrun.
-  destruct (execActions_sound stageAB_acts p1_start p58_start Hrun [] 0) as [w0 [c0_idx Hreach]].
-  exists w0, c0_idx.
-  exact Hreach.
+  destruct (execActions_sound stageAB_acts p1_start start (proj1 cert_spec) [] 0)
+    as [w [c H]]. exists w, c. exact H.
+Qed.
+
+Lemma cycle (wc : list bool * nat) : exists wc',
+  decode (fst wc) (snd wc) start -[ tm ]->+ decode (fst wc') (snd wc') start.
+Proof.
+  destruct wc as [w c]; cbn [fst snd].
+  pose proof (hub_first_step_plus w c seed) as H1.
+  pose proof (beqOptState_eq (proj2 cert_spec)) as Hrun.
+  destruct (execActions_sound stageC_acts (cycle_in seed) start Hrun w c)
+    as [w' [c' H2]].
+  exists (w', c'). cbn [fst snd].
+  eapply progress_evstep_trans; [exact H1|exact H2].
+Qed.
+
+Lemma core_nonhalt : ~ halts tm c0.
+Proof.
+  destruct initial as [w [c H]].
+  eapply multistep_nonhalt; [exact H|].
+  exact (progress_nonhalt_simple tm (list bool * nat)
+    (fun wc => decode (fst wc) (snd wc) start) (w, c) cycle).
 Qed.
 
 End M390.
 
 Theorem nonhalt : ~ halts tm c0.
-Proof.
-  destruct M390.reach_p58_start as [w0 [c0_idx Hreach]].
-  eapply multistep_nonhalt; [exact Hreach |].
-  exact (progress_nonhalt_simple tm (list bool * nat)
-           (fun wc => M390.decode (fst wc) (snd wc) M390.p58_start)
-           (w0, c0_idx)
-           M390.attractor_step).
-Qed.
+Proof. exact M390.core_nonhalt. Qed.
 
 Print Assumptions nonhalt.
