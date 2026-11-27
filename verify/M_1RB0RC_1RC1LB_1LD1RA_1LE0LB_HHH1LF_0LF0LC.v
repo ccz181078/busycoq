@@ -45,6 +45,20 @@ Definition opt_bind {T U : Type} (x : option T) (f : T -> option U) : option U :
   | None => None
   end.
 
+Fixpoint firstSome {T U} (f : T -> option U) (xs : list T) : option U :=
+  match xs with
+  | [] => None
+  | x :: tl => match f x with Some y => Some y | None => firstSome f tl end
+  end.
+
+Lemma firstSome_sound {T U} (f : T -> option U) (P : U -> Prop) xs y :
+  Forall (fun x => forall z, f x = Some z -> P z) xs ->
+  firstSome f xs = Some y -> P y.
+Proof.
+  induction 1 as [|x xs hx _ IH]; cbn [firstSome]; [discriminate |].
+  destruct (f x) as [z|] eqn:h; [intros [= <-]; now apply hx | exact IH].
+Qed.
+
 Definition repBlock {T : Type} (u : list T) (n : N) : list T :=
   N.iter n (fun acc => u ++ acc) [].
 
@@ -78,46 +92,72 @@ Proof.
   rewrite repBlock_add, repBlock_1. reflexivity.
 Qed.
 
-Definition evalWin (l r : side) (q : Q) (dR : bool) (ls rs : list Sym) : Q * tape :=
-  if dR then (ls *> l) {{q}}> (rs *> r) else (ls *> l) <{{q}} (rs *> r).
+(* Both finite windows and stacks with powers use the same ordinary TM step.
+   Their readers differ only in which front cells they expose. *)
+Definition orient (q : Q) (d : bool) (l r : side) : Q * tape :=
+  if d then l {{q}}> r else l <{{q}} r.
 
-Definition stepWin (bL bR : bool) (st : Q * bool * list Sym * list Sym) :
-  option (Q * bool * list Sym * list Sym) :=
-  let '(q, dR, ls, rs) := st in
-  if dR then
-    match rs with
-    | a :: rs0 =>
-      match tm (q, a) with
-      | Some (w, R, q') => Some (q', true, w :: ls, rs0)
-      | Some (w, L, q') => Some (q', false, ls, w :: rs0)
-      | None => None
-      end
-    | [] =>
-      if bR then
-        match tm (q, S0) with
-        | Some (w, R, q') => Some (q', true, w :: ls, [])
-        | Some (w, L, q') => Some (q', false, ls, [w])
-        | None => None
-        end
-      else None
-    end
-  else
-    match ls with
-    | a :: ls0 =>
-      match tm (q, a) with
-      | Some (w, R, q') => Some (q', true, w :: ls0, rs)
-      | Some (w, L, q') => Some (q', false, ls0, w :: rs)
-      | None => None
-      end
-    | [] =>
-      if bL then
-        match tm (q, S0) with
-        | Some (w, R, q') => Some (q', true, [w], rs)
-        | Some (w, L, q') => Some (q', false, [], w :: rs)
-        | None => None
-        end
-      else None
-    end.
+Definition View (T : Type) := (Q * bool * T * T)%type.
+
+Definition readStep {T} (readL readR : T -> option (Sym * T))
+  (push : Sym -> T -> T) (st : View T) : option (View T) :=
+  let '(q, d, l, r) := st in
+  let head := if d then opt_bind (readR r) (fun '(a, rt) => Some (a, l, rt))
+                 else opt_bind (readL l) (fun '(a, lt) => Some (a, lt, r)) in
+  opt_bind head (fun '(a, lt, rt) =>
+    match tm (q, a) with
+    | Some (w, R, q') => Some (q', true, push w lt, rt)
+    | Some (w, L, q') => Some (q', false, lt, push w rt)
+    | None => None
+    end).
+
+Definition reads {T} (eval : T -> side) (read : T -> option (Sym * T)) :=
+  forall x a tl, read x = Some (a, tl) -> eval x = a >> eval tl.
+
+Definition pushes {T} (eval : T -> side) (push : Sym -> T -> T) :=
+  forall a tl, eval (push a tl) = a >> eval tl.
+
+Definition evalView {T} (evalL evalR : T -> side) (st : View T) : Q * tape :=
+  let '(q, d, l, r) := st in orient q d (evalL l) (evalR r).
+
+Lemma readStep_sound {T} readL readR push (evalL evalR : T -> side)
+  (hl : reads evalL readL) (hr : reads evalR readR)
+  (pl : pushes evalL push) (pr : pushes evalR push) st out :
+  readStep readL readR push st = Some out ->
+  evalView evalL evalR st -[ tm ]-> evalView evalL evalR out.
+Proof.
+  destruct st as [[[q d] l] r]. unfold readStep. destruct d.
+  - destruct (readR r) as [[a rt]|] eqn:h; [|discriminate].
+    cbn [opt_bind evalView]. rewrite (hr _ _ _ h).
+    destruct (tm (q, a)) as [[[w dir] q']|] eqn:ht; [|discriminate].
+    destruct dir; intros [= <-]; cbn [evalView]; [rewrite pr | rewrite pl];
+      [exact (step_left ht) | exact (step_right ht)].
+  - destruct (readL l) as [[a lt]|] eqn:h; [|discriminate].
+    cbn [opt_bind evalView]. rewrite (hl _ _ _ h).
+    destruct (tm (q, a)) as [[[w dir] q']|] eqn:ht; [|discriminate].
+    destruct dir; intros [= <-]; cbn [evalView]; [rewrite pr | rewrite pl];
+      [exact (step_left ht) | exact (step_right ht)].
+Qed.
+
+Definition evalWin (l r : side) (q : Q) (dR : bool) (ls rs : list Sym) : Q * tape :=
+  orient q dR (ls *> l) (rs *> r).
+
+Definition readWin (blank : bool) (xs : list Sym) : option (Sym * list Sym) :=
+  match xs with
+  | a :: tl => Some (a, tl)
+  | [] => if blank then Some (S0, []) else None
+  end.
+
+Lemma readWin_reads b s (h : b = true -> s = const S0) :
+  reads (fun xs => xs *> s) (readWin b).
+Proof.
+  intros [|x xs] a tl.
+  - destruct b; [|discriminate]. intros [= <- <-].
+    specialize (h eq_refl); subst s. exact (eq_sym zero_cons_def).
+  - intros [= <- <-]. reflexivity.
+Qed.
+
+Definition stepWin (bL bR : bool) := readStep (readWin bL) (readWin bR) (@cons Sym).
 
 Fixpoint multiStepWin (bL bR : bool) (n : nat) (st : Q * bool * list Sym * list Sym) :
   option (Q * bool * list Sym * list Sym) :=
@@ -167,39 +207,16 @@ Definition checkWin (bL bR : bool) (n : nat) (q : Q) (dR : bool) (ls rs : list S
   | None => false
   end.
 
-Lemma stepWin_exec (l r : side) (q q' : Q) (dR dR' : bool) (ls rs ls' rs' : list Sym)
-  (x : Sym) (ls0 rs0 : list Sym)
-  (hev : evalWin l r q dR ls rs = (q, (ls0 *> l, x, rs0 *> r)))
-  (hm : (match tm (q, x) with
-         | Some (w, R, q1) => Some (q1, true, w :: ls0, rs0)
-         | Some (w, L, q1) => Some (q1, false, ls0, w :: rs0)
-         | None => None
-         end) = Some (q', dR', ls', rs')) :
-  evalWin l r q dR ls rs -[ tm ]-> evalWin l r q' dR' ls' rs'.
-Proof.
-  rewrite hev.
-  destruct (tm (q, x)) as [[[w dir] q1] |] eqn:htm; [| discriminate].
-  destruct dir; inversion hm; subst; [exact (step_left htm) | exact (step_right htm)].
-Qed.
-
 Lemma stepWin_sound {bL bR : bool} {l r : side}
   (hL : bL = true -> l = const S0) (hR : bR = true -> r = const S0)
   {q q' : Q} {dR dR' : bool} {ls rs ls' rs' : list Sym}
   (hs : stepWin bL bR (q, dR, ls, rs) = Some (q', dR', ls', rs')) :
   evalWin l r q dR ls rs -[ tm ]-> evalWin l r q' dR' ls' rs'.
 Proof.
-  unfold stepWin in hs.
-  destruct dR.
-  - destruct rs as [| a rs0].
-    + destruct bR eqn:hbR; [| discriminate].
-      specialize (hR eq_refl); subst r.
-      exact (stepWin_exec l (const S0) q q' true dR' ls [] ls' rs' S0 ls [] eq_refl hs).
-    + exact (stepWin_exec l r q q' true dR' ls (a :: rs0) ls' rs' a ls rs0 eq_refl hs).
-  - destruct ls as [| a ls0].
-    + destruct bL eqn:hbL; [| discriminate].
-      specialize (hL eq_refl); subst l.
-      exact (stepWin_exec (const S0) r q q' false dR' [] rs ls' rs' S0 [] rs eq_refl hs).
-    + exact (stepWin_exec l r q q' false dR' (a :: ls0) rs ls' rs' a ls0 rs eq_refl hs).
+  exact (readStep_sound (readWin bL) (readWin bR) (@cons Sym)
+    (fun xs => xs *> l) (fun xs => xs *> r)
+    (readWin_reads _ _ hL) (readWin_reads _ _ hR)
+    (fun _ _ => eq_refl) (fun _ _ => eq_refl) _ _ hs).
 Qed.
 
 Lemma checkWin_sound {bL bR : bool} {l r : side}
@@ -811,10 +828,6 @@ Fixpoint beqRList (xs ys : list RTok) : bool :=
 
 Lemma evalWin_b0_flip (l r : side) (rs : list Sym) :
   evalWin l r B false [S0] rs = evalWin l r B true [] (S0 :: rs).
-Proof. reflexivity. Qed.
-
-Lemma evalWin_b0_def (r : side) :
-  evalWin (const S0) r B false [] [] = evalWin (const S0) r B true [] [S0].
 Proof. reflexivity. Qed.
 
 Lemma encodeBase_core_congr (m : Mode) {l1 l2 : list LTok} {r1 r2 : list RTok}
@@ -1491,22 +1504,83 @@ Definition stepB0OddQ0 (l : list LTok) (rNew : list RTok) : BaseState :=
   | Some (LHLD lv, lrest) => Core MB0 lrest (addR (lv + 2) rNew)
   end.
 
-Definition stepB0Pos (isR1 : bool) (dp : N) (l : list LTok) (rRest : list RTok) : BaseState :=
+(* [Some m] is a completed macro; [None] hands off to the DL fold.
+   The outer option can also fail when a symbolic stack is opaque. *)
+Definition B0Prep (L R : Type) := (option Mode * list L * list R)%type.
+
+Record B0Ops (L R : Type) := {
+  b0ReadL : list L -> option (option (LHead * list L));
+  b0Bump : nat -> list L -> option (list L);
+  b0Peel : N -> list L -> list L;
+  b0Zeros : N -> list L -> list L;
+  b0Add : N -> list R -> option (list R);
+  b0PushR0 : N -> list R -> list R;
+  b0LitL : LTok -> L;
+  b0LitR : RTok -> R
+}.
+Arguments b0ReadL {L R}.
+Arguments b0Bump {L R}.
+Arguments b0Peel {L R}.
+Arguments b0Zeros {L R}.
+Arguments b0Add {L R}.
+Arguments b0PushR0 {L R}.
+Arguments b0LitL {L R}.
+Arguments b0LitR {L R}.
+
+Definition b0Q0 {L R} (ops : B0Ops L R) (l : list L) (r : list R) :
+  option (B0Prep L R) :=
+  match b0ReadL ops l with
+  | None => None
+  | Some None => Some (Some MDL, [], b0LitR ops (R0 0) :: r)
+  | Some (Some (LHL0 v, rest)) =>
+    opt_bind (b0Add ops 1 r) (fun r' => Some (Some MB0, b0Peel ops v rest, r'))
+  | Some (Some (LHLD v, rest)) =>
+    opt_bind (b0Add ops (v + 2) r) (fun r' => Some (Some MB0, rest, r'))
+  end.
+
+Definition b0Positive {L R} (ops : B0Ops L R) (isR1 : bool) (dp : N)
+  (l : list L) (r : list R) : option (B0Prep L R) :=
   let q := dp / 2 in
-  let l2 := bumpL (bumpL l) in
   if dp mod 2 =? 1 then
-    if isR1 then
-      Core MB0 (LD 0 :: pushZeros q l2) rRest
-    else
-      match rRest with
-      | [] => Core MDL (bumpL (bumpL (pushZeros (q + 1) l2))) [R0 0]
-      | _ :: _ => Core MB0 (pushZeros q l2) (addR 1 rRest)
-      end
+    opt_bind (b0Bump ops 2%nat l) (fun l2 =>
+      if isR1 then Some (Some MB0, b0LitL ops (LD 0) :: b0Zeros ops q l2, r)
+      else match r with
+      | [] =>
+        opt_bind (b0Bump ops 2%nat (b0Zeros ops (q + 1) l2))
+          (fun l4 => Some (Some MDL, l4, [b0LitR ops (R0 0)]))
+      | _ :: _ =>
+        opt_bind (b0Add ops 1 r) (fun r' => Some (Some MB0, b0Zeros ops q l2, r'))
+      end)
   else
-    let rNew := if isR1 then pushR0 2 rRest else addR 2 rRest in
-    if q =? 0 then stepB0OddQ0 l rNew
-    else if q =? 1 then Core MB0 l2 rNew
-    else foldDL2 (pushZeros (q - 2) l2) (R1 0 :: rNew).
+    opt_bind (if isR1 then Some (b0PushR0 ops 2 r) else b0Add ops 2 r) (fun r' =>
+      if q =? 0 then b0Q0 ops l r'
+      else opt_bind (b0Bump ops 2%nat l) (fun l2 =>
+        if q =? 1 then Some (Some MB0, l2, r')
+        else Some (None, b0Zeros ops (q - 2) l2, b0LitR ops (R1 0) :: r'))).
+
+Fixpoint bumpLN (n : nat) (l : list LTok) : list LTok :=
+  match n with O => l | S k => bumpLN k (bumpL l) end.
+
+Definition plainB0 : B0Ops LTok RTok :=
+  {| b0ReadL := fun l => Some (unconsL l); b0Bump := fun n l => Some (bumpLN n l);
+     b0Peel := peelL0; b0Zeros := pushZeros; b0Add := fun n r => Some (addR n r);
+     b0PushR0 := pushR0; b0LitL := fun t => t; b0LitR := fun t => t |}.
+
+Definition enterB0 (l : list LTok) (r : list RTok) (p : option (B0Prep LTok RTok)) :=
+  match p with
+  | Some (Some m, l', r') => Core m l' r'
+  | Some (None, l', r') => Core MDL l' r'
+  | None => Core MB0 l r
+  end.
+
+Definition stepB0Pos (isR1 : bool) (dp : N) (l : list LTok) (r : list RTok) : BaseState :=
+  match b0Positive plainB0 isR1 dp l r with
+  | Some (None, l', r') => foldDL2 l' r'
+  | p => enterB0 l r p
+  end.
+
+Ltac reduce_plain_b0 :=
+  cbn [plainB0 b0ReadL b0Bump b0Peel b0Zeros b0Add b0PushR0 b0LitL b0LitR bumpLN opt_bind enterB0].
 
 Definition stepB0Base (l : list LTok) (r : list RTok) : BaseState :=
   match unconsR r with
@@ -1781,10 +1855,10 @@ Proof.
     cbn [encodeBase encodeCore eL eR]. rewrite hrNew. reflexivity.
 Qed.
 
-Lemma stepB0Pos_sound (isR1 : bool) (dp : N) (l : list LTok) (rRest : list RTok)
+Lemma stepB0Prepare_sound (isR1 : bool) (dp : N) (l : list LTok) (rRest : list RTok)
   (r : list RTok)
   (hr : eR r = eR ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: rRest)) :
-  encodeBase (Core MB0 l r) -[ tm ]->* encodeBase (stepB0Pos isR1 dp l rRest).
+  encodeBase (Core MB0 l r) -[ tm ]->* encodeBase (enterB0 l rRest (b0Positive plainB0 isR1 dp l rRest)).
 Proof.
   set (l2 := bumpL (bumpL l)).
   set (rTail := if isR1 then [S0] *> eR rRest else eR rRest).
@@ -1799,7 +1873,7 @@ Proof.
       (@no_false _) (@no_false _) _ _ eq_refl).
     - cbn [encodeBase encodeCore]. rewrite heR_start. reflexivity.
     - unfold l2. rewrite !eL_bumpL. reflexivity. }
-  unfold stepB0Pos; fold l2.
+  unfold b0Positive; reduce_plain_b0; fold l2.
   destruct (dp mod 2 =? 1) eqn:hrem.
   - apply N.eqb_eq in hrem.
     set (q := dp / 2).
@@ -1824,7 +1898,8 @@ Proof.
       * eapply rs_trans; [exact h2q |].
         refine (chkWin_eq false true 5%nat A true [] [S1; S1; S0] D false [S1; S1; S1; S0] [S1]
           (eL (pushZeros q l2)) (const S0) (@no_false _) (fun _ => eq_refl) eq_refl _ eq_refl).
-        cbn [encodeBase encodeCore]. rewrite !eL_bumpL, (eL_pushZeros (q + 1)), (eL_pushZeros q).
+        reduce_plain_b0. cbn [encodeBase encodeCore].
+        rewrite !eL_bumpL, (eL_pushZeros (q + 1)), (eL_pushZeros q).
         replace (q + 1) with (1 + q) by lia.
         rewrite (repBlock_add wL0 1 q), repBlock_1, Str_app_assoc.
         change (eR [R0 0]) with (S1 >> (S0 >> const S0)).
@@ -1833,11 +1908,14 @@ Proof.
         refine (chkWin_eq false false 6%nat A true [] [S1; S1; S0; S1] B false [S0] [S1; S1; S1]
           (eL (pushZeros q l2)) (tailAfter1R r1 rs) (@no_false _) (@no_false _) _ _ eq_refl).
         -- rewrite (eR_cons_one r1 rs). reflexivity.
-        -- cbn [encodeBase encodeCore].
+        -- reduce_plain_b0. cbn [encodeBase encodeCore].
            rewrite (eR_addR 1 (r1 :: rs)), (eR_cons_one r1 rs), <- evalWin_b0_flip. reflexivity.
   - apply N.eqb_neq in hrem.
     set (q := dp / 2).
     set (rNew := if isR1 then pushR0 2 rRest else addR 2 rRest).
+    assert (hnew : (if isR1 then Some (pushR0 2 rRest) else Some (addR 2 rRest)) = Some rNew)
+      by (destruct isR1; reflexivity).
+    rewrite hnew. cbn [opt_bind].
     assert (hrNew : eR rNew = [S1; S1; S1] *> rTail).
     { unfold rNew, rTail. destruct isR1.
       - rewrite eR_pushR0. reflexivity.
@@ -1848,7 +1926,10 @@ Proof.
       subst dp.
       assert (hstart0 : encodeBase (Core MB0 l r) = evalWin (eL l) rTail B true [] [S0; S1; S1; S0]).
       { cbn [encodeBase encodeCore]. rewrite heR_start. reflexivity. }
-      rewrite hstart0. exact (stepB0OddQ0_sound l rNew rTail hrNew).
+      rewrite hstart0. cut (enterB0 l rRest (b0Q0 plainB0 l rNew) = stepB0OddQ0 l rNew).
+      * intro he. rewrite he. exact (stepB0OddQ0_sound l rNew rTail hrNew).
+      * unfold b0Q0, stepB0OddQ0. reduce_plain_b0.
+        destruct (unconsL l) as [[[? | ?] ?] |]; reflexivity.
     + apply N.eqb_neq in hq0.
       assert (hdp : dp + 1 = 2 * q + 1) by (unfold q; lia).
       assert (hpow : repBlock [S1] (dp + 1) *> ([S0] *> rTail) =
@@ -1863,7 +1944,8 @@ Proof.
         refine (chkWin_eq false false 8%nat A true [S1; S0; S1; S1] [S1; S0] B true [S1; S1] [S0; S1; S1; S1]
           (eL l) rTail (@no_false _) (@no_false _) _ _ eq_refl).
         -- unfold l2. rewrite !eL_bumpL. reflexivity.
-        -- cbn [encodeBase encodeCore]. unfold l2. rewrite !eL_bumpL, hrNew. reflexivity.
+        -- reduce_plain_b0. cbn [encodeBase encodeCore]. unfold l2.
+           rewrite !eL_bumpL, hrNew. reflexivity.
       * apply N.eqb_neq in hq1.
         set (q' := q - 2).
         assert (hq_eq : q = q' + 2) by (unfold q'; lia).
@@ -1875,7 +1957,19 @@ Proof.
           - replace (q' + 2) with (2 + q') by lia.
             rewrite (repBlock_add wL0 2 q'), Str_app_assoc. reflexivity.
           - cbn [encodeBase encodeCore eR]. rewrite (eL_pushZeros q' l2), hrNew. reflexivity. }
-        exact (foldDL2_sound _ (pushZeros q' l2) (R1 0 :: rNew) (rs_trans h2q h7)).
+        exact (rs_trans h2q h7).
+Qed.
+
+Lemma stepB0Pos_sound (isR1 : bool) (dp : N) (l : list LTok) (rRest r : list RTok)
+  (hr : eR r = eR ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: rRest)) :
+  encodeBase (Core MB0 l r) -[ tm ]->* encodeBase (stepB0Pos isR1 dp l rRest).
+Proof.
+  pose proof (stepB0Prepare_sound isR1 dp l rRest r hr) as hs.
+  unfold stepB0Pos.
+  destruct (b0Positive plainB0 isR1 dp l rRest) as [[[[m |] l'] r'] |].
+  - exact hs.
+  - exact (foldDL2_sound _ l' r' hs).
+  - exact hs.
 Qed.
 
 Lemma stepB0Base_sound (l : list LTok) (r : list RTok) :
@@ -2227,7 +2321,7 @@ Proof.
 Qed.
 
 (* ========================================================================= *)
-(* Section 7: Symbolic Stack Engine (SymLTok, SymRTok, symStepA, symStepB)   *)
+(* Section 7: Physical Block Checker & Parameterized Phase Transitions      *)
 (* ========================================================================= *)
 
 Definition opt_map {T U : Type} (f : T -> U) (x : option T) : option U :=
@@ -2235,49 +2329,6 @@ Definition opt_map {T U : Type} (f : T -> U) (x : option T) : option U :=
   | Some a => Some (f a)
   | None => None
   end.
-
-Lemma b0EvenGe2_preDL_sound (isR1 : bool) (dp q' : N)
-  (hrem : dp mod 2 <> 1) (hq : dp / 2 = q' + 2)
-  (l : list LTok) (rRest : list RTok) :
-  encodeBase (Core MB0 l ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: rRest)) -[ tm ]->*
-  encodeBase (Core MDL (pushZeros q' (bumpL (bumpL l)))
-    (R1 0 :: (if isR1 then pushR0 2 rRest else addR 2 rRest))).
-Proof.
-  set (r := (if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: rRest).
-  set (rTail := if isR1 then [S0] *> eR rRest else eR rRest).
-  assert (heR_start : eR r = [S1] *> (repBlock [S1] (dp + 1) *> ([S0] *> rTail))).
-  { unfold r, rTail. destruct isR1; cbn [eR];
-      replace (dp + 1 + 1) with ((dp + 1) + 1) by lia;
-      rewrite (repBlock_succ_left [S1] (dp + 1)), Str_app_assoc; reflexivity. }
-  set (l2 := bumpL (bumpL l)).
-  assert (hinit : encodeBase (Core MB0 l r) -[ tm ]->*
-                  evalWin (eL l2) (repBlock [S1] (dp + 1) *> ([S0] *> rTail)) A true [] []).
-  { refine (chkWin_eq false false 2%nat B true [] [S0; S1] A true [S1; S1] []
-      (eL l) (repBlock [S1] (dp + 1) *> ([S0] *> rTail))
-      (@no_false _) (@no_false _) _ _ eq_refl).
-    - cbn [encodeBase encodeCore]. rewrite heR_start. reflexivity.
-    - unfold l2. rewrite !eL_bumpL. reflexivity. }
-  set (rNew := if isR1 then pushR0 2 rRest else addR 2 rRest).
-  assert (hrNew : eR rNew = [S1; S1; S1] *> rTail).
-  { unfold rNew, rTail. destruct isR1.
-    - rewrite eR_pushR0. reflexivity.
-    - rewrite (eR_addR 2 rRest). reflexivity. }
-  assert (hdp : dp + 1 = 2 * (q' + 2) + 1) by lia.
-  assert (hpow : repBlock [S1] (dp + 1) *> ([S0] *> rTail) =
-                 repBlock [S1; S1] (q' + 2) *> ([S1; S0] *> rTail)).
-  { rewrite hdp, repBlock_add, pow_one_even, Str_app_assoc. reflexivity. }
-  rewrite hpow in hinit.
-  pose proof (walkWordRight 2%nat A true [] wL0 [] [S1; S1] eq_refl (q' + 2) (eL l2) ([S1; S0] *> rTail)) as hw.
-  pose proof (rs_trans hinit hw) as h2q.
-  assert (h7 : evalWin (repBlock wL0 (q' + 2) *> eL l2) ([S1; S0] *> rTail) A true [] [] -[ tm ]->*
-               encodeBase (Core MDL (pushZeros q' l2) (R1 0 :: rNew))).
-  { refine (chkWin_eq false false 7%nat A true [S1; S0; S1; S0] [S1; S0] D false [] [S1; S0; S0; S1; S1; S1]
-      (repBlock wL0 q' *> eL l2) rTail (@no_false _) (@no_false _) _ _ eq_refl).
-    - replace (q' + 2) with (2 + q') by lia.
-      rewrite (repBlock_add wL0 2 q'), Str_app_assoc. reflexivity.
-    - cbn [encodeBase encodeCore eR]. rewrite (eL_pushZeros q' l2), hrNew. reflexivity. }
-  exact (rs_trans h2q h7).
-Qed.
 
 Inductive SymLTok :=
 | SLC (t : LTok)
@@ -2317,10 +2368,6 @@ Definition SymReached (m : Mode) (sl : list SymLTok) (sr : list SymRTok)
     encodeBase (Core m (evalSymL v2 v3 v4 sl rest) (evalSymR vr v2 sr)) -[ tm ]->*
     encodeBase (Core m' (evalSymL v2 v3 v4 sl' rest) (evalSymR vr v2 sr')).
 
-Lemma symReached_refl (m : Mode) (sl : list SymLTok) (sr : list SymRTok) :
-  SymReached m sl sr m sl sr.
-Proof. intros vr v2 v3 v4 rest; apply rs_refl. Qed.
-
 Lemma symReached_trans
   {m0 m1 m2 : Mode} {sl0 sl1 sl2 : list SymLTok} {sr0 sr1 sr2 : list SymRTok}
   (h1 : SymReached m0 sl0 sr0 m1 sl1 sr1)
@@ -2329,118 +2376,6 @@ Lemma symReached_trans
 Proof.
   intros vr v2 v3 v4 rest.
   exact (rs_trans (h1 vr v2 v3 v4 rest) (h2 vr v2 v3 v4 rest)).
-Qed.
-
-Definition beqMode (a b : Mode) : bool :=
-  match a, b with
-  | MB0, MB0 => true
-  | MDL, MDL => true
-  | _, _ => false
-  end.
-
-Definition beqSymLTok (x y : SymLTok) : bool :=
-  match x, y with
-  | SLC a, SLC b => beqLTok a b
-  | SM2 a, SM2 b => a =? b
-  | SM3 a, SM3 b => a =? b
-  | SM4 a, SM4 b => a =? b
-  | SM3P a, SM3P b => a =? b
-  | SM4P a, SM4P b => a =? b
-  | _, _ => false
-  end.
-
-Definition beqSymRTok (x y : SymRTok) : bool :=
-  match x, y with
-  | SRC a, SRC b => beqRTok a b
-  | SMR a, SMR b => a =? b
-  | SM2R a, SM2R b => a =? b
-  | _, _ => false
-  end.
-
-Fixpoint beqSymLList (xs ys : list SymLTok) : bool :=
-  match xs, ys with
-  | [], [] => true
-  | a :: as_, b :: bs => beqSymLTok a b && beqSymLList as_ bs
-  | _, _ => false
-  end.
-
-Fixpoint beqSymRList (xs ys : list SymRTok) : bool :=
-  match xs, ys with
-  | [], [] => true
-  | a :: as_, b :: bs => beqSymRTok a b && beqSymRList as_ bs
-  | _, _ => false
-  end.
-
-Fixpoint stripSymLC (pfx : list LTok) (sl : list SymLTok) : option (list SymLTok) :=
-  match pfx, sl with
-  | [], _ => Some sl
-  | p :: ps, SLC x :: xs => if beqLTok p x then stripSymLC ps xs else None
-  | _ :: _, _ => None
-  end.
-
-Fixpoint stripSymRC (pfx : list RTok) (sr : list SymRTok) : option (list SymRTok) :=
-  match pfx, sr with
-  | [], _ => Some sr
-  | p :: ps, SRC x :: xs => if beqRTok p x then stripSymRC ps xs else None
-  | _ :: _, _ => None
-  end.
-
-Lemma eq_of_beqMode {a b : Mode} (h : beqMode a b = true) : a = b.
-Proof. destruct a, b; try discriminate; reflexivity. Qed.
-
-Lemma eq_of_beqSymLTok {a b : SymLTok} (h : beqSymLTok a b = true) : a = b.
-Proof.
-  destruct a, b; try discriminate; cbn in h;
-    [f_equal; exact (eq_of_beqLTok h) |
-     apply N.eqb_eq in h; subst; reflexivity |
-     apply N.eqb_eq in h; subst; reflexivity |
-     apply N.eqb_eq in h; subst; reflexivity |
-     apply N.eqb_eq in h; subst; reflexivity |
-     apply N.eqb_eq in h; subst; reflexivity].
-Qed.
-
-Lemma eq_of_beqSymRTok {a b : SymRTok} (h : beqSymRTok a b = true) : a = b.
-Proof.
-  destruct a, b; try discriminate; cbn in h;
-    [f_equal; exact (eq_of_beqRTok h) |
-     apply N.eqb_eq in h; subst; reflexivity |
-     apply N.eqb_eq in h; subst; reflexivity].
-Qed.
-
-Lemma eq_of_beqSymLList : forall a b, beqSymLList a b = true -> a = b.
-Proof.
-  induction a as [| x xs IH]; intros [| y ys] h; try discriminate.
-  - reflexivity.
-  - cbn in h. apply andb_prop in h. destruct h as [hx hxs].
-    rewrite (eq_of_beqSymLTok hx), (IH ys hxs). reflexivity.
-Qed.
-
-Lemma eq_of_beqSymRList : forall a b, beqSymRList a b = true -> a = b.
-Proof.
-  induction a as [| x xs IH]; intros [| y ys] h; try discriminate.
-  - reflexivity.
-  - cbn in h. apply andb_prop in h. destruct h as [hx hxs].
-    rewrite (eq_of_beqSymRTok hx), (IH ys hxs). reflexivity.
-Qed.
-
-Lemma stripSymLC_some :
-  forall pfx sl rest, stripSymLC pfx sl = Some rest -> sl = map SLC pfx ++ rest.
-Proof.
-  induction pfx as [| p ps IH].
-  - intros sl rest h; inversion h; reflexivity.
-  - intros [| [t | ? | ? | ? | ? | ?] xs] rest h; try discriminate.
-    cbn [stripSymLC] in h. destruct (beqLTok p t) eqn:hb; [| discriminate].
-    rewrite <- (eq_of_beqLTok hb), (IH xs rest h). reflexivity.
-Qed.
-
-Lemma stripSymRC_some :
-  forall pfx sr rest, stripSymRC pfx sr = Some rest -> sr = map SRC pfx ++ rest.
-Proof.
-  induction pfx as [| p ps IH].
-  - intros sr rest h; inversion h; reflexivity.
-  - intros [| [t | ? | ?] xs] rest h; try discriminate.
-    cbn [stripSymRC] in h. destruct (beqRTok p t) eqn:hb; [| discriminate].
-    rewrite <- (eq_of_beqRTok hb), (IH xs rest h). reflexivity.
 Qed.
 
 Lemma evalSymL_map_c :
@@ -2466,1852 +2401,490 @@ Proof.
   cbn [map app evalSymR]. rewrite (IH sr vr v2). reflexivity.
 Qed.
 
-Definition w3TopL : list LTok :=
-  [LD 2; L0 1; LD 5; LD1 0; L0 2; LD1 0; L0 0; LD 5; LD 3; L0 3;
-   LD1 0; L0 0; LD1 0; LD 7; LD 7].
-Definition u1TopL : list LTok := [LD 3; LD1 1; LD 5; L0 1; LD 5; LD 5; LD 7].
-Definition u2TopL : list LTok := [LD 7; LD 3; LD1 12; LD 5].
-Definition wm4Pfx5L : list LTok := [L0 3; LD 3; L0 0; LD 3; L0 0].
+(* A hole denotes a whole power, not bits on which a transition can branch. *)
+Inductive BAtom := Bit (b : Sym) | Power (var : nat) (word : list Sym).
+Definition Stack := list BAtom.
+Definition Vals := nat -> N.
+Definition BCfg := (Q * bool * Stack * Stack)%type.
 
-Definition luTailSym : list SymLTok :=
-  [SLC (LD1 1); SLC (LD 5); SLC (L0 1); SLC (LD 5); SLC (LD 5); SLC (LD 7)].
-Definition lu2TailSym : list SymLTok :=
-  [SLC (LD 3); SLC (LD1 12); SLC (LD 5)].
-Definition lw3TailSym : list SymLTok :=
-  [SLC (LD1 0); SLC (L0 2); SLC (LD1 0); SLC (L0 0); SLC (LD 5); SLC (LD 3); SLC (L0 3);
-   SLC (LD1 0); SLC (L0 0); SLC (LD1 0); SLC (LD 7); SLC (LD 7)].
-Definition lw4TailSym : list SymLTok :=
-  [SLC (LD 3); SLC (L0 0); SLC (LD 3); SLC (L0 0); SLC (LD1 0)].
-Definition ruTailSym : list SymRTok :=
-  [SRC (R1 3); SRC (R02 1); SRC (R1 3); SRC (R1 3); SRC (R02 3); SRC (R1 3)].
-Definition ru2TailSym : list SymRTok :=
-  [SRC (R02 6); SRC (R1 3); SRC (R02 0); SRC (R1 3); SRC (R02 6)].
-
-Definition sPushM3L (k : N) (sl : list SymLTok) : list SymLTok :=
-  match sl with
-  | SLC (M3L m) :: tl => SLC (M3L (k + 1 + m)) :: tl
-  | SM3 d :: tl => SM3 (d + k + 1) :: tl
-  | SM3P d :: tl => SM3P (k + 1 + d) :: tl
-  | SLC t :: tl => SLC (M3L k) :: SLC t :: tl
-  | _ => SM3P k :: sl
+Fixpoint pile (val : Vals) (xs : Stack) (outside : side) : side :=
+  match xs with
+  | [] => outside
+  | Bit b :: tl => b >> pile val tl outside
+  | Power i w :: tl => repBlock w (val i) *> pile val tl outside
   end.
 
-Definition sPushM4L (k : N) (sl : list SymLTok) : list SymLTok :=
-  match sl with
-  | SLC (M4L m) :: tl => SLC (M4L (k + 1 + m)) :: tl
-  | SM4 d :: tl => SM4 (d + k + 1) :: tl
-  | SM4P d :: tl => SM4P (k + 1 + d) :: tl
-  | SLC t :: tl => SLC (M4L k) :: SLC t :: tl
-  | _ => SM4P k :: sl
+Definition blockCfg (val : Vals) (outside : side) (st : BCfg) : Q * tape :=
+  evalView (fun l => pile val l outside) (fun r => pile val r (const S0)) st.
+
+Lemma pile_bits val (w : list Sym) xs outside :
+  pile val (List.map Bit w ++ xs) outside = w *> pile val xs outside.
+Proof. induction w; cbn [List.map app pile Str_app]; now rewrite ?IHw. Qed.
+
+Lemma slide_power (x u w : list Sym) (H : x ++ u = w ++ x) :
+  forall n s, x *> (repBlock u n *> s) = repBlock w n *> (x *> s).
+Proof.
+  intro n; induction n as [| n IH] using N.peano_ind; intro s; [reflexivity |].
+  replace (N.succ n) with (n + 1) by lia.
+  rewrite !repBlock_succ_left, !Str_app_assoc.
+  rewrite <- (Str_app_assoc x u), H, Str_app_assoc, IH. reflexivity.
+Qed.
+
+Fixpoint stripBits (p : list Sym) (xs : Stack) : option Stack :=
+  match p, xs with
+  | [], _ => Some xs
+  | a :: tl, Bit b :: more => if sym_eqb a b then stripBits tl more else None
+  | _, _ => None
   end.
 
-Definition sPushLD1 (k : N) (sl : list SymLTok) : list SymLTok :=
-  match sl with
-  | SLC (LD1 m) :: tl => SLC (LD1 (k + 1 + m)) :: tl
-  | _ => SLC (LD1 k) :: sl
-  end.
+Lemma stripBits_sound p xs out : stripBits p xs = Some out -> xs = List.map Bit p ++ out.
+Proof.
+  revert xs. induction p as [| a p IH]; intros xs h.
+  - cbn [stripBits] in h. now injection h as ->.
+  - destruct xs as [| [b |] rest]; try discriminate.
+    cbn [stripBits] in h.
+    destruct a, b; try discriminate; cbn [sym_eqb] in h; now rewrite (IH _ h).
+Qed.
 
-Definition sPushLD (v : N) (sl : list SymLTok) : list SymLTok :=
-  if v =? 1 then sPushLD1 0 sl else SLC (LD v) :: sl.
-
-Definition sPeelLD1 (k : N) (sl : list SymLTok) : list SymLTok :=
-  if k =? 0 then sl else SLC (LD1 (k - 1)) :: sl.
-
-Definition sPeelML8 (k : N) (sl : list SymLTok) : list SymLTok :=
-  if k =? 0 then sl else SLC (ML8 (k - 1)) :: sl.
-
-Definition sPeelM2L (k : N) (sl : list SymLTok) : list SymLTok :=
-  if k =? 0 then sl else SLC (M2L (k - 1)) :: sl.
-
-Definition sPeelM3L (k : N) (sl : list SymLTok) : list SymLTok :=
-  if k =? 0 then sl else SLC (M3L (k - 1)) :: sl.
-
-Definition sPeelM4L (k : N) (sl : list SymLTok) : list SymLTok :=
-  if k =? 0 then sl else SLC (M4L (k - 1)) :: sl.
-
-Definition sFoldWM4 (sl : list SymLTok) : list SymLTok :=
-  match stripSymLC wm4Pfx5L sl with
-  | Some (SLC (LD1 rem) :: rest) => sPushM4L 0 (sPeelLD1 rem rest)
-  | _ => sl
-  end.
-
-Definition sPeelL0 (k : N) (sl : list SymLTok) : list SymLTok :=
-  if k =? 0 then sl else sFoldWM4 (SLC (L0 (k - 1)) :: sl).
-
-Definition sUnconsL (sl : list SymLTok) : option (LHead * list SymLTok) :=
-  match sl with
-  | SLC (L0 k) :: tl => Some (LHL0 k, tl)
-  | SLC (LD v) :: tl => Some (LHLD v, tl)
-  | SLC (LD1 k) :: tl => Some (LHLD 1, sPeelLD1 k tl)
-  | SLC (ML8 k) :: tl => Some (LHLD 3, luTailSym ++ sPeelML8 k tl)
-  | SLC (M2L k) :: tl => Some (LHLD 7, lu2TailSym ++ sPeelM2L k tl)
-  | SLC (M3L k) :: tl => Some (LHLD 5, lw3TailSym ++ sPeelM3L k tl)
-  | SLC (M4L k) :: tl => Some (LHL0 3, lw4TailSym ++ sPeelM4L k tl)
-  | SM2 d :: tl => if d =? 0 then None else Some (LHLD 7, lu2TailSym ++ (SM2 (d - 1) :: tl))
-  | SM3 d :: tl => if d =? 0 then None else Some (LHLD 5, lw3TailSym ++ (SM3 (d - 1) :: tl))
-  | SM4 d :: tl => if d =? 0 then None else Some (LHL0 3, lw4TailSym ++ (SM4 (d - 1) :: tl))
-  | SM4P d :: tl => if d =? 0 then None else Some (LHL0 3, lw4TailSym ++ (SM4P (d - 1) :: tl))
-  | _ => None
-  end.
-
-Definition sPushL0 (k : N) (sl : list SymLTok) : list SymLTok :=
-  match sUnconsL sl with
-  | Some (LHL0 m, rest) => sFoldWM4 (SLC (L0 (k + 1 + m)) :: rest)
-  | _ => sFoldWM4 (SLC (L0 k) :: sl)
-  end.
-
-Definition sPushZeros (q : N) (sl : list SymLTok) : list SymLTok :=
-  if q =? 0 then sl else sPushL0 (q - 1) sl.
-
-Definition sBumpL (sl : list SymLTok) : option (list SymLTok) :=
-  match sUnconsL sl with
-  | None => None
-  | Some (LHL0 v, rest) => Some (sPushLD 0 (sPeelL0 v rest))
-  | Some (LHLD v, rest) => Some (sPushLD (v + 1) rest)
-  end.
-
-Fixpoint sBumpLN (n : nat) (sl : list SymLTok) : option (list SymLTok) :=
-  match n with
-  | O => Some sl
-  | S n' => opt_bind (sBumpL sl) (sBumpLN n')
-  end.
-
-Definition sPushM2LRaw_conc (k : N) (sl : list SymLTok) : list SymLTok :=
-  match sl with
-  | SLC (M2L m) :: tl => SLC (M2L (k + 1 + m)) :: tl
-  | SM2 d :: tl => SM2 (k + 1 + d) :: tl
-  | _ => SLC (M2L k) :: sl
-  end.
-
-Definition sPushM2LRaw_sym (d : N) (sl : list SymLTok) : option (list SymLTok) :=
-  match sl with
-  | SLC (M2L m) :: tl => Some (SM2 (d + 1 + m) :: tl)
-  | SM2 _ :: _ => None
-  | _ => Some (SM2 d :: sl)
-  end.
-
-Definition sPushM2L_conc (k : N) (sl : list SymLTok) : list SymLTok :=
-  match stripSymLC u2TopL sl with
-  | Some rest => sPushM2LRaw_conc (k + 1) rest
-  | None => sPushM2LRaw_conc k sl
-  end.
-
-Definition sPushM2L_sym (d : N) (sl : list SymLTok) : option (list SymLTok) :=
-  match stripSymLC u2TopL sl with
-  | Some rest => sPushM2LRaw_sym (d + 1) rest
-  | None => sPushM2LRaw_sym d sl
-  end.
-
-Definition sPushML8 (k : N) (sl : list SymLTok) : list SymLTok :=
-  match sl with
-  | SLC (ML8 m) :: tl => SLC (ML8 (k + 1 + m)) :: tl
-  | _ => SLC (ML8 k) :: sl
-  end.
-
-Definition sPushWM1_conc (k : N) (sl : list SymLTok) : option (list SymLTok) :=
-  match sBumpLN 4%nat sl with
-  | None => None
-  | Some l4 =>
-    let lMid := [SLC (LD 3); SLC (LD1 1); SLC (LD 5); SLC (L0 1); SLC (LD 5); SLC (LD 5)] ++ l4 in
-    if k =? 0 then Some (SLC (LD 3) :: lMid)
-    else Some (SLC (LD 3) :: sPushML8 (k - 1) lMid)
-  end.
-
-Definition sPushWM2_conc (k : N) (sl : list SymLTok) : option (list SymLTok) :=
-  match sBumpLN 2%nat sl with
-  | None => None
-  | Some l2 =>
-    let lMid := SLC (LD 7) :: SLC (LD 3) :: sPushLD1 5 l2 in
-    let lBody := if k =? 0 then lMid else sPushM2L_conc (k - 1) lMid in
-    Some (SLC (L0 0) :: SLC (LD1 5) :: SLC (LD 5) :: lBody)
-  end.
-
-Definition sPushWM2_sym (d : N) (sl : list SymLTok) : option (list SymLTok) :=
-  match sBumpLN 2%nat sl with
-  | None => None
-  | Some l2 =>
-    let lMid := SLC (LD 7) :: SLC (LD 3) :: sPushLD1 5 l2 in
-    let lBodyOpt :=
-      if d =? 0 then
-        match stripSymLC u2TopL lMid with
-        | Some mRest => sPushM2LRaw_sym 0 mRest
-        | None => None
-        end
-      else sPushM2L_sym (d - 1) lMid in
-    match lBodyOpt with
-    | None => None
-    | Some lBody => Some (SLC (L0 0) :: SLC (LD1 5) :: SLC (LD 5) :: lBody)
+Fixpoint findPower (fuel : nat) (xs : Stack) : option (list Sym * nat * list Sym * Stack) :=
+  match xs with
+  | [] => None
+  | Power i w :: rest => Some ([], i, w, rest)
+  | Bit b :: tl =>
+    match fuel with
+    | O => None
+    | S k => opt_map (fun '(gap, i, w, rest) => (b :: gap, i, w, rest)) (findPower k tl)
     end
   end.
 
-Definition sPeelR02 (k : N) (sr : list SymRTok) : list SymRTok :=
-  if k =? 0 then sr else SRC (R02 (k - 1)) :: sr.
+Lemma findPower_sound fuel xs gap i w rest :
+  findPower fuel xs = Some (gap, i, w, rest) ->
+  xs = List.map Bit gap ++ Power i w :: rest.
+Proof.
+  revert xs gap. induction fuel as [| k IH]; intros [| [b | v t] tl] gap h; try discriminate;
+    try (injection h as <- <- <- <-; reflexivity).
+  cbn [findPower] in h.
+  destruct (findPower k tl) as [[[[g j] u] ts] |] eqn:hf; try discriminate.
+  injection h as <- <- <- <-. cbn [List.map app]. now rewrite (IH _ _ hf).
+Qed.
 
-Definition sPeelMR11 (k : N) (sr : list SymRTok) : list SymRTok :=
-  if k =? 0 then sr else SRC (MR11 (k - 1)) :: sr.
+Definition alignPower (pre w : list Sym) (xs : Stack) : option (nat * Stack) :=
+  opt_bind (stripBits pre xs) (fun after =>
+    opt_bind (findPower (2 * length w)%nat after) (fun '(gap, i, u, rest) =>
+      if list_sym_eqb (gap ++ u) (w ++ gap)
+      then Some (i, List.map Bit gap ++ rest)
+      else None)).
 
-Definition sPeelM2R (k : N) (sr : list SymRTok) : list SymRTok :=
-  if k =? 0 then sr else SRC (M2R (k - 1)) :: sr.
+Lemma alignPower_sound pre w xs i out val outside :
+  alignPower pre w xs = Some (i, out) ->
+  pile val xs outside = pre *> (repBlock w (val i) *> pile val out outside).
+Proof.
+  unfold alignPower.
+  destruct (stripBits pre xs) as [after |] eqn:hp; cbn [opt_bind]; [| discriminate].
+  destruct (findPower (2 * length w)%nat after) as [[[[gap j] u] rest] |] eqn:hf;
+    cbn [opt_bind]; [| discriminate].
+  destruct (list_sym_eqb (gap ++ u) (w ++ gap)) eqn:hw; [| discriminate].
+  intros [= <- <-]. rewrite (stripBits_sound _ _ _ hp), (findPower_sound _ _ _ _ _ _ hf).
+  rewrite !pile_bits. cbn [pile]. now rewrite (slide_power _ _ _ (list_sym_eqb_eq _ _ hw)).
+Qed.
 
-Definition sPushR02 (k : N) (sr : list SymRTok) : list SymRTok :=
-  match sr with
-  | SRC (R02 m) :: tl => SRC (R02 (k + 1 + m)) :: tl
-  | _ => SRC (R02 k) :: sr
-  end.
+Record MovePower := mkMove {
+  fromRight : bool;
+  preL : list Sym;
+  preR : list Sym;
+  sourceWord : list Sym;
+  destWord : list Sym
+}.
 
-Definition sPushR0 (d : N) (sr : list SymRTok) : list SymRTok :=
-  if d =? 2 then sPushR02 0 sr else SRC (R0 d) :: sr.
+Definition moves :=
+  [mkMove false (List.tl pLA) (S0 :: pRA) uM vM;
+   mkMove true [] (S0 :: pRB) vM wM;
+   mkMove false (List.tl pL2A) (S0 :: r1_9Bits) uM2 vM2;
+   mkMove true [] (S0 :: pRB) vM2 wM2].
 
-Definition sPushMR11_conc (k : N) (sr : list SymRTok) : list SymRTok :=
-  match sr with
-  | SRC (MR11 m) :: tl => SRC (MR11 (k + 1 + m)) :: tl
-  | SMR d :: tl => SMR (k + 1 + d) :: tl
-  | _ => SRC (MR11 k) :: sr
-  end.
+Definition move_spec (m : MovePower) : Prop :=
+  forall k l r,
+  if fromRight m then
+    evalWin l (repBlock (sourceWord m) k *> r) B true (preL m) (preR m) -[ tm ]->*
+    evalWin (repBlock (destWord m) k *> l) r B true (preL m) (preR m)
+  else
+    evalWin (repBlock (sourceWord m) k *> l) r B true (preL m) (preR m) -[ tm ]->*
+    evalWin l (repBlock (destWord m) k *> r) B true (preL m) (preR m).
 
-Definition sPushM2R_conc (k : N) (sr : list SymRTok) : list SymRTok :=
-  match sr with
-  | SRC (M2R m) :: tl => SRC (M2R (k + 1 + m)) :: tl
-  | SM2R d :: tl => SM2R (k + 1 + d) :: tl
-  | _ => SRC (M2R k) :: sr
-  end.
+Lemma moves_sound : Forall move_spec moves.
+Proof.
+  repeat apply Forall_cons. 5: constructor.
+  - exact (walkWordLeft 448 B false pLA uM pRA vM motifA_body).
+  - exact (walkWordRight 494 B false [S0] wM pRB vM motifB_body).
+  - exact (walkWordLeft 670 B false pL2A uM2 r1_9Bits vM2 motif2A_body).
+  - exact (walkWordRight 368 B false [S0] wM2 pRB vM2 motif2B_body).
+Qed.
 
-Definition sPushM2R_sym (d : N) (sr : list SymRTok) : option (list SymRTok) :=
-  match sr with
-  | SRC (M2R m) :: tl => Some (SM2R (d + 1 + m) :: tl)
-  | SM2R _ :: _ => None
-  | _ => Some (SM2R d :: sr)
-  end.
+Definition movePower (m : MovePower) (l r : Stack) : option (Stack * Stack) :=
+  let pl := preL m in let pr := preR m in
+  let u := sourceWord m in let v := destWord m in
+  if fromRight m then
+    opt_bind (stripBits pl l) (fun lt =>
+      opt_map (fun '(i, rt) => (List.map Bit pl ++ Power i v :: lt, List.map Bit pr ++ rt))
+        (alignPower pr u r))
+  else
+    opt_bind (stripBits pr r) (fun rt =>
+      opt_map (fun '(i, lt) => (List.map Bit pl ++ lt, List.map Bit pr ++ Power i v :: rt))
+        (alignPower pl u l)).
 
-Definition sUnconsR (sr : list SymRTok) : option (option (RHead * list SymRTok)) :=
-  match sr with
-  | [] => Some None
-  | SRC (R0 d) :: tl => Some (Some (RHR0 d, tl))
-  | SRC (R1 d) :: tl => Some (Some (RHR1 d, tl))
-  | SRC (R02 k) :: tl => Some (Some (RHR0 2, sPeelR02 k tl))
-  | SRC (MR11 k) :: tl => Some (Some (RHR0 2, ruTailSym ++ sPeelMR11 k tl))
-  | SRC (M2R k) :: tl => Some (Some (RHR0 2, ru2TailSym ++ sPeelM2R k tl))
-  | SMR d :: tl => if d =? 0 then None else Some (Some (RHR0 2, ruTailSym ++ (SMR (d - 1) :: tl)))
+Lemma movePower_sound m (hs : move_spec m) l r l' r' :
+  movePower m l r = Some (l', r') ->
+  forall val outside, blockCfg val outside (B, true, l, r) -[ tm ]->*
+    blockCfg val outside (B, true, l', r').
+Proof.
+  unfold movePower, move_spec in *. cbv zeta. destruct (fromRight m).
+  - destruct (stripBits (preL m) l) as [lt |] eqn:hl; [| discriminate].
+    cbn [opt_bind].
+    destruct (alignPower (preR m) (sourceWord m) r) as [[i rt] |] eqn:hr; [| discriminate].
+    intros [= <- <-] val outside.
+    cbn [blockCfg evalView]. rewrite (stripBits_sound _ _ _ hl), !pile_bits,
+      (alignPower_sound _ _ _ _ _ val _ hr).
+    exact (hs (val i) (pile val lt outside) (pile val rt (const S0))).
+  - destruct (stripBits (preR m) r) as [rt |] eqn:hr; [| discriminate].
+    cbn [opt_bind].
+    destruct (alignPower (preL m) (sourceWord m) l) as [[i lt] |] eqn:hl; [| discriminate].
+    intros [= <- <-] val outside.
+    cbn [blockCfg evalView]. rewrite (stripBits_sound _ _ _ hr), !pile_bits,
+      (alignPower_sound _ _ _ _ _ val _ hl).
+    exact (hs (val i) (pile val lt outside) (pile val rt (const S0))).
+Qed.
+
+Definition firstMove (ms : list MovePower) (l r : Stack) :=
+  firstSome (fun m => movePower m l r) ms.
+
+Lemma firstMove_sound ms (hs : Forall move_spec ms) l r l' r' :
+  firstMove ms l r = Some (l', r') ->
+  forall val outside, blockCfg val outside (B, true, l, r) -[ tm ]->*
+    blockCfg val outside (B, true, l', r').
+Proof.
+  unfold firstMove. intro h.
+  refine (firstSome_sound _ (fun '(a, b) => forall val outside,
+    blockCfg val outside (B, true, l, r) -[ tm ]->*
+    blockCfg val outside (B, true, a, b)) ms (l', r') _ h).
+  clear h. induction hs as [|m ms hm _ IH]; [constructor | constructor].
+  - intros [a b]. exact (movePower_sound m hm l r a b).
+  - exact IH.
+Qed.
+
+Definition readBit (d : bool) (xs : Stack) : option (Sym * Stack) :=
+  match xs with
+  | Bit b :: tl => Some (b, tl)
+  | [] => if d then Some (S0, []) else None
   | _ => None
   end.
 
-Definition sAddR (m : N) (sr : list SymRTok) : option (list SymRTok) :=
-  match sUnconsR sr with
-  | None => None
-  | Some None => Some (sPushR0 m [])
-  | Some (Some (RHR0 d, rest)) => Some (sPushR0 (d + m + 1) rest)
-  | Some (Some (RHR1 d, rest)) => Some (SRC (R1 (d + m + 1)) :: rest)
+Lemma readBit_reads val outside b (h : b = true -> outside = const S0) :
+  reads (fun xs => pile val xs outside) (readBit b).
+Proof.
+  intros [|[x|] xs] a tl; try discriminate.
+  - destruct b; [|discriminate]. intros [= <- <-].
+    specialize (h eq_refl); subst outside. exact (eq_sym zero_cons_def).
+  - intros [= <- <-]. reflexivity.
+Qed.
+
+Definition blockRaw := readStep (readBit false) (readBit true) (fun a xs => Bit a :: xs).
+
+Lemma blockRaw_sound st out : blockRaw st = Some out ->
+  forall val outside, blockCfg val outside st -[ tm ]->* blockCfg val outside out.
+Proof.
+  intros h val outside. eapply evstep_step; [|apply rs_refl].
+  exact (readStep_sound (readBit false) (readBit true) (fun a xs => Bit a :: xs)
+    (fun xs => pile val xs outside) (fun xs => pile val xs (const S0))
+    (readBit_reads _ _ _ (@no_false _)) (readBit_reads _ _ _ (fun _ => eq_refl))
+    (fun _ _ => eq_refl) (fun _ _ => eq_refl) _ _ h).
+Qed.
+
+Definition faceRight (st : BCfg) : option BCfg :=
+  let '(q, d, l, r) := st in
+  if d then Some st else
+  match l with Bit b :: lt => Some (q, true, lt, Bit b :: r) | _ => None end.
+
+Lemma faceRight_sound st st' val outside :
+  faceRight st = Some st' -> blockCfg val outside st = blockCfg val outside st'.
+Proof.
+  destruct st as [[[q d] l] r]. destruct d; [intros [= <-]; reflexivity |].
+  destruct l as [| [] l]; try discriminate. intros [= <-]. reflexivity.
+Qed.
+
+Definition blockStep (st : BCfg) : option BCfg :=
+  let '(q, _, _, _) := st in
+  match q with
+  | B =>
+    match faceRight st with
+    | Some (_, _, l, r) =>
+      match firstMove moves l r with
+      | Some (l', r') => Some (B, true, l', r')
+      | None => blockRaw st
+      end
+    | None => blockRaw st
+    end
+  | _ => blockRaw st
   end.
 
-Definition sNormB0W3 (m : Mode) (sl : list SymLTok) (sr : list SymRTok) : list SymLTok :=
-  match m with
-  | MDL => sl
-  | MB0 =>
-    match stripSymRC [R0 4] sr with
-    | Some (SMR _ :: _) =>
-      match stripSymLC w3TopL sl with
-      | Some rest => SLC (LD 2) :: SLC (L0 1) :: sPushM3L 0 rest
-      | None => sl
-      end
-    | Some (SRC (MR11 _) :: _) =>
-      match stripSymLC w3TopL sl with
-      | Some rest => SLC (LD 2) :: SLC (L0 1) :: sPushM3L 0 rest
-      | None => sl
-      end
-    | _ => sl
+Lemma blockStep_sound st out : blockStep st = Some out ->
+  forall val outside, blockCfg val outside st -[ tm ]->* blockCfg val outside out.
+Proof.
+  destruct st as [[[q d] l] r]; destruct q; try (apply blockRaw_sound).
+  destruct d.
+  - cbn [blockStep faceRight].
+    destruct (firstMove moves l r) as [[lt rt] |] eqn:h; [| apply blockRaw_sound].
+    intros [= <-]. exact (firstMove_sound _ moves_sound _ _ _ _ h).
+  - destruct l as [| [b |] l]; try apply blockRaw_sound.
+    cbn [blockStep faceRight].
+    destruct (firstMove moves l (Bit b :: r)) as [[lt rt] |] eqn:h; [| apply blockRaw_sound].
+    intros [= <-]. exact (firstMove_sound _ moves_sound _ _ _ _ h).
+Qed.
+
+(* Compare at an endpoint with holes pushed away from the head. *)
+Fixpoint slideHole i (w : list Sym) (xs : Stack) : Stack :=
+  match w, xs with
+  | a :: ws, Bit b :: tl =>
+    if sym_eqb a b then Bit b :: slideHole i (ws ++ [a]) tl else Power i w :: xs
+  | _, _ => Power i w :: xs
+  end.
+
+Lemma slideHole_sound i xs val outside :
+  forall w, pile val (slideHole i w xs) outside = pile val (Power i w :: xs) outside.
+Proof.
+  induction xs as [| [b | j u] tl IH]; intros [| a w]; try reflexivity.
+  destruct a, b; cbn [slideHole sym_eqb]; try reflexivity;
+    cbn [pile]; rewrite IH; cbn [pile];
+    exact (slide_power [_] (w ++ [_]) (_ :: w) eq_refl _ _).
+Qed.
+
+Fixpoint normHoles (xs : Stack) : Stack :=
+  match xs with
+  | [] => []
+  | Bit b :: tl => Bit b :: normHoles tl
+  | Power i w :: tl => slideHole i w (normHoles tl)
+  end.
+
+Lemma normHoles_sound xs val outside :
+  pile val (normHoles xs) outside = pile val xs outside.
+Proof.
+  induction xs as [| [] tl IH]; cbn [normHoles]; try rewrite slideHole_sound;
+    cbn [pile]; now rewrite ?IH.
+Qed.
+
+Fixpoint trimBlank (xs : Stack) : Stack :=
+  match xs with
+  | [] => []
+  | a :: tl =>
+    let more := trimBlank tl in
+    match a, more with Bit S0, [] => [] | _, _ => a :: more end
+  end.
+
+Lemma trimBlank_sound xs val :
+  pile val (trimBlank xs) (const S0) = pile val xs (const S0).
+Proof.
+  induction xs as [| [[|] |] tl IH]; cbn [trimBlank pile]; try (now rewrite ?IH).
+  destruct (trimBlank tl) as [| a rest]; cbn [pile] in *.
+  - rewrite <- IH. symmetry. apply zero_cons_def.
+  - now rewrite IH.
+Qed.
+
+Definition atomEq a b :=
+  match a, b with
+  | Bit x, Bit y => sym_eqb x y
+  | Power i x, Power j y => if Nat.eqb i j then list_sym_eqb x y else false
+  | _, _ => false
+  end.
+
+Lemma atomEq_sound a b : atomEq a b = true -> a = b.
+Proof.
+  destruct a, b; try discriminate; cbn [atomEq].
+  - destruct b, b0; cbn [sym_eqb]; congruence.
+  - destruct (Nat.eqb var var0) eqn:h; try discriminate.
+    apply Nat.eqb_eq in h. intros hw. now rewrite h, (list_sym_eqb_eq _ _ hw).
+Qed.
+
+Fixpoint stackEq (a b : Stack) : bool :=
+  match a, b with
+  | [], [] => true
+  | x :: l, y :: r => if atomEq x y then stackEq l r else false
+  | _, _ => false
+  end.
+
+Lemma stackEq_sound a b : stackEq a b = true -> a = b.
+Proof.
+  revert b. induction a as [| x l IH]; intros [| y r]; try discriminate; [reflexivity |].
+  cbn [stackEq]. destruct (atomEq x y) eqn:h; try discriminate.
+  intros hr. now rewrite (atomEq_sound _ _ h), (IH _ hr).
+Qed.
+
+Definition endpoint (st : BCfg) : option BCfg :=
+  opt_map (fun '(q, d, l, r) => (q, d, normHoles l, normHoles (trimBlank r))) (faceRight st).
+
+Lemma endpoint_sound st out val outside :
+  endpoint st = Some out -> blockCfg val outside st = blockCfg val outside out.
+Proof.
+  unfold endpoint. destruct (faceRight st) as [[[[q d] l] r] |] eqn:h; [| discriminate].
+  intros [= <-]. rewrite (faceRight_sound _ _ val outside h).
+  cbn [blockCfg evalView]. now rewrite !normHoles_sound, trimBlank_sound.
+Qed.
+
+Definition blockEq (st out : BCfg) : bool :=
+  match endpoint st, endpoint out with
+  | Some (q, d, l, r), Some (q', d', l', r') =>
+    q_eqb q q' && Bool.eqb d d' && stackEq l l' && stackEq r r'
+  | _, _ => false
+  end.
+
+Lemma blockEq_sound st out val outside :
+  blockEq st out = true -> blockCfg val outside st = blockCfg val outside out.
+Proof.
+  unfold blockEq.
+  destruct (endpoint st) as [[[[q d] l] r] |] eqn:h; [| discriminate].
+  destruct (endpoint out) as [[[[q' d'] l'] r'] |] eqn:h'; [| discriminate].
+  rewrite !Bool.andb_true_iff. intros [[[hq hd] hl] hr].
+  destruct (q_eqb_spec q q'); [| discriminate].
+  apply Bool.eqb_prop in hd. apply stackEq_sound in hl, hr. subst.
+  now rewrite (endpoint_sound _ _ _ _ h), (endpoint_sound _ _ _ _ h').
+Qed.
+
+Definition blockOptStep (a : option BCfg) := opt_bind a blockStep.
+
+Definition blockReach (a b : option BCfg) : Prop :=
+  forall out, b = Some out -> exists st, a = Some st /\
+  forall val outside, blockCfg val outside st -[ tm ]->* blockCfg val outside out.
+
+Lemma blockReach_trans a b c : blockReach a b -> blockReach b c -> blockReach a c.
+Proof.
+  intros hab hbc out ho. destruct (hbc _ ho) as [mid [hm h2]].
+  destruct (hab _ hm) as [st [hs h1]].
+  exists st. split; [exact hs |]. intros val outside. eapply rs_trans; [apply h1 | apply h2].
+Qed.
+
+Lemma blockReach_iter p a : blockReach a (Pos.iter blockOptStep a p).
+Proof.
+  revert a. induction p as [p IH | p IH |]; intro a; cbn [Pos.iter].
+  - eapply blockReach_trans; [apply IH |]. eapply blockReach_trans; [apply IH |].
+    destruct (Pos.iter blockOptStep (Pos.iter blockOptStep a p) p) as [st |]; [| discriminate].
+    intros out h. exists st. split; [reflexivity |]. now apply blockStep_sound.
+  - eapply blockReach_trans; apply IH.
+  - destruct a as [st |]; [| discriminate].
+    intros out h. exists st. split; [reflexivity |]. now apply blockStep_sound.
+Qed.
+
+(* The stage boundaries still use the old names for the physical words. *)
+Definition wordL (t : LTok) : list Sym :=
+  match t with
+  | L0 k => repBlock wL0 (k + 1)
+  | LD d => repBlock [S1] (d + 2) ++ [S0]
+  | LD1 k => repBlock wLD1 (k + 1)
+  | ML8 k => repBlock uM (k + 1)
+  | M2L k => repBlock uM2 (k + 1)
+  | M3L k => repBlock wM3 (k + 1)
+  | M4L k => repBlock wM4 (k + 1)
+  end.
+
+Definition wordR (t : RTok) : list Sym :=
+  match t with
+  | R0 d => repBlock [S1] (d + 1) ++ [S0]
+  | R1 d => repBlock [S1] (d + 1) ++ [S0; S0]
+  | R02 k => repBlock wLD1 (k + 1)
+  | MR11 k => repBlock vM (k + 1)
+  | M2R k => repBlock vM2 (k + 1)
+  end.
+
+Definition emitPower i w d (tl : Stack) :=
+  List.map Bit (repBlock w (d + 1)) ++ Power i w :: tl.
+
+Fixpoint encodeHoleL (ts : list SymLTok) : Stack :=
+  match ts with
+  | [] => []
+  | t :: tl =>
+    let rest := encodeHoleL tl in
+    match t with
+    | SLC a => List.map Bit (wordL a) ++ rest
+    | SM2 d => emitPower 1%nat uM2 d rest
+    | SM3 d => emitPower 2%nat wM3 d rest
+    | SM4 d => emitPower 3%nat wM4 d rest
+    | SM3P d => List.map Bit (repBlock wM3 (d + 1)) ++ rest
+    | SM4P d => List.map Bit (repBlock wM4 (d + 1)) ++ rest
     end
   end.
 
-(* ========================================================================= *)
-(* Section 8: Soundness of Symbolic Stack Operations                         *)
-(* ========================================================================= *)
+Fixpoint encodeHoleR (ts : list SymRTok) : Stack :=
+  match ts with
+  | [] => []
+  | t :: tl =>
+    let rest := encodeHoleR tl in
+    match t with
+    | SRC a => List.map Bit (wordR a) ++ rest
+    | SMR d => emitPower 0%nat vM d rest
+    | SM2R d => emitPower 1%nat vM2 d rest
+    end
+  end.
 
-Lemma eL_sPushM3L (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushM3L k sl) rest) =
-  repBlock wM3 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
+Definition stageVals vr v2 v3 v4 : Vals :=
+  fun i => match i with O => vr | S O => v2 | S (S O) => v3 | _ => v4 end.
+
+Lemma emitPower_sound val i w d tl outside :
+  pile val (emitPower i w d tl) outside =
+  repBlock w (val i + d + 1) *> pile val tl outside.
 Proof.
-  destruct sl as [| hd tl]; [exact (eL_pushM3L k rest) |].
-  destruct hd as [t | d | d | d | d | d].
-  - destruct t as [? | ? | ? | ? | ? | m | ?]; try reflexivity.
-    cbn [sPushM3L evalSymL eL].
-    replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - exact (eL_pushM3L k _).
-  - cbn [sPushM3L evalSymL eL].
-    replace (v3 + (d + k + 1) + 1) with ((k + 1) + (v3 + d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - exact (eL_pushM3L k _).
-  - cbn [sPushM3L evalSymL]. rewrite <- (pushM3L_pushM3L k d), eL_pushM3L. reflexivity.
-  - exact (eL_pushM3L k _).
+  unfold emitPower. rewrite pile_bits. cbn [pile].
+  replace (val i + d + 1) with (d + 1 + val i) by lia.
+  now rewrite (repBlock_add w (d + 1) (val i)), Str_app_assoc.
 Qed.
 
-Lemma eL_sPushM4L (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushM4L k sl) rest) =
-  repBlock wM4 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
+Lemma encodeHoleL_sound ts vr v2 v3 v4 rest :
+  pile (stageVals vr v2 v3 v4) (encodeHoleL ts) (eL rest) =
+  eL (evalSymL v2 v3 v4 ts rest).
 Proof.
-  destruct sl as [| hd tl]; [exact (eL_pushM4L k rest) |].
-  destruct hd as [t | d | d | d | d | d].
-  - destruct t as [? | ? | ? | ? | ? | ? | m]; try reflexivity.
-    cbn [sPushM4L evalSymL eL].
-    replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - exact (eL_pushM4L k _).
-  - exact (eL_pushM4L k _).
-  - cbn [sPushM4L evalSymL eL].
-    replace (v4 + (d + k + 1) + 1) with ((k + 1) + (v4 + d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - exact (eL_pushM4L k _).
-  - cbn [sPushM4L evalSymL]. rewrite <- (pushM4L_pushM4L k d), eL_pushM4L. reflexivity.
+  induction ts as [| [] tl IH]; cbn [encodeHoleL evalSymL]; [reflexivity | ..];
+    rewrite ?emitPower_sound, ?pile_bits, IH; cbn [stageVals];
+    rewrite ?eL_pushM3L, ?eL_pushM4L; try reflexivity.
+  destruct t; cbn [wordL eL]; now rewrite ?Str_app_assoc.
 Qed.
 
-Lemma eL_sPushLD1 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushLD1 k sl) rest) =
-  repBlock wLD1 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
+Lemma encodeHoleR_sound ts vr v2 v3 v4 :
+  pile (stageVals vr v2 v3 v4) (encodeHoleR ts) (const S0) = eR (evalSymR vr v2 ts).
 Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl]; try reflexivity.
-  destruct t as [? | ? | m | ? | ? | ? | ?]; try reflexivity.
-  cbn [sPushLD1 evalSymL eL].
-  replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-  rewrite repBlock_add, Str_app_assoc. reflexivity.
+  induction ts as [| [] tl IH]; cbn [encodeHoleR evalSymR]; [reflexivity | ..];
+    rewrite ?emitPower_sound, ?pile_bits, IH; cbn [stageVals]; try reflexivity.
+  destruct t; cbn [wordR eR]; now rewrite ?Str_app_assoc.
 Qed.
 
-Lemma eL_sPushLD (v v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushLD v sl) rest) =
-  eL (LD v :: evalSymL v2 v3 v4 sl rest).
+Definition symBlockCfg m sl sr : BCfg :=
+  let l := encodeHoleL sl in let r := encodeHoleR sr in
+  match m with MB0 => (B, true, l, Bit S0 :: r) | MDL => (D, false, l, r) end.
+
+Lemma symBlockCfg_sound m sl sr vr v2 v3 v4 rest :
+  blockCfg (stageVals vr v2 v3 v4) (eL rest) (symBlockCfg m sl sr) =
+  encodeBase (Core m (evalSymL v2 v3 v4 sl rest) (evalSymR vr v2 sr)).
 Proof.
-  unfold sPushLD. destruct (v =? 1) eqn:hv.
-  - apply N.eqb_eq in hv; subst. rewrite eL_sPushLD1. reflexivity.
-  - reflexivity.
+  destruct m; cbn [symBlockCfg blockCfg evalView pile];
+    now rewrite encodeHoleL_sound, encodeHoleR_sound.
 Qed.
 
-Lemma eL_sPeelLD1 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPeelLD1 k sl) rest) =
-  repBlock wLD1 k *> eL (evalSymL v2 v3 v4 sl rest).
+(* Replay fixed bits by the TM table and opaque powers by the four moves.
+   Only the endpoints are translated from the driver's RLE vocabulary. *)
+Definition checkHoles (p : positive) m sl sr m' sl' sr' : bool :=
+  match Pos.iter blockOptStep (Some (symBlockCfg m sl sr)) p with
+  | Some out => blockEq out (symBlockCfg m' sl' sr')
+  | None => false
+  end.
+
+Lemma checkHoles_sound {p m sl sr m' sl' sr'} :
+  checkHoles p m sl sr m' sl' sr' = true -> SymReached m sl sr m' sl' sr'.
 Proof.
-  unfold sPeelLD1. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymL eL]. replace (k - 1 + 1) with k by lia. reflexivity.
+  unfold checkHoles.
+  destruct (Pos.iter _ _ _) as [out |] eqn:h; [| discriminate].
+  intros he vr v2 v3 v4 rest.
+  destruct (blockReach_iter p _ _ h) as [st [[= <-] hr]].
+  rewrite <- !symBlockCfg_sound, <- (blockEq_sound _ _ _ _ he).
+  apply hr.
 Qed.
 
-Lemma eL_sPeelML8 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPeelML8 k sl) rest) =
-  repBlock uM k *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPeelML8. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymL eL]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eL_sPeelM2L (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPeelM2L k sl) rest) =
-  repBlock uM2 k *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPeelM2L. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymL eL]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eL_sPeelM3L (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPeelM3L k sl) rest) =
-  repBlock wM3 k *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPeelM3L. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymL eL]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eL_sPeelM4L (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPeelM4L k sl) rest) =
-  repBlock wM4 k *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPeelM4L. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymL eL]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eL_sFoldWM4 (v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sFoldWM4 sl) rest) = eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sFoldWM4.
-  destruct (stripSymLC wm4Pfx5L sl) as [[| [t | ? | ? | ? | ? | ?] tl] |] eqn:hs; try reflexivity.
-  destruct t as [? | ? | rem | ? | ? | ? | ?]; try reflexivity.
-  rewrite (stripSymLC_some wm4Pfx5L sl (SLC (LD1 rem) :: tl) hs), evalSymL_map_c, eL_sPushM4L.
-  change (0 + 1) with 1. rewrite repBlock_1.
-  cbn [wm4Pfx5L app evalSymL].
-  rewrite <- (eL_w4 (evalSymL v2 v3 v4 (sPeelLD1 rem tl) rest)).
-  assert (htail : eL (LD1 0 :: evalSymL v2 v3 v4 (sPeelLD1 rem tl) rest) =
-                  eL (LD1 rem :: evalSymL v2 v3 v4 tl rest)).
-  { change (eL (LD1 0 :: evalSymL v2 v3 v4 (sPeelLD1 rem tl) rest)) with
-      (wLD1 *> eL (evalSymL v2 v3 v4 (sPeelLD1 rem tl) rest)).
-    rewrite eL_sPeelLD1, <- Str_app_assoc, <- repBlock_succ_left. reflexivity. }
-  cbn [eL] in htail |- *. rewrite htail. reflexivity.
-Qed.
-
-Lemma eL_sPeelL0 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (L0 k :: evalSymL v2 v3 v4 sl rest) =
-  wL0 *> eL (evalSymL v2 v3 v4 (sPeelL0 k sl) rest).
-Proof.
-  unfold sPeelL0. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. rewrite eL_sFoldWM4.
-    cbn [evalSymL eL]. replace k with ((k - 1) + 1) at 1 by lia.
-    rewrite repBlock_succ_left, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eL_peelL0_eq_sPeelL0 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (peelL0 k (evalSymL v2 v3 v4 sl rest)) =
-  eL (evalSymL v2 v3 v4 (sPeelL0 k sl) rest).
-Proof.
-  unfold peelL0, sPeelL0. destruct (k =? 0) eqn:hk.
-  - reflexivity.
-  - rewrite eL_foldWM4, eL_sFoldWM4. reflexivity.
-Qed.
-
-Lemma sUnconsL_L0 {sl sl' : list SymLTok} {k : N}
-  (h : sUnconsL sl = Some (LHL0 k, sl')) (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl rest) = eL (L0 k :: evalSymL v2 v3 v4 sl' rest).
-Proof.
-  destruct sl as [| hd tl]; [discriminate |].
-  destruct hd as [t | d | d | d | d | d].
-  - destruct t as [m | ? | ? | ? | ? | ? | m]; try discriminate; cbn [sUnconsL] in h; inversion h; subst.
-    + reflexivity.
-    + cbn [lw4TailSym app evalSymL].
-      rewrite eL_w4, eL_sPeelM4L, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-  - cbn [sUnconsL] in h. destruct (d =? 0); discriminate.
-  - cbn [sUnconsL] in h. destruct (d =? 0); discriminate.
-  - cbn [sUnconsL] in h. destruct (d =? 0) eqn:hd0; [discriminate |].
-    apply N.eqb_neq in hd0. inversion h; subst.
-    cbn [lw4TailSym app evalSymL]. rewrite eL_w4. cbn [eL].
-    replace (v4 + d + 1) with (1 + (v4 + (d - 1) + 1)) by lia.
-    rewrite repBlock_add, repBlock_1, Str_app_assoc. reflexivity.
-  - discriminate.
-  - cbn [sUnconsL] in h. destruct (d =? 0) eqn:hd0; [discriminate |].
-    apply N.eqb_neq in hd0. inversion h; subst.
-    cbn [lw4TailSym app evalSymL].
-    rewrite eL_w4, !eL_pushM4L, <- Str_app_assoc, <- repBlock_succ_left.
-    replace (d - 1 + 1 + 1) with (d + 1) by lia. reflexivity.
-Qed.
-
-Lemma sUnconsL_LD {sl sl' : list SymLTok} {v : N}
-  (h : sUnconsL sl = Some (LHLD v, sl')) (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl rest) = eL (LD v :: evalSymL v2 v3 v4 sl' rest).
-Proof.
-  destruct sl as [| hd tl]; [discriminate |].
-  destruct hd as [t | d | d | d | d | d].
-  - destruct t as [? | m | k | k | k | k | ?]; try discriminate; cbn [sUnconsL] in h; inversion h; subst.
-    + reflexivity.
-    + change (eL (LD 1 :: evalSymL v2 v3 v4 (sPeelLD1 k tl) rest)) with
-        (wLD1 *> eL (evalSymL v2 v3 v4 (sPeelLD1 k tl) rest)).
-      rewrite eL_sPeelLD1, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-    + cbn [luTailSym app evalSymL].
-      rewrite eL_lu, eL_sPeelML8, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-    + cbn [lu2TailSym app evalSymL].
-      rewrite eL_u2, eL_sPeelM2L, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-    + cbn [lw3TailSym app evalSymL].
-      rewrite eL_w3, eL_sPeelM3L, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-  - cbn [sUnconsL] in h. destruct (d =? 0) eqn:hd0; [discriminate |].
-    apply N.eqb_neq in hd0. inversion h; subst.
-    cbn [lu2TailSym app evalSymL]. rewrite eL_u2. cbn [eL].
-    replace (v2 + d + 1) with (1 + (v2 + (d - 1) + 1)) by lia.
-    rewrite repBlock_add, repBlock_1, Str_app_assoc. reflexivity.
-  - cbn [sUnconsL] in h. destruct (d =? 0) eqn:hd0; [discriminate |].
-    apply N.eqb_neq in hd0. inversion h; subst.
-    cbn [lw3TailSym app evalSymL]. rewrite eL_w3. cbn [eL].
-    replace (v3 + d + 1) with (1 + (v3 + (d - 1) + 1)) by lia.
-    rewrite repBlock_add, repBlock_1, Str_app_assoc. reflexivity.
-  - cbn [sUnconsL] in h. destruct (d =? 0); discriminate.
-  - discriminate.
-  - cbn [sUnconsL] in h. destruct (d =? 0); discriminate.
-Qed.
-
-Lemma eL_sPushL0 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushL0 k sl) rest) =
-  repBlock wL0 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushL0. destruct (sUnconsL sl) as [[[m | m] rest'] |] eqn:hu.
-  - rewrite eL_sFoldWM4, (sUnconsL_L0 hu v2 v3 v4 rest).
-    cbn [evalSymL eL].
-    replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - rewrite eL_sFoldWM4. reflexivity.
-  - rewrite eL_sFoldWM4. reflexivity.
-Qed.
-
-Lemma eL_sPushZeros (q v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushZeros q sl) rest) =
-  repBlock wL0 q *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushZeros. destruct (q =? 0) eqn:hq.
-  - apply N.eqb_eq in hq; subst; reflexivity.
-  - apply N.eqb_neq in hq. rewrite eL_sPushL0.
-    replace (q - 1 + 1) with q by lia. reflexivity.
-Qed.
-
-Lemma eL_sBumpL {sl sl' : list SymLTok} (h : sBumpL sl = Some sl')
-  (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl' rest) = [S1] *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sBumpL in h. destruct (sUnconsL sl) as [[[v | v] rest'] |] eqn:hu; [| | discriminate].
-  - inversion h; subst. rewrite (sUnconsL_L0 hu v2 v3 v4 rest), eL_sPushLD, eL_sPeelL0. reflexivity.
-  - inversion h; subst. rewrite (sUnconsL_LD hu v2 v3 v4 rest), eL_sPushLD. cbn [eL].
-    replace (v + 1 + 2) with (1 + (v + 2)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eL_sBumpLN :
-  forall (n : nat) {sl sl' : list SymLTok},
-    sBumpLN n sl = Some sl' ->
-    forall (v2 v3 v4 : N) (rest : list LTok),
-      eL (evalSymL v2 v3 v4 sl' rest) =
-      repBlock [S1] (N.of_nat n) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  induction n as [| n IH]; intros sl sl' h v2 v3 v4 rest.
-  - inversion h; subst. reflexivity.
-  - cbn [sBumpLN] in h. destruct (sBumpL sl) as [sl1 |] eqn:hb; [cbn [opt_bind] in h | discriminate].
-    rewrite (IH sl1 sl' h v2 v3 v4 rest), (eL_sBumpL hb v2 v3 v4 rest).
-    rewrite <- Str_app_assoc, <- repBlock_succ_right.
-    replace (N.of_nat n + 1) with (N.of_nat (S n)) by lia. reflexivity.
-Qed.
-
-Lemma eL_sPushML8 (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushML8 k sl) rest) =
-  repBlock uM (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl]; try reflexivity.
-  destruct t as [? | ? | ? | m | ? | ? | ?]; try reflexivity.
-  cbn [sPushML8 evalSymL eL].
-  replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-  rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eL_sPushM2LRaw_conc (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushM2LRaw_conc k sl) rest) =
-  repBlock uM2 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  destruct sl as [| [t | d | ? | ? | ? | ?] tl]; try reflexivity.
-  - destruct t as [? | ? | ? | ? | m | ? | ?]; try reflexivity.
-    cbn [sPushM2LRaw_conc evalSymL eL].
-    replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - cbn [sPushM2LRaw_conc evalSymL eL].
-    replace (v2 + (k + 1 + d) + 1) with ((k + 1) + (v2 + d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eL_sPushM2LRaw_sym {d : N} {sl sl' : list SymLTok}
-  (h : sPushM2LRaw_sym d sl = Some sl') (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl' rest) =
-  repBlock uM2 (v2 + d + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl];
-    try (inversion h; subst; reflexivity).
-  destruct t as [? | ? | ? | ? | m | ? | ?];
-    try (inversion h; subst; reflexivity).
-  cbn [sPushM2LRaw_sym] in h; inversion h; subst.
-  cbn [evalSymL eL].
-  replace (v2 + (d + 1 + m) + 1) with ((v2 + d + 1) + (m + 1)) by lia.
-  rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eL_sPushM2L_conc (k v2 v3 v4 : N) (sl : list SymLTok) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sPushM2L_conc k sl) rest) =
-  repBlock uM2 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushM2L_conc. destruct (stripSymLC u2TopL sl) as [rest' |] eqn:hm.
-  - rewrite (eL_sPushM2LRaw_conc (k + 1)), (stripSymLC_some u2TopL sl rest' hm), evalSymL_map_c,
-            (repBlock_succ_right uM2 (k + 1)), Str_app_assoc. reflexivity.
-  - exact (eL_sPushM2LRaw_conc k v2 v3 v4 sl rest).
-Qed.
-
-Lemma eL_sPushM2L_sym {d : N} {sl sl' : list SymLTok}
-  (h : sPushM2L_sym d sl = Some sl') (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl' rest) =
-  repBlock uM2 (v2 + d + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushM2L_sym in h. destruct (stripSymLC u2TopL sl) as [rest' |] eqn:hm.
-  - rewrite (eL_sPushM2LRaw_sym h v2 v3 v4 rest), (stripSymLC_some u2TopL sl rest' hm), evalSymL_map_c.
-    replace (v2 + (d + 1) + 1) with ((v2 + d + 1) + 1) by lia.
-    rewrite (repBlock_succ_right uM2 (v2 + d + 1)), Str_app_assoc. reflexivity.
-  - exact (eL_sPushM2LRaw_sym h v2 v3 v4 rest).
-Qed.
-
-Lemma eL_sPushWM1_conc {k : N} {sl sl' : list SymLTok}
-  (h : sPushWM1_conc k sl = Some sl') (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl' rest) = repBlock wM (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushWM1_conc in h.
-  destruct (sBumpLN 4%nat sl) as [l4 |] eqn:hb4; [| discriminate].
-  remember ([SLC (LD 3); SLC (LD1 1); SLC (LD 5); SLC (L0 1); SLC (LD 5); SLC (LD 5)] ++ l4)
-    as lMid eqn:hlMid.
-  pose proof (eL_sBumpLN 4%nat hb4 v2 v3 v4 rest) as hl4.
-  change (repBlock [S1] (N.of_nat 4)) with ones4 in hl4.
-  assert (hmid : eL (evalSymL v2 v3 v4 lMid rest) =
-                 mid42 *> (ones4 *> eL (evalSymL v2 v3 v4 sl rest))).
-  { subst lMid. cbn [app evalSymL]. rewrite eL_mid42, hl4. reflexivity. }
-  rewrite (wM_pow_eq k (eL (evalSymL v2 v3 v4 sl rest))).
-  destruct (k =? 0) eqn:hk; injection h as <-.
-  - apply N.eqb_eq in hk; subst k.
-    cbn [evalSymL]. change (eL (LD 3 :: ?xs)) with (ld3Bits *> eL xs).
-    rewrite hmid. reflexivity.
-  - apply N.eqb_neq in hk.
-    cbn [evalSymL]. change (eL (LD 3 :: ?xs)) with (ld3Bits *> eL xs).
-    rewrite eL_sPushML8, hmid.
-    replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eL_sPushWM2_conc {k : N} {sl sl' : list SymLTok}
-  (h : sPushWM2_conc k sl = Some sl') (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl' rest) = repBlock wM2 (k + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushWM2_conc in h.
-  destruct (sBumpLN 2%nat sl) as [l2 |] eqn:hb2; [| discriminate].
-  remember (SLC (LD 7) :: SLC (LD 3) :: sPushLD1 5 l2) as lMid eqn:hlMid.
-  injection h as <-.
-  pose proof (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest) as hl2.
-  change (repBlock [S1] (N.of_nat 2)) with [S1; S1] in hl2.
-  assert (hmid : eL (evalSymL v2 v3 v4 lMid rest) =
-                 wM2Mid40 *> ([S1; S1] *> eL (evalSymL v2 v3 v4 sl rest))).
-  { subst lMid. cbn [evalSymL].
-    change (eL (LD 7 :: LD 3 :: evalSymL v2 v3 v4 (sPushLD1 5 l2) rest)) with
-      ((ld7Bits ++ ld3Bits) *> eL (evalSymL v2 v3 v4 (sPushLD1 5 l2) rest)).
-    rewrite eL_sPushLD1, hl2. reflexivity. }
-  rewrite (wM2_pow_eq k (eL (evalSymL v2 v3 v4 sl rest))).
-  destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst k.
-    cbn [evalSymL]. change (eL (L0 0 :: LD1 5 :: LD 5 :: ?xs)) with (wM2Prefix34 *> eL xs).
-    rewrite hmid. reflexivity.
-  - apply N.eqb_neq in hk.
-    cbn [evalSymL]. change (eL (L0 0 :: LD1 5 :: LD 5 :: ?xs)) with (wM2Prefix34 *> eL xs).
-    rewrite eL_sPushM2L_conc, hmid.
-    replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eL_sPushWM2_sym {d : N} {sl sl' : list SymLTok}
-  (h : sPushWM2_sym d sl = Some sl') (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 sl' rest) = repBlock wM2 (v2 + d + 1) *> eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  unfold sPushWM2_sym in h.
-  destruct (sBumpLN 2%nat sl) as [l2 |] eqn:hb2; [| discriminate].
-  set (lMid := SLC (LD 7) :: SLC (LD 3) :: sPushLD1 5 l2) in h |- *.
-  pose proof (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest) as hl2.
-  change (repBlock [S1] (N.of_nat 2)) with [S1; S1] in hl2.
-  assert (hmid : eL (evalSymL v2 v3 v4 lMid rest) =
-                 wM2Mid40 *> ([S1; S1] *> eL (evalSymL v2 v3 v4 sl rest))).
-  { unfold lMid; cbn [evalSymL].
-    change (eL (LD 7 :: LD 3 :: evalSymL v2 v3 v4 (sPushLD1 5 l2) rest)) with
-      ((ld7Bits ++ ld3Bits) *> eL (evalSymL v2 v3 v4 (sPushLD1 5 l2) rest)).
-    rewrite eL_sPushLD1, hl2. reflexivity. }
-  rewrite (wM2_pow_eq (v2 + d) (eL (evalSymL v2 v3 v4 sl rest))).
-  destruct (d =? 0) eqn:hd0.
-  - apply N.eqb_eq in hd0; subst d.
-    destruct (stripSymLC u2TopL lMid) as [mRest |] eqn:hm; [| discriminate].
-    destruct (sPushM2LRaw_sym 0 mRest) as [lBody |] eqn:hbody; [| discriminate].
-    inversion h; subst.
-    assert (hu2 : eL (evalSymL v2 v3 v4 lMid rest) = uM2 *> eL (evalSymL v2 v3 v4 mRest rest)).
-    { rewrite (stripSymLC_some u2TopL lMid mRest hm), evalSymL_map_c. reflexivity. }
-    cbn [evalSymL]. change (eL (L0 0 :: LD1 5 :: LD 5 :: ?xs)) with (wM2Prefix34 *> eL xs).
-    rewrite (eL_sPushM2LRaw_sym hbody v2 v3 v4 rest).
-    replace (v2 + 0 + 1) with (v2 + 1) by lia.
-    replace (v2 + 0) with v2 by lia.
-    rewrite (repBlock_succ_right uM2 v2), Str_app_assoc, <- hu2, hmid. reflexivity.
-  - apply N.eqb_neq in hd0.
-    destruct (sPushM2L_sym (d - 1) lMid) as [lBody |] eqn:hbody; [| discriminate].
-    inversion h; subst.
-    cbn [evalSymL]. change (eL (L0 0 :: LD1 5 :: LD 5 :: ?xs)) with (wM2Prefix34 *> eL xs).
-    rewrite (eL_sPushM2L_sym hbody v2 v3 v4 rest).
-    replace (v2 + (d - 1) + 1) with (v2 + d) by lia.
-    rewrite hmid. reflexivity.
-Qed.
-
-Lemma eR_sPeelR02 (k vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPeelR02 k sr)) = repBlock wLD1 k *> eR (evalSymR vr v2 sr).
-Proof.
-  unfold sPeelR02. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymR eR]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eR_sPeelMR11 (k vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPeelMR11 k sr)) = repBlock vM k *> eR (evalSymR vr v2 sr).
-Proof.
-  unfold sPeelMR11. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymR eR]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eR_sPeelM2R (k vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPeelM2R k sr)) = repBlock vM2 k *> eR (evalSymR vr v2 sr).
-Proof.
-  unfold sPeelM2R. destruct (k =? 0) eqn:hk.
-  - apply N.eqb_eq in hk; subst; reflexivity.
-  - apply N.eqb_neq in hk. cbn [evalSymR eR]. replace (k - 1 + 1) with k by lia. reflexivity.
-Qed.
-
-Lemma eR_sPushR02 (k vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPushR02 k sr)) = repBlock wLD1 (k + 1) *> eR (evalSymR vr v2 sr).
-Proof.
-  destruct sr as [| [t | ? | ?] tl]; try reflexivity.
-  destruct t as [? | ? | m | ? | ?]; try reflexivity.
-  cbn [sPushR02 evalSymR eR].
-  replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-  rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eR_sPushR0 (d vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPushR0 d sr)) = eR (R0 d :: evalSymR vr v2 sr).
-Proof.
-  unfold sPushR0. destruct (d =? 2) eqn:hd.
-  - apply N.eqb_eq in hd; subst. rewrite eR_sPushR02. reflexivity.
-  - reflexivity.
-Qed.
-
-Lemma eR_sPushMR11_conc (k vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPushMR11_conc k sr)) = repBlock vM (k + 1) *> eR (evalSymR vr v2 sr).
-Proof.
-  destruct sr as [| [t | d | ?] tl]; try reflexivity.
-  - destruct t as [? | ? | ? | m | ?]; try reflexivity.
-    cbn [sPushMR11_conc evalSymR eR].
-    replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - cbn [sPushMR11_conc evalSymR eR].
-    replace (vr + (k + 1 + d) + 1) with ((k + 1) + (vr + d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eR_sPushM2R_conc (k vr v2 : N) (sr : list SymRTok) :
-  eR (evalSymR vr v2 (sPushM2R_conc k sr)) = repBlock vM2 (k + 1) *> eR (evalSymR vr v2 sr).
-Proof.
-  destruct sr as [| [t | ? | d] tl]; try reflexivity.
-  - destruct t as [? | ? | ? | ? | m]; try reflexivity.
-    cbn [sPushM2R_conc evalSymR eR].
-    replace (k + 1 + m + 1) with ((k + 1) + (m + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - cbn [sPushM2R_conc evalSymR eR].
-    replace (v2 + (k + 1 + d) + 1) with ((k + 1) + (v2 + d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma eR_sPushM2R_sym {d : N} {sr sr' : list SymRTok}
-  (h : sPushM2R_sym d sr = Some sr') (vr v2 : N) :
-  eR (evalSymR vr v2 sr') = repBlock vM2 (v2 + d + 1) *> eR (evalSymR vr v2 sr).
-Proof.
-  destruct sr as [| [t | ? | ?] tl];
-    try (inversion h; subst; reflexivity).
-  destruct t as [? | ? | ? | ? | m];
-    try (inversion h; subst; reflexivity).
-  cbn [sPushM2R_sym] in h; inversion h; subst.
-  cbn [evalSymR eR].
-  replace (v2 + (d + 1 + m) + 1) with ((v2 + d + 1) + (m + 1)) by lia.
-  rewrite repBlock_add, Str_app_assoc. reflexivity.
-Qed.
-
-Lemma sUnconsR_empty {sr : list SymRTok} (h : sUnconsR sr = Some None) (vr v2 : N) :
-  evalSymR vr v2 sr = [].
-Proof.
-  destruct sr as [| [t | d | ?] tl]; [reflexivity | | | discriminate].
-  - destruct t; discriminate.
-  - cbn [sUnconsR] in h; destruct (d =? 0); discriminate.
-Qed.
-
-Lemma sUnconsR_R0 {sr sr' : list SymRTok} {d : N}
-  (h : sUnconsR sr = Some (Some (RHR0 d, sr'))) (vr v2 : N) :
-  eR (evalSymR vr v2 sr) = eR (R0 d :: evalSymR vr v2 sr').
-Proof.
-  destruct sr as [| [t | d' | ?] tl]; try discriminate.
-  - destruct t as [m | ? | k | k | k]; try discriminate; cbn [sUnconsR] in h; inversion h; subst.
-    + reflexivity.
-    + change (eR (R0 2 :: evalSymR vr v2 (sPeelR02 k tl))) with
-        (wLD1 *> eR (evalSymR vr v2 (sPeelR02 k tl))).
-      rewrite eR_sPeelR02, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-    + cbn [ruTailSym app evalSymR].
-      rewrite eR_ru, eR_sPeelMR11, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-    + cbn [ru2TailSym app evalSymR].
-      rewrite eR_ru2, eR_sPeelM2R, <- Str_app_assoc, <- repBlock_succ_left. reflexivity.
-  - cbn [sUnconsR] in h. destruct (d' =? 0) eqn:hd0; [discriminate |].
-    apply N.eqb_neq in hd0. inversion h; subst.
-    cbn [ruTailSym app evalSymR]. rewrite eR_ru. cbn [eR].
-    rewrite <- (Str_app_assoc vM (repBlock vM (vr + (d' - 1) + 1))),
-            <- (repBlock_succ_left vM (vr + (d' - 1) + 1)).
-    replace (vr + (d' - 1) + 1 + 1) with (vr + d' + 1) by lia. reflexivity.
-Qed.
-
-Lemma sUnconsR_R1 {sr sr' : list SymRTok} {d : N}
-  (h : sUnconsR sr = Some (Some (RHR1 d, sr'))) (vr v2 : N) :
-  eR (evalSymR vr v2 sr) = eR (R1 d :: evalSymR vr v2 sr').
-Proof.
-  destruct sr as [| [t | d' | ?] tl]; try discriminate.
-  - destruct t as [? | m | ? | ? | ?]; try discriminate.
-    cbn [sUnconsR] in h; inversion h; subst; reflexivity.
-  - cbn [sUnconsR] in h; destruct (d' =? 0); discriminate.
-Qed.
-
-Lemma eR_sAddR {m : N} {sr sr' : list SymRTok} (h : sAddR m sr = Some sr')
-  (vr v2 : N) :
-  eR (evalSymR vr v2 sr') = repBlock [S1] (m + 1) *> eR (evalSymR vr v2 sr).
-Proof.
-  unfold sAddR in h. destruct (sUnconsR sr) as [[[[d | d] rest] |] |] eqn:hu; try discriminate.
-  - inversion h; subst. rewrite (sUnconsR_R0 hu vr v2), eR_sPushR0. cbn [eR].
-    replace (d + m + 1 + 1) with ((m + 1) + (d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - inversion h; subst. rewrite (sUnconsR_R1 hu vr v2). cbn [evalSymR eR].
-    replace (d + m + 1 + 1) with ((m + 1) + (d + 1)) by lia.
-    rewrite repBlock_add, Str_app_assoc. reflexivity.
-  - inversion h; subst. rewrite (sUnconsR_empty hu vr v2), eR_sPushR0.
-    cbn [evalSymR eR Str_app]. rewrite zero_cons_def. reflexivity.
-Qed.
-
-Lemma eL_sNormB0W3 (m : Mode) (sl : list SymLTok) (sr : list SymRTok)
-  (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sNormB0W3 m sl sr) rest) = eL (evalSymL v2 v3 v4 sl rest).
-Proof.
-  assert (hfold : forall sl0 rest', stripSymLC w3TopL sl0 = Some rest' ->
-            eL (evalSymL v2 v3 v4 (SLC (LD 2) :: SLC (L0 1) :: sPushM3L 0 rest') rest) =
-            eL (evalSymL v2 v3 v4 sl0 rest)).
-  { intros sl0 rest' hm.
-    rewrite (stripSymLC_some w3TopL sl0 rest' hm), evalSymL_map_c.
-    cbn [w3TopL app evalSymL].
-    change (eL (LD 2 :: L0 1 :: evalSymL v2 v3 v4 (sPushM3L 0 rest') rest)) with
-      ([S1; S1; S1; S1; S0; S1; S0; S1; S0] *> eL (evalSymL v2 v3 v4 (sPushM3L 0 rest') rest)).
-    change (eL (LD 2 :: L0 1 :: ?xs)) with ([S1; S1; S1; S1; S0; S1; S0; S1; S0] *> eL xs).
-    rewrite eL_sPushM3L. change (0 + 1) with 1. rewrite repBlock_1, eL_w3. reflexivity. }
-  unfold sNormB0W3. destruct m; [| reflexivity].
-  destruct (stripSymRC [R0 4] sr) as [[| [t1 | ? | ?] ?] |]; try reflexivity.
-  - destruct t1 as [? | ? | ? | ? | ?]; try reflexivity.
-    destruct (stripSymLC w3TopL sl) as [rest' |] eqn:hm; [exact (hfold sl rest' hm) | reflexivity].
-  - destruct (stripSymLC w3TopL sl) as [rest' |] eqn:hm; [exact (hfold sl rest' hm) | reflexivity].
-Qed.
-
-Lemma symReached_norm
-  {m0 m1 : Mode} {sl0 sl1 : list SymLTok} {sr0 sr1 : list SymRTok}
-  (h : SymReached m0 sl0 sr0 m1 sl1 sr1) :
-  SymReached m0 sl0 sr0 m1 (sNormB0W3 m1 sl1 sr1) sr1.
-Proof.
-  intros vr v2 v3 v4 rest.
-  rewrite (encodeBase_core_congr m1 (eL_sNormB0W3 m1 sl1 sr1 v2 v3 v4 rest) eq_refl).
-  exact (h vr v2 v3 v4 rest).
-Qed.
-
-(* ========================================================================= *)
-(* Section 9: Symbolic Stepper symStepA (Layer 1) & Soundness                *)
-(* ========================================================================= *)
 
 Definition capTailSym : list SymRTok := [SRC (R02 0); SRC (R1 3); SRC (R02 0)].
-
-Definition sStepDL (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match sUnconsL sl with
-  | None => None
-  | Some (LHL0 v, rest) =>
-    match sBumpL (sPeelL0 v rest), sAddR 0 sr with
-    | Some sl', Some sr' => Some (MDL, sl', sr')
-    | _, _ => None
-    end
-  | Some (LHLD v, rest) => Some (MB0, rest, sPushR0 v sr)
-  end.
-
-Definition sFoldDL2 (sl1 : list SymLTok) (sr1 : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match sStepDL sl1 sr1 with
-  | None => None
-  | Some (MDL, sl2, sr2) => sStepDL sl2 sr2
-  | Some (MB0, sl2, sr2) => Some (MB0, sl2, sr2)
-  end.
-
-Definition sStepB0Pos (isR1 : bool) (dp : N) (sl : list SymLTok) (rRest : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  let q := dp / 2 in
-  if dp mod 2 =? 1 then
-    match sBumpLN 2%nat sl with
-    | None => None
-    | Some l2 =>
-      if isR1 then
-        Some (MB0, SLC (LD 0) :: sPushZeros q l2, rRest)
-      else
-        match rRest with
-        | [] =>
-          match sBumpLN 2%nat (sPushZeros (q + 1) l2) with
-          | None => None
-          | Some l4 => Some (MDL, l4, [SRC (R0 0)])
-          end
-        | _ :: _ =>
-          match sAddR 1 rRest with
-          | None => None
-          | Some sr' => Some (MB0, sPushZeros q l2, sr')
-          end
-        end
-    end
-  else
-    let srNewOpt := if isR1 then Some (sPushR0 2 rRest) else sAddR 2 rRest in
-    match srNewOpt with
-    | None => None
-    | Some srNew =>
-      if q =? 0 then
-        match sUnconsL sl with
-        | None => None
-        | Some (LHL0 lv, lRest) =>
-          match sAddR 1 srNew with
-          | None => None
-          | Some sr' => Some (MB0, sPeelL0 lv lRest, sr')
-          end
-        | Some (LHLD lv, lRest) =>
-          match sAddR (lv + 2) srNew with
-          | None => None
-          | Some sr' => Some (MB0, lRest, sr')
-          end
-        end
-      else if q =? 1 then
-        match sBumpLN 2%nat sl with
-        | None => None
-        | Some l2 => Some (MB0, l2, srNew)
-        end
-      else
-        match sBumpLN 2%nat sl with
-        | None => None
-        | Some l2 => sFoldDL2 (sPushZeros (q - 2) l2) (SRC (R1 0) :: srNew)
-        end
-    end.
-
-Definition sStepB0Base (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match sUnconsR sr with
-  | None => None
-  | Some None =>
-    match sBumpL sl with
-    | None => None
-    | Some sl' => Some (MDL, sl', [SRC (R0 0)])
-    end
-  | Some (Some (RHR0 d, rRest)) =>
-    if d =? 0 then
-      match rRest with
-      | [] =>
-        match sBumpLN 4%nat sl with
-        | None => None
-        | Some sl' => Some (MDL, sl', [SRC (R0 0)])
-        end
-      | r1 :: rs =>
-        match sUnconsL sl with
-        | None => None
-        | Some (LHL0 lv, lRest) =>
-          match sAddR 3 (r1 :: rs) with
-          | None => None
-          | Some sr' => Some (MB0, sPeelL0 lv lRest, sr')
-          end
-        | Some (LHLD lv, lRest) =>
-          match sAddR (lv + 4) (r1 :: rs) with
-          | None => None
-          | Some sr' => Some (MB0, lRest, sr')
-          end
-        end
-      end
-    else sStepB0Pos false (d - 1) sl rRest
-  | Some (Some (RHR1 d, rRest)) =>
-    if d =? 0 then
-      match sBumpLN 3%nat sl with
-      | None => None
-      | Some sl' => Some (MB0, sl', rRest)
-      end
-    else sStepB0Pos true (d - 1) sl rRest
-  end.
-
-Definition sPopR02 (sr : list SymRTok) : option (N * list SymRTok) :=
-  match sr with
-  | SRC (R02 k) :: tl => Some (k, tl)
-  | _ => None
-  end.
-
-Definition sPopLD1 (sl : list SymLTok) : option (N * list SymLTok) :=
-  match sl with
-  | SLC (LD1 k) :: tl => Some (k, tl)
-  | _ => None
-  end.
-
-Definition sPopLD1Ge4 (sl : list SymLTok) : option (N * list SymLTok) :=
-  match sl with
-  | SLC (LD1 m) :: tl => if 4 <=? m then Some (m - 4, tl) else None
-  | _ => None
-  end.
-
-Definition sPopML8 (sl : list SymLTok) : option (N * list SymLTok) :=
-  match sl with
-  | SLC (ML8 k) :: tl => Some (k, tl)
-  | _ => None
-  end.
-
-Definition sPopM2L (sl : list SymLTok) : option (N * list SymLTok) :=
-  match sl with
-  | SLC (M2L k) :: tl => Some (k, tl)
-  | _ => None
-  end.
-
-Definition sPopSymM2 (sl : list SymLTok) : option (N * list SymLTok) :=
-  match sl with
-  | SM2 d :: tl => Some (d, tl)
-  | _ => None
-  end.
-
-Definition sLd5ROut (k : N) (rRest : list SymRTok) : list SymRTok :=
-  let rMid := SRC (R1 3) :: SRC (R02 0) :: SRC (R1 3) :: sPushR02 1 rRest in
-  if k =? 0 then rMid else sPushR02 (k - 1) rMid.
-
-Definition sR02LOut (k : N) (l2 : list SymLTok) : list SymLTok :=
-  let lMid := if k =? 0 then l2 else sPushLD1 (k - 1) l2 in
-  sPushL0 0 lMid.
-
-Definition sStepMotifR4Zero (sl : list SymLTok) (r2 : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match r2 with
-  | SMR d :: r3 =>
-    if beqSymRList r3 capTailSym then
-      match stripSymLC [LD 3] sl with
-      | Some lRest =>
-        Some (MB0, SLC (LD 7) :: lRest, SRC (R0 9) :: SRC (R1 0) :: SMR d :: capTailSym)
-      | None => None
-      end
-    else None
-  | SRC t :: r3 =>
-    match t with
-    | MR11 k =>
-      if beqSymRList r3 capTailSym then
-        match stripSymLC [LD 3] sl with
-        | Some lRest =>
-          Some (MB0, SLC (LD 7) :: lRest, SRC (R0 9) :: SRC (R1 0) :: SRC (MR11 k) :: capTailSym)
-        | None =>
-          opt_map (fun p => (MB0, p, SRC (R0 4) :: sPushR02 0 r3)) (sPushWM1_conc k sl)
-        end
-      else
-        opt_map (fun p => (MB0, p, SRC (R0 4) :: sPushR02 0 r3)) (sPushWM1_conc k sl)
-    | M2R k =>
-      opt_map (fun p => (MB0, p, SRC (R0 4) :: sPushR02 0 r3)) (sPushWM2_conc k sl)
-    | _ => None
-    end
-  | SM2R d :: r3 =>
-    opt_map (fun p => (MB0, p, SRC (R0 4) :: sPushR02 0 r3)) (sPushWM2_sym d sl)
-  | [] => None
-  end.
-
-Definition sMotifR4 (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match stripSymRC [R0 4] sr with
-  | None => None
-  | Some rAfter4 =>
-    match sPopR02 rAfter4 with
-    | None => None
-    | Some (kr, r2) =>
-      if kr =? 0 then sStepMotifR4Zero sl r2
-      else
-        opt_map (fun l2 => (MB0, sR02LOut (kr - 1) l2, SRC (R0 4) :: sPushR02 0 r2))
-          (sBumpLN 2%nat sl)
-    end
-  end.
-
-Definition sMotifR9 (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match stripSymRC [R0 9; R1 0] sr with
-  | None => None
-  | Some rRest =>
-    match stripSymLC [LD 7] sl with
-    | None => None
-    | Some l1 =>
-      match sPopML8 l1 with
-      | Some (k, lRest) =>
-        Some (MB0, SLC (LD 7) :: lRest, SRC (R0 9) :: SRC (R1 0) :: sPushMR11_conc k rRest)
-      | None =>
-        match stripSymLC u1TopL l1 with
-        | Some lRest =>
-          Some (MB0, SLC (LD 7) :: lRest, SRC (R0 9) :: SRC (R1 0) :: sPushMR11_conc 0 rRest)
-        | None => None
-        end
-      end
-    end
-  end.
-
-Definition sMotifR19 (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match stripSymRC [R1 9] sr with
-  | None => None
-  | Some rRest =>
-    match sPopLD1 sl with
-    | Some (k, lRest) =>
-      Some (MB0, lRest, SRC (R1 9) :: sPushR02 k rRest)
-    | None =>
-      match stripSymLC [LD 5] sl with
-      | None => None
-      | Some l1 =>
-        match sPopSymM2 l1 with
-        | Some (d, lRest) =>
-          opt_map (fun pr => (MB0, SLC (LD 5) :: lRest, SRC (R1 9) :: pr))
-            (sPushM2R_sym d rRest)
-        | None =>
-          match sPopM2L l1 with
-          | Some (k, lRest) =>
-            Some (MB0, SLC (LD 5) :: lRest, SRC (R1 9) :: sPushM2R_conc k rRest)
-          | None =>
-            match stripSymLC u2TopL l1 with
-            | Some lRest =>
-              Some (MB0, SLC (LD 5) :: lRest, SRC (R1 9) :: sPushM2R_conc 0 rRest)
-            | None => None
-            end
-          end
-        end
-      end
-    end
-  end.
-
-Definition sMotifR15 (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match stripSymRC [R1 5] sr with
-  | None => None
-  | Some rRest =>
-    match stripSymLC [LD 5] sl with
-    | None => None
-    | Some l1 =>
-      match sPopLD1Ge4 l1 with
-      | None => None
-      | Some (k, lRest) =>
-        Some (MB0, lRest, SRC (R1 9) :: sLd5ROut k rRest)
-      end
-    end
-  end.
-
-Definition sStepMotifB0 (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match sMotifR4 sl sr with
-  | Some res => Some res
-  | None =>
-    match sMotifR9 sl sr with
-    | Some res => Some res
-    | None =>
-      match sMotifR19 sl sr with
-      | Some res => Some res
-      | None => sMotifR15 sl sr
-      end
-    end
-  end.
-
-Definition symStepA (m : Mode) (sl0 : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  let sl := sNormB0W3 m sl0 sr in
-  match m with
-  | MDL => sStepDL sl sr
-  | MB0 =>
-    match sStepMotifB0 sl sr with
-    | Some res => Some res
-    | None => sStepB0Base sl sr
-    end
-  end.
-
-Fixpoint symRunA (steps : nat) (m : Mode) (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match steps with
-  | O => Some (m, sl, sr)
-  | S n =>
-    match symStepA m sl sr with
-    | None => None
-    | Some (m', sl', sr') => symRunA n m' sl' sr'
-    end
-  end.
-
-Definition checkSymA (steps : nat) (m : Mode) (sl : list SymLTok) (sr : list SymRTok)
-  (m' : Mode) (sl' : list SymLTok) (sr' : list SymRTok) : bool :=
-  match symRunA steps m sl sr with
-  | None => false
-  | Some (rm, rsl, rsr) =>
-    beqMode rm m' && beqSymLList rsl sl' && beqSymRList rsr sr'
-  end.
-
-Lemma evalSymR_cons (r1 : SymRTok) (rs : list SymRTok) (vr v2 : N) :
-  exists y ys, evalSymR vr v2 (r1 :: rs) = y :: ys.
-Proof. destruct r1; eexists; eexists; reflexivity. Qed.
-
-Lemma sStepDL_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sStepDL sl sr = Some (m', sl', sr')) :
-  SymReached MDL sl sr m' sl' sr'.
-Proof.
-  unfold sStepDL in h.
-  destruct (sUnconsL sl) as [[[v | v] lRest] |] eqn:hu; [| | discriminate].
-  - destruct (sBumpL (sPeelL0 v lRest)) as [sl1 |] eqn:hb; [| discriminate].
-    destruct (sAddR 0 sr) as [sr1 |] eqn:har; [| discriminate].
-    injection h as <- <- <-.
-    intros vr v2 v3 v4 rest.
-    set (xs := evalSymL v2 v3 v4 lRest rest).
-    set (R := evalSymR vr v2 sr).
-    pose proof (stepDL_sound (L0 v :: xs) R) as hs.
-    change (stepDL (L0 v :: xs) R) with (Core MDL (bumpL (peelL0 v xs)) (addR 0 R)) in hs.
-    assert (heL : eL (evalSymL v2 v3 v4 sl1 rest) = eL (bumpL (peelL0 v xs))).
-    { rewrite (eL_sBumpL hb v2 v3 v4 rest), <- eL_peelL0_eq_sPeelL0, eL_bumpL. reflexivity. }
-    assert (heR : eR (evalSymR vr v2 sr1) = eR (addR 0 R)).
-    { rewrite (eR_sAddR har vr v2), eR_addR. reflexivity. }
-    rewrite (encodeBase_core_congr MDL (sUnconsL_L0 hu v2 v3 v4 rest) (@eq_refl _ (eR R))),
-            (encodeBase_core_congr MDL heL heR).
-    exact hs.
-  - injection h as <- <- <-.
-    intros vr v2 v3 v4 rest.
-    set (xs := evalSymL v2 v3 v4 lRest rest).
-    set (R := evalSymR vr v2 sr).
-    pose proof (stepDL_sound (LD v :: xs) R) as hs.
-    change (stepDL (LD v :: xs) R) with (Core MB0 xs (pushR0 v R)) in hs.
-    assert (heR : eR (evalSymR vr v2 (sPushR0 v sr)) = eR (pushR0 v R)).
-    { rewrite eR_sPushR0, eR_pushR0. reflexivity. }
-    rewrite (encodeBase_core_congr MDL (sUnconsL_LD hu v2 v3 v4 rest) (@eq_refl _ (eR R))),
-            (encodeBase_core_congr MB0 (@eq_refl _ (eL xs)) heR).
-    exact hs.
-Qed.
-
-Lemma sFoldDL2_sound
-  {m0 : Mode} {sl0 sl1 : list SymLTok} {sr0 sr1 : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (hpre : SymReached m0 sl0 sr0 MDL sl1 sr1)
-  (hf : sFoldDL2 sl1 sr1 = Some (m', sl', sr')) :
-  SymReached m0 sl0 sr0 m' sl' sr'.
-Proof.
-  unfold sFoldDL2 in hf.
-  destruct (sStepDL sl1 sr1) as [[[m2 sl2] sr2] |] eqn:h1; [| discriminate].
-  pose proof (symReached_trans hpre (sStepDL_sound h1)) as hs1.
-  destruct m2.
-  - injection hf as <- <- <-. exact hs1.
-  - exact (symReached_trans hs1 (sStepDL_sound hf)).
-Qed.
-
-Lemma eL_bumpL2 (xs : list LTok) : eL (bumpL (bumpL xs)) = repBlock [S1] 2 *> eL xs.
-Proof. rewrite !eL_bumpL. reflexivity. Qed.
-
-Lemma eL_bumpL3 (xs : list LTok) : eL (bumpL (bumpL (bumpL xs))) = repBlock [S1] 3 *> eL xs.
-Proof. rewrite !eL_bumpL. reflexivity. Qed.
-
-Lemma eL_bumpL4 (xs : list LTok) : eL (bumpL (bumpL (bumpL (bumpL xs)))) = repBlock [S1] 4 *> eL xs.
-Proof. rewrite !eL_bumpL. reflexivity. Qed.
-
-Lemma stepB0Base_to_pos (isR1 : bool) (dp : N) (L_ : list LTok) (RRest : list RTok) :
-  stepB0Base L_ ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: RRest) =
-  stepB0Pos isR1 dp L_ RRest.
-Proof.
-  assert (hpos : dp + 1 =? 0 = false) by (apply N.eqb_neq; lia).
-  assert (hsub : dp + 1 - 1 = dp) by lia.
-  destruct isR1; cbn [stepB0Base unconsR]; rewrite hpos, hsub; reflexivity.
-Qed.
-
-Lemma stepB0Pos_even (isR1 : bool) (dp : N) (hmod : dp mod 2 =? 1 = false) (L_ : list LTok) (RRest : list RTok) :
-  stepB0Pos isR1 dp L_ RRest =
-  let q := dp / 2 in
-  let l2 := bumpL (bumpL L_) in
-  let rNew := if isR1 then pushR0 2 RRest else addR 2 RRest in
-  if q =? 0 then stepB0OddQ0 L_ rNew
-  else if q =? 1 then Core MB0 l2 rNew
-  else foldDL2 (pushZeros (q - 2) l2) (R1 0 :: rNew).
-Proof. unfold stepB0Pos; rewrite hmod; reflexivity. Qed.
-
-Lemma sStepB0Pos_sound (isR1 : bool) (dp : N)
-  {sl : list SymLTok} {sr rRest : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (hR : forall vr v2, eR (evalSymR vr v2 sr) =
-          eR ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: evalSymR vr v2 rRest))
-  (hp : sStepB0Pos isR1 dp sl rRest = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sStepB0Pos in hp.
-  destruct (dp mod 2 =? 1) eqn:hmod.
-  - destruct (sBumpLN 2%nat sl) as [l2 |] eqn:hb2; [| discriminate].
-    destruct isR1.
-    + injection hp as <- <- <-.
-      intros vr v2 v3 v4 rest.
-      set (L_ := evalSymL v2 v3 v4 sl rest).
-      set (RRest := evalSymR vr v2 rRest).
-      pose proof (stepB0Base_sound L_ (R1 (dp + 1) :: RRest)) as hs.
-      rewrite (stepB0Base_to_pos true dp L_ RRest) in hs.
-      unfold stepB0Pos in hs; rewrite hmod in hs.
-      assert (heL : eL (evalSymL v2 v3 v4 (SLC (LD 0) :: sPushZeros (dp / 2) l2) rest) =
-                    eL (LD 0 :: pushZeros (dp / 2) (bumpL (bumpL L_)))).
-      { cbn [evalSymL].
-        change (eL (LD 0 :: evalSymL v2 v3 v4 (sPushZeros (dp / 2) l2) rest)) with
-          ([S1; S1; S0] *> eL (evalSymL v2 v3 v4 (sPushZeros (dp / 2) l2) rest)).
-        change (eL (LD 0 :: pushZeros (dp / 2) (bumpL (bumpL L_)))) with
-          ([S1; S1; S0] *> eL (pushZeros (dp / 2) (bumpL (bumpL L_)))).
-        rewrite eL_sPushZeros, eL_pushZeros, (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest), eL_bumpL2.
-        reflexivity. }
-      rewrite (encodeBase_core_congr MB0 eq_refl (hR vr v2)),
-              (encodeBase_core_congr MB0 heL eq_refl).
-      exact hs.
-    + destruct rRest as [| r1 rs].
-      * destruct (sBumpLN 2%nat (sPushZeros (dp / 2 + 1) l2)) as [l4 |] eqn:hb4; [| discriminate].
-        injection hp as <- <- <-.
-        intros vr v2 v3 v4 rest.
-        set (L_ := evalSymL v2 v3 v4 sl rest).
-        pose proof (stepB0Base_sound L_ [R0 (dp + 1)]) as hs.
-        rewrite (stepB0Base_to_pos false dp L_ []) in hs.
-        unfold stepB0Pos in hs; rewrite hmod in hs.
-        assert (heL : eL (evalSymL v2 v3 v4 l4 rest) =
-                      eL (bumpL (bumpL (pushZeros (dp / 2 + 1) (bumpL (bumpL L_)))))).
-        { rewrite (eL_sBumpLN 2%nat hb4 v2 v3 v4 rest), eL_sPushZeros,
-                  (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest), eL_bumpL2, eL_pushZeros, eL_bumpL2.
-          reflexivity. }
-        rewrite (encodeBase_core_congr MB0 eq_refl (hR vr v2)),
-                (encodeBase_core_congr MDL heL eq_refl).
-        exact hs.
-      * destruct (sAddR 1 (r1 :: rs)) as [sr1 |] eqn:har; [| discriminate].
-        injection hp as <- <- <-.
-        intros vr v2 v3 v4 rest.
-        set (L_ := evalSymL v2 v3 v4 sl rest).
-        destruct (evalSymR_cons r1 rs vr v2) as [y [ys hcons]].
-        pose proof (stepB0Base_sound L_ (R0 (dp + 1) :: y :: ys)) as hs.
-        rewrite (stepB0Base_to_pos false dp L_ (y :: ys)) in hs.
-        unfold stepB0Pos in hs; rewrite hmod in hs.
-        assert (heL : eL (evalSymL v2 v3 v4 (sPushZeros (dp / 2) l2) rest) =
-                      eL (pushZeros (dp / 2) (bumpL (bumpL L_)))).
-        { rewrite eL_sPushZeros, eL_pushZeros, (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest), eL_bumpL2.
-          reflexivity. }
-        assert (heR : eR (evalSymR vr v2 sr1) = eR (addR 1 (y :: ys))).
-        { rewrite (eR_sAddR har vr v2), hcons, eR_addR. reflexivity. }
-        assert (hR0 : eR (evalSymR vr v2 sr) = eR (R0 (dp + 1) :: y :: ys)).
-        { rewrite (hR vr v2), hcons. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 eq_refl hR0),
-                (encodeBase_core_congr MB0 heL heR).
-        exact hs.
-  - set (srNewOpt := if isR1 then Some (sPushR0 2 rRest) else sAddR 2 rRest) in hp.
-    destruct srNewOpt as [srNew |] eqn:hnew; [| discriminate].
-    assert (heRNew : forall vr v2, eR (evalSymR vr v2 srNew) =
-              eR (if isR1 then pushR0 2 (evalSymR vr v2 rRest) else addR 2 (evalSymR vr v2 rRest))).
-    { intros vr v2. unfold srNewOpt in hnew. destruct isR1.
-      - injection hnew as <-. rewrite eR_sPushR0, eR_pushR0. reflexivity.
-      - rewrite (eR_sAddR hnew vr v2), eR_addR. reflexivity. }
-    destruct (dp / 2 =? 0) eqn:hq0.
-    + destruct (sUnconsL sl) as [[[lv | lv] lRest] |] eqn:hu; [| | discriminate].
-      * destruct (sAddR 1 srNew) as [sr1 |] eqn:har; [| discriminate].
-        injection hp as <- <- <-.
-        intros vr v2 v3 v4 rest.
-        set (xs := evalSymL v2 v3 v4 lRest rest).
-        set (RRest := evalSymR vr v2 rRest).
-        pose proof (stepB0Base_sound (L0 lv :: xs)
-          ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: RRest)) as hs.
-        rewrite (stepB0Base_to_pos isR1 dp (L0 lv :: xs) RRest),
-                (stepB0Pos_even isR1 dp hmod (L0 lv :: xs) RRest) in hs.
-        cbv zeta in hs; rewrite hq0 in hs. cbn [stepB0OddQ0 unconsL] in hs.
-        assert (heL : eL (evalSymL v2 v3 v4 (sPeelL0 lv lRest) rest) = eL (peelL0 lv xs)).
-        { symmetry; exact (eL_peelL0_eq_sPeelL0 lv v2 v3 v4 lRest rest). }
-        assert (heR : eR (evalSymR vr v2 sr1) =
-                      eR (addR 1 (if isR1 then pushR0 2 RRest else addR 2 RRest))).
-        { rewrite (eR_sAddR har vr v2), (heRNew vr v2), eR_addR. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 (sUnconsL_L0 hu v2 v3 v4 rest) (hR vr v2)),
-                (encodeBase_core_congr MB0 heL heR).
-        exact hs.
-      * destruct (sAddR (lv + 2) srNew) as [sr1 |] eqn:har; [| discriminate].
-        injection hp as <- <- <-.
-        intros vr v2 v3 v4 rest.
-        set (xs := evalSymL v2 v3 v4 lRest rest).
-        set (RRest := evalSymR vr v2 rRest).
-        pose proof (stepB0Base_sound (LD lv :: xs)
-          ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: RRest)) as hs.
-        rewrite (stepB0Base_to_pos isR1 dp (LD lv :: xs) RRest),
-                (stepB0Pos_even isR1 dp hmod (LD lv :: xs) RRest) in hs.
-        cbv zeta in hs; rewrite hq0 in hs. cbn [stepB0OddQ0 unconsL] in hs.
-        assert (heR : eR (evalSymR vr v2 sr1) =
-                      eR (addR (lv + 2) (if isR1 then pushR0 2 RRest else addR 2 RRest))).
-        { rewrite (eR_sAddR har vr v2), (heRNew vr v2), eR_addR. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 (sUnconsL_LD hu v2 v3 v4 rest) (hR vr v2)),
-                (encodeBase_core_congr MB0 (@eq_refl _ (eL xs)) heR).
-        exact hs.
-    + destruct (dp / 2 =? 1) eqn:hq1.
-      * destruct (sBumpLN 2%nat sl) as [l2 |] eqn:hb2; [| discriminate].
-        injection hp as <- <- <-.
-        intros vr v2 v3 v4 rest.
-        set (L_ := evalSymL v2 v3 v4 sl rest).
-        set (RRest := evalSymR vr v2 rRest).
-        pose proof (stepB0Base_sound L_
-          ((if isR1 then R1 (dp + 1) else R0 (dp + 1)) :: RRest)) as hs.
-        rewrite (stepB0Base_to_pos isR1 dp L_ RRest),
-                (stepB0Pos_even isR1 dp hmod L_ RRest) in hs.
-        cbv zeta in hs; rewrite hq0, hq1 in hs.
-        assert (heL : eL (evalSymL v2 v3 v4 l2 rest) = eL (bumpL (bumpL L_))).
-        { rewrite (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest), eL_bumpL2. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 eq_refl (hR vr v2)),
-                (encodeBase_core_congr MB0 heL (heRNew vr v2)).
-        exact hs.
-      * destruct (sBumpLN 2%nat sl) as [l2 |] eqn:hb2; [| discriminate].
-        apply N.eqb_neq in hq0. apply N.eqb_neq in hq1. apply N.eqb_neq in hmod.
-        set (q' := dp / 2 - 2) in hp |- *.
-        assert (hq_eq : dp / 2 = q' + 2) by (unfold q'; lia).
-        assert (hpre : SymReached MB0 sl sr MDL (sPushZeros q' l2) (SRC (R1 0) :: srNew)).
-        { intros vr v2 v3 v4 rest.
-          set (L_ := evalSymL v2 v3 v4 sl rest).
-          set (RRest := evalSymR vr v2 rRest).
-          pose proof (b0EvenGe2_preDL_sound isR1 dp q' hmod hq_eq L_ RRest) as hbs.
-          assert (heL : eL (evalSymL v2 v3 v4 (sPushZeros q' l2) rest) =
-                        eL (pushZeros q' (bumpL (bumpL L_)))).
-          { rewrite eL_sPushZeros, eL_pushZeros, (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest), eL_bumpL2.
-            reflexivity. }
-          assert (heR : eR (evalSymR vr v2 (SRC (R1 0) :: srNew)) =
-                        eR (R1 0 :: (if isR1 then pushR0 2 RRest else addR 2 RRest))).
-          { cbn [evalSymR].
-            change (eR (R1 0 :: evalSymR vr v2 srNew)) with ([S1; S0; S0] *> eR (evalSymR vr v2 srNew)).
-            change (eR (R1 0 :: (if isR1 then pushR0 2 RRest else addR 2 RRest))) with
-              ([S1; S0; S0] *> eR (if isR1 then pushR0 2 RRest else addR 2 RRest)).
-            rewrite (heRNew vr v2). reflexivity. }
-          rewrite (encodeBase_core_congr MB0 eq_refl (hR vr v2)),
-                  (encodeBase_core_congr MDL heL heR).
-          exact hbs. }
-        exact (sFoldDL2_sound hpre hp).
-Qed.
-
-Lemma sStepB0Base_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sStepB0Base sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sStepB0Base in h.
-  destruct (sUnconsR sr) as [[[[d | d] rRest] |] |] eqn:hur; try discriminate.
-  - destruct (d =? 0) eqn:hd0.
-    + apply N.eqb_eq in hd0; subst d.
-      destruct rRest as [| r1 rs].
-      * destruct (sBumpLN 4%nat sl) as [sl1 |] eqn:hb4; [| discriminate].
-        injection h as <- <- <-.
-        intros vr v2 v3 v4 rest.
-        set (L_ := evalSymL v2 v3 v4 sl rest).
-        pose proof (stepB0Base_sound L_ [R0 0]) as hs.
-        change (stepB0Base L_ [R0 0]) with (Core MDL (bumpL (bumpL (bumpL (bumpL L_)))) [R0 0]) in hs.
-        assert (heL : eL (evalSymL v2 v3 v4 sl1 rest) = eL (bumpL (bumpL (bumpL (bumpL L_))))).
-        { rewrite (eL_sBumpLN 4%nat hb4 v2 v3 v4 rest), eL_bumpL4. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 eq_refl (sUnconsR_R0 hur vr v2)),
-                (encodeBase_core_congr MDL heL eq_refl).
-        exact hs.
-      * destruct (sUnconsL sl) as [[[lv | lv] lRest] |] eqn:hul; [| | discriminate].
-        -- destruct (sAddR 3 (r1 :: rs)) as [sr1 |] eqn:har; [| discriminate].
-           injection h as <- <- <-.
-           intros vr v2 v3 v4 rest.
-           set (xs := evalSymL v2 v3 v4 lRest rest).
-           destruct (evalSymR_cons r1 rs vr v2) as [y [ys hcons]].
-           pose proof (stepB0Base_sound (L0 lv :: xs) (R0 0 :: y :: ys)) as hs.
-           change (stepB0Base (L0 lv :: xs) (R0 0 :: y :: ys)) with
-             (Core MB0 (peelL0 lv xs) (addR 3 (y :: ys))) in hs.
-           assert (hR0 : eR (evalSymR vr v2 sr) = eR (R0 0 :: y :: ys)).
-           { rewrite (sUnconsR_R0 hur vr v2), hcons. reflexivity. }
-           assert (heL : eL (evalSymL v2 v3 v4 (sPeelL0 lv lRest) rest) = eL (peelL0 lv xs)).
-           { symmetry; exact (eL_peelL0_eq_sPeelL0 lv v2 v3 v4 lRest rest). }
-           assert (heR : eR (evalSymR vr v2 sr1) = eR (addR 3 (y :: ys))).
-           { rewrite (eR_sAddR har vr v2), hcons, eR_addR. reflexivity. }
-           rewrite (encodeBase_core_congr MB0 (sUnconsL_L0 hul v2 v3 v4 rest) hR0),
-                   (encodeBase_core_congr MB0 heL heR).
-           exact hs.
-        -- destruct (sAddR (lv + 4) (r1 :: rs)) as [sr1 |] eqn:har; [| discriminate].
-           injection h as <- <- <-.
-           intros vr v2 v3 v4 rest.
-           set (xs := evalSymL v2 v3 v4 lRest rest).
-           destruct (evalSymR_cons r1 rs vr v2) as [y [ys hcons]].
-           pose proof (stepB0Base_sound (LD lv :: xs) (R0 0 :: y :: ys)) as hs.
-           change (stepB0Base (LD lv :: xs) (R0 0 :: y :: ys)) with
-             (Core MB0 xs (addR (lv + 4) (y :: ys))) in hs.
-           assert (hR0 : eR (evalSymR vr v2 sr) = eR (R0 0 :: y :: ys)).
-           { rewrite (sUnconsR_R0 hur vr v2), hcons. reflexivity. }
-           assert (heR : eR (evalSymR vr v2 sr1) = eR (addR (lv + 4) (y :: ys))).
-           { rewrite (eR_sAddR har vr v2), hcons, eR_addR. reflexivity. }
-           rewrite (encodeBase_core_congr MB0 (sUnconsL_LD hul v2 v3 v4 rest) hR0),
-                   (encodeBase_core_congr MB0 (@eq_refl _ (eL xs)) heR).
-           exact hs.
-    + apply N.eqb_neq in hd0.
-      refine (sStepB0Pos_sound false (d - 1) _ h).
-      intros vr v2. replace (d - 1 + 1) with d by lia. exact (sUnconsR_R0 hur vr v2).
-  - destruct (d =? 0) eqn:hd0.
-    + apply N.eqb_eq in hd0; subst d.
-      destruct (sBumpLN 3%nat sl) as [sl1 |] eqn:hb3; [| discriminate].
-      injection h as <- <- <-.
-      intros vr v2 v3 v4 rest.
-      set (L_ := evalSymL v2 v3 v4 sl rest).
-      set (RRest := evalSymR vr v2 rRest).
-      pose proof (stepB0Base_sound L_ (R1 0 :: RRest)) as hs.
-      change (stepB0Base L_ (R1 0 :: RRest)) with (Core MB0 (bumpL (bumpL (bumpL L_))) RRest) in hs.
-      assert (heL : eL (evalSymL v2 v3 v4 sl1 rest) = eL (bumpL (bumpL (bumpL L_)))).
-      { rewrite (eL_sBumpLN 3%nat hb3 v2 v3 v4 rest), eL_bumpL3. reflexivity. }
-      rewrite (encodeBase_core_congr MB0 eq_refl (sUnconsR_R1 hur vr v2)),
-              (encodeBase_core_congr MB0 heL eq_refl).
-      exact hs.
-    + apply N.eqb_neq in hd0.
-      refine (sStepB0Pos_sound true (d - 1) _ h).
-      intros vr v2. replace (d - 1 + 1) with d by lia. exact (sUnconsR_R1 hur vr v2).
-  - destruct (sBumpL sl) as [sl1 |] eqn:hb; [| discriminate].
-    injection h as <- <- <-.
-    intros vr v2 v3 v4 rest.
-    set (L_ := evalSymL v2 v3 v4 sl rest).
-    pose proof (stepB0Base_sound L_ []) as hs.
-    change (stepB0Base L_ []) with (Core MDL (bumpL L_) [R0 0]) in hs.
-    assert (heL : eL (evalSymL v2 v3 v4 sl1 rest) = eL (bumpL L_)).
-    { rewrite (eL_sBumpL hb v2 v3 v4 rest), eL_bumpL. reflexivity. }
-    rewrite (sUnconsR_empty hur vr v2), (encodeBase_core_congr MDL heL eq_refl).
-    exact hs.
-Qed.
-
-Lemma sPopR02_some {sr r2 : list SymRTok} {k : N}
-  (h : sPopR02 sr = Some (k, r2)) : sr = SRC (R02 k) :: r2.
-Proof.
-  destruct sr as [| [t | ? | ?] tl]; try discriminate.
-  destruct t; try discriminate; inversion h; subst; reflexivity.
-Qed.
-
-Lemma sPopLD1_some {sl lRest : list SymLTok} {k : N}
-  (h : sPopLD1 sl = Some (k, lRest)) : sl = SLC (LD1 k) :: lRest.
-Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl]; try discriminate.
-  destruct t; try discriminate; inversion h; subst; reflexivity.
-Qed.
-
-Lemma sPopLD1Ge4_some {sl lRest : list SymLTok} {k : N}
-  (h : sPopLD1Ge4 sl = Some (k, lRest)) : sl = SLC (LD1 (k + 4)) :: lRest.
-Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl]; try discriminate.
-  destruct t as [? | ? | m | ? | ? | ? | ?]; try discriminate.
-  cbn [sPopLD1Ge4] in h. destruct (4 <=? m) eqn:hle; [| discriminate].
-  apply N.leb_le in hle. inversion h; subst.
-  replace (m - 4 + 4) with m by lia. reflexivity.
-Qed.
-
-Lemma sPopML8_some {sl lRest : list SymLTok} {k : N}
-  (h : sPopML8 sl = Some (k, lRest)) : sl = SLC (ML8 k) :: lRest.
-Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl]; try discriminate.
-  destruct t; try discriminate; inversion h; subst; reflexivity.
-Qed.
-
-Lemma sPopM2L_some {sl lRest : list SymLTok} {k : N}
-  (h : sPopM2L sl = Some (k, lRest)) : sl = SLC (M2L k) :: lRest.
-Proof.
-  destruct sl as [| [t | ? | ? | ? | ? | ?] tl]; try discriminate.
-  destruct t; try discriminate; inversion h; subst; reflexivity.
-Qed.
-
-Lemma sPopSymM2_some {sl lRest : list SymLTok} {d : N}
-  (h : sPopSymM2 sl = Some (d, lRest)) : sl = SM2 d :: lRest.
-Proof.
-  destruct sl as [| [? | d' | ? | ? | ? | ?] tl]; try discriminate.
-  inversion h; subst; reflexivity.
-Qed.
-
-Lemma eR_sLd5ROut (k vr v2 : N) (rRest : list SymRTok) :
-  eR (evalSymR vr v2 (sLd5ROut k rRest)) = eR (ld5ROut k (evalSymR vr v2 rRest)).
-Proof.
-  assert (hmid : eR (evalSymR vr v2 (SRC (R1 3) :: SRC (R02 0) :: SRC (R1 3) :: sPushR02 1 rRest)) =
-                 eR (R1 3 :: R02 0 :: R1 3 :: pushR02 1 (evalSymR vr v2 rRest))).
-  { cbn [evalSymR].
-    change (eR (R1 3 :: R02 0 :: R1 3 :: evalSymR vr v2 (sPushR02 1 rRest))) with
-      ([S1; S1; S1; S1; S0; S0; S1; S1; S1; S0; S1; S1; S1; S1; S0; S0] *>
-       eR (evalSymR vr v2 (sPushR02 1 rRest))).
-    change (eR (R1 3 :: R02 0 :: R1 3 :: pushR02 1 (evalSymR vr v2 rRest))) with
-      ([S1; S1; S1; S1; S0; S0; S1; S1; S1; S0; S1; S1; S1; S1; S0; S0] *>
-       eR (pushR02 1 (evalSymR vr v2 rRest))).
-    rewrite eR_sPushR02, eR_pushR02. reflexivity. }
-  unfold sLd5ROut, ld5ROut. destruct (k =? 0) eqn:hk.
-  - exact hmid.
-  - rewrite eR_sPushR02, eR_pushR02, hmid. reflexivity.
-Qed.
-
-Lemma eL_sR02LOut {k : N} {sl l2 : list SymLTok} (hb2 : sBumpLN 2%nat sl = Some l2)
-  (v2 v3 v4 : N) (rest : list LTok) :
-  eL (evalSymL v2 v3 v4 (sR02LOut k l2) rest) =
-  eL (r02LOut k (evalSymL v2 v3 v4 sl rest)).
-Proof.
-  assert (hl2 : eL (evalSymL v2 v3 v4 l2 rest) = eL (bumpL (bumpL (evalSymL v2 v3 v4 sl rest)))).
-  { rewrite (eL_sBumpLN 2%nat hb2 v2 v3 v4 rest), eL_bumpL2. reflexivity. }
-  unfold sR02LOut, r02LOut. destruct (k =? 0) eqn:hk.
-  - rewrite eL_sPushL0, eL_pushL0, hl2. reflexivity.
-  - rewrite eL_sPushL0, eL_pushL0, eL_sPushLD1, eL_pushLD1, hl2. reflexivity.
-Qed.
-
-Lemma sStepMotifR4Zero_sound {sl : list SymLTok} {r2 : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sStepMotifR4Zero sl r2 = Some (m', sl', sr')) :
-  SymReached MB0 sl (SRC (R0 4) :: SRC (R02 0) :: r2) m' sl' sr'.
-Proof.
-  destruct r2 as [| [t | d | d] r3]; [discriminate | | |].
-  - destruct t as [? | ? | ? | k | k]; try discriminate; cbn [sStepMotifR4Zero] in h.
-    + assert (hmb : forall sl0 p, sPushWM1_conc k sl0 = Some p ->
-                SymReached MB0 sl0 (SRC (R0 4) :: SRC (R02 0) :: SRC (MR11 k) :: r3)
-                  MB0 p (SRC (R0 4) :: sPushR02 0 r3)).
-      { intros sl0 p hp vr v2 v3 v4 rest.
-        set (L_ := evalSymL v2 v3 v4 sl0 rest).
-        set (R3 := evalSymR vr v2 r3).
-        assert (heR : eR (evalSymR vr v2 (SRC (R0 4) :: sPushR02 0 r3)) = eR (R0 4 :: pushR02 0 R3)).
-        { cbn [evalSymR].
-          change (eR (R0 4 :: evalSymR vr v2 (sPushR02 0 r3))) with
-            ([S1; S1; S1; S1; S1; S0] *> eR (evalSymR vr v2 (sPushR02 0 r3))).
-          change (eR (R0 4 :: pushR02 0 R3)) with ([S1; S1; S1; S1; S1; S0] *> eR (pushR02 0 R3)).
-          rewrite eR_sPushR02, eR_pushR02. reflexivity. }
-        assert (heL : eL (evalSymL v2 v3 v4 p rest) = eL (pushWM1 k L_)).
-        { rewrite (eL_sPushWM1_conc hp v2 v3 v4 rest), eL_pushWM1. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 heL heR).
-        exact (motifB_sound k L_ R3). }
-      destruct (beqSymRList r3 capTailSym) eqn:hcap.
-      * destruct (stripSymLC [LD 3] sl) as [lRest |] eqn:hl3.
-        -- injection h as <- <- <-.
-           rewrite (eq_of_beqSymRList r3 capTailSym hcap), (stripSymLC_some [LD 3] sl lRest hl3).
-           intros vr v2 v3 v4 rest.
-           exact (capRoundtrip_sound k (evalSymL v2 v3 v4 lRest rest)).
-        -- destruct (sPushWM1_conc k sl) as [p |] eqn:hp; [| discriminate].
-           injection h as <- <- <-. exact (hmb sl p hp).
-      * destruct (sPushWM1_conc k sl) as [p |] eqn:hp; [| discriminate].
-        injection h as <- <- <-. exact (hmb sl p hp).
-    + destruct (sPushWM2_conc k sl) as [p |] eqn:hp; [| discriminate].
-      injection h as <- <- <-.
-      intros vr v2 v3 v4 rest.
-      set (L_ := evalSymL v2 v3 v4 sl rest).
-      set (R3 := evalSymR vr v2 r3).
-      assert (heR : eR (evalSymR vr v2 (SRC (R0 4) :: sPushR02 0 r3)) = eR (R0 4 :: pushR02 0 R3)).
-      { cbn [evalSymR].
-        change (eR (R0 4 :: evalSymR vr v2 (sPushR02 0 r3))) with
-          ([S1; S1; S1; S1; S1; S0] *> eR (evalSymR vr v2 (sPushR02 0 r3))).
-        change (eR (R0 4 :: pushR02 0 R3)) with ([S1; S1; S1; S1; S1; S0] *> eR (pushR02 0 R3)).
-        rewrite eR_sPushR02, eR_pushR02. reflexivity. }
-      assert (heL : eL (evalSymL v2 v3 v4 p rest) = eL (pushWM2 k L_)).
-      { rewrite (eL_sPushWM2_conc hp v2 v3 v4 rest), eL_pushWM2. reflexivity. }
-      rewrite (encodeBase_core_congr MB0 heL heR).
-      exact (motif2B_sound k L_ R3).
-  - cbn [sStepMotifR4Zero] in h.
-    destruct (beqSymRList r3 capTailSym) eqn:hcap; [| discriminate].
-    destruct (stripSymLC [LD 3] sl) as [lRest |] eqn:hl3; [| discriminate].
-    injection h as <- <- <-.
-    rewrite (eq_of_beqSymRList r3 capTailSym hcap), (stripSymLC_some [LD 3] sl lRest hl3).
-    intros vr v2 v3 v4 rest.
-    exact (capRoundtrip_sound (vr + d) (evalSymL v2 v3 v4 lRest rest)).
-  - cbn [sStepMotifR4Zero] in h.
-    destruct (sPushWM2_sym d sl) as [p |] eqn:hp; [| discriminate].
-    injection h as <- <- <-.
-    intros vr v2 v3 v4 rest.
-    set (L_ := evalSymL v2 v3 v4 sl rest).
-    set (R3 := evalSymR vr v2 r3).
-    assert (heR : eR (evalSymR vr v2 (SRC (R0 4) :: sPushR02 0 r3)) = eR (R0 4 :: pushR02 0 R3)).
-    { cbn [evalSymR].
-      change (eR (R0 4 :: evalSymR vr v2 (sPushR02 0 r3))) with
-        ([S1; S1; S1; S1; S1; S0] *> eR (evalSymR vr v2 (sPushR02 0 r3))).
-      change (eR (R0 4 :: pushR02 0 R3)) with ([S1; S1; S1; S1; S1; S0] *> eR (pushR02 0 R3)).
-      rewrite eR_sPushR02, eR_pushR02. reflexivity. }
-    assert (heL : eL (evalSymL v2 v3 v4 p rest) = eL (pushWM2 (v2 + d) L_)).
-    { rewrite (eL_sPushWM2_sym hp v2 v3 v4 rest), eL_pushWM2. reflexivity. }
-    rewrite (encodeBase_core_congr MB0 heL heR).
-    exact (motif2B_sound (v2 + d) L_ R3).
-Qed.
-
-Lemma sMotifR4_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sMotifR4 sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sMotifR4 in h.
-  destruct (stripSymRC [R0 4] sr) as [rAfter4 |] eqn:hr4; [| discriminate].
-  destruct (sPopR02 rAfter4) as [[kr r2] |] eqn:hr02; [| discriminate].
-  rewrite (stripSymRC_some [R0 4] sr rAfter4 hr4), (sPopR02_some hr02).
-  destruct (kr =? 0) eqn:hkr0.
-  - apply N.eqb_eq in hkr0; subst kr. exact (sStepMotifR4Zero_sound h).
-  - apply N.eqb_neq in hkr0.
-    destruct (sBumpLN 2%nat sl) as [l2 |] eqn:hb2; [| discriminate].
-    injection h as <- <- <-.
-    intros vr v2 v3 v4 rest.
-    assert (heR_out : eR (evalSymR vr v2 (SRC (R0 4) :: sPushR02 0 r2)) =
-                      eR (R0 4 :: pushR02 0 (evalSymR vr v2 r2))).
-    { cbn [evalSymR].
-      change (eR (R0 4 :: evalSymR vr v2 (sPushR02 0 r2))) with
-        ([S1; S1; S1; S1; S1; S0] *> eR (evalSymR vr v2 (sPushR02 0 r2))).
-      change (eR (R0 4 :: pushR02 0 (evalSymR vr v2 r2))) with
-        ([S1; S1; S1; S1; S1; S0] *> eR (pushR02 0 (evalSymR vr v2 r2))).
-      rewrite eR_sPushR02, eR_pushR02. reflexivity. }
-    rewrite (encodeBase_core_congr MB0 (eL_sR02LOut hb2 v2 v3 v4 rest) heR_out).
-    cbn [map app evalSymR].
-    replace kr with ((kr - 1) + 1) at 1 by lia.
-    exact (r02Right_sound (kr - 1) (evalSymL v2 v3 v4 sl rest) (evalSymR vr v2 r2)).
-Qed.
-
-Lemma sMotifR9_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sMotifR9 sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sMotifR9 in h.
-  destruct (stripSymRC [R0 9; R1 0] sr) as [rRest |] eqn:hr9; [| discriminate].
-  destruct (stripSymLC [LD 7] sl) as [l1 |] eqn:hl7; [| discriminate].
-  rewrite (stripSymRC_some [R0 9; R1 0] sr rRest hr9), (stripSymLC_some [LD 7] sl l1 hl7).
-  destruct (sPopML8 l1) as [[k lRest] |] eqn:hml.
-  - injection h as <- <- <-. rewrite (sPopML8_some hml).
-    intros vr v2 v3 v4 rest.
-    assert (heR_out : eR (evalSymR vr v2 (SRC (R0 9) :: SRC (R1 0) :: sPushMR11_conc k rRest)) =
-                      eR (R0 9 :: R1 0 :: pushMR11 k (evalSymR vr v2 rRest))).
-    { cbn [evalSymR].
-      change (eR (R0 9 :: R1 0 :: evalSymR vr v2 (sPushMR11_conc k rRest))) with
-        (pRA *> eR (evalSymR vr v2 (sPushMR11_conc k rRest))).
-      change (eR (R0 9 :: R1 0 :: pushMR11 k (evalSymR vr v2 rRest))) with
-        (pRA *> eR (pushMR11 k (evalSymR vr v2 rRest))).
-      rewrite eR_sPushMR11_conc, eR_pushMR11. reflexivity. }
-    rewrite (encodeBase_core_congr MB0 eq_refl heR_out).
-    exact (motifA_sound k (evalSymL v2 v3 v4 lRest rest) (evalSymR vr v2 rRest)).
-  - destruct (stripSymLC u1TopL l1) as [lRestU |] eqn:hu1; [| discriminate].
-    injection h as <- <- <-. rewrite (stripSymLC_some u1TopL l1 lRestU hu1).
-    intros vr v2 v3 v4 rest.
-    set (LRest := evalSymL v2 v3 v4 lRestU rest).
-    set (RRest := evalSymR vr v2 rRest).
-    assert (heL_in : eL (evalSymL v2 v3 v4 (map SLC [LD 7] ++ (map SLC u1TopL ++ lRestU)) rest) =
-                     eL (LD 7 :: ML8 0 :: LRest)).
-    { cbn [map app evalSymL].
-      change (eL (LD 7 :: evalSymL v2 v3 v4 (map SLC u1TopL ++ lRestU) rest)) with
-        (ld7Bits *> eL (evalSymL v2 v3 v4 (map SLC u1TopL ++ lRestU) rest)).
-      rewrite evalSymL_map_c. cbn [u1TopL app]. rewrite eL_lu. reflexivity. }
-    assert (heR_out : eR (evalSymR vr v2 (SRC (R0 9) :: SRC (R1 0) :: sPushMR11_conc 0 rRest)) =
-                      eR (R0 9 :: R1 0 :: pushMR11 0 RRest)).
-    { cbn [evalSymR].
-      change (eR (R0 9 :: R1 0 :: evalSymR vr v2 (sPushMR11_conc 0 rRest))) with
-        (pRA *> eR (evalSymR vr v2 (sPushMR11_conc 0 rRest))).
-      change (eR (R0 9 :: R1 0 :: pushMR11 0 RRest)) with (pRA *> eR (pushMR11 0 RRest)).
-      rewrite eR_sPushMR11_conc, eR_pushMR11. reflexivity. }
-    rewrite (encodeBase_core_congr MB0 heL_in eq_refl),
-            (encodeBase_core_congr MB0 eq_refl heR_out).
-    exact (motifA_sound 0 LRest RRest).
-Qed.
-
-Lemma sMotifR19_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sMotifR19 sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sMotifR19 in h.
-  destruct (stripSymRC [R1 9] sr) as [rRest19 |] eqn:hr19; [| discriminate].
-  rewrite (stripSymRC_some [R1 9] sr rRest19 hr19).
-  destruct (sPopLD1 sl) as [[k lRest] |] eqn:hld1.
-  - injection h as <- <- <-. rewrite (sPopLD1_some hld1).
-    intros vr v2 v3 v4 rest.
-    assert (heR_out : eR (evalSymR vr v2 (SRC (R1 9) :: sPushR02 k rRest19)) =
-                      eR (R1 9 :: pushR02 k (evalSymR vr v2 rRest19))).
-    { cbn [evalSymR].
-      change (eR (R1 9 :: evalSymR vr v2 (sPushR02 k rRest19))) with
-        (r1_9Bits *> eR (evalSymR vr v2 (sPushR02 k rRest19))).
-      change (eR (R1 9 :: pushR02 k (evalSymR vr v2 rRest19))) with
-        (r1_9Bits *> eR (pushR02 k (evalSymR vr v2 rRest19))).
-      rewrite eR_sPushR02, eR_pushR02. reflexivity. }
-    rewrite (encodeBase_core_congr MB0 eq_refl heR_out).
-    exact (ld1Left_sound k (evalSymL v2 v3 v4 lRest rest) (evalSymR vr v2 rRest19)).
-  - destruct (stripSymLC [LD 5] sl) as [l1 |] eqn:hl5; [| discriminate].
-    rewrite (stripSymLC_some [LD 5] sl l1 hl5).
-    destruct (sPopSymM2 l1) as [[d lRestM] |] eqn:hsm2.
-    + destruct (sPushM2R_sym d rRest19) as [pr |] eqn:hpr; [| discriminate].
-      injection h as <- <- <-. rewrite (sPopSymM2_some hsm2).
-      intros vr v2 v3 v4 rest.
-      assert (heR_out : eR (evalSymR vr v2 (SRC (R1 9) :: pr)) =
-                        eR (R1 9 :: pushM2R (v2 + d) (evalSymR vr v2 rRest19))).
-      { cbn [evalSymR].
-        change (eR (R1 9 :: evalSymR vr v2 pr)) with (r1_9Bits *> eR (evalSymR vr v2 pr)).
-        change (eR (R1 9 :: pushM2R (v2 + d) (evalSymR vr v2 rRest19))) with
-          (r1_9Bits *> eR (pushM2R (v2 + d) (evalSymR vr v2 rRest19))).
-        rewrite (eR_sPushM2R_sym hpr vr v2), eR_pushM2R. reflexivity. }
-      rewrite (encodeBase_core_congr MB0 eq_refl heR_out).
-      exact (motif2A_sound (v2 + d) (evalSymL v2 v3 v4 lRestM rest) (evalSymR vr v2 rRest19)).
-    + destruct (sPopM2L l1) as [[k2 lRest2] |] eqn:hm2c.
-      * injection h as <- <- <-. rewrite (sPopM2L_some hm2c).
-        intros vr v2 v3 v4 rest.
-        assert (heR_out : eR (evalSymR vr v2 (SRC (R1 9) :: sPushM2R_conc k2 rRest19)) =
-                          eR (R1 9 :: pushM2R k2 (evalSymR vr v2 rRest19))).
-        { cbn [evalSymR].
-          change (eR (R1 9 :: evalSymR vr v2 (sPushM2R_conc k2 rRest19))) with
-            (r1_9Bits *> eR (evalSymR vr v2 (sPushM2R_conc k2 rRest19))).
-          change (eR (R1 9 :: pushM2R k2 (evalSymR vr v2 rRest19))) with
-            (r1_9Bits *> eR (pushM2R k2 (evalSymR vr v2 rRest19))).
-          rewrite eR_sPushM2R_conc, eR_pushM2R. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 eq_refl heR_out).
-        exact (motif2A_sound k2 (evalSymL v2 v3 v4 lRest2 rest) (evalSymR vr v2 rRest19)).
-      * destruct (stripSymLC u2TopL l1) as [lRestU |] eqn:hu2; [| discriminate].
-        injection h as <- <- <-. rewrite (stripSymLC_some u2TopL l1 lRestU hu2).
-        intros vr v2 v3 v4 rest.
-        set (LRest := evalSymL v2 v3 v4 lRestU rest).
-        set (RRest := evalSymR vr v2 rRest19).
-        assert (heL_in : eL (evalSymL v2 v3 v4 (map SLC [LD 5] ++ (map SLC u2TopL ++ lRestU)) rest) =
-                         eL (LD 5 :: M2L 0 :: LRest)).
-        { cbn [map app evalSymL].
-          change (eL (LD 5 :: evalSymL v2 v3 v4 (map SLC u2TopL ++ lRestU) rest)) with
-            (ld5Bits *> eL (evalSymL v2 v3 v4 (map SLC u2TopL ++ lRestU) rest)).
-          rewrite evalSymL_map_c. cbn [u2TopL app]. rewrite eL_u2. reflexivity. }
-        assert (heR_out : eR (evalSymR vr v2 (SRC (R1 9) :: sPushM2R_conc 0 rRest19)) =
-                          eR (R1 9 :: pushM2R 0 RRest)).
-        { cbn [evalSymR].
-          change (eR (R1 9 :: evalSymR vr v2 (sPushM2R_conc 0 rRest19))) with
-            (r1_9Bits *> eR (evalSymR vr v2 (sPushM2R_conc 0 rRest19))).
-          change (eR (R1 9 :: pushM2R 0 RRest)) with (r1_9Bits *> eR (pushM2R 0 RRest)).
-          rewrite eR_sPushM2R_conc, eR_pushM2R. reflexivity. }
-        rewrite (encodeBase_core_congr MB0 heL_in eq_refl),
-                (encodeBase_core_congr MB0 eq_refl heR_out).
-        exact (motif2A_sound 0 LRest RRest).
-Qed.
-
-Lemma sMotifR15_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sMotifR15 sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sMotifR15 in h.
-  destruct (stripSymRC [R1 5] sr) as [rRest15 |] eqn:hr15; [| discriminate].
-  destruct (stripSymLC [LD 5] sl) as [l1 |] eqn:hl5; [| discriminate].
-  destruct (sPopLD1Ge4 l1) as [[k lRest] |] eqn:hld4; [| discriminate].
-  injection h as <- <- <-.
-  rewrite (stripSymRC_some [R1 5] sr rRest15 hr15),
-          (stripSymLC_some [LD 5] sl l1 hl5), (sPopLD1Ge4_some hld4).
-  intros vr v2 v3 v4 rest.
-  assert (heR : eR (evalSymR vr v2 (SRC (R1 9) :: sLd5ROut k rRest15)) =
-                eR (R1 9 :: ld5ROut k (evalSymR vr v2 rRest15))).
-  { cbn [evalSymR].
-    change (eR (R1 9 :: evalSymR vr v2 (sLd5ROut k rRest15))) with
-      (r1_9Bits *> eR (evalSymR vr v2 (sLd5ROut k rRest15))).
-    change (eR (R1 9 :: ld5ROut k (evalSymR vr v2 rRest15))) with
-      (r1_9Bits *> eR (ld5ROut k (evalSymR vr v2 rRest15))).
-    rewrite eR_sLd5ROut. reflexivity. }
-  rewrite (encodeBase_core_congr MB0 eq_refl heR).
-  exact (ld5Init_sound k (evalSymL v2 v3 v4 lRest rest) (evalSymR vr v2 rRest15)).
-Qed.
-
-Lemma sStepMotifB0_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sStepMotifB0 sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sStepMotifB0 in h.
-  destruct (sMotifR4 sl sr) as [res |] eqn:h4; [inversion h; subst; exact (sMotifR4_sound h4) |].
-  destruct (sMotifR9 sl sr) as [res |] eqn:h9; [inversion h; subst; exact (sMotifR9_sound h9) |].
-  destruct (sMotifR19 sl sr) as [res |] eqn:h19; [inversion h; subst; exact (sMotifR19_sound h19) |].
-  exact (sMotifR15_sound h).
-Qed.
-
-Lemma symStepA_sound {m m' : Mode} {sl0 sl' : list SymLTok} {sr sr' : list SymRTok}
-  (h : symStepA m sl0 sr = Some (m', sl', sr')) :
-  SymReached m sl0 sr m' sl' sr'.
-Proof.
-  assert (hraw : SymReached m (sNormB0W3 m sl0 sr) sr m' sl' sr').
-  { unfold symStepA in h. destruct m.
-    - destruct (sStepMotifB0 (sNormB0W3 MB0 sl0 sr) sr) as [res |] eqn:hm.
-      + inversion h; subst. exact (sStepMotifB0_sound hm).
-      + exact (sStepB0Base_sound h).
-    - exact (sStepDL_sound h). }
-  intros vr v2 v3 v4 rest.
-  rewrite <- (encodeBase_core_congr m (eL_sNormB0W3 m sl0 sr v2 v3 v4 rest) eq_refl).
-  exact (hraw vr v2 v3 v4 rest).
-Qed.
-
-Lemma symRunA_sound :
-  forall (steps : nat) {m0 m rm : Mode} {sl0 sl rsl : list SymLTok} {sr0 sr rsr : list SymRTok},
-    SymReached m0 sl0 sr0 m sl sr ->
-    symRunA steps m sl sr = Some (rm, rsl, rsr) ->
-    SymReached m0 sl0 sr0 rm rsl rsr.
-Proof.
-  induction steps as [| n IH]; intros m0 m rm sl0 sl rsl sr0 sr rsr hpre hr.
-  - inversion hr; subst. exact hpre.
-  - cbn [symRunA] in hr.
-    destruct (symStepA m sl sr) as [[[m1 sl1] sr1] |] eqn:hs; [| discriminate].
-    exact (IH _ _ _ _ _ _ _ _ _ (symReached_trans hpre (symStepA_sound hs)) hr).
-Qed.
-
-Lemma checkSymA_sound {steps : nat} {m m' : Mode} {sl sl' : list SymLTok} {sr sr' : list SymRTok}
-  (h : checkSymA steps m sl sr m' sl' sr' = true) :
-  SymReached m sl sr m' sl' sr'.
-Proof.
-  unfold checkSymA in h.
-  destruct (symRunA steps m sl sr) as [[[rm rsl] rsr] |] eqn:hrun; [| discriminate].
-  apply andb_prop in h. destruct h as [h hsr].
-  apply andb_prop in h. destruct h as [hm hsl].
-  rewrite <- (eq_of_beqMode hm), <- (eq_of_beqSymLList rsl sl' hsl), <- (eq_of_beqSymRList rsr sr' hsr).
-  exact (symRunA_sound steps (symReached_refl m sl sr) hrun).
-Qed.
-
-(* ========================================================================= *)
-(* Section 10: Layer-1 Bridges & Layer-2 Symbolic Engine (symStepB)          *)
-(* ========================================================================= *)
 
 Definition capTailR : list RTok := [R02 0; R1 3; R02 0].
 Definition rc6Of (mr : N) : list RTok := R0 9 :: R1 0 :: MR11 mr :: capTailR.
@@ -4354,11 +2927,11 @@ Definition bridge3OutTop : list RTok :=
   [R1 9; M2R 0; R02 2; R1 3; R02 0; R1 3; R02 2; R1 3; R02 1; R1 3; R1 3; R02 3; R1 3].
 
 Lemma era1_step_raw :
-  checkSymA 133%nat MB0
+  checkHoles 5648%positive MB0
     [SLC (LD 2); SLC (L0 1)]
     (SRC (R0 4) :: SMR 1 :: capTailSym)
     MB0
-    (map SLC w3TopL)
+    [SLC (LD 2); SLC (L0 1); SM3P 0]
     (SRC (R0 4) :: SMR 0 :: capTailSym) = true.
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
@@ -4369,7 +2942,7 @@ Lemma era1_step_sym :
     MB0
     [SLC (LD 2); SLC (L0 1); SM3P 0]
     (SRC (R0 4) :: SMR 0 :: capTailSym).
-Proof. exact (symReached_norm (checkSymA_sound era1_step_raw)). Qed.
+Proof. exact (checkHoles_sound era1_step_raw). Qed.
 
 Lemma era1_step_concrete (k : N) (after : list LTok) :
   encodeBase (Core MB0 (LD 2 :: L0 1 :: after) (rc4Of (k + 1))) -[ tm ]->*
@@ -4382,7 +2955,7 @@ Proof.
 Qed.
 
 Lemma bridgeH10_raw :
-  checkSymA 33%nat MB0
+  checkHoles 814%positive MB0
     (map SLC h10Top)
     (SRC (R0 9) :: SRC (R1 0) :: SMR 0 :: capTailSym)
     MB0
@@ -4394,7 +2967,7 @@ Lemma bridgeH10_concrete (mr : N) (afterH10 : list LTok) :
   encodeBase (Core MB0 (h10Top ++ afterH10) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (LD 5 :: afterH10) (bridgeH10OutTop ++ (MR11 mr :: capTailR))).
 Proof.
-  pose proof (checkSymA_sound bridgeH10_raw mr 0 0 0 afterH10) as hr.
+  pose proof (checkHoles_sound bridgeH10_raw mr 0 0 0 afterH10) as hr.
   rewrite evalSymL_map_c_nil, evalSymR_map_c in hr.
   cbn [evalSymL evalSymR capTailSym] in hr.
   replace (mr + 0) with mr in hr by lia.
@@ -4402,7 +2975,7 @@ Proof.
 Qed.
 
 Lemma bridge0a_raw :
-  checkSymA 73%nat MB0
+  checkHoles 2726%positive MB0
     [SLC (L0 0); SLC (LD1 5); SLC (LD 5)]
     (map SRC bridge0aPfx ++ (SMR 0 :: capTailSym))
     MB0
@@ -4414,7 +2987,7 @@ Lemma bridge0a_concrete (mr : N) (rest : list LTok) :
   encodeBase (Core MB0 (L0 0 :: LD1 5 :: LD 5 :: rest) (bridge0aPfx ++ (MR11 mr :: capTailR))) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ rest) (rc6Of (mr + 1))).
 Proof.
-  pose proof (checkSymA_sound bridge0a_raw mr 0 0 0 rest) as hr.
+  pose proof (checkHoles_sound bridge0a_raw mr 0 0 0 rest) as hr.
   rewrite evalSymL_map_c_nil, evalSymR_map_c in hr.
   cbn [evalSymL evalSymR capTailSym] in hr.
   replace (mr + 0) with mr in hr by lia.
@@ -4422,7 +2995,7 @@ Proof.
 Qed.
 
 Lemma bridge1_raw :
-  checkSymA 107%nat MB0
+  checkHoles 3022%positive MB0
     [SLC (L0 0); SLC (LD1 5); SLC (LD 5)]
     (map SRC bridge1Pfx ++ (SMR 0 :: capTailSym))
     MB0
@@ -4434,7 +3007,7 @@ Lemma bridge1_concrete (mr : N) (rest : list LTok) :
   encodeBase (Core MB0 (L0 0 :: LD1 5 :: LD 5 :: rest) (bridge1Pfx ++ (MR11 mr :: capTailR))) -[ tm ]->*
   encodeBase (Core MB0 (LD 5 :: rest) (bridge1OutTop ++ (MR11 mr :: capTailR))).
 Proof.
-  pose proof (checkSymA_sound bridge1_raw mr 0 0 0 rest) as hr.
+  pose proof (checkHoles_sound bridge1_raw mr 0 0 0 rest) as hr.
   rewrite !evalSymR_map_c in hr.
   cbn [evalSymL evalSymR capTailSym] in hr.
   replace (mr + 0) with mr in hr by lia.
@@ -4442,7 +3015,7 @@ Proof.
 Qed.
 
 Lemma bridge2_raw :
-  checkSymA 98%nat MB0
+  checkHoles 3258%positive MB0
     [SLC (L0 0); SLC (LD1 5); SLC (LD 5)]
     (map SRC bridge2Pfx ++ (SMR 0 :: capTailSym))
     MB0
@@ -4454,7 +3027,7 @@ Lemma bridge2_concrete (mr : N) (rest : list LTok) :
   encodeBase (Core MB0 (L0 0 :: LD1 5 :: LD 5 :: rest) (bridge2Pfx ++ (MR11 mr :: capTailR))) -[ tm ]->*
   encodeBase (Core MB0 (LD 5 :: rest) (bridge2OutTop ++ (MR11 mr :: capTailR))).
 Proof.
-  pose proof (checkSymA_sound bridge2_raw mr 0 0 0 rest) as hr.
+  pose proof (checkHoles_sound bridge2_raw mr 0 0 0 rest) as hr.
   rewrite !evalSymR_map_c in hr.
   cbn [evalSymL evalSymR capTailSym] in hr.
   replace (mr + 0) with mr in hr by lia.
@@ -4462,7 +3035,7 @@ Proof.
 Qed.
 
 Lemma bridge3_raw :
-  checkSymA 84%nat MB0
+  checkHoles 3586%positive MB0
     [SLC (L0 0); SLC (LD1 5); SLC (LD 5)]
     (map SRC bridge3Pfx ++ (SMR 0 :: capTailSym))
     MB0
@@ -4474,251 +3047,40 @@ Lemma bridge3_concrete (mr : N) (rest : list LTok) :
   encodeBase (Core MB0 (L0 0 :: LD1 5 :: LD 5 :: rest) (bridge3Pfx ++ (MR11 mr :: capTailR))) -[ tm ]->*
   encodeBase (Core MB0 (LD 5 :: rest) (bridge3OutTop ++ (MR11 mr :: capTailR))).
 Proof.
-  pose proof (checkSymA_sound bridge3_raw mr 0 0 0 rest) as hr.
+  pose proof (checkHoles_sound bridge3_raw mr 0 0 0 rest) as hr.
   rewrite !evalSymR_map_c in hr.
   cbn [evalSymL evalSymR capTailSym] in hr.
   replace (mr + 0) with mr in hr by lia.
   exact hr.
 Qed.
 
-(* Layer-2 Symbolic Bridges on SymLTok / SymRTok *)
+Record CapBridge := {
+  bridgeInR : list RTok;
+  bridgeOutL : list LTok;
+  bridgeOutR : list RTok;
+  bridgeDelta : N
+}.
 
-Definition sPopMRTail (sr : list SymRTok) : option (bool * N) :=
-  match sr with
-  | SMR d :: rTail => if beqSymRList rTail capTailSym then Some (true, d) else None
-  | SRC (MR11 k) :: rTail => if beqSymRList rTail capTailSym then Some (false, k) else None
-  | _ => None
-  end.
+Definition capBridgeL := [L0 0; LD1 5; LD 5].
+Definition capBridges :=
+  [Build_CapBridge bridge0aPfx h10Top [R0 9; R1 0] 1;
+   Build_CapBridge bridge1Pfx [LD 5] bridge1OutTop 0;
+   Build_CapBridge bridge2Pfx [LD 5] bridge2OutTop 0;
+   Build_CapBridge bridge3Pfx [LD 5] bridge3OutTop 0].
+Definition CapBridgeSound (lp : list LTok) (b : CapBridge) :=
+  forall n rest,
+  encodeBase (Core MB0 (lp ++ rest) (bridgeInR b ++ (MR11 n :: capTailR))) -[ tm ]->*
+  encodeBase (Core MB0 (bridgeOutL b ++ rest) (bridgeOutR b ++ (MR11 (n + bridgeDelta b) :: capTailR))).
 
-Definition mkMRSym (isSym : bool) (d : N) : SymRTok :=
-  if isSym then SMR d else SRC (MR11 d).
-
-Lemma sPopMRTail_some {sr : list SymRTok} {isSym : bool} {d : N}
-  (h : sPopMRTail sr = Some (isSym, d)) :
-  sr = mkMRSym isSym d :: capTailSym.
+Lemma capBridges_sound : Forall (CapBridgeSound capBridgeL) capBridges.
 Proof.
-  destruct sr as [| [t | d' | ?] rTail]; try discriminate.
-  - destruct t as [? | ? | ? | k | ?]; try discriminate.
-    cbn [sPopMRTail] in h. destruct (beqSymRList rTail capTailSym) eqn:hc; [| discriminate].
-    inversion h; subst. rewrite (eq_of_beqSymRList rTail capTailSym hc). reflexivity.
-  - cbn [sPopMRTail] in h. destruct (beqSymRList rTail capTailSym) eqn:hc; [| discriminate].
-    inversion h; subst. rewrite (eq_of_beqSymRList rTail capTailSym hc). reflexivity.
+  repeat constructor; unfold CapBridgeSound; intros; cbn [capBridgeL bridgeInR bridgeOutL bridgeOutR bridgeDelta];
+    rewrite ?N.add_0_r.
+  - apply bridge0a_concrete.
+  - apply bridge1_concrete.
+  - apply bridge2_concrete.
+  - apply bridge3_concrete.
 Qed.
-
-Lemma evalSymR_mkMRSym (isSym : bool) (d vr v2 : N) :
-  evalSymR vr v2 (mkMRSym isSym d :: capTailSym) =
-  MR11 (if isSym then vr + d else d) :: capTailR.
-Proof. destruct isSym; reflexivity. Qed.
-
-Definition sStepBridgesB0 (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match opt_bind (stripSymRC [R0 9; R1 0] sr) sPopMRTail, stripSymLC h10Top sl with
-  | Some (isSym, d), Some afterH10 =>
-    Some (MB0, SLC (LD 5) :: afterH10, map SRC bridgeH10OutTop ++ (mkMRSym isSym d :: capTailSym))
-  | _, _ =>
-    match stripSymLC [L0 0; LD1 5; LD 5] sl with
-    | None => None
-    | Some restL =>
-      match opt_bind (stripSymRC bridge0aPfx sr) sPopMRTail with
-      | Some (isSym, d) =>
-        Some (MB0, map SLC h10Top ++ restL,
-              SRC (R0 9) :: SRC (R1 0) :: mkMRSym isSym (d + 1) :: capTailSym)
-      | None =>
-        match opt_bind (stripSymRC bridge1Pfx sr) sPopMRTail with
-        | Some (isSym, d) =>
-          Some (MB0, SLC (LD 5) :: restL, map SRC bridge1OutTop ++ (mkMRSym isSym d :: capTailSym))
-        | None =>
-          match opt_bind (stripSymRC bridge2Pfx sr) sPopMRTail with
-          | Some (isSym, d) =>
-            Some (MB0, SLC (LD 5) :: restL, map SRC bridge2OutTop ++ (mkMRSym isSym d :: capTailSym))
-          | None =>
-            match opt_bind (stripSymRC bridge3Pfx sr) sPopMRTail with
-            | Some (isSym, d) =>
-              Some (MB0, SLC (LD 5) :: restL, map SRC bridge3OutTop ++ (mkMRSym isSym d :: capTailSym))
-            | None => None
-            end
-          end
-        end
-      end
-    end
-  end.
-
-Lemma stripSymRC_bind_sPopMRTail {pfx : list RTok} {sr : list SymRTok} {isSym : bool} {d : N}
-  (h : opt_bind (stripSymRC pfx sr) sPopMRTail = Some (isSym, d)) :
-  sr = map SRC pfx ++ (mkMRSym isSym d :: capTailSym).
-Proof.
-  destruct (stripSymRC pfx sr) as [rAfter |] eqn:hs; [cbn [opt_bind] in h | discriminate].
-  rewrite (stripSymRC_some pfx sr rAfter hs), (sPopMRTail_some h). reflexivity.
-Qed.
-
-Lemma sStepBridgesB0_sound {sl : list SymLTok} {sr : list SymRTok}
-  {m' : Mode} {sl' : list SymLTok} {sr' : list SymRTok}
-  (h : sStepBridgesB0 sl sr = Some (m', sl', sr')) :
-  SymReached MB0 sl sr m' sl' sr'.
-Proof.
-  unfold sStepBridgesB0 in h.
-  assert (hcap_cases :
-    (match stripSymLC [L0 0; LD1 5; LD 5] sl with
-     | None => None
-     | Some restL =>
-       match opt_bind (stripSymRC bridge0aPfx sr) sPopMRTail with
-       | Some (isSym, d) =>
-         Some (MB0, map SLC h10Top ++ restL,
-               SRC (R0 9) :: SRC (R1 0) :: mkMRSym isSym (d + 1) :: capTailSym)
-       | None =>
-         match opt_bind (stripSymRC bridge1Pfx sr) sPopMRTail with
-         | Some (isSym, d) =>
-           Some (MB0, SLC (LD 5) :: restL, map SRC bridge1OutTop ++ (mkMRSym isSym d :: capTailSym))
-         | None =>
-           match opt_bind (stripSymRC bridge2Pfx sr) sPopMRTail with
-           | Some (isSym, d) =>
-             Some (MB0, SLC (LD 5) :: restL, map SRC bridge2OutTop ++ (mkMRSym isSym d :: capTailSym))
-           | None =>
-             match opt_bind (stripSymRC bridge3Pfx sr) sPopMRTail with
-             | Some (isSym, d) =>
-               Some (MB0, SLC (LD 5) :: restL, map SRC bridge3OutTop ++ (mkMRSym isSym d :: capTailSym))
-             | None => None
-             end
-           end
-         end
-       end
-     end) = Some (m', sl', sr') -> SymReached MB0 sl sr m' sl' sr').
-  { intro hc.
-    destruct (stripSymLC [L0 0; LD1 5; LD 5] sl) as [restL |] eqn:hl; [| discriminate].
-    rewrite (stripSymLC_some [L0 0; LD1 5; LD 5] sl restL hl).
-    destruct (opt_bind (stripSymRC bridge0aPfx sr) sPopMRTail) as [[isSym d] |] eqn:hb0.
-    - injection hc as <- <- <-. rewrite (stripSymRC_bind_sPopMRTail hb0).
-      intros vr v2 v3 v4 rest.
-      rewrite !evalSymL_map_c, evalSymR_map_c.
-      destruct isSym; cbn [mkMRSym map app evalSymL evalSymR capTailSym].
-      + replace (vr + (d + 1)) with ((vr + d) + 1) by lia.
-        exact (bridge0a_concrete (vr + d) (evalSymL v2 v3 v4 restL rest)).
-      + exact (bridge0a_concrete d (evalSymL v2 v3 v4 restL rest)).
-    - destruct (opt_bind (stripSymRC bridge1Pfx sr) sPopMRTail) as [[isSym d] |] eqn:hb1.
-      + injection hc as <- <- <-. rewrite (stripSymRC_bind_sPopMRTail hb1).
-        intros vr v2 v3 v4 rest.
-        rewrite evalSymR_map_c.
-        destruct isSym; cbn [mkMRSym map app evalSymL evalSymR capTailSym].
-        * exact (bridge1_concrete (vr + d) (evalSymL v2 v3 v4 restL rest)).
-        * exact (bridge1_concrete d (evalSymL v2 v3 v4 restL rest)).
-      + destruct (opt_bind (stripSymRC bridge2Pfx sr) sPopMRTail) as [[isSym d] |] eqn:hb2.
-        * injection hc as <- <- <-. rewrite (stripSymRC_bind_sPopMRTail hb2).
-          intros vr v2 v3 v4 rest.
-          rewrite evalSymR_map_c.
-          destruct isSym; cbn [mkMRSym map app evalSymL evalSymR capTailSym].
-          -- exact (bridge2_concrete (vr + d) (evalSymL v2 v3 v4 restL rest)).
-          -- exact (bridge2_concrete d (evalSymL v2 v3 v4 restL rest)).
-        * destruct (opt_bind (stripSymRC bridge3Pfx sr) sPopMRTail) as [[isSym d] |] eqn:hb3; [| discriminate].
-          injection hc as <- <- <-. rewrite (stripSymRC_bind_sPopMRTail hb3).
-          intros vr v2 v3 v4 rest.
-          rewrite evalSymR_map_c.
-          destruct isSym; cbn [mkMRSym map app evalSymL evalSymR capTailSym].
-          -- exact (bridge3_concrete (vr + d) (evalSymL v2 v3 v4 restL rest)).
-          -- exact (bridge3_concrete d (evalSymL v2 v3 v4 restL rest)). }
-  destruct (opt_bind (stripSymRC [R0 9; R1 0] sr) sPopMRTail) as [[isSym d] |] eqn:hr9;
-    [| exact (hcap_cases h)].
-  destruct (stripSymLC h10Top sl) as [afterH10 |] eqn:hh10;
-    [| exact (hcap_cases h)].
-  injection h as <- <- <-.
-  rewrite (stripSymRC_bind_sPopMRTail hr9), (stripSymLC_some h10Top sl afterH10 hh10).
-  intros vr v2 v3 v4 rest.
-  rewrite evalSymL_map_c, evalSymR_map_c.
-  destruct isSym; cbn [mkMRSym map app evalSymL evalSymR capTailSym].
-  - exact (bridgeH10_concrete (vr + d) (evalSymL v2 v3 v4 afterH10 rest)).
-  - exact (bridgeH10_concrete d (evalSymL v2 v3 v4 afterH10 rest)).
-Qed.
-
-Definition symStepB (m : Mode) (sl0 : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  let sl := sNormB0W3 m sl0 sr in
-  match m with
-  | MDL => sStepDL sl sr
-  | MB0 =>
-    match sStepBridgesB0 sl sr with
-    | Some res => Some res
-    | None =>
-      match sStepMotifB0 sl sr with
-      | Some res => Some res
-      | None => sStepB0Base sl sr
-      end
-    end
-  end.
-
-Definition symStepBOpt (st : option (Mode * list SymLTok * list SymRTok)) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  match st with
-  | None => None
-  | Some (m, sl, sr) => symStepB m sl sr
-  end.
-
-Definition symRunB (steps : positive) (m : Mode) (sl : list SymLTok) (sr : list SymRTok) :
-  option (Mode * list SymLTok * list SymRTok) :=
-  Pos.iter symStepBOpt (Some (m, sl, sr)) steps.
-
-Definition checkSymB (steps : positive) (m : Mode) (sl : list SymLTok) (sr : list SymRTok)
-  (m' : Mode) (sl' : list SymLTok) (sr' : list SymRTok) : bool :=
-  match symRunB steps m sl sr with
-  | None => false
-  | Some (rm, rsl, rsr) =>
-    beqMode rm m' && beqSymLList rsl sl' && beqSymRList rsr sr'
-  end.
-
-Lemma symStepB_sound {m m' : Mode} {sl0 sl' : list SymLTok} {sr sr' : list SymRTok}
-  (h : symStepB m sl0 sr = Some (m', sl', sr')) :
-  SymReached m sl0 sr m' sl' sr'.
-Proof.
-  assert (hraw : SymReached m (sNormB0W3 m sl0 sr) sr m' sl' sr').
-  { unfold symStepB in h. destruct m.
-    - destruct (sStepBridgesB0 (sNormB0W3 MB0 sl0 sr) sr) as [res |] eqn:hb.
-      + inversion h; subst. exact (sStepBridgesB0_sound hb).
-      + destruct (sStepMotifB0 (sNormB0W3 MB0 sl0 sr) sr) as [res |] eqn:hm.
-        * inversion h; subst. exact (sStepMotifB0_sound hm).
-        * exact (sStepB0Base_sound h).
-    - exact (sStepDL_sound h). }
-  intros vr v2 v3 v4 rest.
-  rewrite <- (encodeBase_core_congr m (eL_sNormB0W3 m sl0 sr v2 v3 v4 rest) eq_refl).
-  exact (hraw vr v2 v3 v4 rest).
-Qed.
-
-Lemma iter_symStepBOpt_none (p : positive) : Pos.iter symStepBOpt None p = None.
-Proof. induction p as [p IH | p IH |]; cbn [Pos.iter]; rewrite ?IH; reflexivity. Qed.
-
-Lemma symRunB_sound (steps : positive) :
-  forall {m0 m rm : Mode} {sl0 sl rsl : list SymLTok} {sr0 sr rsr : list SymRTok},
-    SymReached m0 sl0 sr0 m sl sr ->
-    Pos.iter symStepBOpt (Some (m, sl, sr)) steps = Some (rm, rsl, rsr) ->
-    SymReached m0 sl0 sr0 rm rsl rsr.
-Proof.
-  induction steps as [p IH | p IH |]; intros m0 m rm sl0 sl rsl sr0 sr rsr hpre hr;
-    cbn [Pos.iter] in hr.
-  - destruct (Pos.iter symStepBOpt (Some (m, sl, sr)) p) as [[[m1 sl1] sr1] |] eqn:hp1;
-      [| rewrite iter_symStepBOpt_none in hr; discriminate].
-    destruct (Pos.iter symStepBOpt (Some (m1, sl1, sr1)) p) as [[[m2 sl2] sr2] |] eqn:hp2;
-      [| discriminate].
-    exact (symReached_trans (IH _ _ _ _ _ _ _ _ _ (IH _ _ _ _ _ _ _ _ _ hpre hp1) hp2)
-             (symStepB_sound hr)).
-  - destruct (Pos.iter symStepBOpt (Some (m, sl, sr)) p) as [[[m1 sl1] sr1] |] eqn:hp1;
-      [| rewrite iter_symStepBOpt_none in hr; discriminate].
-    exact (IH _ _ _ _ _ _ _ _ _ (IH _ _ _ _ _ _ _ _ _ hpre hp1) hr).
-  - exact (symReached_trans hpre (symStepB_sound hr)).
-Qed.
-
-Lemma checkSymB_sound {steps : positive} {m m' : Mode} {sl sl' : list SymLTok} {sr sr' : list SymRTok}
-  (h : checkSymB steps m sl sr m' sl' sr' = true) :
-  SymReached m sl sr m' sl' sr'.
-Proof.
-  unfold checkSymB, symRunB in h.
-  destruct (Pos.iter symStepBOpt (Some (m, sl, sr)) steps) as [[[rm rsl] rsr] |] eqn:hrun;
-    [| discriminate].
-  apply andb_prop in h. destruct h as [h hsr].
-  apply andb_prop in h. destruct h as [hm hsl].
-  rewrite <- (eq_of_beqMode hm), <- (eq_of_beqSymLList rsl sl' hsl), <- (eq_of_beqSymRList rsr sr' hsr).
-  exact (symRunB_sound steps (symReached_refl m sl sr) hrun).
-Qed.
-
-(* ========================================================================= *)
-(* Section 11: Layer-2 Symbolic Proofs & 7 Quadratic Countdown Eras          *)
-(* ========================================================================= *)
 
 Definition era2Mid176L : list SymLTok :=
   [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
@@ -4728,7 +3090,7 @@ Definition era2Mid176L : list SymLTok :=
    SLC (LD 7); SLC (LD 7); SM3 9].
 
 Lemma era2Head_chk :
-  checkSymB 176%positive MB0
+  checkHoles 27410%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SM2 2;
      SLC (L0 3); SLC (LD 9); SLC (LD 7); SM3 10]
@@ -4738,7 +3100,7 @@ Lemma era2Head_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era2Tail_chk :
-  checkSymB 3635%positive MB0 era2Mid176L
+  checkHoles 1358450%positive MB0 era2Mid176L
     [SRC (R0 9); SRC (R1 0); SMR 1; SRC (R02 0); SRC (R1 3); SRC (R02 0)]
     MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
@@ -4748,7 +3110,7 @@ Lemma era2Tail_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era3a_chk :
-  checkSymB 6683%positive MB0
+  checkHoles 3711112%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SM2 1;
      SLC (LD 7); SLC (LD 3); SLC (LD1 7); SLC (LD 9); SLC (L0 3); SLC (LD1 1); SM4 44]
@@ -4761,7 +3123,7 @@ Lemma era3a_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era3b_chk :
-  checkSymB 1071%positive MB0
+  checkHoles 228490%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SM2 2;
      SLC (LD 7); SLC (L0 0); SLC (LD1 1); SM4 7]
@@ -4774,7 +3136,7 @@ Lemma era3b_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era3c_chk :
-  checkSymB 1071%positive MB0
+  checkHoles 247174%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SM2 2;
      SLC (LD 7); SLC (LD 3); SLC (LD1 3); SLC (LD 5); SLC (LD1 3); SM4 7]
@@ -4787,7 +3149,7 @@ Lemma era3c_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era4a_chk :
-  checkSymB 135%positive MB0
+  checkHoles 23916%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SM2 1;
      SLC (LD 7); SLC (LD 3); SLC (LD1 10); SLC (LD 4); SLC (LD1 0);
@@ -4802,7 +3164,7 @@ Lemma era4a_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era4b_chk :
-  checkSymB 135%positive MB0
+  checkHoles 25992%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SM2 2;
      SLC (LD 7); SLC (LD 3); SLC (LD1 1); SLC (LD 4); SLC (L0 4);
@@ -4817,7 +3179,7 @@ Lemma era4b_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era4aEnd_chk :
-  checkSymB 988%positive MB0
+  checkHoles 60862%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SLC (M2L 0);
      SLC (LD 7); SLC (LD 3); SLC (LD1 10); SLC (LD 4); SLC (LD1 0);
@@ -4832,7 +3194,7 @@ Lemma era4aEnd_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma era4bEnd_chk :
-  checkSymB 987%positive MB0
+  checkHoles 78718%positive MB0
     [SLC (LD 7); SLC (LD 3); SLC (LD 5); SLC (LD 7); SLC (LD 3); SLC (LD1 1);
      SLC (LD 5); SLC (LD 3); SLC (LD1 8); SLC (LD 5); SLC (M2L 1);
      SLC (LD 7); SLC (LD 3); SLC (LD1 1); SLC (LD 4); SLC (L0 4);
@@ -4847,7 +3209,7 @@ Lemma era4bEnd_chk :
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 Lemma postMR11Head_chk :
-  checkSymB 4241%positive MB0
+  checkHoles 394169%positive MB0
     [SLC (LD 2); SLC (L0 1); SM3 16]
     [SRC (R0 4); SRC (MR11 0); SRC (R02 0); SRC (R1 3); SRC (R02 0)]
     MB0
@@ -4879,203 +3241,103 @@ Lemma era2_step_concrete (mr d2 v3 : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2) :: era2MidTop ++ (M3L (v3 + 10) :: rest))) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 7) :: era2MidTop ++ (M3L v3 :: rest))) (rc6Of (mr + 19))).
 Proof.
-  pose proof (symReached_trans (checkSymB_sound era2Head_chk) (checkSymB_sound era2Tail_chk) mr d2 v3 0 rest) as hr.
+  pose proof (symReached_trans (checkHoles_sound era2Head_chk) (checkHoles_sound era2Tail_chk) mr d2 v3 0 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   replace (v3 + 0) with v3 in hr by lia.
   exact hr.
 Qed.
 
-Lemma era2_loop :
-  forall (q' mr d2 rem : N) (rest : list LTok),
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2) :: era2MidTop ++ (M3L (rem + 10 * (q' + 1)) :: rest))) (rc6Of mr)) -[ tm ]->*
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2 + 5 * (q' + 1)) :: era2MidTop ++ (M3L rem :: rest))) (rc6Of (mr + 19 * (q' + 1)))).
+(* Each pass consumes one stride of the active digit and adds fixed
+   increments to the other two. No tape representation is needed here. *)
+Lemma affine_countdown (cfg : N -> N -> N -> Q * tape) (dr da db : N)
+  (next : forall r a b, cfg r a (b + db) -[ tm ]->* cfg (r + dr) (a + da) b) :
+  forall n r a b, cfg r a (b + db * n) -[ tm ]->* cfg (r + dr * n) (a + da * n) b.
 Proof.
-  intro q'; pattern q'; apply N.peano_ind.
-  - intros mr d2 rem rest.
-    change (0 + 1) with 1.
-    replace (10 * 1) with 10 by lia.
-    replace (d2 + 2 + 5 * 1) with (d2 + 7) by lia.
-    replace (mr + 19 * 1) with (mr + 19) by lia.
-    exact (era2_step_concrete mr d2 rem rest).
-  - intros m IH mr d2 rem rest.
-    replace (N.succ m) with (m + 1) by lia.
-    pose proof (era2_step_concrete mr d2 (rem + 10 * (m + 1)) rest) as h1.
-    pose proof (IH (mr + 19) (d2 + 5) rem rest) as h2.
-    replace (rem + 10 * (m + 1) + 10) with (rem + 10 * (m + 1 + 1)) in h1 by lia.
-    replace (d2 + 7) with (d2 + 5 + 2) in h1 by lia.
-    replace (d2 + 5 + 2 + 5 * (m + 1)) with (d2 + 2 + 5 * (m + 1 + 1)) in h2 by lia.
-    replace (mr + 19 + 19 * (m + 1)) with (mr + 19 * (m + 1 + 1)) in h2 by lia.
-    exact (rs_trans h1 h2).
+  intro n; induction n as [| n IH] using N.peano_ind; intros r a b.
+  - rewrite !N.mul_0_r, !N.add_0_r. apply rs_refl.
+  - rewrite !N.mul_succ_r.
+    replace (b + (db * n + db)) with (b + db * n + db) by lia.
+    replace (r + (dr * n + dr)) with (r + dr + dr * n) by lia.
+    replace (a + (da * n + da)) with (a + da + da * n) by lia.
+    exact (rs_trans (next r a (b + db * n)) (IH (r + dr) (a + da) b)).
 Qed.
 
 Lemma era3a_step_concrete (mr d2 v4 : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 1) :: era3aMidTop ++ (M4L (v4 + 44) :: rest))) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 8) :: era3aMidTop ++ (M4L v4 :: rest))) (rc6Of (mr + 35))).
 Proof.
-  pose proof (checkSymB_sound era3a_chk mr d2 0 v4 rest) as hr.
+  pose proof (checkHoles_sound era3a_chk mr d2 0 v4 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   replace (v4 + 0) with v4 in hr by lia.
   exact hr.
-Qed.
-
-Lemma era3a_loop :
-  forall (q' mr d2 rem : N) (rest : list LTok),
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 1) :: era3aMidTop ++ (M4L (rem + 44 * (q' + 1)) :: rest))) (rc6Of mr)) -[ tm ]->*
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 1 + 7 * (q' + 1)) :: era3aMidTop ++ (M4L rem :: rest))) (rc6Of (mr + 35 * (q' + 1)))).
-Proof.
-  intro q'; pattern q'; apply N.peano_ind.
-  - intros mr d2 rem rest.
-    change (0 + 1) with 1.
-    replace (44 * 1) with 44 by lia.
-    replace (d2 + 1 + 7 * 1) with (d2 + 8) by lia.
-    replace (mr + 35 * 1) with (mr + 35) by lia.
-    exact (era3a_step_concrete mr d2 rem rest).
-  - intros m IH mr d2 rem rest.
-    replace (N.succ m) with (m + 1) by lia.
-    pose proof (era3a_step_concrete mr d2 (rem + 44 * (m + 1)) rest) as h1.
-    pose proof (IH (mr + 35) (d2 + 7) rem rest) as h2.
-    replace (rem + 44 * (m + 1) + 44) with (rem + 44 * (m + 1 + 1)) in h1 by lia.
-    replace (d2 + 8) with (d2 + 7 + 1) in h1 by lia.
-    replace (d2 + 7 + 1 + 7 * (m + 1)) with (d2 + 1 + 7 * (m + 1 + 1)) in h2 by lia.
-    replace (mr + 35 + 35 * (m + 1)) with (mr + 35 * (m + 1 + 1)) in h2 by lia.
-    exact (rs_trans h1 h2).
 Qed.
 
 Lemma era3b_step_concrete (mr d2 v4 : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2) :: era3bMidTop ++ (M4L (v4 + 7) :: rest))) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 3) :: era3bMidTop ++ (M4L v4 :: rest))) (rc6Of (mr + 6))).
 Proof.
-  pose proof (checkSymB_sound era3b_chk mr d2 0 v4 rest) as hr.
+  pose proof (checkHoles_sound era3b_chk mr d2 0 v4 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   replace (v4 + 0) with v4 in hr by lia.
   exact hr.
-Qed.
-
-Lemma era3b_loop :
-  forall (q' mr d2 rem : N) (rest : list LTok),
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2) :: era3bMidTop ++ (M4L (rem + 7 * (q' + 1)) :: rest))) (rc6Of mr)) -[ tm ]->*
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2 + (q' + 1)) :: era3bMidTop ++ (M4L rem :: rest))) (rc6Of (mr + 6 * (q' + 1)))).
-Proof.
-  intro q'; pattern q'; apply N.peano_ind.
-  - intros mr d2 rem rest.
-    change (0 + 1) with 1.
-    replace (7 * 1) with 7 by lia.
-    replace (d2 + 2 + 1) with (d2 + 3) by lia.
-    replace (mr + 6 * 1) with (mr + 6) by lia.
-    exact (era3b_step_concrete mr d2 rem rest).
-  - intros m IH mr d2 rem rest.
-    replace (N.succ m) with (m + 1) by lia.
-    pose proof (era3b_step_concrete mr d2 (rem + 7 * (m + 1)) rest) as h1.
-    pose proof (IH (mr + 6) (d2 + 1) rem rest) as h2.
-    replace (rem + 7 * (m + 1) + 7) with (rem + 7 * (m + 1 + 1)) in h1 by lia.
-    replace (d2 + 3) with (d2 + 1 + 2) in h1 by lia.
-    replace (d2 + 1 + 2 + (m + 1)) with (d2 + 2 + (m + 1 + 1)) in h2 by lia.
-    replace (mr + 6 + 6 * (m + 1)) with (mr + 6 * (m + 1 + 1)) in h2 by lia.
-    exact (rs_trans h1 h2).
 Qed.
 
 Lemma era3c_step_concrete (mr d2 v4 : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2) :: era3cMidTop ++ (M4L (v4 + 7) :: rest))) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 3) :: era3cMidTop ++ (M4L v4 :: rest))) (rc6Of (mr + 6))).
 Proof.
-  pose proof (checkSymB_sound era3c_chk mr d2 0 v4 rest) as hr.
+  pose proof (checkHoles_sound era3c_chk mr d2 0 v4 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   replace (v4 + 0) with v4 in hr by lia.
   exact hr.
 Qed.
 
-Lemma era3c_loop :
-  forall (q' mr d2 rem : N) (rest : list LTok),
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2) :: era3cMidTop ++ (M4L (rem + 7 * (q' + 1)) :: rest))) (rc6Of mr)) -[ tm ]->*
-    encodeBase (Core MB0 (h10Top ++ (M2L (d2 + 2 + (q' + 1)) :: era3cMidTop ++ (M4L rem :: rest))) (rc6Of (mr + 6 * (q' + 1)))).
-Proof.
-  intro q'; pattern q'; apply N.peano_ind.
-  - intros mr d2 rem rest.
-    change (0 + 1) with 1.
-    replace (7 * 1) with 7 by lia.
-    replace (d2 + 2 + 1) with (d2 + 3) by lia.
-    replace (mr + 6 * 1) with (mr + 6) by lia.
-    exact (era3c_step_concrete mr d2 rem rest).
-  - intros m IH mr d2 rem rest.
-    replace (N.succ m) with (m + 1) by lia.
-    pose proof (era3c_step_concrete mr d2 (rem + 7 * (m + 1)) rest) as h1.
-    pose proof (IH (mr + 6) (d2 + 1) rem rest) as h2.
-    replace (rem + 7 * (m + 1) + 7) with (rem + 7 * (m + 1 + 1)) in h1 by lia.
-    replace (d2 + 3) with (d2 + 1 + 2) in h1 by lia.
-    replace (d2 + 1 + 2 + (m + 1)) with (d2 + 2 + (m + 1 + 1)) in h2 by lia.
-    replace (mr + 6 + 6 * (m + 1)) with (mr + 6 * (m + 1 + 1)) in h2 by lia.
-    exact (rs_trans h1 h2).
-Qed.
-
 Lemma era4a_step_concrete (mr v2 : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L (v2 + 1) :: era4aMidTop ++ rest)) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L v2 :: era4aMidTop ++ pushM4L 1 rest)) (rc6Of (mr + 1))).
 Proof.
-  pose proof (checkSymB_sound era4a_chk mr v2 0 0 rest) as hr.
+  pose proof (checkHoles_sound era4a_chk mr v2 0 0 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   replace (v2 + 0) with v2 in hr by lia.
   exact hr.
 Qed.
 
-Lemma era4a_loop :
-  forall (q' mr : N) (rest : list LTok),
-    encodeBase (Core MB0 (h10Top ++ (M2L (q' + 1) :: era4aMidTop ++ rest)) (rc6Of mr)) -[ tm ]->*
-    encodeBase (Core MB0 (h10Top ++ (M2L 0 :: era4aMidTop ++ pushM4L (2 * q' + 1) rest)) (rc6Of (mr + (q' + 1)))).
+(* The other countdown grows a suffix by all the blocks produced by
+   successive calls. pushM4L's argument is the run length minus one. *)
+Lemma grow_M4_countdown (cfg : N -> N -> list LTok -> Q * tape)
+  (next : forall r n rest, cfg r (n + 1) rest -[ tm ]->* cfg (r + 1) n (pushM4L 1 rest)) :
+  forall n r rest, cfg r (n + 1) rest -[ tm ]->* cfg (r + (n + 1)) 0 (pushM4L (2 * n + 1) rest).
 Proof.
-  intro q'; pattern q'; apply N.peano_ind.
-  - intros mr rest.
-    change (2 * 0 + 1) with 1.
-    exact (era4a_step_concrete mr 0 rest).
-  - intros m IH mr rest.
-    replace (N.succ m) with (m + 1) by lia.
-    pose proof (era4a_step_concrete mr (m + 1) rest) as h1.
-    pose proof (IH (mr + 1) (pushM4L 1 rest)) as h2.
-    rewrite (pushM4L_pushM4L (2 * m + 1) 1 rest) in h2.
-    replace (2 * m + 1 + 1 + 1) with (2 * (m + 1) + 1) in h2 by lia.
-    replace (mr + 1 + (m + 1)) with (mr + (m + 1 + 1)) in h2 by lia.
-    exact (rs_trans h1 h2).
+  intro n; induction n as [| n IH] using N.peano_ind; intros r rest.
+  - exact (next r 0 rest).
+  - rewrite <- N.add_1_r.
+    pose proof (IH (r + 1) (pushM4L 1 rest)) as hr.
+    rewrite pushM4L_pushM4L in hr.
+    replace (2 * n + 1 + 1 + 1) with (2 * (n + 1) + 1) in hr by lia.
+    replace (r + 1 + (n + 1)) with (r + (n + 1 + 1)) in hr by lia.
+    exact (rs_trans (next r (n + 1) rest) hr).
 Qed.
 
 Lemma era4b_step_concrete (mr v2 : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L (v2 + 2) :: era4bMidTop ++ rest)) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L (v2 + 1) :: era4bMidTop ++ pushM4L 1 rest)) (rc6Of (mr + 1))).
 Proof.
-  pose proof (checkSymB_sound era4b_chk mr v2 0 0 rest) as hr.
+  pose proof (checkHoles_sound era4b_chk mr v2 0 0 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   exact hr.
-Qed.
-
-Lemma era4b_loop :
-  forall (q' mr : N) (rest : list LTok),
-    encodeBase (Core MB0 (h10Top ++ (M2L (q' + 2) :: era4bMidTop ++ rest)) (rc6Of mr)) -[ tm ]->*
-    encodeBase (Core MB0 (h10Top ++ (M2L 1 :: era4bMidTop ++ pushM4L (2 * q' + 1) rest)) (rc6Of (mr + (q' + 1)))).
-Proof.
-  intro q'; pattern q'; apply N.peano_ind.
-  - intros mr rest.
-    change (2 * 0 + 1) with 1; change (0 + 2) with 2; change (0 + 1) with 1.
-    exact (era4b_step_concrete mr 0 rest).
-  - intros m IH mr rest.
-    replace (N.succ m) with (m + 1) by lia.
-    pose proof (era4b_step_concrete mr (m + 1) rest) as h1.
-    pose proof (IH (mr + 1) (pushM4L 1 rest)) as h2.
-    replace (m + 1 + 1) with (m + 2) in h1 by lia.
-    rewrite (pushM4L_pushM4L (2 * m + 1) 1 rest) in h2.
-    replace (2 * m + 1 + 1 + 1) with (2 * (m + 1) + 1) in h2 by lia.
-    replace (mr + 1 + (m + 1)) with (mr + (m + 1 + 1)) in h2 by lia.
-    exact (rs_trans h1 h2).
 Qed.
 
 Lemma era4aEnd_concrete (mr : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L 0 :: era4aMidTop ++ rest)) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (era4aEndOutTop ++ pushM4L 5 rest) (rc4Of (mr + 2))).
 Proof.
-  pose proof (checkSymB_sound era4aEnd_chk mr 0 0 0 rest) as hr.
+  pose proof (checkHoles_sound era4aEnd_chk mr 0 0 0 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   exact hr.
@@ -5085,7 +3347,7 @@ Lemma era4bEnd_concrete (mr : N) (rest : list LTok) :
   encodeBase (Core MB0 (h10Top ++ (M2L 1 :: era4bMidTop ++ rest)) (rc6Of mr)) -[ tm ]->*
   encodeBase (Core MB0 (era4bEndOutTop ++ pushM4L 5 rest) (rc4Of (mr + 3))).
 Proof.
-  pose proof (checkSymB_sound era4bEnd_chk mr 0 0 0 rest) as hr.
+  pose proof (checkHoles_sound era4bEnd_chk mr 0 0 0 rest) as hr.
   cbn [evalSymL evalSymR] in hr.
   replace (mr + 0) with mr in hr by lia.
   exact hr.
@@ -5095,15 +3357,15 @@ Lemma postMR11_concrete (m3Rem : N) (rest : list LTok) :
   encodeBase (Core MB0 (LD 2 :: L0 1 :: M3L (m3Rem + 16) :: rest) (rc4Of 0)) -[ tm ]->*
   encodeBase (Core MB0 (h10Top ++ (M2L 7 :: era2MidTop ++ (M3L m3Rem :: rest))) (rc6Of 28)).
 Proof.
-  pose proof (checkSymB_sound postMR11Head_chk 0 0 m3Rem 0 rest) as hr1.
-  pose proof (checkSymB_sound era2Tail_chk 9 0 m3Rem 0 rest) as hr2.
+  pose proof (checkHoles_sound postMR11Head_chk 0 0 m3Rem 0 rest) as hr1.
+  pose proof (checkHoles_sound era2Tail_chk 9 0 m3Rem 0 rest) as hr2.
   cbn [era2Mid176L evalSymL evalSymR] in hr1, hr2.
   replace (m3Rem + 0) with m3Rem in hr2 by lia.
   exact (rs_trans hr1 hr2).
 Qed.
 
 (* ========================================================================= *)
-(* Section 12: stepV3, stepNext, Pos.iter Soundness & Halting Theorem        *)
+(* Section 8: Countdown Driver & Halting Theorem                          *)
 (* ========================================================================= *)
 
 Definition popMRTail (r : list RTok) : option N :=
@@ -5112,128 +3374,48 @@ Definition popMRTail (r : list RTok) : option N :=
   | None => None
   end.
 
-Definition tryRC6Era2 (mr m2 : N) (afterM2 : list LTok) : option BaseState :=
-  match stripLPrefix era2MidTop afterM2 with
-  | Some afterMid =>
-    if 2 <=? m2 then
-      match popM3L afterMid with
-      | Some (m3, rest) =>
-        let q := m3 / 10 in
-        if 1 <=? q then
-          let rem := m3 mod 10 in
-          Some (Core MB0 (h10Top ++ (M2L (m2 + 5 * q) :: era2MidTop ++ (M3L rem :: rest)))
-            (rc6Of (mr + 19 * q)))
-        else None
-      | None => None
-      end
-    else None
-  | None => None
-  end.
+Definition rc6Frame (mid : list LTok) (mr m2 : N) (afterM2 : list LTok) : BaseState :=
+  Core MB0 (h10Top ++ (M2L m2 :: mid ++ afterM2)) (rc6Of mr).
 
-Definition tryRC6Era3a (mr m2 : N) (afterM2 : list LTok) : option BaseState :=
-  match stripLPrefix era3aMidTop afterM2 with
-  | Some afterMid =>
-    if 1 <=? m2 then
-      match popM4L afterMid with
-      | Some (m4, rest) =>
-        let q := m4 / 44 in
+Definition tryRC6Affine (mid : list LTok) (digit : N -> LTok)
+  (pop : list LTok -> option (N * list LTok)) (offset dr da stride mr m2 : N)
+  (afterM2 : list LTok) : option BaseState :=
+  opt_bind (stripLPrefix mid afterM2) (fun afterMid =>
+    if offset <=? m2 then
+      opt_bind (pop afterMid) (fun '(v, rest) =>
+        let q := v / stride in
         if 1 <=? q then
-          let rem := m4 mod 44 in
-          Some (Core MB0 (h10Top ++ (M2L (m2 + 7 * q) :: era3aMidTop ++ (M4L rem :: rest)))
-            (rc6Of (mr + 35 * q)))
-        else None
-      | None => None
-      end
-    else None
-  | None => None
-  end.
+          Some (rc6Frame mid (mr + dr * q) (m2 + da * q) (digit (v mod stride) :: rest))
+        else None)
+    else None).
 
-Definition tryRC6Era3b (mr m2 : N) (afterM2 : list LTok) : option BaseState :=
-  match stripLPrefix era3bMidTop afterM2 with
-  | Some afterMid =>
-    if 2 <=? m2 then
-      match popM4L afterMid with
-      | Some (m4, rest) =>
-        let q := m4 / 7 in
-        if 1 <=? q then
-          let rem := m4 mod 7 in
-          Some (Core MB0 (h10Top ++ (M2L (m2 + q) :: era3bMidTop ++ (M4L rem :: rest)))
-            (rc6Of (mr + 6 * q)))
-        else None
-      | None => None
-      end
-    else None
-  | None => None
-  end.
+Definition tryRC6Era2 := tryRC6Affine era2MidTop M3L popM3L 2 19 5 10.
+Definition tryRC6Era3a := tryRC6Affine era3aMidTop M4L popM4L 1 35 7 44.
+Definition tryRC6Era3b := tryRC6Affine era3bMidTop M4L popM4L 2 6 1 7.
+Definition tryRC6Era3c := tryRC6Affine era3cMidTop M4L popM4L 2 6 1 7.
 
-Definition tryRC6Era3c (mr m2 : N) (afterM2 : list LTok) : option BaseState :=
-  match stripLPrefix era3cMidTop afterM2 with
-  | Some afterMid =>
-    if 2 <=? m2 then
-      match popM4L afterMid with
-      | Some (m4, rest) =>
-        let q := m4 / 7 in
-        if 1 <=? q then
-          let rem := m4 mod 7 in
-          Some (Core MB0 (h10Top ++ (M2L (m2 + q) :: era3cMidTop ++ (M4L rem :: rest)))
-            (rc6Of (mr + 6 * q)))
-        else None
-      | None => None
-      end
-    else None
-  | None => None
-  end.
+Definition era4aExit mr rest :=
+  Core MB0 (era4aEndOutTop ++ pushM4L 5 rest) (rc4Of (mr + 2)).
+Definition era4bExit mr rest :=
+  Core MB0 (era4bEndOutTop ++ pushM4L 5 rest) (rc4Of (mr + 3)).
 
-Definition tryRC6Era4a (mr m2 : N) (afterM2 : list LTok) : option BaseState :=
-  match stripLPrefix era4aMidTop afterM2 with
-  | None => None
-  | Some rest =>
-    if m2 =? 0 then
-      Some (Core MB0 (era4aEndOutTop ++ pushM4L 5 rest) (rc4Of (mr + 2)))
+Definition tryRC6Grow mid offset exit mr m2 afterM2 : option BaseState :=
+  opt_bind (stripLPrefix mid afterM2) (fun rest =>
+    if m2 <? offset then None
+    else if m2 =? offset then Some (exit mr rest)
     else
-      let q' := m2 - 1 in
-      Some (Core MB0 (h10Top ++ (M2L 0 :: era4aMidTop ++ pushM4L (2 * q' + 1) rest))
-        (rc6Of (mr + m2)))
-  end.
+      let n := m2 - offset - 1 in
+      Some (rc6Frame mid (mr + (n + 1)) offset (pushM4L (2 * n + 1) rest))).
 
-Definition tryRC6Era4b (mr m2 : N) (afterM2 : list LTok) : option BaseState :=
-  match stripLPrefix era4bMidTop afterM2 with
-  | None => None
-  | Some rest =>
-    if m2 =? 0 then None
-    else if m2 =? 1 then
-      Some (Core MB0 (era4bEndOutTop ++ pushM4L 5 rest) (rc4Of (mr + 3)))
-    else
-      let q' := m2 - 2 in
-      Some (Core MB0 (h10Top ++ (M2L 1 :: era4bMidTop ++ pushM4L (2 * q' + 1) rest))
-        (rc6Of (mr + (q' + 1))))
-  end.
+Definition tryRC6Era4a := tryRC6Grow era4aMidTop 0 era4aExit.
+Definition tryRC6Era4b := tryRC6Grow era4bMidTop 1 era4bExit.
+
+Definition rc6Phases :=
+  [tryRC6Era2; tryRC6Era3a; tryRC6Era3b; tryRC6Era3c; tryRC6Era4a; tryRC6Era4b].
 
 Definition tryRC6All (mr : N) (afterH10 : list LTok) : option BaseState :=
-  match popM2L afterH10 with
-  | None => None
-  | Some (m2, afterM2) =>
-    match tryRC6Era2 mr m2 afterM2 with
-    | Some res => Some res
-    | None =>
-      match tryRC6Era3a mr m2 afterM2 with
-      | Some res => Some res
-      | None =>
-        match tryRC6Era3b mr m2 afterM2 with
-        | Some res => Some res
-        | None =>
-          match tryRC6Era3c mr m2 afterM2 with
-          | Some res => Some res
-          | None =>
-            match tryRC6Era4a mr m2 afterM2 with
-            | Some res => Some res
-            | None => tryRC6Era4b mr m2 afterM2
-            end
-          end
-        end
-      end
-    end
-  end.
+  opt_bind (popM2L afterH10) (fun '(m2, afterM2) =>
+    firstSome (fun phase => phase mr m2 afterM2) rc6Phases).
 
 Definition stepRC6H10 (mr : N) (afterH10 : list LTok) : BaseState :=
   match tryRC6All mr afterH10 with
@@ -5241,27 +3423,14 @@ Definition stepRC6H10 (mr : N) (afterH10 : list LTok) : BaseState :=
   | None => Core MB0 (LD 5 :: afterH10) (bridgeH10OutTop ++ (MR11 mr :: capTailR))
   end.
 
+Definition tryCapBridge rest r b :=
+  opt_bind (opt_bind (stripRPrefix (bridgeInR b) r) popMRTail) (fun k =>
+    Some (Core MB0 (bridgeOutL b ++ rest)
+      (bridgeOutR b ++ (MR11 (k + bridgeDelta b) :: capTailR)))).
+
 Definition stepCapBridgeB0 (l : list LTok) (r : list RTok) : option BaseState :=
-  match stripLPrefix [L0 0; LD1 5; LD 5] l with
-  | None => None
-  | Some rest =>
-    match opt_bind (stripRPrefix bridge0aPfx r) popMRTail with
-    | Some mr => Some (Core MB0 (h10Top ++ rest) (rc6Of (mr + 1)))
-    | None =>
-      match opt_bind (stripRPrefix bridge1Pfx r) popMRTail with
-      | Some mr => Some (Core MB0 (LD 5 :: rest) (bridge1OutTop ++ (MR11 mr :: capTailR)))
-      | None =>
-        match opt_bind (stripRPrefix bridge2Pfx r) popMRTail with
-        | Some mr => Some (Core MB0 (LD 5 :: rest) (bridge2OutTop ++ (MR11 mr :: capTailR)))
-        | None =>
-          match opt_bind (stripRPrefix bridge3Pfx r) popMRTail with
-          | Some mr => Some (Core MB0 (LD 5 :: rest) (bridge3OutTop ++ (MR11 mr :: capTailR)))
-          | None => None
-          end
-        end
-      end
-    end
-  end.
+  opt_bind (stripLPrefix capBridgeL l) (fun rest =>
+    firstSome (tryCapBridge rest r) capBridges).
 
 Definition tryRC6TopB0 (l : list LTok) (r : list RTok) : option BaseState :=
   match opt_bind (stripRPrefix [R0 9; R1 0] r) popMRTail, stripLPrefix h10Top l with
@@ -5338,139 +3507,144 @@ Proof.
   rewrite (popR0Eq_some hs), (popMRTail_some h). reflexivity.
 Qed.
 
+Lemma tryRC6Affine_sound (mid : list LTok) (digit : N -> LTok)
+  (pop : list LTok -> option (N * list LTok)) (offset dr da stride : N)
+  (pop_ok : forall xs v rest, pop xs = Some (v, rest) -> xs = digit v :: rest)
+  (stride_ok : stride <> 0)
+  (next : forall r a b rest,
+    encodeBase (rc6Frame mid r (a + offset) (digit (b + stride) :: rest)) -[ tm ]->*
+    encodeBase (rc6Frame mid (r + dr) (a + da + offset) (digit b :: rest)))
+  {mr m2 afterM2 bs'} :
+  tryRC6Affine mid digit pop offset dr da stride mr m2 afterM2 = Some bs' ->
+  encodeBase (rc6Frame [] mr m2 afterM2) -[ tm ]->* encodeBase bs'.
+Proof.
+  unfold tryRC6Affine. intro h.
+  destruct (stripLPrefix mid afterM2) as [xs |] eqn:hs; cbn [opt_bind] in h; [| discriminate].
+  destruct (offset <=? m2) eqn:hb; [| discriminate].
+  destruct (pop xs) as [[v rest] |] eqn:hp; cbn [opt_bind] in h; [| discriminate].
+  set (q := v / stride) in h.
+  destruct (1 <=? q); [| discriminate]. injection h as <-.
+  apply N.leb_le in hb.
+  rewrite (stripLPrefix_some mid afterM2 xs hs), (pop_ok xs v rest hp).
+  pose (C := fun r a b => encodeBase (rc6Frame mid r (a + offset) (digit b :: rest))).
+  pose proof (affine_countdown C dr da stride (fun r a b => next r a b rest)
+    q mr (m2 - offset) (v mod stride)) as hr.
+  unfold C, rc6Frame in hr.
+  replace (v mod stride + stride * q) with v in hr
+    by (unfold q; pose proof (N.div_mod v stride stride_ok); lia).
+  replace (m2 - offset + offset) with m2 in hr by lia.
+  replace (m2 - offset + da * q + offset) with (m2 + da * q) in hr by lia.
+  exact hr.
+Qed.
+
 Lemma tryRC6Era2_sound {mr m2 : N} {afterM2 : list LTok} {bs' : BaseState}
   (h : tryRC6Era2 mr m2 afterM2 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6Era2 in h.
-  destruct (stripLPrefix era2MidTop afterM2) as [afterMid |] eqn:hs; [| discriminate].
-  destruct (2 <=? m2) eqn:hm2; [| discriminate].
-  destruct (popM3L afterMid) as [[m3 rest] |] eqn:hm3; [| discriminate].
-  destruct (1 <=? m3 / 10) eqn:hq; [| discriminate].
-  apply N.leb_le in hm2. apply N.leb_le in hq.
-  injection h as <-.
-  set (d2 := m2 - 2). set (q' := m3 / 10 - 1).
-  assert (ha : afterM2 = era2MidTop ++ (M3L (m3 mod 10 + 10 * (q' + 1)) :: rest)).
-  { rewrite (stripLPrefix_some era2MidTop afterM2 afterMid hs), (popM3L_some hm3).
-    assert (hm3eq : m3 = m3 mod 10 + 10 * (q' + 1)) by (unfold q'; lia).
-    rewrite <- hm3eq; reflexivity. }
-  rewrite ha.
-  replace m2 with (d2 + 2) by (unfold d2; lia).
-  replace (m3 / 10) with (q' + 1) by (unfold q'; lia).
-  exact (era2_loop q' mr d2 (m3 mod 10) rest).
+  revert h. unfold tryRC6Era2. change (encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)))
+    with (encodeBase (rc6Frame [] mr m2 afterM2)).
+  apply tryRC6Affine_sound; [intros; now apply popM3L_some | discriminate |].
+  intros r a b rest. unfold rc6Frame.
+  replace (a + 5 + 2) with (a + 7) by lia.
+  exact (era2_step_concrete r a b rest).
 Qed.
 
 Lemma tryRC6Era3a_sound {mr m2 : N} {afterM2 : list LTok} {bs' : BaseState}
   (h : tryRC6Era3a mr m2 afterM2 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6Era3a in h.
-  destruct (stripLPrefix era3aMidTop afterM2) as [afterMid |] eqn:hs; [| discriminate].
-  destruct (1 <=? m2) eqn:hm2; [| discriminate].
-  destruct (popM4L afterMid) as [[m4 rest] |] eqn:hm4; [| discriminate].
-  destruct (1 <=? m4 / 44) eqn:hq; [| discriminate].
-  apply N.leb_le in hm2. apply N.leb_le in hq.
-  injection h as <-.
-  set (d2 := m2 - 1). set (q' := m4 / 44 - 1).
-  assert (ha : afterM2 = era3aMidTop ++ (M4L (m4 mod 44 + 44 * (q' + 1)) :: rest)).
-  { rewrite (stripLPrefix_some era3aMidTop afterM2 afterMid hs), (popM4L_some hm4).
-    assert (hm4eq : m4 = m4 mod 44 + 44 * (q' + 1)) by (unfold q'; lia).
-    rewrite <- hm4eq; reflexivity. }
-  rewrite ha.
-  replace m2 with (d2 + 1) by (unfold d2; lia).
-  replace (m4 / 44) with (q' + 1) by (unfold q'; lia).
-  exact (era3a_loop q' mr d2 (m4 mod 44) rest).
+  revert h. unfold tryRC6Era3a. change (encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)))
+    with (encodeBase (rc6Frame [] mr m2 afterM2)).
+  apply tryRC6Affine_sound; [intros; now apply popM4L_some | discriminate |].
+  intros r a b rest. unfold rc6Frame.
+  replace (a + 7 + 1) with (a + 8) by lia.
+  exact (era3a_step_concrete r a b rest).
 Qed.
 
 Lemma tryRC6Era3b_sound {mr m2 : N} {afterM2 : list LTok} {bs' : BaseState}
   (h : tryRC6Era3b mr m2 afterM2 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6Era3b in h.
-  destruct (stripLPrefix era3bMidTop afterM2) as [afterMid |] eqn:hs; [| discriminate].
-  destruct (2 <=? m2) eqn:hm2; [| discriminate].
-  destruct (popM4L afterMid) as [[m4 rest] |] eqn:hm4; [| discriminate].
-  destruct (1 <=? m4 / 7) eqn:hq; [| discriminate].
-  apply N.leb_le in hm2. apply N.leb_le in hq.
-  injection h as <-.
-  set (d2 := m2 - 2). set (q' := m4 / 7 - 1).
-  assert (ha : afterM2 = era3bMidTop ++ (M4L (m4 mod 7 + 7 * (q' + 1)) :: rest)).
-  { rewrite (stripLPrefix_some era3bMidTop afterM2 afterMid hs), (popM4L_some hm4).
-    assert (hm4eq : m4 = m4 mod 7 + 7 * (q' + 1)) by (unfold q'; lia).
-    rewrite <- hm4eq; reflexivity. }
-  rewrite ha.
-  replace m2 with (d2 + 2) by (unfold d2; lia).
-  replace (m4 / 7) with (q' + 1) by (unfold q'; lia).
-  exact (era3b_loop q' mr d2 (m4 mod 7) rest).
+  revert h. unfold tryRC6Era3b. change (encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)))
+    with (encodeBase (rc6Frame [] mr m2 afterM2)).
+  apply tryRC6Affine_sound; [intros; now apply popM4L_some | discriminate |].
+  intros r a b rest. unfold rc6Frame.
+  replace (a + 1 + 2) with (a + 3) by lia.
+  exact (era3b_step_concrete r a b rest).
 Qed.
 
 Lemma tryRC6Era3c_sound {mr m2 : N} {afterM2 : list LTok} {bs' : BaseState}
   (h : tryRC6Era3c mr m2 afterM2 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6Era3c in h.
-  destruct (stripLPrefix era3cMidTop afterM2) as [afterMid |] eqn:hs; [| discriminate].
-  destruct (2 <=? m2) eqn:hm2; [| discriminate].
-  destruct (popM4L afterMid) as [[m4 rest] |] eqn:hm4; [| discriminate].
-  destruct (1 <=? m4 / 7) eqn:hq; [| discriminate].
-  apply N.leb_le in hm2. apply N.leb_le in hq.
-  injection h as <-.
-  set (d2 := m2 - 2). set (q' := m4 / 7 - 1).
-  assert (ha : afterM2 = era3cMidTop ++ (M4L (m4 mod 7 + 7 * (q' + 1)) :: rest)).
-  { rewrite (stripLPrefix_some era3cMidTop afterM2 afterMid hs), (popM4L_some hm4).
-    assert (hm4eq : m4 = m4 mod 7 + 7 * (q' + 1)) by (unfold q'; lia).
-    rewrite <- hm4eq; reflexivity. }
-  rewrite ha.
-  replace m2 with (d2 + 2) by (unfold d2; lia).
-  replace (m4 / 7) with (q' + 1) by (unfold q'; lia).
-  exact (era3c_loop q' mr d2 (m4 mod 7) rest).
+  revert h. unfold tryRC6Era3c. change (encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)))
+    with (encodeBase (rc6Frame [] mr m2 afterM2)).
+  apply tryRC6Affine_sound; [intros; now apply popM4L_some | discriminate |].
+  intros r a b rest. unfold rc6Frame.
+  replace (a + 1 + 2) with (a + 3) by lia.
+  exact (era3c_step_concrete r a b rest).
+Qed.
+
+Lemma tryRC6Grow_sound mid offset exit
+  (next : forall r m rest,
+    encodeBase (rc6Frame mid r (m + 1 + offset) rest) -[ tm ]->*
+    encodeBase (rc6Frame mid (r + 1) (m + offset) (pushM4L 1 rest)))
+  (last : forall r rest,
+    encodeBase (rc6Frame mid r offset rest) -[ tm ]->* encodeBase (exit r rest))
+  {mr m2 afterM2 bs'} :
+  tryRC6Grow mid offset exit mr m2 afterM2 = Some bs' ->
+  encodeBase (rc6Frame [] mr m2 afterM2) -[ tm ]->* encodeBase bs'.
+Proof.
+  unfold tryRC6Grow. intro h.
+  destruct (stripLPrefix mid afterM2) as [rest |] eqn:hs; cbn [opt_bind] in h; [| discriminate].
+  destruct (m2 <? offset) eqn:hb; [discriminate |].
+  rewrite (stripLPrefix_some mid afterM2 rest hs).
+  destruct (m2 =? offset) eqn:he.
+  - apply N.eqb_eq in he; subst. injection h as <-. exact (last mr rest).
+  - apply N.ltb_ge in hb. apply N.eqb_neq in he. injection h as <-.
+    pose (C := fun r n xs => encodeBase (rc6Frame mid r (n + offset) xs)).
+    pose proof (grow_M4_countdown C next (m2 - offset - 1) mr rest) as hr.
+    unfold C in hr. replace (m2 - offset - 1 + 1 + offset) with m2 in hr by lia.
+    exact hr.
 Qed.
 
 Lemma tryRC6Era4a_sound {mr m2 : N} {afterM2 : list LTok} {bs' : BaseState}
   (h : tryRC6Era4a mr m2 afterM2 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6Era4a in h.
-  destruct (stripLPrefix era4aMidTop afterM2) as [rest |] eqn:hs; [| discriminate].
-  rewrite (stripLPrefix_some era4aMidTop afterM2 rest hs).
-  destruct (m2 =? 0) eqn:hm2.
-  - apply N.eqb_eq in hm2; subst m2. injection h as <-.
-    exact (era4aEnd_concrete mr rest).
-  - apply N.eqb_neq in hm2. injection h as <-.
-    replace m2 with ((m2 - 1) + 1) by lia.
-    replace (m2 - 1 + 1 - 1) with (m2 - 1) by lia.
-    exact (era4a_loop (m2 - 1) mr rest).
+  revert h. unfold tryRC6Era4a. change (encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)))
+    with (encodeBase (rc6Frame [] mr m2 afterM2)).
+  apply tryRC6Grow_sound; [| exact era4aEnd_concrete].
+  intros r a rest. unfold rc6Frame.
+  rewrite !N.add_0_r.
+  exact (era4a_step_concrete r a rest).
 Qed.
 
 Lemma tryRC6Era4b_sound {mr m2 : N} {afterM2 : list LTok} {bs' : BaseState}
   (h : tryRC6Era4b mr m2 afterM2 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6Era4b in h.
-  destruct (stripLPrefix era4bMidTop afterM2) as [rest |] eqn:hs; [| discriminate].
-  rewrite (stripLPrefix_some era4bMidTop afterM2 rest hs).
-  destruct (m2 =? 0) eqn:hm20; [discriminate |].
-  destruct (m2 =? 1) eqn:hm21.
-  - apply N.eqb_eq in hm21; subst m2. injection h as <-.
-    exact (era4bEnd_concrete mr rest).
-  - apply N.eqb_neq in hm20. apply N.eqb_neq in hm21. injection h as <-.
-    replace m2 with ((m2 - 2) + 2) at 1 by lia.
-    exact (era4b_loop (m2 - 2) mr rest).
+  revert h. unfold tryRC6Era4b. change (encodeBase (Core MB0 (h10Top ++ (M2L m2 :: afterM2)) (rc6Of mr)))
+    with (encodeBase (rc6Frame [] mr m2 afterM2)).
+  apply tryRC6Grow_sound; [| exact era4bEnd_concrete].
+  intros r a rest. unfold rc6Frame.
+  replace (a + 1 + 1) with (a + 2) by lia.
+  exact (era4b_step_concrete r a rest).
 Qed.
 
 Lemma tryRC6All_sound {mr : N} {afterH10 : list LTok} {bs' : BaseState}
   (h : tryRC6All mr afterH10 = Some bs') :
   encodeBase (Core MB0 (h10Top ++ afterH10) (rc6Of mr)) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold tryRC6All in h.
+  unfold tryRC6All in h. revert h.
   destruct (popM2L afterH10) as [[m2 afterM2] |] eqn:hm2; [| discriminate].
-  rewrite (popM2L_some hm2).
-  destruct (tryRC6Era2 mr m2 afterM2) as [res |] eqn:h2; [injection h as <-; exact (tryRC6Era2_sound h2) |].
-  destruct (tryRC6Era3a mr m2 afterM2) as [res |] eqn:h3a; [injection h as <-; exact (tryRC6Era3a_sound h3a) |].
-  destruct (tryRC6Era3b mr m2 afterM2) as [res |] eqn:h3b; [injection h as <-; exact (tryRC6Era3b_sound h3b) |].
-  destruct (tryRC6Era3c mr m2 afterM2) as [res |] eqn:h3c; [injection h as <-; exact (tryRC6Era3c_sound h3c) |].
-  destruct (tryRC6Era4a mr m2 afterM2) as [res |] eqn:h4a; [injection h as <-; exact (tryRC6Era4a_sound h4a) |].
-  exact (tryRC6Era4b_sound h).
+  rewrite (popM2L_some hm2). intro h.
+  refine (firstSome_sound _ (fun z => encodeBase (rc6Frame [] mr m2 afterM2) -[ tm ]->*
+    encodeBase z) rc6Phases bs' _ h). unfold rc6Phases.
+  repeat constructor; intros z hz;
+    first [exact (tryRC6Era2_sound hz) | exact (tryRC6Era3a_sound hz) |
+      exact (tryRC6Era3b_sound hz) | exact (tryRC6Era3c_sound hz) |
+      exact (tryRC6Era4a_sound hz) | exact (tryRC6Era4b_sound hz)].
 Qed.
 
 Lemma stepRC6H10_sound (mr : N) (afterH10 : list LTok) :
@@ -5487,21 +3661,16 @@ Lemma stepCapBridgeB0_sound {l : list LTok} {r : list RTok} {bs' : BaseState}
   (h : stepCapBridgeB0 l r = Some bs') :
   encodeBase (Core MB0 l r) -[ tm ]->* encodeBase bs'.
 Proof.
-  unfold stepCapBridgeB0 in h.
-  destruct (stripLPrefix [L0 0; LD1 5; LD 5] l) as [rest |] eqn:hl; [| discriminate].
-  rewrite (stripLPrefix_some [L0 0; LD1 5; LD 5] l rest hl).
-  destruct (opt_bind (stripRPrefix bridge0aPfx r) popMRTail) as [mr |] eqn:hb0.
-  - injection h as <-. rewrite (stripRPrefix_bind_popMRTail hb0).
-    exact (bridge0a_concrete mr rest).
-  - destruct (opt_bind (stripRPrefix bridge1Pfx r) popMRTail) as [mr |] eqn:hb1.
-    + injection h as <-. rewrite (stripRPrefix_bind_popMRTail hb1).
-      exact (bridge1_concrete mr rest).
-    + destruct (opt_bind (stripRPrefix bridge2Pfx r) popMRTail) as [mr |] eqn:hb2.
-      * injection h as <-. rewrite (stripRPrefix_bind_popMRTail hb2).
-        exact (bridge2_concrete mr rest).
-      * destruct (opt_bind (stripRPrefix bridge3Pfx r) popMRTail) as [mr |] eqn:hb3; [| discriminate].
-        injection h as <-. rewrite (stripRPrefix_bind_popMRTail hb3).
-        exact (bridge3_concrete mr rest).
+  revert h. unfold stepCapBridgeB0.
+  destruct (stripLPrefix capBridgeL l) as [rest |] eqn:hl; [| discriminate].
+  rewrite (stripLPrefix_some capBridgeL l rest hl). intro h.
+  refine (firstSome_sound _ (fun z => encodeBase (Core MB0 (capBridgeL ++ rest) r) -[ tm ]->*
+    encodeBase z) capBridges bs' _ h).
+  pose proof capBridges_sound as hs. rewrite Forall_forall in *.
+  intros b hin z. unfold tryCapBridge.
+  destruct (opt_bind (stripRPrefix (bridgeInR b) r) popMRTail) as [k |] eqn:hr; [| discriminate].
+  intros [= <-]. rewrite (stripRPrefix_bind_popMRTail hr).
+  exact (hs b hin k rest).
 Qed.
 
 Lemma tryRC6TopB0_sound {l : list LTok} {r : list RTok} {bs' : BaseState}
@@ -5588,13 +3757,16 @@ Lemma traj_halted : isHalted (Pos.iter stepNext Init0 467147%positive) = true.
 Proof. vm_cast_no_check (eq_refl true). Qed.
 
 
-Lemma halt_internal : halts tm c0.
+Lemma checked_iter_halts (p : positive) (s : BaseState) :
+  isHalted (Pos.iter stepNext s p) = true -> halts tm (encodeBase s).
 Proof.
-  pose proof (iter_stepNext_sound 467147%positive Init0) as hreach.
-  pose proof traj_halted as hchk.
-  destruct (Pos.iter stepNext Init0 467147%positive) as [| ? ? ? | r]; try discriminate.
-  exact (evstep_to_halts hreach eq_refl).
+  pose proof (iter_stepNext_sound p s) as hr.
+  destruct (Pos.iter stepNext s p); intro h; try discriminate.
+  exact (evstep_to_halts hr eq_refl).
 Qed.
+
+Lemma halt_internal : halts tm c0.
+Proof. exact (checked_iter_halts 467147%positive Init0 traj_halted). Qed.
 
 End Internal.
 
