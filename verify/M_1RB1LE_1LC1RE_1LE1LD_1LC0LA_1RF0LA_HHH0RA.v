@@ -11,7 +11,7 @@ Import ListNotations.
 Set Default Goal Selector "!".
 
 Open Scope string_scope.
-Definition tm : TM := TM_from_str "1RB1LE_1LC1RE_1LE1LD_1LC0LA_1RF0LA_---0RA".
+Definition tm := Eval compute in (TM_from_str "1RB1LE_1LC1RE_1LE1LD_1LC0LA_1RF0LA_---0RA").
 Close Scope string_scope.
 
 Module MachineProof.
@@ -588,18 +588,6 @@ Proof.
   exact (run4_sound n s (m2, (l2, r2)) hr S_tail).
 Qed.
 
-Lemma nat_strong_ind (P : nat -> Prop)
-  (IH : forall n, (forall k, k < n -> P k) -> P n) : forall n, P n.
-Proof.
-  assert (Hle : forall n k, k <= n -> P k).
-  { induction n as [| n IHn]; intros k Hk.
-    - replace k with 0 by lia. apply IH. intros m Hm. lia.
-    - destruct (Nat.eq_dec k (S n)) as [Heq | Hne].
-      + subst k. apply IH. intros m Hm. apply IHn. lia.
-      + apply IHn. lia. }
-  intro n. apply (Hle n n). lia.
-Qed.
-
 Lemma rep4_succ_r (k : nat) : rep4 (k + 1) = 4 :: rep4 k.
 Proof.
   replace (k + 1) with (S k) by lia. reflexivity.
@@ -646,7 +634,7 @@ Fixpoint div4 (n : nat) : nat :=
 
 Lemma div4_spec (n : nat) : 4 * div4 n <= n /\ n < 4 * div4 n + 4.
 Proof.
-  induction n as [n IH] using nat_strong_ind.
+  induction n as [n IH] using strong_induction.
   destruct n as [| [| [| [| n']]]]; cbn [div4]; try lia.
   specialize (IH n' ltac:(lia)); lia.
 Qed.
@@ -799,26 +787,6 @@ Proof.
     pose proof (div4_spec (4 * S r' + 3)). lia.
 Qed.
 
-Lemma wf_4r1_ge2 (r : nat) : wf (4 * (r + 2) + 1) = r + 4.
-Proof.
-  rewrite wf_ge7 by lia.
-  pose proof (div4_spec (4 * (r + 2) + 1)). lia.
-Qed.
-
-Lemma wf_4j6 (j : nat) : j + 2 <= wf (4 * j + 6).
-Proof.
-  destruct j as [| j'].
-  - cbn. lia.
-  - rewrite wf_ge7 by lia.
-    pose proof (div4_spec (4 * S j' + 6)). lia.
-Qed.
-
-Lemma wf_4j8 (j : nat) : j + 4 <= wf (4 * j + 8).
-Proof.
-  rewrite wf_ge7 by lia.
-  pose proof (div4_spec (4 * j + 8)). lia.
-Qed.
-
 Lemma wf_inc_class (v : nat) :
   (v = 4) \/ (wf (v + 1) <= wf v) \/ (v = 0) \/ (v = 2) \/ (v = 6) \/
   (exists m, v = 4 * (m + 1) + 3).
@@ -968,12 +936,23 @@ Definition GoodOut (M : list nat) (c : nat) (S_tail : list nat) : Prop :=
   (exists L', Reach (cfg_CL1 (inc1 M) ((2 * c + 1) :: S_tail)) (cfg_BR1 (0 :: L') (0 :: S_tail)) /\
               2 * W L' + 1 <= psi M).
 
+Definition ELResult (L S_tail : list nat) : Prop :=
+  (exists L', Reach (cfg_EL1 (0 :: L) (0 :: S_tail)) (cfg_BR1 (0 :: L') S_tail) /\
+              2 * W L' <= psi L) \/
+  (exists L', Reach (cfg_EL1 (0 :: L) (0 :: S_tail)) (cfg_BR1 (0 :: L') (0 :: S_tail)) /\
+              2 * W L' + 1 <= psi L).
+
 Definition ELIH (limit : nat) : Prop :=
-  forall L : list nat, psi L < limit -> forall S_tail : list nat,
-    (exists L', Reach (cfg_EL1 (0 :: L) (0 :: S_tail)) (cfg_BR1 (0 :: L') S_tail) /\
-                2 * W L' <= psi L) \/
-    (exists L', Reach (cfg_EL1 (0 :: L) (0 :: S_tail)) (cfg_BR1 (0 :: L') (0 :: S_tail)) /\
-                2 * W L' + 1 <= psi L).
+  forall L, psi L < limit -> forall S_tail, ELResult L S_tail.
+
+Lemma good_to_el {L S_tail} : GoodOut L 0 S_tail -> ELResult L S_tail.
+Proof.
+  intros [[T [hr [hw _]]] | [T [hr hw]]].
+  - left. exists T.
+    split; [exact (reach_trans (step_EL1_zero L (0 :: S_tail)) hr) | cbn [Nat.mul Nat.add wf] in hw; lia].
+  - right. exists T.
+    split; [exact (reach_trans (step_EL1_zero L (0 :: S_tail)) hr) | exact hw].
+Qed.
 
 Lemma step_even_ih {limit : nat} (ihEL : ELIH limit) (c : nat) :
   forall (L : list nat), psi L < limit -> forall (S_tail : list nat),
@@ -1238,6 +1217,26 @@ Proof.
     exact (finish_0_p02_2c ihEL hr heven hL_psi).
 Qed.
 
+(* The 20 front is a complete call, regardless of how we reached it.
+   Its two exits differ by one remaining zero in front of the pairs. *)
+Lemma finish_BR20 {M L S_tail : list nat} {k c : nat}
+  (ihEL : ELIH (psi M))
+  (hr : Reach (cfg_CL1 (inc1 M) ((2 * c + 1) :: S_tail))
+    (cfg_BR1 (0 :: L) (2 :: 0 :: (rep02 k ++ ((2 * c) :: S_tail)))))
+  (heven : IsEven (psi M))
+  (hp : psi L + 3 <= psi M) :
+  GoodOut M c S_tail.
+Proof.
+  destruct (step_even_ih ihEL 0 L ltac:(lia) (0 :: (rep02 k ++ ((2 * c) :: S_tail))))
+    as [[U [hu hw]] | [U [hu [h0 _]]]].
+  - refine (finish_no0 ihEL (reach_trans hr (reach_trans hu _)) _).
+    + rstep (step_BR1_00 U (rep02 k ++ ((2 * c) :: S_tail))).
+      rdone (sweep_BR_p02 k (2 :: U) ((2 * c) :: S_tail)).
+    + rewrite W_rep4_append. cbn [W wf]. lia.
+  - destruct (h0 eq_refl) as [hpU [hwU _]].
+    exact (finish_0_p02_opt ihEL (reach_trans hr hu) heven ltac:(lia) ltac:(lia)).
+Qed.
+
 Lemma finish_42_0_p02_2c {M T S_tail : list nat} {k c : nat}
   (ihEL : ELIH (psi M))
   (hr : Reach (cfg_CL1 (inc1 M) ((2 * c + 1) :: S_tail))
@@ -1256,83 +1255,27 @@ Proof.
                         (cfg_EL1 (0 :: L1) (0 :: 0 :: 0 :: 2 :: 2 :: 0 :: R))).
     { rstep (step_BR1_ge2 0 (0 :: L1) (0 :: 2 :: 2 :: 0 :: R)).
       rdone (step_EL1_add_two 0 L1 (0 :: 0 :: 2 :: 2 :: 0 :: R)). }
+    pose proof (reach_trans (reach_trans h1 hr1) hs1) as pre.
     destruct (ihEL L1 hlt1 (0 :: 0 :: 2 :: 2 :: 0 :: R)) as [[L2 [hr2 hw2]] | [L2 [hr2 hw2]]].
     + assert (hlt2 : psi L2 < psi M)
         by (pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia).
       destruct (step_p02_one_ih ihEL L2 hlt2 (2 :: 0 :: R))
         as [[L3 [hr3 [hp3 hw3]]] | [L3 [hr3 hw3]]].
-      * pose proof (reach_trans
-          (reach_trans (reach_trans (reach_trans h1 hr1) (reach_trans hs1 hr2)) hr3)
-          (sweep_BR_p02_one L3 (0 :: R))) as hs3.
-        refine (finish_0_p02_opt ihEL hs3 heven _ _).
+      * refine (finish_0_p02_opt ihEL
+          (reach_trans (reach_trans pre hr2) (reach_trans hr3 (sweep_BR_p02_one L3 (0 :: R))))
+          heven _ _).
         -- cbn [W wf]; pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
-        -- rewrite psi_cons_four; cbn [W wf].
-           pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
-      * assert (hlt3 : psi (2 :: L3) < psi M)
-          by (rewrite psi_cons_two; pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia).
-        assert (hs3 : Reach (cfg_BR1 (0 :: 2 :: L3) (2 :: 0 :: R))
-                            (cfg_EL1 (0 :: 2 :: L3) (0 :: 0 :: 0 :: R))).
-        { rstep (step_BR1_ge2 0 (0 :: 2 :: L3) (0 :: R)).
-          rdone (step_EL1_add_two 0 (2 :: L3) (0 :: 0 :: R)). }
-        destruct (ihEL (2 :: L3) hlt3 (0 :: 0 :: R)) as [[L4 [hr4 hw4]] | [L4 [hr4 hw4]]].
-        -- rewrite psi_cons_two in hw4.
-           pose proof (reach_trans
-             (reach_trans (reach_trans (reach_trans (reach_trans h1 hr1) (reach_trans hs1 hr2)) hr3)
-                          (reach_trans hs3 hr4))
-             (reach_trans (step_BR1_00 L4 R) (sweep_BR_p02 k (2 :: L4) ((2 * c) :: S_tail)))) as hsw.
-           refine (finish_no0 ihEL hsw _).
-           destruct heven as [q_ev hq_ev]; rewrite W_rep4_append; cbn [W wf].
-           pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
-        -- rewrite psi_cons_two in hw4.
-           pose proof (reach_trans
-             (reach_trans (reach_trans (reach_trans (reach_trans h1 hr1) (reach_trans hs1 hr2)) hr3)
-                          (reach_trans hs3 hr4))
-             (step_BR1_00 L4 (0 :: R))) as hsw.
-           refine (finish_0_p02_opt ihEL hsw heven _ _).
-           ++ cbn [W wf]; pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
-           ++ rewrite psi_cons_two; pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
-    + pose proof (reach_trans (reach_trans (reach_trans h1 hr1) (reach_trans hs1 hr2))
-        (reach_trans (step_BR1_00 L2 (0 :: 2 :: 2 :: 0 :: R))
-                     (sweep_BR_p02_one (2 :: L2) (2 :: 0 :: R)))) as hs2.
-      assert (hlt2 : psi (4 :: 2 :: L2) < psi M)
-        by (rewrite psi_cons_four; cbn [W wf]; pose proof (psi_le L1); pose proof (psi_le T); lia).
-      assert (hs3 : Reach (cfg_BR1 (0 :: 4 :: 2 :: L2) (2 :: 0 :: R))
-                          (cfg_EL1 (0 :: 4 :: 2 :: L2) (0 :: 0 :: 0 :: R))).
-      { rstep (step_BR1_ge2 0 (0 :: 4 :: 2 :: L2) (0 :: R)).
-        rdone (step_EL1_add_two 0 (4 :: 2 :: L2) (0 :: 0 :: R)). }
-      destruct (ihEL (4 :: 2 :: L2) hlt2 (0 :: 0 :: R)) as [[L3 [hr3 hw3]] | [L3 [hr3 hw3]]].
-      * rewrite psi_cons_four in hw3; cbn [W wf] in hw3.
-        pose proof (reach_trans (reach_trans hs2 (reach_trans hs3 hr3))
-          (reach_trans (step_BR1_00 L3 R) (sweep_BR_p02 k (2 :: L3) ((2 * c) :: S_tail)))) as hsw.
-        refine (finish_no0 ihEL hsw _).
-        rewrite W_rep4_append; cbn [W wf]; pose proof (psi_le L1); pose proof (psi_le T); lia.
-      * rewrite psi_cons_four in hw3; cbn [W wf] in hw3.
-        pose proof (reach_trans (reach_trans hs2 (reach_trans hs3 hr3))
-          (step_BR1_00 L3 (0 :: R))) as hsw.
-        refine (finish_0_p02_opt ihEL hsw heven _ _).
-        -- cbn [W wf]; pose proof (psi_le L1); pose proof (psi_le T); lia.
-        -- rewrite psi_cons_two; pose proof (psi_le L1); pose proof (psi_le T); lia.
-  - pose proof (reach_trans (reach_trans h1 hr1)
-      (reach_trans (sweep_BR_p02_one L1 (0 :: 2 :: 2 :: 0 :: R))
-                   (sweep_BR_p02_one (4 :: L1) (2 :: 0 :: R)))) as hs1.
-    assert (hlt1 : psi (4 :: 4 :: L1) < psi M)
-      by (rewrite psi_cons_four; cbn [W wf]; pose proof (psi_le T); lia).
-    assert (hs2 : Reach (cfg_BR1 (0 :: 4 :: 4 :: L1) (2 :: 0 :: R))
-                        (cfg_EL1 (0 :: 4 :: 4 :: L1) (0 :: 0 :: 0 :: R))).
-    { rstep (step_BR1_ge2 0 (0 :: 4 :: 4 :: L1) (0 :: R)).
-      rdone (step_EL1_add_two 0 (4 :: 4 :: L1) (0 :: 0 :: R)). }
-    destruct (ihEL (4 :: 4 :: L1) hlt1 (0 :: 0 :: R)) as [[L2 [hr2 hw2]] | [L2 [hr2 hw2]]].
-    + rewrite psi_cons_four in hw2; cbn [W wf] in hw2.
-      pose proof (reach_trans (reach_trans hs1 (reach_trans hs2 hr2))
-        (reach_trans (step_BR1_00 L2 R) (sweep_BR_p02 k (2 :: L2) ((2 * c) :: S_tail)))) as hsw.
-      refine (finish_no0 ihEL hsw _).
-      rewrite W_rep4_append; cbn [W wf]; pose proof (psi_le T); lia.
-    + rewrite psi_cons_four in hw2; cbn [W wf] in hw2.
-      pose proof (reach_trans (reach_trans hs1 (reach_trans hs2 hr2))
-        (step_BR1_00 L2 (0 :: R))) as hsw.
-      refine (finish_0_p02_opt ihEL hsw heven _ _).
-      * cbn [W wf]; pose proof (psi_le T); lia.
-      * rewrite psi_cons_two; pose proof (psi_le T); lia.
+        -- rewrite psi_cons_four; pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
+      * refine (finish_BR20 ihEL (reach_trans (reach_trans pre hr2) hr3) heven _).
+        rewrite psi_cons_two; pose proof (psi_le L2); pose proof (psi_le L1); pose proof (psi_le T); lia.
+    + refine (finish_BR20 ihEL (reach_trans (reach_trans pre hr2) _) heven _).
+      * rstep (step_BR1_00 L2 (0 :: 2 :: 2 :: 0 :: R)).
+        exact (sweep_BR_p02_one (2 :: L2) (2 :: 0 :: R)).
+      * rewrite psi_cons_four. cbn [W wf]. pose proof (psi_le L1); pose proof (psi_le T); lia.
+  - refine (finish_BR20 ihEL (reach_trans (reach_trans h1 hr1) _) heven _).
+    + rstep (sweep_BR_p02_one L1 (0 :: 2 :: 2 :: 0 :: R)).
+      exact (sweep_BR_p02_one (4 :: L1) (2 :: 0 :: R)).
+    + rewrite psi_cons_four. cbn [W wf]. pose proof (psi_le T); lia.
 Qed.
 
 Lemma finish_EL_p02_0_p02_2c {M L S_tail : list nat} {k c : nat}
@@ -1406,563 +1349,467 @@ Proof.
     rewrite psi_cons_four; cbn [W wf]; pose proof (psi_le Y); lia.
 Qed.
 
-Lemma mCL_bump_spec (M : list nat) (c : nat) (S_tail : list nat) : GoodOut M c S_tail.
+(* A strict decrease in potential pays for either return shape. *)
+Lemma finish_even {M L c S_tail}
+  (ihEL : ELIH (psi M))
+  (pre : Reach (cfg_CL1 (inc1 M) ((2 * c + 1) :: S_tail))
+               (cfg_BR1 (0 :: L) ((2 * c + 2) :: S_tail)))
+  (hsmall : psi L < psi M) : GoodOut M c S_tail.
 Proof.
-  assert (Hmain : forall (p n : nat) (M0 : list nat),
-    psi M0 = p -> List.length M0 = n -> forall (c0 : nat) (S0_tl : list nat), GoodOut M0 c0 S0_tl).
-  { intro p.
-    induction p as [p ihP] using nat_strong_ind.
-    intro n.
-    induction n as [n ihN] using nat_strong_ind.
-    clear M c S_tail.
-    intros M hpM hnM c S_tail.
-    assert (ihEL : ELIH (psi M)).
-    { intros L hL S'.
-      destruct (ihP (psi L) ltac:(lia) (List.length L) L eq_refl eq_refl 0 S')
-        as [[L' [hr [hw _]]] | [L' [hr hw]]].
-      - left. exists L'.
-        split; [exact (reach_trans (step_EL1_zero L (0 :: S')) hr) | cbn [Nat.mul Nat.add wf] in hw; lia].
-      - right. exists L'.
-        split; [exact (reach_trans (step_EL1_zero L (0 :: S')) hr) | exact hw]. }
-    destruct M as [| v M'].
-    - assert (hr : Reach (cfg_CL1 (inc1 []) ((2 * c + 1) :: S_tail))
-                         (cfg_BR1 [0; 2 * c + 4] S_tail)).
-      { cbn [inc1].
-        rstep (step_CL1_zero [] ((2 * c + 1) :: S_tail)).
-        rstep (step_CL1_nil ((2 * c + 3) :: S_tail)).
-        rdone (step_EL1_nil_cons (2 * c + 4) S_tail). }
-      left. exists [2 * c + 4].
-      split; [exact hr |].
-      split; [cbn [W psi]; lia | intros _ [T hne]; discriminate hne].
-    - destruct v as [| [| [| [| [| [| n0]]]]]].
-      + (* v = 0 *)
-        assert (hpsiM : psi (0 :: M') = 2 * (2 + W M')) by reflexivity.
-        assert (hlt : psi M' < p) by (pose proof (psi_le M'); lia).
-        assert (h1 : Reach (cfg_CL1 (inc1 (0 :: M')) ((2 * c + 1) :: S_tail))
-                           (cfg_CL1 (inc1 M') ((2 * (c + 1) + 1) :: S_tail))).
-        { cbn [inc1]. rdone (step_CL1_one M' ((2 * c + 1) :: S_tail)). }
-        destruct (ihP (psi M') hlt (List.length M') M' eq_refl eq_refl (c + 1) S_tail)
-          as [[L' [hr [hw _]]] | [L' [hr hw]]].
-        * left. exists L'.
-          split; [exact (reach_trans h1 hr) |].
-          split; [pose proof (wf_even_step c); pose proof (psi_le M'); lia |
-                  intros _ [T hne]; discriminate hne].
-        * right. exists L'.
-          split; [exact (reach_trans h1 hr) | pose proof (psi_le M'); lia].
-      + (* v = 1 *)
-        assert (hpsiM : psi (1 :: M') = 2 * (3 + W M')) by reflexivity.
-        assert (h1 : Reach (cfg_CL1 (inc1 (1 :: M')) ((2 * c + 1) :: S_tail))
-                           (cfg_BR1 (0 :: inc1 M') ((2 * c + 2) :: S_tail))).
-        { cbn [inc1].
-          rstep (step_CL1_two M' ((2 * c + 1) :: S_tail)).
-          rdone (step_EB1_zero M' ((2 * c + 2) :: S_tail)). }
-        assert (hlt : psi (inc1 M') < psi (1 :: M'))
-          by (pose proof (psi_le (inc1 M')); pose proof (W_inc1_le M'); lia).
-        destruct (step_even_ih ihEL c (inc1 M') hlt S_tail)
-          as [[L' [hr hw]] | [L' [hr [h0 hge1]]]].
-        * right. exists L'.
-          split; [exact (reach_trans h1 hr) |
-                  pose proof (psi_le (inc1 M')); pose proof (W_inc1_le M'); lia].
-        * left. exists L'.
-          split; [exact (reach_trans h1 hr) |].
-          split; [| intros _ [T hne]; discriminate hne].
-          destruct c as [| c'].
-          -- destruct (h0 eq_refl) as [_ [hw _]].
-             pose proof (psi_le (inc1 M')); pose proof (W_inc1_le M'); cbn [Nat.mul Nat.add wf]; lia.
-          -- pose proof (hge1 ltac:(lia)).
-             pose proof (@wf_even_mono (S c') ltac:(lia)).
-             pose proof (psi_le (inc1 M')); pose proof (W_inc1_le M'); lia.
-      + (* v = 2 *)
-        assert (hpsiM : psi (2 :: M') = 2 * W M' + 1) by reflexivity.
-        assert (hlt : psi M' < psi (2 :: M')) by (pose proof (psi_le M'); lia).
-        assert (h1 : Reach (cfg_CL1 (inc1 (2 :: M')) ((2 * c + 1) :: S_tail))
-                           (cfg_EL1 (0 :: M') (0 :: (2 * c + 2) :: S_tail))).
-        { cbn [inc1]. rdone (step_CL1_add_three 0 M' ((2 * c + 1) :: S_tail)). }
-        destruct (ihEL M' hlt ((2 * c + 2) :: S_tail)) as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
-        * assert (hlt1 : psi L1 < psi (2 :: M'))
-            by (pose proof (psi_le L1); pose proof (psi_le M'); lia).
-          destruct (step_even_ih ihEL c L1 hlt1 S_tail)
-            as [[L2 [hr2 hw2]] | [L2 [hr2 [h0 hge1]]]].
-          -- right. exists L2.
-             split; [exact (reach_trans (reach_trans h1 hr1) hr2) |
-                     pose proof (psi_le L1); pose proof (psi_le M'); lia].
-          -- left. exists L2.
-             split; [exact (reach_trans (reach_trans h1 hr1) hr2) |].
-             split; [| intros _ [T hne]; discriminate hne].
-             destruct c as [| c'].
-             ++ destruct (h0 eq_refl) as [hp2 [_ [T ->]]].
-                rewrite psi_cons_two in hp2.
-                pose proof (psi_le L1); pose proof (psi_le M'); cbn [Nat.mul Nat.add W wf]; lia.
-             ++ pose proof (hge1 ltac:(lia)).
-                pose proof (@wf_even_mono (S c') ltac:(lia)).
-                pose proof (psi_le L1); pose proof (psi_le M'); lia.
-        * left. exists ((2 * c + 4) :: L1).
-          split; [rdone (reach_trans (reach_trans h1 hr1) (step_BR1_0d (2 * c + 2) L1 S_tail)) |].
-          split; [cbn [W]; pose proof (psi_le M'); lia | intros _ [T hne]; discriminate hne].
-      + (* v = 3 *)
-        assert (hpsiM : psi (3 :: M') = 2 * (2 + W M')) by reflexivity.
-        assert (h1 : Reach (cfg_CL1 (inc1 (3 :: M')) ((2 * c + 1) :: S_tail))
-                           (cfg_BR1 (0 :: (2 * c + 4) :: inc1 M') S_tail)).
-        { cbn [inc1].
-          rstep (step_CL1_add_three 1 M' ((2 * c + 1) :: S_tail)).
-          rstep (step_EL1_one M' (0 :: (2 * c + 2) :: S_tail)).
-          rstep (step_EB1_zero M' (0 :: (2 * c + 2) :: S_tail)).
-          rdone (step_BR1_0d (2 * c + 2) (inc1 M') S_tail). }
-        left. exists ((2 * c + 4) :: inc1 M').
-        split; [exact h1 |].
-        split; [cbn [W]; pose proof (W_inc1_le M'); lia | intros _ [T hne]; discriminate hne].
-      + (* v = 4 *)
-        assert (hpsiM : psi (4 :: M') = 2 * W M') by (cbn [psi Nat.eqb W wf]; lia).
-        assert (h1 : Reach (cfg_CL1 (inc1 (4 :: M')) ((2 * c + 1) :: S_tail))
-                           (cfg_EL1 (0 :: M') (0 :: 0 :: (2 * c + 2) :: S_tail))).
-        { cbn [inc1].
-          rstep (step_CL1_add_three 2 M' ((2 * c + 1) :: S_tail)).
-          rdone (step_EL1_add_two 0 M' (0 :: (2 * c + 2) :: S_tail)). }
-        assert (hM' :
-          (exists L1, Reach (cfg_EL1 (0 :: M') (0 :: 0 :: (2 * c + 2) :: S_tail))
-                            (cfg_BR1 (0 :: L1) (0 :: (2 * c + 2) :: S_tail)) /\ 2 * W L1 <= psi M') \/
-          (exists L1, Reach (cfg_EL1 (0 :: M') (0 :: 0 :: (2 * c + 2) :: S_tail))
-                            (cfg_BR1 (0 :: L1) (0 :: 0 :: (2 * c + 2) :: S_tail)) /\ 2 * W L1 + 1 <= psi M')).
-        { assert (hle : psi M' < p \/ psi M' = p) by (pose proof (psi_le M'); lia).
-          destruct hle as [hlt | heq].
-          - destruct (ihP (psi M') hlt (List.length M') M' eq_refl eq_refl 0 (0 :: (2 * c + 2) :: S_tail))
-              as [[L1 [hr1 [hw1 _]]] | [L1 [hr1 hw1]]].
-            + left. exists L1.
-              split; [exact (reach_trans (step_EL1_zero M' (0 :: 0 :: (2 * c + 2) :: S_tail)) hr1) | cbn [Nat.mul Nat.add wf] in hw1; lia].
-            + right. exists L1.
-              split; [exact (reach_trans (step_EL1_zero M' (0 :: 0 :: (2 * c + 2) :: S_tail)) hr1) | exact hw1].
-          - assert (hnlt : List.length M' < n) by (cbn [List.length] in hnM; lia).
-            destruct (ihN (List.length M') hnlt M' heq eq_refl 0 (0 :: (2 * c + 2) :: S_tail))
-              as [[L1 [hr1 [hw1 _]]] | [L1 [hr1 hw1]]].
-            + left. exists L1.
-              split; [exact (reach_trans (step_EL1_zero M' (0 :: 0 :: (2 * c + 2) :: S_tail)) hr1) | cbn [Nat.mul Nat.add wf] in hw1; lia].
-            + right. exists L1.
-              split; [exact (reach_trans (step_EL1_zero M' (0 :: 0 :: (2 * c + 2) :: S_tail)) hr1) | exact hw1]. }
-        destruct hM' as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
-        * left. exists ((2 * c + 4) :: L1).
-          split; [rdone (reach_trans (reach_trans h1 hr1) (step_BR1_0d (2 * c + 2) L1 S_tail)) |].
-          split; [cbn [W]; pose proof (psi_le M'); lia | intros _ [T hne]; discriminate hne].
-        * assert (hlt2 : psi (2 :: L1) < psi (4 :: M'))
-            by (rewrite psi_cons_two; pose proof (psi_le M'); lia).
-          pose proof (reach_trans (reach_trans h1 hr1) (step_BR1_00 L1 ((2 * c + 2) :: S_tail))) as h2.
-          destruct (step_even_ih ihEL c (2 :: L1) hlt2 S_tail)
-            as [[L2 [hr2 hw2]] | [L2 [hr2 [h0 hge1]]]].
-          -- rewrite psi_cons_two in hw2.
-             right. exists L2.
-             split; [exact (reach_trans h2 hr2) | pose proof (psi_le M'); lia].
-          -- left. exists L2.
-             split; [exact (reach_trans h2 hr2) |].
-             split; [| intros _ [T hne]; discriminate hne].
-             destruct c as [| c'].
-             ++ destruct (h0 eq_refl) as [hp2 [_ [T ->]]].
-                rewrite psi_cons_two in hp2; rewrite psi_cons_two in hp2.
-                pose proof (psi_le M'); cbn [Nat.mul Nat.add W wf]; lia.
-             ++ pose proof (hge1 ltac:(lia)) as hrec; rewrite psi_cons_two in hrec.
-                pose proof (@wf_even_mono (S c') ltac:(lia)).
-                pose proof (psi_le M'); lia.
-      + (* v = 5 *)
-        assert (hpsiM : psi (5 :: M') = 2 * (2 + W M')) by reflexivity.
-        assert (heven : IsEven (psi (5 :: M'))) by (exists (2 + W M'); exact hpsiM).
-        destruct M' as [| hd tl].
-        * left. exists [2 * c + 2; 2; 4; 4; 4].
-          split; [cbn [inc1]; exact (cl_6_nil_step c S_tail) |].
-          split.
-          -- destruct c as [| c'].
-             ++ cbn; lia.
-             ++ pose proof (@wf_even_mono (S c') ltac:(lia)).
-                cbn [W psi Nat.eqb wf]; lia.
-          -- intros -> _. cbn; lia.
-        * destruct (Nat.eq_dec hd 4) as [hhd | hne4].
-          -- (* hd = 4 *)
-             subst hd.
-             destruct (strip4_spec tl) as [hstr hne].
-             set (k := fst (strip4 tl)) in *.
-             set (R_tail := snd (strip4 tl)) in *.
-             assert (hlist : 4 :: tl = rep4 (k + 1) ++ R_tail).
-             { rewrite rep4_succ_r; cbn [app]; f_equal; exact hstr. }
-             assert (hw_eq : W (4 :: tl) = W R_tail) by (rewrite hlist, W_rep4_append; reflexivity).
-             assert (hpsi_eq : psi (5 :: 4 :: tl) = 2 * (2 + W R_tail))
-               by (rewrite hpsiM, hw_eq; reflexivity).
-             assert (hpre : Reach (cfg_CL1 (inc1 (5 :: 4 :: tl)) ((2 * c + 1) :: S_tail))
-                                  (cfg_EL1 (0 :: inc1 R_tail)
-                                    (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
-             { cbn [inc1]. rewrite hlist.
-               pose proof (cl_6_rep4_step k c R_tail S_tail) as hcl.
-               replace (k + 2) with (S (k + 1)) in hcl by lia.
-               cbn [rep02 app] in hcl. exact hcl. }
-             destruct R_tail as [| x M''] eqn:hRt.
-             ++ (* R_tail = [] *)
-                assert (h0 : Reach (cfg_EL1 [0; 0] (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                   (cfg_BR1 [0; 6] (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
-                { rstep (step_EL1_zero [0] (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                  rstep (step_CL1_one [] (1 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                  rstep (step_CL1_zero [] (3 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                  rstep (step_CL1_nil (5 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                  rdone (step_EL1_nil_cons 6 (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))). }
-                change (inc1 []) with [0] in hpre.
-                pose proof (reach_trans hpre h0) as hstart.
-                rewrite rep02_succ_r in hstart; cbn [app] in hstart.
-                pose proof (reach_trans hstart (br_6_202_step (rep02 k ++ ((2 * c) :: S_tail)))) as h1.
-                destruct k as [| k'].
-                ** cbn [rep02 app] in h1.
-                   refine (finish_has0 h1 _).
-                   cbn [W wf rep4] in hpsi_eq |- *; lia.
-                ** cbn [rep02 app] in h1.
-                   pose proof (reach_trans (reach_trans h1 (br_rep4_6_002_step (rep02 k' ++ ((2 * c) :: S_tail))))
-                     (sweep_BR_p02 k' (2 :: rep4 8) ((2 * c) :: S_tail))) as h2.
-                   refine (finish_no0 ihEL h2 _).
-                   rewrite W_rep4_append; cbn [W wf rep4] in hpsi_eq |- *; lia.
-             ++ (* R_tail = x :: M'' *)
-                assert (hxne4 : x <> 4) by (exact (hne x M'' eq_refl)).
-                assert (hpsi_x : psi (5 :: 4 :: tl) = 2 * (2 + (wf x + W M'')))
-                  by (cbn [W] in hpsi_eq; exact hpsi_eq).
-                destruct (wf_inc_class x) as [-> | [hle | [-> | [-> | [-> | [m ->]]]]]].
-                ** exfalso; exact (hxne4 eq_refl).
-                ** (* Case 2A *)
-                   refine (finish_EL_p02_2c ihEL hpre heven _).
-                   pose proof (psi_le ((x + 1) :: M'')); cbn [inc1 W] in *; lia.
-                ** (* Case 2B: x = 0 *)
-                   assert (h1 : Reach (cfg_EL1 (0 :: inc1 (0 :: M'')) (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                      (cfg_BR1 (0 :: inc1 M'') (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
-                   { cbn [inc1].
-                     rstep (step_EL1_zero (1 :: M'') (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_CL1_two M'' (1 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rdone (step_EB1_zero M'' (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))). }
-                   refine (finish_BR_22_p02_2c ihEL (reach_trans hpre h1) heven _).
-                   pose proof (W_inc1_le M''); pose proof (psi_le (inc1 M'')); cbn [wf] in hpsi_x; lia.
-                ** (* Case 2E: x = 2 *)
-                   assert (h1 : Reach (cfg_EL1 (0 :: inc1 (2 :: M'')) (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                      (cfg_EL1 (0 :: inc1 M'') (0 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
-                   { cbn [inc1].
-                     rstep (step_EL1_zero (3 :: M'') (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_CL1_add_three 1 M'' (1 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EL1_one M'' (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EB1_zero M'' (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (sweep_BR_p02_one (inc1 M'') (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_BR1_ge2 0 (0 :: 4 :: inc1 M'') (rep02 (k + 1) ++ ((2 * c) :: S_tail))).
-                     rstep (step_EL1_add_two 0 (4 :: inc1 M'') (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rdone (sweep_EL_f4_one (inc1 M'') (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))). }
-                   pose proof (reach_trans hpre h1) as h2.
-                   cbn [wf] in hpsi_x.
-                   destruct M'' as [| y M'''].
-                   --- (* M'' = [] *)
-                       assert (hc1 : Reach (cfg_EL1 [0; 0] (0 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                           (cfg_BR1 [0; 4; 6] (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
-                       { set (R0 := 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))).
-                         rstep (step_EL1_zero [0] (0 :: R0)).
-                         rstep (step_CL1_one [] (1 :: R0)).
-                         rstep (step_CL1_zero [] (3 :: R0)).
-                         rstep (step_CL1_nil (5 :: R0)).
-                         rstep (step_EL1_nil_cons 6 R0).
-                         unfold R0; rdone (sweep_BR_p02_one [6] (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))). }
-                       assert (hc2 : Reach (cfg_BR1 [0; 4; 6] (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                           (cfg_BR1 (0 :: (rep4 k ++ 2 :: 2 :: rep4 7)) ((2 * c) :: S_tail))).
-                       { rewrite rep02_succ_r; cbn [app].
-                         exact (reach_trans (br_46_002_step (rep02 k ++ ((2 * c) :: S_tail)))
-                                            (sweep_BR_p02 k (2 :: 2 :: rep4 7) ((2 * c) :: S_tail))). }
-                       change (inc1 []) with [0] in h2.
-                       refine (finish_no0 ihEL (reach_trans (reach_trans h2 hc1) hc2) _).
-                       rewrite W_rep4_append; cbn [W wf rep4] in hpsi_x |- *; lia.
-                   --- (* M'' = y :: M''' *)
-                       destruct (Nat.eq_dec y 4) as [hy4 | hyne4].
-                       +++ (* y = 4 *)
-                           subst y.
-                           assert (hpsi5 : psi (5 :: M''') = 2 * (2 + W M''')) by reflexivity.
-                           assert (hlt5 : psi (5 :: M''') < p) by (cbn [W wf] in hpsi_x; lia).
-                           destruct (ihP (psi (5 :: M''')) hlt5 (List.length (5 :: M''')) (5 :: M''') eq_refl eq_refl
-                                     0 (0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                             as [[L1 [hr1 [hw1 hstr5]]] | [L1 [hr1 hw1]]].
-                           *** change (inc1 (4 :: M''')) with (5 :: M''') in h2.
-                               pose proof (reach_trans h2
-                                 (reach_trans (step_EL1_zero (5 :: M''') (0 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))) hr1)) as hreach1.
-                               assert (hpsL1 : psi L1 + 1 <= psi (5 :: M''')).
-                               { apply hstr5; [reflexivity | exists M'''; reflexivity]. }
-                               destruct L1 as [| z Z].
-                               ---- pose proof (reach_trans hreach1
-                                      (sweep_BR_p02_one [] (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))) as hsw.
-                                    refine (finish_0_p02_2c ihEL hsw heven _).
-                                    cbn [psi Nat.eqb W wf] in hpsi_x |- *; lia.
-                               ---- destruct (Nat.eq_dec z 2) as [-> | hzne2].
-                                    ++++ rewrite psi_cons_two in hpsL1.
-                                         pose proof (reach_trans hreach1
-                                           (sweep_BR_p02_one (2 :: Z) (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))) as hsw.
-                                         refine (finish_42_0_p02_2c ihEL hsw heven _).
-                                         cbn [W wf] in hpsi_x; lia.
-                                    ++++ rewrite (psi_cons_ne2 hzne2) in hpsL1.
-                                         pose proof (reach_trans hreach1
-                                           (sweep_BR_p02_one (z :: Z) (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))) as hsw.
-                                         refine (finish_0_p02_2c ihEL hsw heven _).
-                                         rewrite psi_cons_four; cbn [W wf] in hpsi_x |- *; lia.
-                           *** change (inc1 (4 :: M''')) with (5 :: M''') in h2.
-                               pose proof (reach_trans h2
-                                 (reach_trans (step_EL1_zero (5 :: M''') (0 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))) hr1)) as hreach1.
-                               cbn [W wf] in hpsi_x.
-                               assert (hlt1 : psi L1 < psi (5 :: 4 :: tl))
-                                 by (pose proof (psi_le L1); lia).
-                               destruct (step_p02_one_ih ihEL L1 hlt1 (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                 as [[L2 [hr2 [_ hw2]]] | [L2 [hr2 hw2]]].
-                               ---- pose proof (reach_trans (reach_trans hreach1 hr2)
-                                      (reach_trans (step_BR1_00 L2 (rep02 (k + 1) ++ ((2 * c) :: S_tail)))
-                                                   (sweep_BR_p02 (k + 1) (2 :: L2) ((2 * c) :: S_tail)))) as hsw.
-                                    refine (finish_no0 ihEL hsw _).
-                                    rewrite W_rep4_append; cbn [W wf]; pose proof (psi_le L1); lia.
-                               ---- refine (finish_0_p02_2c ihEL (reach_trans hreach1 hr2) heven _).
-                                    rewrite psi_cons_two; pose proof (psi_le L1); lia.
-                       +++ (* y <> 4 *)
-                           refine (finish_EL_p02_0_p02_2c ihEL h2 heven _).
-                           cbn [inc1 W] in hpsi_x |- *; pose proof (wf_add_one_le_ne4 hyne4); lia.
-                ** (* Case 2D: x = 6 *)
-                   assert (h1 : Reach (cfg_EL1 (0 :: inc1 (6 :: M'')) (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                      (cfg_EL1 (0 :: inc1 M'') (0 :: 2 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
-                   { cbn [inc1].
-                     rstep (step_EL1_zero (7 :: M'') (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_CL1_add_three 5 M'' (1 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EL1_add_two 3 M'' (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EL1_add_two 1 M'' (0 :: 0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EL1_one M'' (0 :: 0 :: 0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EB1_zero M'' (0 :: 0 :: 0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_BR1_00 (inc1 M'') (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (sweep_BR_p02_one (2 :: inc1 M'') (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_BR1_ge2 0 (0 :: 4 :: 2 :: inc1 M'') (rep02 (k + 1) ++ ((2 * c) :: S_tail))).
-                     rstep (step_EL1_add_two 0 (4 :: 2 :: inc1 M'') (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (sweep_EL_f4_one (2 :: inc1 M'') (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_EL1_zero (2 :: inc1 M'') (0 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rdone (step_CL1_add_three 0 (inc1 M'') (1 :: 0 :: 2 :: 0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))). }
-                   refine (finish_2D ihEL (reach_trans hpre h1) heven _).
-                   pose proof (W_inc1_le M''); cbn [wf] in hpsi_x; lia.
-                ** (* Case 2C: x = 4 * (m + 1) + 3 *)
-                   pose proof (wf_4r3 (m + 1)) as hwx.
-                   assert (h1 : Reach (cfg_EL1 (0 :: inc1 ((4 * (m + 1) + 3) :: M''))
-                                        (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                      (cfg_EL1 (0 :: M'')
-                                        (0 :: (repeat 0 (2 * m + 3) ++ (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))))).
-                   { cbn [inc1].
-                     rstep (step_EL1_zero ((4 * (m + 1) + 3 + 1) :: M'') (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     rstep (step_CL1_add_three (2 * (2 * m + 3)) M'' (1 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                     pose proof (peel_EL1_even (2 * m + 3) 0 M'' (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))) as a3.
-                     rewrite repeat_zero_snoc in a3.
-                     replace (2 * m + 3 + 1) with (S (2 * m + 3)) in a3 by lia.
-                     cbn [repeat app] in a3.
-                     rdone a3. }
-                   assert (hltM'' : psi M'' < psi (5 :: 4 :: tl))
-                     by (pose proof (psi_le M''); rewrite hwx in hpsi_x; lia).
-                   destruct (ihEL M'' hltM'' (repeat 0 (2 * m + 3) ++ (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))))
-                     as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
-                   --- assert (hrep : repeat 0 (2 * m + 3) ++ (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))) =
-                         repeat 0 (2 * (m + 1)) ++ (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                       { rewrite repeat_zero_snoc. f_equal; f_equal; lia. }
-                       rewrite hrep in h1, hr1.
-                       pose proof (reach_trans (reach_trans (reach_trans hpre h1) hr1)
-                         (reach_trans (sweep_BR_00 (m + 1) L1 (0 :: 2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                                      (sweep_BR_p02_one (repeat 2 (m + 1) ++ L1) (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))))) as hs.
-                       pose proof (reach_trans hs
-                         (reach_trans (step_BR1_ge2 0 (0 :: 4 :: (repeat 2 (m + 1) ++ L1)) (rep02 (k + 1) ++ ((2 * c) :: S_tail)))
-                                      (step_EL1_add_two 0 (4 :: (repeat 2 (m + 1) ++ L1)) (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))))) as hs2.
-                       assert (hltL : psi (4 :: (repeat 2 (m + 1) ++ L1)) < psi (5 :: 4 :: tl)).
-                       { rewrite psi_cons_four, W_repeat_two; cbn [W wf].
-                         rewrite hwx in hpsi_x; pose proof (psi_le M''); lia. }
-                       destruct (ihEL (4 :: (repeat 2 (m + 1) ++ L1)) hltL (0 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
-                         as [[L2 [hr2 hw2]] | [L2 [hr2 hw2]]].
-                       +++ refine (finish_0_p02_2c ihEL (reach_trans hs2 hr2) heven _).
-                           rewrite psi_cons_four, W_repeat_two in hw2; cbn [W wf] in hw2.
-                           rewrite hwx in hpsi_x; pose proof (psi_le L2); pose proof (psi_le M''); lia.
-                       +++ pose proof (reach_trans (reach_trans hs2 hr2)
-                             (reach_trans (step_BR1_00 L2 (rep02 (k + 1) ++ ((2 * c) :: S_tail)))
-                                          (sweep_BR_p02 (k + 1) (2 :: L2) ((2 * c) :: S_tail)))) as hsw.
-                           refine (finish_no0 ihEL hsw _).
-                           rewrite W_rep4_append; cbn [W wf].
-                           rewrite psi_cons_four, W_repeat_two in hw2; cbn [W wf] in hw2.
-                           rewrite hwx in hpsi_x; pose proof (psi_le M''); lia.
-                   --- assert (hrep : 0 :: (repeat 0 (2 * m + 3) ++ (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))) =
-                         repeat 0 (2 * (m + 2)) ++ (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
-                       { replace (2 * (m + 2)) with (S (2 * m + 3)) by lia. reflexivity. }
-                       rewrite hrep in h1, hr1.
-                       pose proof (reach_trans (reach_trans (reach_trans hpre h1) hr1)
-                         (sweep_BR_00 (m + 2) L1 (2 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))) as hs.
-                       refine (finish_BR_22_p02_2c ihEL hs heven _).
-                       replace (m + 2) with ((m + 1) + 1) by lia.
-                       rewrite psi_repeat_two_succ.
-                       rewrite hwx in hpsi_x; pose proof (psi_le M''); lia.
-          -- (* hd <> 4 *)
-             assert (h1 : Reach (cfg_CL1 (inc1 (5 :: hd :: tl)) ((2 * c + 1) :: S_tail))
-                                (cfg_BR1 (0 :: 2 :: inc1 (hd :: tl)) ((2 * c + 2) :: S_tail))).
-             { cbn [inc1].
-               rstep (step_CL1_add_three 3 (hd :: tl) ((2 * c + 1) :: S_tail)).
-               rstep (step_EL1_add_two 1 (hd :: tl) (0 :: (2 * c + 2) :: S_tail)).
-               rstep (step_EL1_one (hd :: tl) (0 :: 0 :: (2 * c + 2) :: S_tail)).
-               rstep (step_EB1_zero (hd :: tl) (0 :: 0 :: (2 * c + 2) :: S_tail)).
-               rdone (step_BR1_00 (inc1 (hd :: tl)) ((2 * c + 2) :: S_tail)). }
-             assert (hwinc : W (inc1 (hd :: tl)) <= W (hd :: tl) + 1)
-               by (cbn [inc1 W]; pose proof (wf_add_one_le_ne4 hne4); lia).
-             assert (hltY : psi (2 :: inc1 (hd :: tl)) < psi (5 :: hd :: tl))
-               by (rewrite psi_cons_two; lia).
-             destruct (step_even_ih ihEL c (2 :: inc1 (hd :: tl)) hltY S_tail)
-               as [[L' [hr hw]] | [L' [hr [h0 hge1]]]].
-             ++ rewrite psi_cons_two in hw.
-                right. exists L'. split; [exact (reach_trans h1 hr) | lia].
-             ++ left. exists L'.
-                split; [exact (reach_trans h1 hr) |].
-                split.
-                ** destruct c as [| c'].
-                   --- destruct (h0 eq_refl) as [_ [hw _]]; rewrite psi_cons_two in hw; cbn [Nat.mul Nat.add wf]; lia.
-                   --- pose proof (hge1 ltac:(lia)) as hrec; rewrite psi_cons_two in hrec.
-                       pose proof (@wf_even_mono (S c') ltac:(lia)); lia.
-                ** intros -> _.
-                   destruct (h0 eq_refl) as [hp' [_ _]]; rewrite psi_cons_two in hp'; lia.
-      + (* v = S (S (S (S (S (S n0))))) >= 6 *)
-        set (v0 := S (S (S (S (S (S n0)))))) in *.
-        assert (hv_ne2 : v0 <> 2) by (unfold v0; lia).
-        pose proof (psi_cons_ne2 hv_ne2 M') as hpsiM.
-        destruct (mod4_cases n0) as [q [hq | [hq | [hq | hq]]]].
-        * (* n0 = 4 * q => v0 = 4 * q + 6 *)
-          assert (hv_eq : v0 = 4 * q + 6) by (unfold v0; lia).
-          assert (hwfv : q + 2 <= wf v0) by (rewrite hv_eq; exact (wf_4j6 q)).
-          assert (s12 : Reach (cfg_CL1 (inc1 (v0 :: M')) ((2 * c + 1) :: S_tail))
-                              (cfg_EL1 (0 :: M') (0 :: (repeat 0 (2 * (q + 1)) ++ ((2 * c + 2) :: S_tail))))).
-          { cbn [inc1].
-            rstep (step_CL1_add_three (2 * (2 * q + 2)) M' ((2 * c + 1) :: S_tail)).
-            pose proof (peel_EL1_even (2 * q + 2) 0 M' (0 :: (2 * c + 2) :: S_tail)) as s2.
-            rewrite repeat_zero_snoc in s2.
-            replace (2 * q + 2 + 1) with (S (2 * (q + 1))) in s2 by lia.
-            cbn [repeat app] in s2.
-            rdone s2. }
-          assert (hltM' : psi M' < psi (v0 :: M')) by (pose proof (psi_le M'); lia).
-          destruct (ihEL M' hltM' (repeat 0 (2 * (q + 1)) ++ ((2 * c + 2) :: S_tail)))
-            as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
-          -- pose proof (reach_trans (reach_trans s12 hr1)
-               (sweep_BR_00 (q + 1) L1 ((2 * c + 2) :: S_tail))) as hsw.
-             pose proof (psi_repeat_two_succ q L1) as hpsiL.
-             assert (hltL : psi (repeat 2 (q + 1) ++ L1) < psi (v0 :: M'))
-               by (pose proof (psi_le M'); lia).
-             destruct (step_even_ih ihEL c (repeat 2 (q + 1) ++ L1) hltL S_tail)
-               as [[L2 [hr2 hw2]] | [L2 [hr2 [h0' hge1']]]].
-             ++ right. exists L2.
-                split; [exact (reach_trans hsw hr2) | pose proof (psi_le M'); lia].
-             ++ left. exists L2.
-                split; [exact (reach_trans hsw hr2) |].
-                split; [| intros _ [T hne]; unfold v0 in hne; discriminate hne].
-                destruct c as [| c'].
-                ** destruct (h0' eq_refl) as [_ [hw2 _]]; pose proof (psi_le M'); cbn [Nat.mul Nat.add wf]; lia.
-                ** pose proof (hge1' ltac:(lia)); pose proof (@wf_even_mono (S c') ltac:(lia));
-                   pose proof (psi_le M'); lia.
-          -- assert (hrep1 : 0 :: (repeat 0 (2 * (q + 1)) ++ ((2 * c + 2) :: S_tail)) =
-               repeat 0 (2 * (q + 1)) ++ (0 :: (2 * c + 2) :: S_tail)).
-             { rewrite repeat_zero_snoc. replace (2 * (q + 1) + 1) with (S (2 * (q + 1))) by lia. reflexivity. }
-             rewrite hrep1 in s12, hr1.
-             pose proof (reach_trans (reach_trans (reach_trans s12 hr1)
-               (sweep_BR_00 (q + 1) L1 (0 :: (2 * c + 2) :: S_tail)))
-               (step_BR1_0d (2 * c + 2) (repeat 2 (q + 1) ++ L1) S_tail)) as hsw.
-             left. exists ((2 * c + 4) :: (repeat 2 (q + 1) ++ L1)).
-             split; [rdone hsw |].
-             split; [cbn [W]; rewrite W_repeat_two; pose proof (psi_le M'); lia |
-                     intros _ [T hne]; unfold v0 in hne; discriminate hne].
-        * (* n0 = 4 * q + 1 => v0 = 4 * (q + 1) + 3 *)
-          set (r := q + 1).
-          assert (hv_eq : v0 = 4 * r + 3) by (unfold v0, r; lia).
-          assert (hwfv : wf v0 = r + 2) by (rewrite hv_eq; exact (wf_4r3 r)).
-          assert (htot : Reach (cfg_CL1 (inc1 (v0 :: M')) ((2 * c + 1) :: S_tail))
-                               (cfg_BR1 (0 :: (2 * c + 4) :: (repeat 2 r ++ inc1 M')) S_tail)).
-          { cbn [inc1].
-            rstep (step_CL1_add_three (1 + 2 * (2 * r)) M' ((2 * c + 1) :: S_tail)).
-            rstep (peel_EL1_even (2 * r) 1 M' (0 :: (2 * c + 2) :: S_tail)).
-            rstep (step_EL1_one M' (repeat 0 (2 * r) ++ (0 :: (2 * c + 2) :: S_tail))).
-            rstep (step_EB1_zero M' (repeat 0 (2 * r) ++ (0 :: (2 * c + 2) :: S_tail))).
-            rstep (sweep_BR_00 r (inc1 M') (0 :: (2 * c + 2) :: S_tail)).
-            rdone (step_BR1_0d (2 * c + 2) (repeat 2 r ++ inc1 M') S_tail). }
-          left. exists ((2 * c + 4) :: (repeat 2 r ++ inc1 M')).
-          split; [exact htot |].
-          split; [cbn [W]; rewrite W_repeat_two; pose proof (W_inc1_le M'); lia |
-                  intros _ [T hne]; unfold v0 in hne; discriminate hne].
-        * (* n0 = 4 * q + 2 => v0 = 4 * q + 8 *)
-          assert (hv_eq : v0 = 4 * q + 8) by (unfold v0; lia).
-          assert (hwfv : q + 4 <= wf v0) by (rewrite hv_eq; exact (wf_4j8 q)).
-          assert (s12 : Reach (cfg_CL1 (inc1 (v0 :: M')) ((2 * c + 1) :: S_tail))
-                              (cfg_EL1 (0 :: M') (0 :: (repeat 0 (2 * q + 3) ++ ((2 * c + 2) :: S_tail))))).
-          { cbn [inc1].
-            rstep (step_CL1_add_three (2 * (2 * q + 3)) M' ((2 * c + 1) :: S_tail)).
-            pose proof (peel_EL1_even (2 * q + 3) 0 M' (0 :: (2 * c + 2) :: S_tail)) as s2.
-            rewrite repeat_zero_snoc in s2.
-            replace (2 * q + 3 + 1) with (S (2 * q + 3)) in s2 by lia.
-            cbn [repeat app] in s2.
-            rdone s2. }
-          assert (hltM' : psi M' < psi (v0 :: M')) by (pose proof (psi_le M'); lia).
-          destruct (ihEL M' hltM' (repeat 0 (2 * q + 3) ++ ((2 * c + 2) :: S_tail)))
-            as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
-          -- assert (hrep1 : repeat 0 (2 * q + 3) ++ ((2 * c + 2) :: S_tail) =
-               repeat 0 (2 * (q + 1)) ++ (0 :: (2 * c + 2) :: S_tail)).
-             { rewrite repeat_zero_snoc. f_equal; f_equal; lia. }
-             rewrite hrep1 in s12, hr1.
-             pose proof (reach_trans (reach_trans (reach_trans s12 hr1)
-               (sweep_BR_00 (q + 1) L1 (0 :: (2 * c + 2) :: S_tail)))
-               (step_BR1_0d (2 * c + 2) (repeat 2 (q + 1) ++ L1) S_tail)) as hsw.
-             left. exists ((2 * c + 4) :: (repeat 2 (q + 1) ++ L1)).
-             split; [rdone hsw |].
-             split; [cbn [W]; rewrite W_repeat_two; pose proof (psi_le M'); lia |
-                     intros _ [T hne]; unfold v0 in hne; discriminate hne].
-          -- assert (hrep2 : 0 :: (repeat 0 (2 * q + 3) ++ ((2 * c + 2) :: S_tail)) =
-               repeat 0 (2 * (q + 2)) ++ ((2 * c + 2) :: S_tail)).
-             { replace (2 * (q + 2)) with (S (2 * q + 3)) by lia. reflexivity. }
-             rewrite hrep2 in s12, hr1.
-             pose proof (reach_trans (reach_trans s12 hr1)
-               (sweep_BR_00 (q + 2) L1 ((2 * c + 2) :: S_tail))) as hsw.
-             assert (hpsiL : psi (repeat 2 (q + 2) ++ L1) = 2 * (q + 1 + W L1) + 1).
-             { replace (q + 2) with ((q + 1) + 1) by lia. exact (psi_repeat_two_succ (q + 1) L1). }
-             assert (hltL : psi (repeat 2 (q + 2) ++ L1) < psi (v0 :: M'))
-               by (pose proof (psi_le M'); lia).
-             destruct (step_even_ih ihEL c (repeat 2 (q + 2) ++ L1) hltL S_tail)
-               as [[L2 [hr2 hw2]] | [L2 [hr2 [h0' hge1']]]].
-             ++ right. exists L2.
-                split; [exact (reach_trans hsw hr2) | pose proof (psi_le M'); lia].
-             ++ left. exists L2.
-                split; [exact (reach_trans hsw hr2) |].
-                split; [| intros _ [T hne]; unfold v0 in hne; discriminate hne].
-                destruct c as [| c'].
-                ** destruct (h0' eq_refl) as [_ [hw2 _]]; pose proof (psi_le M'); cbn [Nat.mul Nat.add wf]; lia.
-                ** pose proof (hge1' ltac:(lia)); pose proof (@wf_even_mono (S c') ltac:(lia));
-                   pose proof (psi_le M'); lia.
-        * (* n0 = 4 * q + 3 => v0 = 4 * (q + 2) + 1 *)
-          assert (hv_eq : v0 = 4 * (q + 2) + 1) by (unfold v0; lia).
-          assert (hwfv : wf v0 = q + 4) by (rewrite hv_eq; exact (wf_4r1_ge2 q)).
-          assert (hpre : Reach (cfg_CL1 (inc1 (v0 :: M')) ((2 * c + 1) :: S_tail))
-                               (cfg_BR1 (0 :: (repeat 2 (q + 2) ++ inc1 M')) ((2 * c + 2) :: S_tail))).
-          { cbn [inc1].
-            rstep (step_CL1_add_three (1 + 2 * (2 * q + 3)) M' ((2 * c + 1) :: S_tail)).
-            rstep (peel_EL1_even (2 * q + 3) 1 M' (0 :: (2 * c + 2) :: S_tail)).
-            rstep (step_EL1_one M' (repeat 0 (2 * q + 3) ++ (0 :: (2 * c + 2) :: S_tail))).
-            rstep (step_EB1_zero M' (repeat 0 (2 * q + 3) ++ (0 :: (2 * c + 2) :: S_tail))).
-            rewrite repeat_zero_snoc.
-            replace (2 * q + 3 + 1) with (2 * (q + 2)) by lia.
-            rdone (sweep_BR_00 (q + 2) (inc1 M') ((2 * c + 2) :: S_tail)). }
-          assert (hpsiL : psi (repeat 2 (q + 2) ++ inc1 M') = 2 * (q + 1 + W (inc1 M')) + 1).
-          { replace (q + 2) with ((q + 1) + 1) by lia. exact (psi_repeat_two_succ (q + 1) (inc1 M')). }
-          assert (hltL : psi (repeat 2 (q + 2) ++ inc1 M') < psi (v0 :: M'))
-            by (pose proof (W_inc1_le M'); lia).
-          destruct (step_even_ih ihEL c (repeat 2 (q + 2) ++ inc1 M') hltL S_tail)
-            as [[L' [hr' hw']] | [L' [hr' [h0' hge1']]]].
-          -- right. exists L'.
-             split; [exact (reach_trans hpre hr') | pose proof (W_inc1_le M'); lia].
-          -- left. exists L'.
-             split; [exact (reach_trans hpre hr') |].
-             split; [| intros _ [T hne]; unfold v0 in hne; discriminate hne].
-             destruct c as [| c'].
-             ++ destruct (h0' eq_refl) as [_ [hw' _]]; pose proof (W_inc1_le M'); cbn [Nat.mul Nat.add wf]; lia.
-             ++ pose proof (hge1' ltac:(lia)); pose proof (@wf_even_mono (S c') ltac:(lia));
-                pose proof (W_inc1_le M'); lia. }
-  exact (Hmain (psi M) (List.length M) M eq_refl eq_refl c S_tail).
+  destruct (step_even_ih ihEL c L hsmall S_tail) as [[T [hr hw]] | [T [hr [h0 hpos]]]].
+  - right. exists T. split; [exact (reach_trans pre hr) | lia].
+  - left. exists T. split; [exact (reach_trans pre hr) |].
+    split.
+    + destruct (Nat.eq_dec c 0) as [hc | hc].
+      * subst c. destruct (h0 eq_refl) as [_ [hw _]]. cbn [Nat.mul Nat.add wf]. lia.
+      * assert (hc' : 1 <= c) by lia.
+        pose proof (hpos hc'). pose proof (wf_even_mono hc'). lia.
+    + intros hc _. destruct (h0 hc) as [hp _]. lia.
 Qed.
 
-Lemma mEL_spec (L S_tail : list nat) :
-  (exists L', Reach (cfg_EL1 (0 :: L) (0 :: S_tail)) (cfg_BR1 (0 :: L') S_tail) /\
-              2 * W L' <= psi L) \/
-  (exists L', Reach (cfg_EL1 (0 :: L) (0 :: S_tail)) (cfg_BR1 (0 :: L') (0 :: S_tail)) /\
-              2 * W L' + 1 <= psi L).
+(* Group every pair of zeros into one left 2. Any last zero consumes
+   the right digit; otherwise the same even-digit call continues. *)
+Lemma finish_zero_run {M L c R n}
+  (ihEL : ELIH (psi M))
+  (hr : Reach (cfg_CL1 (inc1 M) ((2 * c + 1) :: R))
+       (cfg_BR1 (0 :: L) (repeat 0 n ++ ((2 * c + 2) :: R))))
+  (hn : 2 <= n)
+  (hw : 2 * (Nat.div2 n + W L) <= psi M)
+  (hne : forall T, M <> 5 :: T) :
+  GoodOut M c R.
 Proof.
-  destruct (mCL_bump_spec L 0 S_tail) as [[L' [hr [hw _]]] | [L' [hr hw]]].
-  - left. exists L'.
-    split; [exact (reach_trans (step_EL1_zero L (0 :: S_tail)) hr) | cbn [Nat.mul Nat.add wf] in hw; lia].
-  - right. exists L'.
-    split; [exact (reach_trans (step_EL1_zero L (0 :: S_tail)) hr) | exact hw].
+  pose proof (Nat.div2_odd n) as Hn.
+  set (k := Nat.div2 n) in Hn, hw.
+  destruct (Nat.odd n); cbn [Nat.b2n] in Hn.
+  - rewrite Hn, <- repeat_zero_snoc in hr.
+    left. exists ((2 * c + 4) :: (repeat 2 k ++ L)). split.
+    + rstep hr.
+      rstep (sweep_BR_00 k L (0 :: (2 * c + 2) :: R)).
+      rdone (step_BR1_0d (2 * c + 2) (repeat 2 k ++ L) R).
+    + split.
+      * cbn [W]. rewrite W_repeat_two. lia.
+      * intros _ [T H]. exact (False_rect _ (hne T H)).
+  - replace n with (2 * k) in hr by lia.
+    destruct k as [| k]; [lia|].
+    eapply finish_even; [exact ihEL| |].
+    + exact (reach_trans hr (sweep_BR_00 (S k) L ((2 * c + 2) :: R))).
+    + replace (S k) with (k + 1) by lia. rewrite psi_repeat_two_succ. lia.
 Qed.
+
+Lemma bump_large_even (n c : nat) (L R : list nat)
+  (hn : 2 <= n) (ihEL : ELIH (psi ((2 * n + 2) :: L))) :
+  GoodOut ((2 * n + 2) :: L) c R.
+Proof.
+  assert (hp : psi ((2 * n + 2) :: L) = 2 * (wf (2 * n + 2) + W L))
+    by (rewrite psi_cons_ne2; [reflexivity|lia]).
+  assert (hc : n + 1 <= 2 * wf (2 * n + 2)).
+  { destruct (Nat.eq_dec n 2) as [->|?]; [exact (Nat.le_succ_diag_r 3)|].
+    rewrite wf_ge7 by lia. pose proof (div4_spec (2 * n + 2)); lia. }
+  assert (hsmall : psi L < psi ((2 * n + 2) :: L))
+    by (pose proof (psi_le L); lia).
+  set (T := (2 * c + 2) :: R).
+  assert (eT : inc1 ((2 * c + 1) :: R) = T)
+    by (unfold T; cbn [inc1]; f_equal; lia).
+  assert (pre : Reach (cfg_CL1 (inc1 ((2 * n + 2) :: L)) ((2 * c + 1) :: R))
+         (cfg_EL1 (0 :: L) (0 :: (repeat 0 n ++ T)))).
+  { cbn [inc1].
+    rstep (step_CL1_add_three (2 * n) L ((2 * c + 1) :: R)).
+    rewrite eT.
+    pose proof (peel_EL1_even n 0 L (0 :: T)) as H.
+    rewrite repeat_zero_snoc in H.
+    replace (n + 1) with (S n) in H by lia. exact H. }
+  destruct (ihEL L hsmall (repeat 0 n ++ T)) as [[U [H hU]] | [U [H hU]]].
+  - eapply (finish_zero_run ihEL (reach_trans pre H)); try assumption.
+    + pose proof (Nat.div2_odd n). pose proof (psi_le L). lia.
+    + intros X HX. injection HX as HX. lia.
+  - change (Reach (cfg_EL1 (0 :: L) (0 :: (repeat 0 n ++ T)))
+             (cfg_BR1 (0 :: U) (repeat 0 (S n) ++ T))) in H.
+    eapply (finish_zero_run ihEL (reach_trans pre H)).
+    + lia.
+    + pose proof (Nat.div2_odd (S n)). pose proof (psi_le L). lia.
+    + intros X HX. injection HX as HX. lia.
+Qed.
+
+Lemma bump_large_odd (n c : nat) (L R : list nat)
+  (hn : 2 <= n) (ihEL : ELIH (psi ((2 * n + 3) :: L))) :
+  GoodOut ((2 * n + 3) :: L) c R.
+Proof.
+  set (T := (2 * c + 2) :: R).
+  assert (eT : inc1 ((2 * c + 1) :: R) = T)
+    by (unfold T; cbn [inc1]; f_equal; lia).
+  assert (pre : Reach (cfg_CL1 (inc1 ((2 * n + 3) :: L)) ((2 * c + 1) :: R))
+        (cfg_BR1 (0 :: inc1 L) (repeat 0 (n + 1) ++ T))).
+  { cbn [inc1].
+    rstep (step_CL1_add_three (1 + 2 * n) L ((2 * c + 1) :: R)).
+    rewrite eT.
+    rstep (peel_EL1_even n 1 L (0 :: T)).
+    rstep (step_EL1_one L (repeat 0 n ++ (0 :: T))).
+    rewrite <- repeat_zero_snoc.
+    rdone (step_EB1_zero L (repeat 0 n ++ (0 :: T))). }
+  eapply (finish_zero_run ihEL pre).
+  - lia.
+  - rewrite psi_cons_ne2 by lia. rewrite wf_ge7 by lia.
+    pose proof (div4_spec (2 * n + 3)) as Hd.
+    pose proof (Nat.div2_odd (n + 1)) as Hn.
+    destruct (Nat.odd (n + 1)); cbn [Nat.b2n] in Hn;
+      pose proof (W_inc1_le L); lia.
+  - intros X HX. injection HX as HX. lia.
+Qed.
+
+
+(* Induct first on potential, then on length for zero-cost digits. *)
+Lemma psi_length_ind (P : list nat -> Prop) :
+  (forall M, (forall L, psi L < psi M \/
+    psi L = psi M /\ List.length L < List.length M -> P L) -> P M) ->
+  forall M, P M.
+Proof.
+  intro Hstep.
+  assert (H : forall p n M, psi M = p -> List.length M = n -> P M).
+  { intro p. induction p as [p IH] using strong_induction.
+    intro n. induction n as [n IHn] using strong_induction.
+    intros M Hp Hn. apply Hstep. intros L [Hlt | [Heq Hlt]].
+    - exact (IH (psi L) ltac:(lia) (List.length L) L eq_refl eq_refl).
+    - exact (IHn (List.length L) ltac:(lia) L ltac:(lia) eq_refl). }
+  intro M. exact (H _ _ M eq_refl eq_refl).
+Qed.
+
+Lemma mCL_bump_spec (M : list nat) (c : nat) (S_tail : list nat) : GoodOut M c S_tail.
+Proof.
+  revert M c S_tail.
+  apply (psi_length_ind (fun M => forall c S_tail, GoodOut M c S_tail)).
+  intros M ih c S_tail.
+  assert (ihEL : ELIH (psi M)).
+  { intros L hL R. exact (good_to_el (ih L (or_introl hL) 0 R)). }
+  destruct M as [| v M'].
+  - assert (hr : Reach (cfg_CL1 (inc1 []) ((2 * c + 1) :: S_tail))
+                       (cfg_BR1 [0; 2 * c + 4] S_tail)).
+    { cbn [inc1].
+      rstep (step_CL1_zero [] ((2 * c + 1) :: S_tail)).
+      rstep (step_CL1_nil ((2 * c + 3) :: S_tail)).
+      rdone (step_EL1_nil_cons (2 * c + 4) S_tail). }
+    left. exists [2 * c + 4].
+    split; [exact hr |].
+    split; [cbn [W psi]; lia | intros _ [T hne]; discriminate hne].
+  - destruct v as [| [| [| [| [| [| n0]]]]]].
+    + (* v = 0 *)
+      assert (hpsiM : psi (0 :: M') = 2 * (2 + W M')) by reflexivity.
+      assert (hlt : psi M' < psi (0 :: M')) by (pose proof (psi_le M'); lia).
+      assert (h1 : Reach (cfg_CL1 (inc1 (0 :: M')) ((2 * c + 1) :: S_tail))
+                         (cfg_CL1 (inc1 M') ((2 * (c + 1) + 1) :: S_tail))).
+      { cbn [inc1]. rdone (step_CL1_one M' ((2 * c + 1) :: S_tail)). }
+      destruct (ih M' (or_introl hlt) (c + 1) S_tail)
+        as [[L' [hr [hw _]]] | [L' [hr hw]]].
+      * left. exists L'.
+        split; [exact (reach_trans h1 hr) |].
+        split; [pose proof (wf_even_step c); pose proof (psi_le M'); lia |
+                intros _ [T hne]; discriminate hne].
+      * right. exists L'.
+        split; [exact (reach_trans h1 hr) | pose proof (psi_le M'); lia].
+    + (* v = 1 *)
+      assert (hpsiM : psi (1 :: M') = 2 * (3 + W M')) by reflexivity.
+      assert (h1 : Reach (cfg_CL1 (inc1 (1 :: M')) ((2 * c + 1) :: S_tail))
+                         (cfg_BR1 (0 :: inc1 M') ((2 * c + 2) :: S_tail))).
+      { cbn [inc1].
+        rstep (step_CL1_two M' ((2 * c + 1) :: S_tail)).
+        rdone (step_EB1_zero M' ((2 * c + 2) :: S_tail)). }
+      assert (hlt : psi (inc1 M') < psi (1 :: M'))
+        by (pose proof (psi_le (inc1 M')); pose proof (W_inc1_le M'); lia).
+      exact (finish_even ihEL h1 hlt).
+    + (* v = 2 *)
+      assert (hpsiM : psi (2 :: M') = 2 * W M' + 1) by reflexivity.
+      assert (hlt : psi M' < psi (2 :: M')) by (pose proof (psi_le M'); lia).
+      assert (h1 : Reach (cfg_CL1 (inc1 (2 :: M')) ((2 * c + 1) :: S_tail))
+                         (cfg_EL1 (0 :: M') (0 :: (2 * c + 2) :: S_tail))).
+      { cbn [inc1]. rdone (step_CL1_add_three 0 M' ((2 * c + 1) :: S_tail)). }
+      destruct (ihEL M' hlt ((2 * c + 2) :: S_tail)) as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
+      * assert (hlt1 : psi L1 < psi (2 :: M'))
+          by (pose proof (psi_le L1); pose proof (psi_le M'); lia).
+        exact (finish_even ihEL (reach_trans h1 hr1) hlt1).
+      * left. exists ((2 * c + 4) :: L1).
+        split; [rdone (reach_trans (reach_trans h1 hr1) (step_BR1_0d (2 * c + 2) L1 S_tail)) |].
+        split; [cbn [W]; pose proof (psi_le M'); lia | intros _ [T hne]; discriminate hne].
+    + (* v = 3 *)
+      assert (hpsiM : psi (3 :: M') = 2 * (2 + W M')) by reflexivity.
+      assert (h1 : Reach (cfg_CL1 (inc1 (3 :: M')) ((2 * c + 1) :: S_tail))
+                         (cfg_BR1 (0 :: (2 * c + 4) :: inc1 M') S_tail)).
+      { cbn [inc1].
+        rstep (step_CL1_add_three 1 M' ((2 * c + 1) :: S_tail)).
+        rstep (step_EL1_one M' (0 :: (2 * c + 2) :: S_tail)).
+        rstep (step_EB1_zero M' (0 :: (2 * c + 2) :: S_tail)).
+        rdone (step_BR1_0d (2 * c + 2) (inc1 M') S_tail). }
+      left. exists ((2 * c + 4) :: inc1 M').
+      split; [exact h1 |].
+      split; [cbn [W]; pose proof (W_inc1_le M'); lia | intros _ [T hne]; discriminate hne].
+    + (* v = 4 *)
+      assert (hpsiM : psi (4 :: M') = 2 * W M') by (cbn [psi Nat.eqb W wf]; lia).
+      assert (h1 : Reach (cfg_CL1 (inc1 (4 :: M')) ((2 * c + 1) :: S_tail))
+                         (cfg_EL1 (0 :: M') (0 :: 0 :: (2 * c + 2) :: S_tail))).
+      { cbn [inc1].
+        rstep (step_CL1_add_three 2 M' ((2 * c + 1) :: S_tail)).
+        rdone (step_EL1_add_two 0 M' (0 :: (2 * c + 2) :: S_tail)). }
+      assert (hsmall : psi M' < psi (4 :: M') \/
+          psi M' = psi (4 :: M') /\ List.length M' < List.length (4 :: M')).
+      { pose proof (psi_le M'). cbn [List.length]. lia. }
+      pose proof (good_to_el (ih M' hsmall 0 (0 :: (2 * c + 2) :: S_tail))) as hM'.
+      destruct hM' as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
+      * left. exists ((2 * c + 4) :: L1).
+        split; [rdone (reach_trans (reach_trans h1 hr1) (step_BR1_0d (2 * c + 2) L1 S_tail)) |].
+        split; [cbn [W]; pose proof (psi_le M'); lia | intros _ [T hne]; discriminate hne].
+      * assert (hlt2 : psi (2 :: L1) < psi (4 :: M'))
+          by (rewrite psi_cons_two; pose proof (psi_le M'); lia).
+        pose proof (reach_trans (reach_trans h1 hr1) (step_BR1_00 L1 ((2 * c + 2) :: S_tail))) as h2.
+        exact (finish_even ihEL h2 hlt2).
+    + (* v = 5 *)
+      assert (hpsiM : psi (5 :: M') = 2 * (2 + W M')) by reflexivity.
+      assert (heven : IsEven (psi (5 :: M'))) by (exists (2 + W M'); exact hpsiM).
+      destruct M' as [| hd tl].
+      * left. exists [2 * c + 2; 2; 4; 4; 4].
+        split; [cbn [inc1]; exact (cl_6_nil_step c S_tail) |].
+        split.
+        -- destruct c as [| c'].
+           ++ cbn; lia.
+           ++ pose proof (@wf_even_mono (S c') ltac:(lia)).
+              cbn [W psi Nat.eqb wf]; lia.
+        -- intros -> _. cbn; lia.
+      * destruct (Nat.eq_dec hd 4) as [hhd | hne4].
+        -- (* hd = 4 *)
+           subst hd.
+           destruct (strip4_spec tl) as [hstr hne].
+           set (k := fst (strip4 tl)) in *.
+           set (R_tail := snd (strip4 tl)) in *.
+           assert (hlist : 4 :: tl = rep4 (k + 1) ++ R_tail).
+           { rewrite rep4_succ_r; cbn [app]; f_equal; exact hstr. }
+           assert (hw_eq : W (4 :: tl) = W R_tail) by (rewrite hlist, W_rep4_append; reflexivity).
+           assert (hpsi_eq : psi (5 :: 4 :: tl) = 2 * (2 + W R_tail))
+             by (rewrite hpsiM, hw_eq; reflexivity).
+           assert (hpre : Reach (cfg_CL1 (inc1 (5 :: 4 :: tl)) ((2 * c + 1) :: S_tail))
+                                (cfg_EL1 (0 :: inc1 R_tail)
+                                  (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
+           { cbn [inc1]. rewrite hlist.
+             pose proof (cl_6_rep4_step k c R_tail S_tail) as hcl.
+             replace (k + 2) with (S (k + 1)) in hcl by lia.
+             cbn [rep02 app] in hcl. exact hcl. }
+           destruct R_tail as [| x M''] eqn:hRt.
+           ++ (* R_tail = [] *)
+              assert (h0 : Reach (cfg_EL1 [0; 0] (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))
+                                 (cfg_BR1 [0; 6] (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail))))).
+              { rstep (step_EL1_zero [0] (0 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
+                rstep (step_CL1_one [] (1 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
+                rstep (step_CL1_zero [] (3 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
+                rstep (step_CL1_nil (5 :: 2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))).
+                rdone (step_EL1_nil_cons 6 (2 :: (rep02 (k + 1) ++ ((2 * c) :: S_tail)))). }
+              change (inc1 []) with [0] in hpre.
+              pose proof (reach_trans hpre h0) as hstart.
+              rewrite rep02_succ_r in hstart; cbn [app] in hstart.
+              pose proof (reach_trans hstart (br_6_202_step (rep02 k ++ ((2 * c) :: S_tail)))) as h1.
+              destruct k as [| k'].
+              ** cbn [rep02 app] in h1.
+                 refine (finish_has0 h1 _).
+                 cbn [W wf rep4] in hpsi_eq |- *; lia.
+              ** cbn [rep02 app] in h1.
+                 pose proof (reach_trans (reach_trans h1 (br_rep4_6_002_step (rep02 k' ++ ((2 * c) :: S_tail))))
+                   (sweep_BR_p02 k' (2 :: rep4 8) ((2 * c) :: S_tail))) as h2.
+                 refine (finish_no0 ihEL h2 _).
+                 rewrite W_rep4_append; cbn [W wf rep4] in hpsi_eq |- *; lia.
+          ++ (* R_tail = x :: M'' *)
+              set (R := (rep02 (k + 1) ++ ((2 * c) :: S_tail))) in hpre.
+              assert (hxne4 : x <> 4) by (exact (hne x M'' eq_refl)).
+              assert (hpsi_x : psi (5 :: 4 :: tl) = 2 * (2 + (wf x + W M'')))
+                by (cbn [W] in hpsi_eq; exact hpsi_eq).
+              destruct (wf_inc_class x) as [-> | [hle | [-> | [-> | [-> | [m ->]]]]]].
+              ** exfalso; exact (hxne4 eq_refl).
+              ** (* Case 2A *)
+                 refine (finish_EL_p02_2c ihEL hpre heven _).
+                 pose proof (psi_le ((x + 1) :: M'')); cbn [inc1 W] in *; lia.
+              ** (* Case 2B: x = 0 *)
+                 assert (h1 : Reach (cfg_EL1 (0 :: inc1 (0 :: M'')) (0 :: 2 :: R))
+                                    (cfg_BR1 (0 :: inc1 M'') (2 :: 2 :: R))).
+                 { cbn [inc1].
+                   rstep (step_EL1_zero (1 :: M'') (0 :: 2 :: R)).
+                   rstep (step_CL1_two M'' (1 :: 2 :: R)).
+                   rdone (step_EB1_zero M'' (2 :: 2 :: R)). }
+                 refine (finish_BR_22_p02_2c ihEL (reach_trans hpre h1) heven _).
+                 pose proof (W_inc1_le M''); pose proof (psi_le (inc1 M'')); cbn [wf] in hpsi_x; lia.
+              ** (* Case 2E: x = 2 *)
+                 assert (h1 : Reach (cfg_EL1 (0 :: inc1 (2 :: M'')) (0 :: 2 :: R))
+                                    (cfg_EL1 (0 :: inc1 M'') (0 :: 0 :: 2 :: 0 :: R))).
+                 { cbn [inc1].
+                   rstep (step_EL1_zero (3 :: M'') (0 :: 2 :: R)).
+                   rstep (step_CL1_add_three 1 M'' (1 :: 2 :: R)).
+                   rstep (step_EL1_one M'' (0 :: 2 :: 2 :: R)).
+                   rstep (step_EB1_zero M'' (0 :: 2 :: 2 :: R)).
+                   rstep (sweep_BR_p02_one (inc1 M'') (2 :: R)).
+                   rstep (step_BR1_ge2 0 (0 :: 4 :: inc1 M'') R).
+                   rstep (step_EL1_add_two 0 (4 :: inc1 M'') (0 :: R)).
+                   rdone (sweep_EL_f4_one (inc1 M'') (0 :: R)). }
+                 pose proof (reach_trans hpre h1) as h2.
+                 cbn [wf] in hpsi_x.
+                 destruct M'' as [| y M'''].
+                 --- (* M'' = [] *)
+                     assert (hc1 : Reach (cfg_EL1 [0; 0] (0 :: 0 :: 2 :: 0 :: R))
+                                         (cfg_BR1 [0; 4; 6] (0 :: R))).
+                     { set (R0 := 0 :: 2 :: 0 :: R).
+                       rstep (step_EL1_zero [0] (0 :: R0)).
+                       rstep (step_CL1_one [] (1 :: R0)).
+                       rstep (step_CL1_zero [] (3 :: R0)).
+                       rstep (step_CL1_nil (5 :: R0)).
+                       rstep (step_EL1_nil_cons 6 R0).
+                       unfold R0; rdone (sweep_BR_p02_one [6] (0 :: R)). }
+                     assert (hc2 : Reach (cfg_BR1 [0; 4; 6] (0 :: R))
+                                         (cfg_BR1 (0 :: (rep4 k ++ 2 :: 2 :: rep4 7)) ((2 * c) :: S_tail))).
+                     { unfold R. rewrite rep02_succ_r; cbn [app].
+                       exact (reach_trans (br_46_002_step (rep02 k ++ ((2 * c) :: S_tail)))
+                                          (sweep_BR_p02 k (2 :: 2 :: rep4 7) ((2 * c) :: S_tail))). }
+                     change (inc1 []) with [0] in h2.
+                     refine (finish_no0 ihEL (reach_trans (reach_trans h2 hc1) hc2) _).
+                     rewrite W_rep4_append; cbn [W wf rep4] in hpsi_x |- *; lia.
+                 --- (* M'' = y :: M''' *)
+                     destruct (Nat.eq_dec y 4) as [hy4 | hyne4].
+                     +++ (* y = 4 *)
+                         subst y.
+                         assert (hpsi5 : psi (5 :: M''') = 2 * (2 + W M''')) by reflexivity.
+                         assert (hlt5 : psi (5 :: M''') < psi (5 :: 4 :: tl)) by (cbn [W wf] in hpsi_x; lia).
+                         destruct (ih (5 :: M''') (or_introl hlt5) 0 (0 :: 2 :: 0 :: R))
+                           as [[L1 [hr1 [hw1 hstr5]]] | [L1 [hr1 hw1]]].
+                         *** change (inc1 (4 :: M''')) with (5 :: M''') in h2.
+                             pose proof (reach_trans h2
+                               (reach_trans (step_EL1_zero (5 :: M''') (0 :: 0 :: 2 :: 0 :: R)) hr1)) as hreach1.
+                             assert (hpsL1 : psi L1 + 1 <= psi (5 :: M''')).
+                             { apply hstr5; [reflexivity | exists M'''; reflexivity]. }
+                             destruct L1 as [| z Z].
+                             ---- pose proof (reach_trans hreach1
+                                    (sweep_BR_p02_one [] (0 :: R))) as hsw.
+                                  refine (finish_0_p02_2c ihEL hsw heven _).
+                                  cbn [psi Nat.eqb W wf] in hpsi_x |- *; lia.
+                             ---- destruct (Nat.eq_dec z 2) as [-> | hzne2].
+                                  ++++ rewrite psi_cons_two in hpsL1.
+                                       pose proof (reach_trans hreach1
+                                         (sweep_BR_p02_one (2 :: Z) (0 :: R))) as hsw.
+                                       refine (finish_42_0_p02_2c ihEL hsw heven _).
+                                       cbn [W wf] in hpsi_x; lia.
+                                  ++++ rewrite (psi_cons_ne2 hzne2) in hpsL1.
+                                       pose proof (reach_trans hreach1
+                                         (sweep_BR_p02_one (z :: Z) (0 :: R))) as hsw.
+                                       refine (finish_0_p02_2c ihEL hsw heven _).
+                                       rewrite psi_cons_four; cbn [W wf] in hpsi_x |- *; lia.
+                         *** change (inc1 (4 :: M''')) with (5 :: M''') in h2.
+                             pose proof (reach_trans h2
+                               (reach_trans (step_EL1_zero (5 :: M''') (0 :: 0 :: 2 :: 0 :: R)) hr1)) as hreach1.
+                             cbn [W wf] in hpsi_x.
+                             assert (hlt1 : psi L1 < psi (5 :: 4 :: tl))
+                               by (pose proof (psi_le L1); lia).
+                             destruct (step_p02_one_ih ihEL L1 hlt1 (0 :: R))
+                               as [[L2 [hr2 [_ hw2]]] | [L2 [hr2 hw2]]].
+                             ---- pose proof (reach_trans (reach_trans hreach1 hr2)
+                                    (reach_trans (step_BR1_00 L2 R)
+                                                 (sweep_BR_p02 (k + 1) (2 :: L2) ((2 * c) :: S_tail)))) as hsw.
+                                  refine (finish_no0 ihEL hsw _).
+                                  rewrite W_rep4_append; cbn [W wf]; pose proof (psi_le L1); lia.
+                             ---- refine (finish_0_p02_2c ihEL (reach_trans hreach1 hr2) heven _).
+                                  rewrite psi_cons_two; pose proof (psi_le L1); lia.
+                     +++ (* y <> 4 *)
+                         refine (finish_EL_p02_0_p02_2c ihEL h2 heven _).
+                         cbn [inc1 W] in hpsi_x |- *; pose proof (wf_add_one_le_ne4 hyne4); lia.
+              ** (* Case 2D: x = 6 *)
+                 assert (h1 : Reach (cfg_EL1 (0 :: inc1 (6 :: M'')) (0 :: 2 :: R))
+                                    (cfg_EL1 (0 :: inc1 M'') (0 :: 2 :: 0 :: 2 :: 0 :: R))).
+                 { cbn [inc1].
+                   rstep (step_EL1_zero (7 :: M'') (0 :: 2 :: R)).
+                   rstep (step_CL1_add_three 5 M'' (1 :: 2 :: R)).
+                   rstep (step_EL1_add_two 3 M'' (0 :: 2 :: 2 :: R)).
+                   rstep (step_EL1_add_two 1 M'' (0 :: 0 :: 2 :: 2 :: R)).
+                   rstep (step_EL1_one M'' (0 :: 0 :: 0 :: 2 :: 2 :: R)).
+                   rstep (step_EB1_zero M'' (0 :: 0 :: 0 :: 2 :: 2 :: R)).
+                   rstep (step_BR1_00 (inc1 M'') (0 :: 2 :: 2 :: R)).
+                   rstep (sweep_BR_p02_one (2 :: inc1 M'') (2 :: R)).
+                   rstep (step_BR1_ge2 0 (0 :: 4 :: 2 :: inc1 M'') R).
+                   rstep (step_EL1_add_two 0 (4 :: 2 :: inc1 M'') (0 :: R)).
+                   rstep (sweep_EL_f4_one (2 :: inc1 M'') (0 :: R)).
+                   rstep (step_EL1_zero (2 :: inc1 M'') (0 :: 0 :: 2 :: 0 :: R)).
+                   rdone (step_CL1_add_three 0 (inc1 M'') (1 :: 0 :: 2 :: 0 :: R)). }
+                 refine (finish_2D ihEL (reach_trans hpre h1) heven _).
+                 pose proof (W_inc1_le M''); cbn [wf] in hpsi_x; lia.
+              ** (* Case 2C: x = 4 * (m + 1) + 3 *)
+                 pose proof (wf_4r3 (m + 1)) as hwx.
+                 assert (h1 : Reach (cfg_EL1 (0 :: inc1 ((4 * (m + 1) + 3) :: M''))
+                                      (0 :: 2 :: R))
+                                    (cfg_EL1 (0 :: M'')
+                                      (0 :: (repeat 0 (2 * m + 3) ++ (2 :: 2 :: R))))).
+                 { cbn [inc1].
+                   rstep (step_EL1_zero ((4 * (m + 1) + 3 + 1) :: M'') (0 :: 2 :: R)).
+                   rstep (step_CL1_add_three (2 * (2 * m + 3)) M'' (1 :: 2 :: R)).
+                   pose proof (peel_EL1_even (2 * m + 3) 0 M'' (0 :: 2 :: 2 :: R)) as a3.
+                   rewrite repeat_zero_snoc in a3.
+                   replace (2 * m + 3 + 1) with (S (2 * m + 3)) in a3 by lia.
+                   cbn [repeat app] in a3.
+                   rdone a3. }
+                 assert (hltM'' : psi M'' < psi (5 :: 4 :: tl))
+                   by (pose proof (psi_le M''); rewrite hwx in hpsi_x; lia).
+                 destruct (ihEL M'' hltM'' (repeat 0 (2 * m + 3) ++ (2 :: 2 :: R)))
+                   as [[L1 [hr1 hw1]] | [L1 [hr1 hw1]]].
+                 --- assert (hrep : repeat 0 (2 * m + 3) ++ (2 :: 2 :: R) =
+                       repeat 0 (2 * (m + 1)) ++ (0 :: 2 :: 2 :: R)).
+                     { rewrite repeat_zero_snoc. f_equal; f_equal; lia. }
+                     rewrite hrep in h1, hr1.
+                     pose proof (reach_trans (reach_trans (reach_trans hpre h1) hr1)
+                       (reach_trans (sweep_BR_00 (m + 1) L1 (0 :: 2 :: 2 :: R))
+                                    (sweep_BR_p02_one (repeat 2 (m + 1) ++ L1) (2 :: R)))) as hs.
+                     pose proof (reach_trans hs
+                       (reach_trans (step_BR1_ge2 0 (0 :: 4 :: (repeat 2 (m + 1) ++ L1)) R)
+                                    (step_EL1_add_two 0 (4 :: (repeat 2 (m + 1) ++ L1)) (0 :: R)))) as hs2.
+                     assert (hltL : psi (4 :: (repeat 2 (m + 1) ++ L1)) < psi (5 :: 4 :: tl)).
+                     { rewrite psi_cons_four, W_repeat_two; cbn [W wf].
+                       rewrite hwx in hpsi_x; pose proof (psi_le M''); lia. }
+                     destruct (ihEL (4 :: (repeat 2 (m + 1) ++ L1)) hltL (0 :: R))
+                       as [[L2 [hr2 hw2]] | [L2 [hr2 hw2]]].
+                     +++ refine (finish_0_p02_2c ihEL (reach_trans hs2 hr2) heven _).
+                         rewrite psi_cons_four, W_repeat_two in hw2; cbn [W wf] in hw2.
+                         rewrite hwx in hpsi_x; pose proof (psi_le L2); pose proof (psi_le M''); lia.
+                     +++ pose proof (reach_trans (reach_trans hs2 hr2)
+                           (reach_trans (step_BR1_00 L2 R)
+                                        (sweep_BR_p02 (k + 1) (2 :: L2) ((2 * c) :: S_tail)))) as hsw.
+                         refine (finish_no0 ihEL hsw _).
+                         rewrite W_rep4_append; cbn [W wf].
+                         rewrite psi_cons_four, W_repeat_two in hw2; cbn [W wf] in hw2.
+                         rewrite hwx in hpsi_x; pose proof (psi_le M''); lia.
+                 --- assert (hrep : 0 :: (repeat 0 (2 * m + 3) ++ (2 :: 2 :: R)) =
+                       repeat 0 (2 * (m + 2)) ++ (2 :: 2 :: R)).
+                     { replace (2 * (m + 2)) with (S (2 * m + 3)) by lia. reflexivity. }
+                     rewrite hrep in h1, hr1.
+                     pose proof (reach_trans (reach_trans (reach_trans hpre h1) hr1)
+                       (sweep_BR_00 (m + 2) L1 (2 :: 2 :: R))) as hs.
+                     refine (finish_BR_22_p02_2c ihEL hs heven _).
+                     replace (m + 2) with ((m + 1) + 1) by lia.
+                     rewrite psi_repeat_two_succ.
+                     rewrite hwx in hpsi_x; pose proof (psi_le M''); lia.
+        -- (* hd <> 4 *)
+           assert (h1 : Reach (cfg_CL1 (inc1 (5 :: hd :: tl)) ((2 * c + 1) :: S_tail))
+                              (cfg_BR1 (0 :: 2 :: inc1 (hd :: tl)) ((2 * c + 2) :: S_tail))).
+           { cbn [inc1].
+             rstep (step_CL1_add_three 3 (hd :: tl) ((2 * c + 1) :: S_tail)).
+             rstep (step_EL1_add_two 1 (hd :: tl) (0 :: (2 * c + 2) :: S_tail)).
+             rstep (step_EL1_one (hd :: tl) (0 :: 0 :: (2 * c + 2) :: S_tail)).
+             rstep (step_EB1_zero (hd :: tl) (0 :: 0 :: (2 * c + 2) :: S_tail)).
+             rdone (step_BR1_00 (inc1 (hd :: tl)) ((2 * c + 2) :: S_tail)). }
+           assert (hwinc : W (inc1 (hd :: tl)) <= W (hd :: tl) + 1)
+             by (cbn [inc1 W]; pose proof (wf_add_one_le_ne4 hne4); lia).
+           assert (hltY : psi (2 :: inc1 (hd :: tl)) < psi (5 :: hd :: tl))
+             by (rewrite psi_cons_two; lia).
+           exact (finish_even ihEL h1 hltY).
+
+    + (* A large head is reduced to a zero run and a residual bit. *)
+      pose proof (Nat.div2_odd n0) as Hn.
+      set (k := Nat.div2 n0) in Hn.
+      set (v := S (S (S (S (S (S n0)))))) in *.
+      destruct (Nat.odd n0); cbn [Nat.b2n] in Hn.
+      * replace v with (2 * (k + 2) + 3) in ihEL |- * by (unfold v; lia).
+        apply bump_large_odd; [lia|exact ihEL].
+      * replace v with (2 * (k + 2) + 2) in ihEL |- * by (unfold v; lia).
+        apply bump_large_even; [lia|exact ihEL].
+Qed.
+
+Lemma mEL_spec (L S_tail : list nat) : ELResult L S_tail.
+Proof. apply good_to_el, mCL_bump_spec. Qed.
 
 Lemma step_p02_one (L S_tail : list nat) :
   (exists L', Reach (cfg_BR1 (0 :: L) (0 :: 0 :: 2 :: S_tail)) (cfg_BR1 (0 :: L') (0 :: S_tail)) /\
@@ -1981,7 +1828,7 @@ Lemma p02_zero_drop (p : nat) :
             (cfg_BR1 (0 :: (rep4 a' ++ L')) S_tail) /\
       n + 2 * W L' <= a' + psi L + 3 /\ 2 * W L' <= psi L + 2.
 Proof.
-  induction p as [p ih] using nat_strong_ind.
+  induction p as [p ih] using strong_induction.
   intros L S_tail [| m] hp hn; [lia |].
   cbn [rep02 app].
   destruct (step_p02_one L (rep02 m ++ S_tail)) as [[L1 [hr1 [hp1 _]]] | [L1 [hr1 hw1]]].
@@ -2715,19 +2562,6 @@ Qed.
 
 Inductive Pfx : Type := p0 | p03 | p05 | p055.
 
-Definition pfxEq (p1 p2 : Pfx) : bool :=
-  match p1, p2 with
-  | p0, p0 => true
-  | p03, p03 => true
-  | p05, p05 => true
-  | p055, p055 => true
-  | _, _ => false
-  end.
-
-Lemma pfxEq_eq (p1 p2 : Pfx) (h : pfxEq p1 p2 = true) : p1 = p2.
-Proof.
-  destruct p1, p2; try reflexivity; discriminate h.
-Qed.
 
 Definition encPfx (pf : Pfx) : list nat :=
   match pf with
@@ -2820,22 +2654,6 @@ Proof.
   reflexivity.
 Qed.
 
-Fixpoint nListEq (l1 l2 : list N) : bool :=
-  match l1, l2 with
-  | [], [] => true
-  | x :: xs, y :: ys => andb (N.eqb x y) (nListEq xs ys)
-  | _, _ => false
-  end.
-
-Lemma nListEq_eq : forall (l1 l2 : list N), nListEq l1 l2 = true -> l1 = l2.
-Proof.
-  induction l1 as [| x xs IH]; intros [| y ys] h; try discriminate h.
-  - reflexivity.
-  - cbn [nListEq] in h.
-    apply Bool.andb_true_iff in h as [h1 h2].
-    apply N.eqb_eq in h1.
-    f_equal; [exact h1 | exact (IH ys h2)].
-Qed.
 
 Inductive RTag : Type := r_z0 | r_z2 | r_p.
 
@@ -3801,193 +3619,6 @@ Proof.
         exact (reach_trans (reach_trans (reach_trans s0 s1) (hRS [3])) (finishD3_sound h)).
 Qed.
 
-Fixpoint runHubs (n : nat) (s : Pfx * list N) : option (Pfx * list N) :=
-  match n with
-  | 0 => Some s
-  | S n' =>
-    match stepHub 200 s with
-    | None => None
-    | Some s1 => runHubs n' s1
-    end
-  end.
-
-Lemma runHubs_sound (n : nat) :
-  forall (s s' : Pfx * list N),
-    runHubs n s = Some s' -> Reach (encHub (fst s) (snd s)) (encHub (fst s') (snd s')).
-Proof.
-  induction n as [| n' IH]; intros s s' h.
-  - inversion h; subst; apply reach_refl.
-  - cbn [runHubs] in h.
-    destruct (stepHub 200 s) as [s1 |] eqn:hs; [| discriminate h].
-    exact (reach_trans (stepHub_sound hs) (IH s1 s' h)).
-Qed.
-
-Definition checkHubs (n : nat) (s s' : Pfx * list N) : bool :=
-  match runHubs n s with
-  | None => false
-  | Some s1 => andb (pfxEq (fst s1) (fst s')) (nListEq (snd s1) (snd s'))
-  end.
-
-Lemma runHubs_of_check {n : nat} {s s' : Pfx * list N}
-  (h : checkHubs n s s' = true) :
-  Reach (encHub (fst s) (snd s)) (encHub (fst s') (snd s')).
-Proof.
-  unfold checkHubs in h.
-  destruct (runHubs n s) as [s1 |] eqn:hr; [| discriminate h].
-  apply Bool.andb_true_iff in h as [h1 h2].
-  destruct s1 as [p1 b1], s' as [p2 b2]; cbn in h1, h2.
-  rewrite (pfxEq_eq p1 p2 h1), (nListEq_eq b1 b2 h2) in hr.
-  exact (runHubs_sound n s (p2, b2) hr).
-Qed.
-
-Definition checkBatch05 (m : N) (bs bs' : list N) : bool :=
-  match subTail m bs with
-  | None => false
-  | Some out => nListEq out bs'
-  end.
-
-Lemma batch05_of_check {m : N} {bs bs' : list N}
-  (h : checkBatch05 m bs bs' = true) :
-  Reach (encHub p05 bs) (encHub p05 bs').
-Proof.
-  unfold checkBatch05 in h.
-  destruct (subTail m bs) as [out |] eqn:hs; [| discriminate h].
-  rewrite (nListEq_eq out bs' h) in hs.
-  exact (hub_05_batch m bs bs' hs).
-Qed.
-
-(** ** Exact Stage 1 Checkpoints (H 1 -> H 1,387 -> H 11,117 -> H 11,120) *)
-
-Open Scope N_scope.
-
-Definition st_H1 : Pfx * list N := (p0, [0]).
-
-Definition st_H200 : Pfx * list N :=
-  (p055, [3555; 20796; 116780; 16748; 59732; 455264; 66792; 0; 458752]).
-
-Definition st_H400 : Pfx * list N :=
-  (p0, [2954; 18920; 109276; 203068; 935376; 7280564; 32712196; 18842664; 25512808; 156638096; 329758992; 29366492]).
-
-Definition st_H600 : Pfx * list N :=
-  (p03, [2354; 17056; 101820; 173244; 816080; 6803380; 30803460; 65794584; 294236116; 2129785012; 10180616692; 81012974392; 885699664; 201326592; 1073741824]).
-
-Definition st_H800 : Pfx * list N :=
-  (p055, [1755; 15196; 94380; 143484; 697040; 6327220; 28898820; 58176024; 263761876; 2007888052; 9693028852; 79062623032; 6735857064; 40093496512; 192694888224; 808988028388; 30386963036]).
-
-Definition st_H1000 : Pfx * list N :=
-  (p0, [1154; 13320; 86876; 113468; 576976; 5846964; 26977796; 50491928; 233025492; 1884942516; 9201246708; 90245562712; 83788517956; 593260430180; 2979993386148; 16174894751472; 34298981500032; 80308496796; 29503024616824; 1924145444072]).
-
-Definition st_H1200 : Pfx * list N :=
-  (p03, [554; 11456; 79420; 83644; 457680; 5369780; 25069060; 42856984; 202485716; 1762783412; 8712610292; 88291017048; 75970335300; 561987699556; 2854902463652; 15674531061488; 79774990672048; 13540101488692; 62535257873232; 232638500134196; 4402879390568]).
-
-Definition blks_H1387 : list N :=
-  [9730; 72516; 56028; 347216; 4927924; 23301636; 35787288; 174206932; 1649668276; 8260149748; 86481174872; 68730966596; 533030224740; 2739072564388; 15211211464432; 77921712283824; 6126987935796; 32882803661648; 201728764217476; 1006885783787796; 5186334372888352; 3666344708518256; 387028092977576; 422212465065984].
-
-Definition blks_H1409 : list N :=
-  [9708; 72428; 55676; 345808; 4922292; 23279108; 35697176; 173846484; 1648226484; 8254382580; 86458106200; 68638691908; 532661125988; 2737596169380; 15205305884400; 77898089963696; 6032498655284; 32504846539600; 200216935729284; 1000838469835028; 5162145117077280; 3569587685273968; 424; 1970324836974592].
-
-Definition blks_H1410 : list N :=
-  [9707; 72424; 55660; 345744; 4922036; 23278084; 35693080; 173830100; 1648160948; 8254120436; 86457057624; 68634497604; 532644348772; 2737529060516; 15205037448944; 77897016221872; 6028203687988; 32487666670416; 200148216252548; 1000563591928084; 5161045605449504; 5544310568761150].
-
-Definition blks_H2813 : list N :=
-  [8304; 66812; 33212; 255952; 4562868; 21841412; 29946392; 150843348; 1556213940; 7886332404; 84985905496; 62749889092; 509105914724; 2643375324324; 14828422504176; 76390556442800; 2364571700; 8384310205264; 103734790391940; 614909888485652; 3618430791679776; 11714769823840062].
-
-Definition blks_H2814 : list N :=
-  [8303; 66808; 33196; 255888; 4562612; 21840388; 29942296; 150826964; 1556148404; 7886070260; 84984856920; 62745694788; 509089137508; 2643308215460; 14828154068720; 84764334619440; 103695026849140; 614750834314452; 3617794574994976; 11717314690579262].
-
-Definition blks_H4888 : list N :=
-  [6229; 58512; 12; 123152; 4031668; 19716612; 21447192; 116846548; 1420226740; 7342383604; 82810110296; 54046708292; 474293191524; 2504124431524; 14271418932976; 82537394076464; 94787264677236; 579119785626836; 3475270380244512; 12287411469581118].
-
-Definition blks_H4889 : list N :=
-  [6228; 181612; 4031468; 19715812; 21443992; 116833748; 1420175540; 7342178804; 82809291096; 54043431492; 474280084324; 2504072002724; 14271209217776; 82536555215664; 94783909234036; 579106363854036; 3475216693153312; 12287626217945918].
-
-Definition blks_H11117 : list N :=
-  [0; 156700; 3931820; 19317220; 19849624; 110456276; 1394665652; 7240139252; 82401132888; 52410798660; 467749552996; 2477949877412; 14166720716528; 82118601210672; 93112093214068; 572419099774164; 3448467636833824; 12394622443223870].
-
-Definition tail13_H11120 : list N :=
-  [110454484; 1394658484; 7240110580; 82401018200; 52410339908; 467747717988; 2477942537380; 14166691356400; 82118483770160; 93111623452020; 572417220725972; 3448460120641056; 12394652507994942].
-
-Definition st_H11120 : Pfx * list N :=
-  (p055, 156691 :: 3931792 :: 19317108 :: 19849176 :: tail13_H11120).
-
-Close Scope N_scope.
-Open Scope nat_scope.
-
-Lemma reach_H1_H200 : Reach (encHub (fst st_H1) (snd st_H1)) (encHub (fst st_H200) (snd st_H200)).
-Proof.
-  exact (@runHubs_of_check 199 st_H1 st_H200 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H200_H400 : Reach (encHub (fst st_H200) (snd st_H200)) (encHub (fst st_H400) (snd st_H400)).
-Proof.
-  exact (@runHubs_of_check 200 st_H200 st_H400 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H400_H600 : Reach (encHub (fst st_H400) (snd st_H400)) (encHub (fst st_H600) (snd st_H600)).
-Proof.
-  exact (@runHubs_of_check 200 st_H400 st_H600 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H600_H800 : Reach (encHub (fst st_H600) (snd st_H600)) (encHub (fst st_H800) (snd st_H800)).
-Proof.
-  exact (@runHubs_of_check 200 st_H600 st_H800 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H800_H1000 : Reach (encHub (fst st_H800) (snd st_H800)) (encHub (fst st_H1000) (snd st_H1000)).
-Proof.
-  exact (@runHubs_of_check 200 st_H800 st_H1000 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H1000_H1200 : Reach (encHub (fst st_H1000) (snd st_H1000)) (encHub (fst st_H1200) (snd st_H1200)).
-Proof.
-  exact (@runHubs_of_check 200 st_H1000 st_H1200 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H1200_H1387 : Reach (encHub (fst st_H1200) (snd st_H1200)) (encHub p05 blks_H1387).
-Proof.
-  exact (@runHubs_of_check 187 st_H1200 (p05, blks_H1387) ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H1387_H1409 : Reach (encHub p05 blks_H1387) (encHub p05 blks_H1409).
-Proof.
-  exact (@batch05_of_check 22%N blks_H1387 blks_H1409 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H1409_H1410 : Reach (encHub p05 blks_H1409) (encHub p05 blks_H1410).
-Proof.
-  exact (@runHubs_of_check 1 (p05, blks_H1409) (p05, blks_H1410) ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H1410_H2813 : Reach (encHub p05 blks_H1410) (encHub p05 blks_H2813).
-Proof.
-  exact (@batch05_of_check 1403%N blks_H1410 blks_H2813 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H2813_H2814 : Reach (encHub p05 blks_H2813) (encHub p05 blks_H2814).
-Proof.
-  exact (@runHubs_of_check 1 (p05, blks_H2813) (p05, blks_H2814) ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H2814_H4888 : Reach (encHub p05 blks_H2814) (encHub p05 blks_H4888).
-Proof.
-  exact (@batch05_of_check 2074%N blks_H2814 blks_H4888 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H4888_H4889 : Reach (encHub p05 blks_H4888) (encHub p05 blks_H4889).
-Proof.
-  exact (@runHubs_of_check 1 (p05, blks_H4888) (p05, blks_H4889) ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H4889_H11117 : Reach (encHub p05 blks_H4889) (encHub p05 blks_H11117).
-Proof.
-  exact (@batch05_of_check 6228%N blks_H4889 blks_H11117 ltac:(vm_compute; reflexivity)).
-Qed.
-
-Lemma reach_H11117_H11120 : Reach (encHub p05 blks_H11117) (encHub (fst st_H11120) (snd st_H11120)).
-Proof.
-  exact (@runHubs_of_check 3 (p05, blks_H11117) st_H11120 ltac:(vm_compute; reflexivity)).
-Qed.
-
 Lemma encHub_p055_3 (a b c d : N) (rest : list N) :
   encHub p055 (a :: b :: c :: d :: rest) =
     cfg_BR1 (0 :: 5 :: 5 ::
@@ -3998,47 +3629,93 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma W_cons_two (L : list nat) : W (2 :: L) = 1 + W L.
+Definition terminal (s : Pfx * list N) : bool :=
+  match s with
+  | (p055, a :: b :: c :: _ :: rest) =>
+    N.eqb a 156691%N && N.eqb b 3931792%N && N.eqb c 19317108%N &&
+    Nat.leb (1 + List.length rest) 14
+  | _ => false
+  end.
+
+Lemma terminal_sound s :
+  terminal s = true -> halts tm (encHub (fst s) (snd s)).
 Proof.
-  reflexivity.
+  destruct s as [[| | |] [| a [| b [| c [| d rest]]]]]; try discriminate.
+  cbn [terminal fst snd].
+  rewrite !Bool.andb_true_iff.
+  intros [[[Ha Hb] Hc] Hw].
+  apply N.eqb_eq in Ha, Hb, Hc. subst a b c.
+  rewrite encHub_p055_3. apply halts_from_H11120.
+  change (1 + W (encBlks_N (d :: rest)) <= 14).
+  rewrite W_encBlks_N_cons. now apply Nat.leb_le.
 Qed.
+
+(* d is affordable if each nonfinal block b_i can pay 4^i * d.
+   None denotes no bound from the remaining blocks. *)
+Fixpoint allowance (bs : list N) : option N :=
+  match bs with
+  | [] => None
+  | a :: tl =>
+    match tl with
+    | [] => None
+    | _ :: _ =>
+      Some (match allowance tl with
+            | Some d => N.min a (N.div d 4)
+            | None => a
+            end)
+    end
+  end.
+
+Definition stepHubFast (s : Pfx * list N) : option (Pfx * list N) :=
+  match s with
+  | (p05, bs) =>
+    match allowance bs with
+    | Some (Npos p) => option_map (fun out => (p05,out)) (subTail (Npos p) bs)
+    | _ => stepHub 200 s
+    end
+  | _ => stepHub 200 s
+  end.
+
+Lemma stepHubFast_sound s out :
+  stepHubFast s = Some out ->
+  Reach (encHub (fst s) (snd s)) (encHub (fst out) (snd out)).
+Proof.
+  destruct s as [p bs], p; cbn [stepHubFast]; try apply stepHub_sound.
+  destruct (allowance bs) as [[|p]|]; try apply stepHub_sound.
+  destruct (subTail (Npos p) bs) as [r|] eqn:H; try discriminate.
+  intros [= <-]. exact (hub_05_batch _ _ _ H).
+Qed.
+
+Fixpoint check_hubs (fuel : nat) (s : Pfx * list N) : bool :=
+  if terminal s then true else
+    match fuel with
+    | O => false
+    | S f => match stepHubFast s with Some out => check_hubs f out | None => false end
+    end.
+
+Lemma check_hubs_sound fuel s : check_hubs fuel s = true ->
+  halts tm (encHub (fst s) (snd s)).
+Proof.
+  revert s. induction fuel as [|f IH]; intros s; cbn [check_hubs];
+    destruct (terminal s) eqn:H; try discriminate;
+    try (intros _; exact (terminal_sound s H)).
+  destruct (stepHubFast s) as [out|] eqn:E; try discriminate.
+  intros h. exact (halts_evstep tm _ _ (IH out h) (stepHubFast_sound s out E)).
+Qed.
+
+Definition initial_hub : Pfx * list N := (p0, [0%N]).
+
+Lemma check_hubs_ok : check_hubs 1400 initial_hub = true.
+Proof. vm_check_eq. Qed.
 
 Lemma is_halt_proof : halts tm c0.
 Proof.
-  assert (h_entry : Reach c0 (encHub (fst st_H1) (snd st_H1))).
-  { unfold st_H1, encHub, encPfx, encBlks_N; cbn [fst snd List.map encBlks rep4 app].
-    exact entry_step. }
-  assert (h_stage1 : Reach c0 (encHub (fst st_H11120) (snd st_H11120))).
-  { eapply reach_trans; [exact h_entry |].
-    eapply reach_trans; [exact reach_H1_H200 |].
-    eapply reach_trans; [exact reach_H200_H400 |].
-    eapply reach_trans; [exact reach_H400_H600 |].
-    eapply reach_trans; [exact reach_H600_H800 |].
-    eapply reach_trans; [exact reach_H800_H1000 |].
-    eapply reach_trans; [exact reach_H1000_H1200 |].
-    eapply reach_trans; [exact reach_H1200_H1387 |].
-    eapply reach_trans; [exact reach_H1387_H1409 |].
-    eapply reach_trans; [exact reach_H1409_H1410 |].
-    eapply reach_trans; [exact reach_H1410_H2813 |].
-    eapply reach_trans; [exact reach_H2813_H2814 |].
-    eapply reach_trans; [exact reach_H2814_H4888 |].
-    eapply reach_trans; [exact reach_H4888_H4889 |].
-    eapply reach_trans; [exact reach_H4889_H11117 |].
-    exact reach_H11117_H11120. }
-  assert (hW : W (2 :: encBlks_N (19849176%N :: tail13_H11120)) <= 14).
-  { rewrite W_cons_two, W_encBlks_N_cons.
-    cbn [tail13_H11120 List.length]; lia. }
-  assert (h_halt : halts tm (encHub (fst st_H11120) (snd st_H11120))).
-  { change (fst st_H11120) with p055.
-    change (snd st_H11120) with (156691%N :: 3931792%N :: 19317108%N :: 19849176%N :: tail13_H11120).
-    rewrite encHub_p055_3.
-    exact (halts_from_H11120 (2 :: encBlks_N (19849176%N :: tail13_H11120)) hW). }
-  exact (halts_evstep tm _ _ h_halt h_stage1).
+  exact (halts_evstep tm _ _ (check_hubs_sound 1400 initial_hub check_hubs_ok) entry_step).
 Qed.
 
 End MachineProof.
 
 Theorem halt : halts tm c0.
-Proof.
-  exact MachineProof.is_halt_proof.
-Qed.
+Proof. exact MachineProof.is_halt_proof. Qed.
+
+Print Assumptions halt.
