@@ -1,0 +1,31 @@
+c273_halts
+     : halts tm c0
+Axioms:
+Uint63.sub_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.sub x y) =
+  BinInt.Z.modulo (BinInt.Z.sub (Uint63.to_Z x) (Uint63.to_Z y)) Uint63.wB
+PrimInt63.sub : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+Uint63.mul_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.mul x y) =
+  BinInt.Z.modulo (BinInt.Z.mul (Uint63.to_Z x) (Uint63.to_Z y)) Uint63.wB
+PrimInt63.mul : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+Uint63.ltb_spec :
+  forall x y : PrimInt63.int,
+  PrimInt63.ltb x y = true <-> BinInt.Z.lt (Uint63.to_Z x) (Uint63.to_Z y)
+PrimInt63.ltb : PrimInt63.int -> PrimInt63.int -> bool
+PrimInt63.lsr : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PrimInt63.land : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PrimInt63.int : Set
+PrimInt63.eqb : PrimInt63.int -> PrimInt63.int -> bool
+Uint63.div_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.div x y) =
+  BinInt.Z.div (Uint63.to_Z x) (Uint63.to_Z y)
+PrimInt63.div : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+Uint63.add_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.add x y) =
+  BinInt.Z.modulo (BinInt.Z.add (Uint63.to_Z x) (Uint63.to_Z y)) Uint63.wB
+PrimInt63.add : PrimInt63.int -> PrimInt63.int -> PrimInt63.int

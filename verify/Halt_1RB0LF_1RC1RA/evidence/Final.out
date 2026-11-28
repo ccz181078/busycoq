@@ -1,0 +1,88 @@
+Axioms:
+Uint63.sub_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.sub x y) =
+  (Uint63.to_Z x - Uint63.to_Z y) mod Uint63.wB
+PrimInt63.sub : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PArray.set :
+  forall A : Type, PArray.array A -> PrimInt63.int -> A -> PArray.array A
+Uint63.of_to_Z : forall x : PrimInt63.int, Uint63.of_Z (Uint63.to_Z x) = x
+Uint63.mulc_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z x * Uint63.to_Z y =
+  Uint63.to_Z (fst (PrimInt63.mulc x y)) * Uint63.wB +
+  Uint63.to_Z (snd (PrimInt63.mulc x y))
+PrimInt63.mulc :
+  PrimInt63.int -> PrimInt63.int -> PrimInt63.int * PrimInt63.int
+Uint63.mul_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.mul x y) =
+  (Uint63.to_Z x * Uint63.to_Z y) mod Uint63.wB
+PrimInt63.mul : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PArray.make : forall A : Type, PrimInt63.int -> A -> PArray.array A
+Uint63.ltb_spec :
+  forall x y : PrimInt63.int,
+  PrimInt63.ltb x y = true <-> Uint63.to_Z x < Uint63.to_Z y
+PrimInt63.ltb : PrimInt63.int -> PrimInt63.int -> bool
+Uint63.lsr_spec :
+  forall x p : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.lsr x p) = Uint63.to_Z x / 2 ^ Uint63.to_Z p
+PrimInt63.lsr : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+Uint63.lsl_spec :
+  forall x p : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.lsl x p) =
+  (Uint63.to_Z x * 2 ^ Uint63.to_Z p) mod Uint63.wB
+PrimInt63.lsl : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+Uint63.lor_spec :
+  forall x y i : PrimInt63.int,
+  Uint63.bit (PrimInt63.lor x y) i = (Uint63.bit x i || Uint63.bit y i)%bool
+PrimInt63.lor : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PArray.length_set :
+  forall (A : Type) (t : PArray.array A) (i : PrimInt63.int) (a : A),
+  PArray.length (PArray.set t i a) = PArray.length t
+PArray.length : forall A : Type, PArray.array A -> PrimInt63.int
+Uint63.leb_spec :
+  forall x y : PrimInt63.int,
+  PrimInt63.leb x y = true <-> Uint63.to_Z x <= Uint63.to_Z y
+PrimInt63.leb : PrimInt63.int -> PrimInt63.int -> bool
+Uint63.land_spec :
+  forall x y i : PrimInt63.int,
+  Uint63.bit (PrimInt63.land x y) i = (Uint63.bit x i && Uint63.bit y i)%bool
+PrimInt63.land : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PrimInt63.int : Set
+PrimInt63.head0 : PrimInt63.int -> PrimInt63.int
+PArray.get_set_same :
+  forall (A : Type) (t : PArray.array A) (i : PrimInt63.int) (a : A),
+  PrimInt63.ltb i (PArray.length t) = true ->
+  PArray.get (PArray.set t i a) i = a
+PArray.get_set_other :
+  forall (A : Type) (t : PArray.array A) (i j : PrimInt63.int) (a : A),
+  i <> j -> PArray.get (PArray.set t i a) j = PArray.get t j
+PArray.get_out_of_bounds :
+  forall (A : Type) (t : PArray.array A) (i : PrimInt63.int),
+  PrimInt63.ltb i (PArray.length t) = false ->
+  PArray.get t i = PArray.default t
+PArray.get_make :
+  forall (A : Type) (a : A) (size i : PrimInt63.int),
+  PArray.get (PArray.make size a) i = a
+PArray.get : forall A : Type, PArray.array A -> PrimInt63.int -> A
+Uint63.eqb_refl : forall x : PrimInt63.int, PrimInt63.eqb x x = true
+Uint63.eqb_correct :
+  forall i j : PrimInt63.int, PrimInt63.eqb i j = true -> i = j
+PrimInt63.eqb : PrimInt63.int -> PrimInt63.int -> bool
+PrimInt63.diveucl_21 :
+  PrimInt63.int ->
+  PrimInt63.int -> PrimInt63.int -> PrimInt63.int * PrimInt63.int
+PrimInt63.diveucl :
+  PrimInt63.int -> PrimInt63.int -> PrimInt63.int * PrimInt63.int
+PrimInt63.div : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
+PArray.default_set :
+  forall (A : Type) (t : PArray.array A) (i : PrimInt63.int) (a : A),
+  PArray.default (PArray.set t i a) = PArray.default t
+PArray.default : forall A : Type, PArray.array A -> A
+PArray.array : Type -> Type
+Uint63.add_spec :
+  forall x y : PrimInt63.int,
+  Uint63.to_Z (PrimInt63.add x y) =
+  (Uint63.to_Z x + Uint63.to_Z y) mod Uint63.wB
+PrimInt63.add : PrimInt63.int -> PrimInt63.int -> PrimInt63.int
