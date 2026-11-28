@@ -1,0 +1,5 @@
+(* visits 17400000000000 to 17600000000000 *)
+From Coq Require Import Uint63 PArith.
+From BusyCoq.M_1RB1LC_1LC1RD_1LA0LB_0RB1RE_1RF0RA_HHH0RC Require Import Check.
+Lemma seg087 : seg 200000000000 200000000000 56944665719913 3955334622667 60986104513276 613895744283 = true.
+Proof. native_cast_no_check (eq_refl true). Qed.
